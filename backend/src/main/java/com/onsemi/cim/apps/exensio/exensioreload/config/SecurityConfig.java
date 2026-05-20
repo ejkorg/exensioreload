@@ -63,10 +63,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/login/oauth2/**",
                                 "/oauth2/**",
-                                "/api/auth/sso/**",
+                        "/api/auth/**",
                                 "/sso-callback"
                         ).permitAll()
-                        .requestMatchers("/api/**").authenticated()
+                    .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(delegatingEntryPoint))
