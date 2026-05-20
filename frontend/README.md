@@ -27,6 +27,6 @@ This is the recreated frontend for the DTP Resender, featuring a premium UI/UX b
 ## Directory Overview
 - `src/app/api`: Backend service and mock interfaces.
 - `src/app/dashboard`: Operational hub with real-time metrics.
-- `src/app/stepper`: Core resender wizard with advanced filtering.
+- `src/app/stepper`: Core ExensioReload wizard with advanced filtering.
 - `src/app/auth`: Modern login and security integration.
 - `src/styles.scss`: Global design system and premium theme tokens.

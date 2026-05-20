@@ -69,9 +69,9 @@ Both modals follow the existing glassmorphism design system (`glass-panel`, `Gla
 
 #### Acceptance Criteria
 
-1. WHEN the SessionExpiredModalComponent navigates to `/login`, THE Router SHALL include the user's current URL as a `returnUrl` query parameter (e.g., `/login?returnUrl=%2Fresender`).
+1. WHEN the SessionExpiredModalComponent navigates to `/login`, THE Router SHALL include the user's current URL as a `returnUrl` query parameter (e.g., `/login?returnUrl=%2Fexensioreload`).
 2. WHEN a user successfully logs in and a `returnUrl` query parameter is present, THE LoginComponent SHALL navigate to the `returnUrl` after successful authentication.
-3. IF the `returnUrl` is an absolute URL or points outside the application, THEN THE LoginComponent SHALL ignore it and navigate to the default route `/resender`.
+3. IF the `returnUrl` is an absolute URL or points outside the application, THEN THE LoginComponent SHALL ignore it and navigate to the default route `/exensioreload`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement industry-standard session expiry UX for `dtp-resender-fullstack`. The work is broken into incremental steps: service layer first, then modals, then wiring existing files, then the return-URL flow.
+Implement industry-standard session expiry UX for `exensioreload`. The work is broken into incremental steps: service layer first, then modals, then wiring existing files, then the return-URL flow.
 
 ## Tasks
 
@@ -70,7 +70,7 @@ Implement industry-standard session expiry UX for `dtp-resender-fullstack`. The 
   - Inject `ActivatedRoute` in `login.component.ts`
   - After successful login, read `returnUrl` from `this.route.snapshot.queryParamMap.get('returnUrl')`
   - Safety check: accept only strings starting with `/` and not containing `://`
-  - Navigate to safe `returnUrl` or fall back to `/resender`
+  - Navigate to safe `returnUrl` or fall back to `/exensioreload`
   - _Requirements: 3.1, 3.2, 3.3_
 
 - [ ]* 7.1 Write property test for `returnUrl` safety validation (Property 5)

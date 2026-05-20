@@ -8,7 +8,7 @@
         <version>3.2.0</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.onsemi.cim.apps.exensio.resender</groupId>
+    <groupId>com.onsemi.cim.apps.exensio.exensioreload</groupId>
     <artifactId>exensio-reload</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>ExensioReload</name>

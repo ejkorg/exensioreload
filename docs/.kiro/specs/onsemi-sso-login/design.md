@@ -87,7 +87,7 @@ reloader.sso.client-secret    = <client secret>
 reloader.sso.tenant-id        = <Azure tenant ID>
 reloader.sso.default-role     = USER
 reloader.sso.role-mappings.*  = map of IdP group name → local role
-                                 e.g. onsemi-resender-admins=ADMIN
+                                 e.g. onsemi-exensioreload-admins=ADMIN
 ```
 
 #### 2. `SecurityConfig` (modified)
@@ -127,7 +127,7 @@ The Angular `AuthService` calls `/silent` on app startup when no local session e
 A minimal Angular component that:
 - Reads `token` from the query string.
 - Calls `AuthService.handleSsoCallback(token)`.
-- Navigates to `returnUrl` (or `/resender` as fallback).
+- Navigates to `returnUrl` (or `/exensioreload` as fallback).
 
 #### 7. `AuthService` (Angular — modified)
 Add `handleSsoCallback(token: string): Observable<void>`:
@@ -173,8 +173,8 @@ reloader:
     tenant-id: ${ONSEMI_SSO_TENANT_ID}
     default-role: USER
     role-mappings:
-      onsemi-resender-admins: ADMIN
-      onsemi-resender-superadmins: SUPER_ADMIN
+      onsemi-exensioreload-admins: ADMIN
+      onsemi-exensioreload-superadmins: SUPER_ADMIN
 ```
 
 ### Spring Security OAuth2 client registration (auto-configured from `SsoProperties`)
@@ -214,7 +214,7 @@ Property 3: SSO session token equivalence
 **Validates: Requirements 5.1, 5.4**
 
 Property 4: Open redirect prevention
-*For any* `returnUrl` value provided to the SSO initiate or callback endpoints, the system should only redirect to paths that start with `/` and do not contain `://` or `//`, rejecting all others by falling back to `/resender`.
+*For any* `returnUrl` value provided to the SSO initiate or callback endpoints, the system should only redirect to paths that start with `/` and do not contain `://` or `//`, rejecting all others by falling back to `/exensioreload`.
 **Validates: Requirements 7.6**
 
 Property 5: Replay prevention
@@ -235,7 +235,7 @@ Property 6: Silent SSO fallback
 | Invalid/expired OIDC assertion | Spring Security rejects; `OAuth2AuthenticationFailureHandler` redirects to `/login?reason=sso-error` | Login page shows error message |
 | JIT provisioning DB failure | `SsoAuthenticationSuccessHandler` catches, logs, redirects to `/login?reason=sso-error` | Login page shows generic error |
 | SSO disabled via config | `SsoController` returns 404; Angular hides SSO button via `/api/auth/config` | SSO button not shown |
-| Invalid returnUrl | Sanitized to `/resender` in both `SsoController` and `SsoAuthenticationSuccessHandler` | User lands on default page |
+| Invalid returnUrl | Sanitized to `/exensioreload` in both `SsoController` and `SsoAuthenticationSuccessHandler` | User lands on default page |
 
 ---
 
@@ -267,7 +267,7 @@ Property 3 test — `SsoJwtEquivalenceTest`:
 
 Property 4 test — `ReturnUrlSanitizationTest`:
 - Generate arbitrary strings as `returnUrl`.
-- Assert that only strings starting with `/` and not containing `://` or `//` pass through; all others map to `/resender`.
+- Assert that only strings starting with `/` and not containing `://` or `//` pass through; all others map to `/exensioreload`.
 - Tag: `Feature: onsemi-sso-login, Property 4: Open redirect prevention`
 
 Property 5 test — `StateValidationTest`:

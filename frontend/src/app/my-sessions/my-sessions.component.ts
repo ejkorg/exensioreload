@@ -734,7 +734,7 @@ import * as echarts from 'echarts';
   `]
 })
 export class MySessionsComponent implements OnInit, OnDestroy {
-  private readonly monitoringResumeStorageKey = 'resender.activeMonitoringSessionId';
+  private readonly monitoringResumeStorageKey = 'exensioreload.activeMonitoringSessionId';
   @ViewChild('trendChartContainer', { static: false }) trendChartContainer?: ElementRef;
   @ViewChild('statusChartContainer', { static: false }) statusChartContainer?: ElementRef;
   private resizeObserver?: ResizeObserver;
@@ -1030,7 +1030,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         return;
       }
       this.persistMonitoringSession(session.sessionId);
-      this.router.navigate(['/resender/new']);
+      this.router.navigate(['/exensioreload/new']);
     }
 
     selectSession(session: StagingSessionSummary) {

@@ -363,7 +363,7 @@ export class LoginComponent implements OnInit {
   onSsoLogin(): void {
     if (this.ssoLoading()) return;
     this.ssoLoading.set(true);
-    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/resender';
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/exensioreload';
     const safeUrl = this.getSafeReturnUrl(returnUrl);
     // Full page redirect — not Angular router — so Spring Security handles the OAuth2 initiation
     window.location.href = `/api/auth/sso/initiate?returnUrl=${encodeURIComponent(safeUrl)}`;
@@ -395,13 +395,13 @@ export class LoginComponent implements OnInit {
   }
 
   private getSafeReturnUrl(returnUrl: string | null): string {
-    if (!returnUrl) return '/resender';
+    if (!returnUrl) return '/exensioreload';
 
     let decoded = returnUrl;
     try {
       decoded = decodeURIComponent(returnUrl);
     } catch {
-      return '/resender';
+      return '/exensioreload';
     }
 
     const isInternalPath = decoded.startsWith('/');
@@ -409,7 +409,7 @@ export class LoginComponent implements OnInit {
     const hasAbsoluteProtocol = decoded.includes('://');
 
     if (!isInternalPath || isProtocolRelative || hasAbsoluteProtocol) {
-      return '/resender';
+      return '/exensioreload';
     }
 
     return decoded;

@@ -74,7 +74,7 @@ effect(() => {
 // package.json
 {
   "scripts": {
-    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href /resender/ --deploy-url /resender/"
+    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href /exensioreload/ --deploy-url /exensioreload/"
   }
 }
 ```
@@ -229,7 +229,7 @@ npm run build:prod:deploy
 // package.json
 {
   "scripts": {
-    "build:prod:deploy": "echo Build started at %time% && ng build --configuration production --base-href /resender/ --deploy-url /resender/ && echo Build completed at %time%"
+    "build:prod:deploy": "echo Build started at %time% && ng build --configuration production --base-href /exensioreload/ --deploy-url /exensioreload/ && echo Build completed at %time%"
   }
 }
 ```
@@ -275,7 +275,7 @@ npm run build:prod:deploy
 ```json
 {
   "scripts": {
-    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href /resender/ --deploy-url /resender/"
+    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href /exensioreload/ --deploy-url /exensioreload/"
   }
 }
 ```

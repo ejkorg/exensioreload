@@ -53,7 +53,7 @@ Implements OIDC-based SSO for onsemi (Azure AD / Entra ID) on top of the existin
 
   - [ ]* 4.2 Write property test for open redirect prevention
     - **Property 4: Open redirect prevention**
-    - Generate arbitrary strings as `returnUrl`; assert only relative paths without `://` or `//` pass through; all others map to `/resender`.
+    - Generate arbitrary strings as `returnUrl`; assert only relative paths without `://` or `//` pass through; all others map to `/exensioreload`.
     - **Validates: Requirements 7.6**
 
   - [ ]* 4.3 Write unit tests for `SsoAuthenticationSuccessHandler`
@@ -99,7 +99,7 @@ Implements OIDC-based SSO for onsemi (Azure AD / Entra ID) on top of the existin
   - Create `SsoCallbackComponent` at `new_frontend/src/app/auth/sso-callback.component.ts`.
   - On init: read `token` and `returnUrl` from query params.
   - Call `AuthService.handleSsoCallback(token)`.
-  - On success: navigate to sanitized `returnUrl` (or `/resender`).
+  - On success: navigate to sanitized `returnUrl` (or `/exensioreload`).
   - On error: navigate to `/login?reason=sso-error`.
   - Register route `/sso-callback` in the app router.
   - _Requirements: 2.5, 7.6_

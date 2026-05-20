@@ -32,11 +32,11 @@ export class SsoCallbackComponent implements OnInit {
   }
 
   private getSafeReturnUrl(returnUrl: string | null): string {
-    if (!returnUrl) return '/resender';
+    if (!returnUrl) return '/exensioreload';
     let decoded = returnUrl;
-    try { decoded = decodeURIComponent(returnUrl); } catch { return '/resender'; }
+    try { decoded = decodeURIComponent(returnUrl); } catch { return '/exensioreload'; }
     if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.includes('://')) {
-      return '/resender';
+      return '/exensioreload';
     }
     return decoded;
   }

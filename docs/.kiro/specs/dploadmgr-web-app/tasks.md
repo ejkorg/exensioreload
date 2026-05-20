@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation creates a full-stack web application for managing data load processes across multiple Unix servers. The system wraps existing Perl CLI tools via SSH, parses their output, and provides a modern Angular frontend with Java Spring Boot backend. The implementation reuses authentication, authorization, and UI patterns from the existing dtp-resender-fullstack application.
+This implementation creates a full-stack web application for managing data load processes across multiple Unix servers. The system wraps existing Perl CLI tools via SSH, parses their output, and provides a modern Angular frontend with Java Spring Boot backend. The implementation reuses authentication, authorization, and UI patterns from the existing exensioreload application.
 
 ## Tasks
 
@@ -533,7 +533,7 @@ This implementation creates a full-stack web application for managing data load 
 - [ ] 12. Frontend: Styling and Theme
 - [ ] 12.1 Create dashboard.component.scss
   - Use Material Design components
-  - Match dtp-resender-fullstack color scheme
+  - Match exensioreload color scheme
   - Use same typography
   - Add responsive breakpoints
   - _Requirements: 11.6, 11.7, 11.8_
@@ -556,7 +556,7 @@ This implementation creates a full-stack web application for managing data load 
   - _Requirements: 11.8_
 
 - [ ] 12.5 Reuse existing theme variables
-  - Import theme from dtp-resender-fullstack
+  - Import theme from exensioreload
   - Use consistent spacing, colors, shadows
   - _Requirements: 11.6, 11.7_
 
@@ -571,7 +571,7 @@ This implementation creates a full-stack web application for managing data load 
   - _Requirements: 11.1_
 
 - [ ] 13.3 Add AuthGuard to route
-  - Reuse existing AuthGuard from dtp-resender-fullstack
+  - Reuse existing AuthGuard from exensioreload
   - Redirect to login if not authenticated
   - _Requirements: 9.1, 9.3_
 
@@ -629,5 +629,5 @@ This implementation creates a full-stack web application for managing data load 
 - Backend tasks should be completed before frontend tasks
 - Property-based tests validate universal correctness properties
 - Integration tests require access to test servers with SSH
-- Reuse existing authentication, authorization, and UI patterns from dtp-resender-fullstack
+- Reuse existing authentication, authorization, and UI patterns from exensioreload
 - SSH credentials should be stored securely (never in source code)

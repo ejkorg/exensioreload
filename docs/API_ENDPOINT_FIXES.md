@@ -2,7 +2,7 @@
 
 ## Problems Found & Fixed
 
-### 1. **404 on `/resender/api/senders`**
+### 1. **404 on `/exensioreload/api/senders`**
 
 **Error**: `Failed to load resource: the server responded with a status of 404`
 
@@ -15,7 +15,7 @@
 - Made `listSenders()` return a default fallback (sender ID 1) so UI doesn't break
 - Updated error handling in `ngOnInit()` to log errors without blocking initialization
 
-### 2. **400 on `/resender/api/senders/1/discover/preview`**
+### 2. **400 on `/exensioreload/api/senders/1/discover/preview`**
 
 **Error**: `Provide at least one filter: testerType, lot/wafer, or a start/end date range.`
 
@@ -56,7 +56,7 @@
 }
 ```
 
-### 3. **401 on `/resender/api/auth/refresh`**
+### 3. **401 on `/exensioreload/api/auth/refresh`**
 
 **Error**: `Failed to load resource: the server responded with a status of 401`
 

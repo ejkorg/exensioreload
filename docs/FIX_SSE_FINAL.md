@@ -28,7 +28,7 @@ Stop and restart your Spring Boot application.
 
 Open browser console and run:
 ```javascript
-const es = new EventSource('/resender/api/stage/test-sse');
+const es = new EventSource('/exensioreload/api/stage/test-sse');
 es.onopen = () => console.log('✅ SSE WORKS!');
 es.onerror = (e) => console.error('❌ SSE FAILED:', e, 'ReadyState:', es.readyState);
 es.addEventListener('TEST', (e) => console.log('📨 Received:', e.data));
@@ -52,7 +52,7 @@ After confirming Step 3 works, test the actual monitoring endpoint:
 ```javascript
 const token = localStorage.getItem('token');
 const sessionId = '0c44de62-a6be-49bc-9f6e-a54b3a38adfe'; // Use your actual session ID
-const url = `/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`;
+const url = `/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`;
 
 const es = new EventSource(url);
 es.onopen = () => console.log('✅ Monitoring SSE OPENED');
@@ -87,7 +87,7 @@ Initial SSE events sent successfully for requestId: xxx
 
 ### ✅ Browser Console Should Show:
 ```
-[StagingSession] Connecting SSE to: /resender/api/stage/sessions/xxx/monitor?token=...
+[StagingSession] Connecting SSE to: /exensioreload/api/stage/sessions/xxx/monitor?token=...
 [StagingSession] SSE connection opened successfully
 [StagingSession] EventSource readyState: 1
 [StagingSession] HEARTBEAT received: {...}
@@ -95,7 +95,7 @@ Initial SSE events sent successfully for requestId: xxx
 ```
 
 ### ✅ Browser Network Tab Should Show:
-- Request: `GET /resender/api/stage/sessions/{id}/monitor?token=...`
+- Request: `GET /exensioreload/api/stage/sessions/{id}/monitor?token=...`
 - Status: `200` or `(pending)`
 - Type: `eventsource`
 - Response Headers:
@@ -174,7 +174,7 @@ If after all this it still doesn't work, the issue is likely:
 Try direct backend connection (bypass proxy):
 ```typescript
 // In staging-session.service.ts, temporarily change:
-const url = `http://localhost:8004/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`;
+const url = `http://localhost:8004/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`;
 ```
 
 If this works, the proxy is the problem.

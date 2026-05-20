@@ -320,15 +320,15 @@ import { Router } from '@angular/router';
 
 export class NavigationComponent {
     navItems = [
-        { label: 'Dashboard', route: '/resender/dashboard', icon: 'dashboard' },
-        { label: 'Analytics', route: '/resender/analytics', icon: 'insights' },
-        { label: 'New Request', route: '/resender/new', icon: 'add' },
-        { label: 'Sessions', route: '/resender/my-sessions', icon: 'history' },
+        { label: 'Dashboard', route: '/exensioreload/dashboard', icon: 'dashboard' },
+        { label: 'Analytics', route: '/exensioreload/analytics', icon: 'insights' },
+        { label: 'New Request', route: '/exensioreload/new', icon: 'add' },
+        { label: 'Sessions', route: '/exensioreload/my-sessions', icon: 'history' },
         { separator: true },
-        { label: 'Alerts', route: '/resender/alerts', icon: 'notifications_active' }, // NEW
-        { label: 'Reports', route: '/resender/export-reports', icon: 'description' }, // NEW
+        { label: 'Alerts', route: '/exensioreload/alerts', icon: 'notifications_active' }, // NEW
+        { label: 'Reports', route: '/exensioreload/export-reports', icon: 'description' }, // NEW
         { separator: true },
-        { label: 'Admin', route: '/resender/admin', icon: 'admin_panel_settings' }
+        { label: 'Admin', route: '/exensioreload/admin', icon: 'admin_panel_settings' }
     ];
 }
 ```

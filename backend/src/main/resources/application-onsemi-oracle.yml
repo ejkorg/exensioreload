@@ -52,7 +52,7 @@ logging:
     org.springframework: WARN
     org.hibernate: WARN
   file:
-    name: logs/resender.log
+    name: logs/exensioreload.log
     max-size: 100MB
     max-history: 30
     total-size-cap: 3GB
@@ -95,7 +95,7 @@ external-db:
     max-pools: 50
     expire-after-access-minutes: 60
 
-dtp-resender:
+exensioreload:
   dtp-db:
     yaml:
       path: classpath:dbconnections.yml
@@ -137,7 +137,7 @@ app:
     from: "no-reply@onsemi.com"
     # Reset URL base(s) used when sending password reset emails. Can be a YAML list, CSV, or folded scalar.
     reset-url-base:
-      - "http://usaz15ls088:8080/resender/reset-password"
+      - "http://usaz15ls088:8080/exensioreload/reset-password"
       - "http://127.0.0.1:4200/reset-password"
     # Probe the first N configured reset-url-base entries and prefer the first reachable one.
     reset-url-probe-first: 1

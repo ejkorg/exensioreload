@@ -49,7 +49,7 @@ Open browser console and run:
 ```javascript
 const token = localStorage.getItem('token');
 const sessionId = 'test-session-id'; // Replace with actual session ID
-const url = `/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`;
+const url = `/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`;
 
 const eventSource = new EventSource(url);
 
@@ -89,7 +89,7 @@ Initial SSE events sent successfully for requestId: xxx
 
 ### Browser Console (in order):
 ```
-[StagingSession] Connecting SSE to: /resender/api/stage/sessions/xxx/monitor?token=...
+[StagingSession] Connecting SSE to: /exensioreload/api/stage/sessions/xxx/monitor?token=...
 [StagingSession] Token length: 203
 [StagingSession] SSE connection opened successfully
 [StagingSession] EventSource readyState: 1
@@ -98,7 +98,7 @@ Initial SSE events sent successfully for requestId: xxx
 ```
 
 ### Browser Network Tab:
-- Request: `GET /resender/api/stage/sessions/{id}/monitor?token=...`
+- Request: `GET /exensioreload/api/stage/sessions/{id}/monitor?token=...`
 - Status: `200` (or `pending` if still connected)
 - Type: `eventsource`
 - Response Headers:
@@ -115,7 +115,7 @@ Initial SSE events sent successfully for requestId: xxx
 ### Test 1: Check if endpoint is reachable
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8004/resender/api/stage/sessions/test/monitor
+  http://localhost:8004/exensioreload/api/stage/sessions/test/monitor
 ```
 
 Expected: Connection hangs (SSE keeps connection open)
@@ -123,7 +123,7 @@ Expected: Connection hangs (SSE keeps connection open)
 ### Test 2: Check response headers
 ```bash
 curl -v -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8004/resender/api/stage/sessions/test/monitor 2>&1 | grep -i "content-type"
+  http://localhost:8004/exensioreload/api/stage/sessions/test/monitor 2>&1 | grep -i "content-type"
 ```
 
 Expected: `Content-Type: text/event-stream`
@@ -131,7 +131,7 @@ Expected: `Content-Type: text/event-stream`
 ### Test 3: Check if events are sent
 ```bash
 curl -N -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8004/resender/api/stage/sessions/test/monitor
+  http://localhost:8004/exensioreload/api/stage/sessions/test/monitor
 ```
 
 Expected: See `:SSE connection established` comment and `event: HEARTBEAT` data
@@ -139,7 +139,7 @@ Expected: See `:SSE connection established` comment and `event: HEARTBEAT` data
 ### Test 4: Direct backend connection (bypass proxy)
 In frontend, temporarily change the URL to:
 ```typescript
-const url = `http://localhost:8004/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`;
+const url = `http://localhost:8004/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`;
 ```
 
 If this works, the proxy is the issue.
@@ -179,7 +179,7 @@ public SseEmitter testSse() {
 
 Test in browser console:
 ```javascript
-const es = new EventSource('/resender/api/test-sse');
+const es = new EventSource('/exensioreload/api/test-sse');
 es.onopen = () => console.log('OPENED');
 es.addEventListener('TEST', (e) => console.log('Received:', e.data));
 ```

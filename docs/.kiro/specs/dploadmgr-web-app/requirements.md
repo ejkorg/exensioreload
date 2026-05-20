@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The DpLoadMgr Web Application provides a modern web-based interface for managing data load processes across multiple servers (usaz15ls082 and usaz15ls083). The system wraps existing Perl-based command-line tools (`DpLoadMgr.pl`) and exposes their functionality through a user-friendly Angular frontend with a Java Spring Boot backend. The application reuses authentication, authorization, and UI/UX patterns from the existing dtp-resender-fullstack application.
+The DpLoadMgr Web Application provides a modern web-based interface for managing data load processes across multiple servers (usaz15ls082 and usaz15ls083). The system wraps existing Perl-based command-line tools (`DpLoadMgr.pl`) and exposes their functionality through a user-friendly Angular frontend with a Java Spring Boot backend. The application reuses authentication, authorization, and UI/UX patterns from the existing exensioreload application.
 
 ## Glossary
 
@@ -130,8 +130,8 @@ The DpLoadMgr Web Application provides a modern web-based interface for managing
 
 #### Acceptance Criteria
 
-1. THE Backend_API SHALL reuse the authentication mechanism from dtp-resender-fullstack application
-2. THE Backend_API SHALL reuse the authorization mechanism from dtp-resender-fullstack application
+1. THE Backend_API SHALL reuse the authentication mechanism from exensioreload application
+2. THE Backend_API SHALL reuse the authorization mechanism from exensioreload application
 3. WHEN an unauthenticated user accesses the application, THE Frontend_UI SHALL redirect to the login page
 4. WHEN an authenticated user lacks permissions, THE Backend_API SHALL return HTTP 403 Forbidden
 5. THE Backend_API SHALL support role-based access control (RBAC) for operations
@@ -162,8 +162,8 @@ The DpLoadMgr Web Application provides a modern web-based interface for managing
 3. THE Frontend_UI SHALL display a processor list with status indicators
 4. THE Frontend_UI SHALL display action buttons (Start, Stop, Kill, Refresh)
 5. THE Frontend_UI SHALL display a status summary showing counts of Running, Stopped, and Failed processors
-6. THE Frontend_UI SHALL use Material Design components consistent with dtp-resender-fullstack
-7. THE Frontend_UI SHALL use the same color scheme and typography as dtp-resender-fullstack
+6. THE Frontend_UI SHALL use Material Design components consistent with exensioreload
+7. THE Frontend_UI SHALL use the same color scheme and typography as exensioreload
 8. THE Frontend_UI SHALL be responsive and work on desktop and tablet devices
 
 ### Requirement 12: Configuration Management

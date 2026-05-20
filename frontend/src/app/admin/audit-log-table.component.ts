@@ -66,7 +66,7 @@ import { AuditService, EtlAuditLog } from './audit.service';
       </div>
 
       <div class="content-area glass-panel table-overflow">
-        <table class="resender-table">
+        <table class="exensioreload-table">
           <thead>
             <tr>
               <th>

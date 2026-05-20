@@ -1,7 +1,7 @@
 # XFCS Removal from DTP Resender — Walkthrough
 
 ## Summary
-Removed all **XFCS/Exensio Dearchiver/Archive Reloader** components from `dtp-resender-fullstack`, leaving only DTP Resender functionality.
+Removed all **XFCS/Exensio Dearchiver/Archive Reloader** components from `exensioreload`, leaving only DTP Resender functionality.
 
 ---
 
@@ -26,7 +26,7 @@ Removed all **XFCS/Exensio Dearchiver/Archive Reloader** components from `dtp-re
 | File | Change |
 |------|--------|
 | `pom.xml` | Removed `net.schmizz:sshj` dependency |
-| `application.yml` | Context-path → `/dtp-resender`, removed `xfcs:` block, updated logging |
+| `application.yml` | Context-path → `/exensioreload`, removed `xfcs:` block, updated logging |
 | `application-onsemi-oracle.yml` | Removed ~130-line `xfcs:` block, `exensio:` block, updated logging and URLs |
 | `DashboardController.java` | Replaced `ExensioDearchiveService` → `RefDbService.fetchStatuses()`/`fetchStatusesForUser()` |
 | `db.changelog-1.0.xml` | Removed 5.0–5.3 reload changelog includes |

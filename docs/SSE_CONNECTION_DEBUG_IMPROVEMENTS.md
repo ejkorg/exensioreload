@@ -8,7 +8,7 @@ Frontend SSE connection attempts but never receives `onopen` event or any data f
 ### Backend Changes
 
 #### 1. StageController.java - Added SSE Headers
-**File**: `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/controller/StageController.java`
+**File**: `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/StageController.java`
 
 Added proper SSE headers to the monitor endpoint:
 - `produces = "text/event-stream"` - Explicitly declares SSE content type
@@ -29,7 +29,7 @@ public SseEmitter monitorSession(@PathVariable String sessionId,
 ```
 
 #### 2. StageMonitorService.java - Improved Connection Establishment
-**File**: `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/stage/StageMonitorService.java`
+**File**: `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/stage/StageMonitorService.java`
 
 Reordered operations to establish connection properly:
 1. Create emitter
@@ -74,7 +74,7 @@ npm run build
 1. Open browser DevTools (F12)
 2. Go to Network tab
 3. Stage a file
-4. Look for the SSE connection request: `GET /resender/api/stage/sessions/{sessionId}/monitor?token=...`
+4. Look for the SSE connection request: `GET /exensioreload/api/stage/sessions/{sessionId}/monitor?token=...`
 
 **Check these details:**
 - Status should be `200` (or `pending` if still connected)

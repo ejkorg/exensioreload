@@ -8,8 +8,8 @@
 **Solution**: Pass JWT token as query parameter for SSE endpoints.
 
 **Files Modified**:
-- `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/config/JwtAuthenticationFilter.java`
-- `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/controller/StageController.java`
+- `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/JwtAuthenticationFilter.java`
+- `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/StageController.java`
 - `new_frontend/src/app/shared/services/staging-session.service.ts`
 
 **Documentation**: [SSE_MONITORING_FIX.md](SSE_MONITORING_FIX.md)

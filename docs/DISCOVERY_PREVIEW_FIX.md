@@ -1,7 +1,7 @@
 # Fix for 400 Bad Request Error on Discovery Preview
 
 ## Problem
-Frontend POST request to `/resender/api/senders/1/discover/preview` was returning **400 Bad Request** with the error message:
+Frontend POST request to `/exensioreload/api/senders/1/discover/preview` was returning **400 Bad Request** with the error message:
 ```
 "Provide at least one filter: testerType, lot/wafer, or a start/end date range."
 ```

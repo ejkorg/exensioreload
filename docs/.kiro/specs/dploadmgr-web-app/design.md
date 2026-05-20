@@ -8,7 +8,7 @@ The DpLoadMgr Web Application is a full-stack web interface for managing data lo
 - **Wrapper Pattern**: Reuse existing Perl scripts rather than reimplementing business logic
 - **Parallel Execution**: Execute commands on multiple servers concurrently
 - **Robust Parsing**: Handle variations in CLI output format gracefully
-- **Consistent UX**: Match dtp-resender-fullstack styling and patterns
+- **Consistent UX**: Match exensioreload styling and patterns
 - **Security First**: Reuse existing authentication and implement proper authorization
 
 ## Architecture
@@ -50,10 +50,10 @@ The DpLoadMgr Web Application is a full-stack web interface for managing data lo
 
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
-| Frontend | Angular | 17+ | Matches dtp-resender-fullstack |
+| Frontend | Angular | 17+ | Matches exensioreload |
 | Frontend UI | Angular Material | 17+ | Consistent with existing app |
-| Backend | Spring Boot | 3.x | Matches dtp-resender-fullstack |
-| Backend Language | Java | 17+ | Matches dtp-resender-fullstack |
+| Backend | Spring Boot | 3.x | Matches exensioreload |
+| Backend Language | Java | 17+ | Matches exensioreload |
 | SSH Client | JSch | 0.2.x | Mature, well-tested SSH library |
 | Database | Oracle | 19c+ | Reuse existing infrastructure |
 | Auth | Spring Security + JWT | 6.x | Reuse existing auth mechanism |
@@ -881,7 +881,7 @@ Integration tests verify end-to-end flows:
 ┌────────────────────────────┴────────────────────────────────┐
 │                     Oracle Database                          │
 │  - Audit logs                                                │
-│  - User authentication (shared with dtp-resender)            │
+│  - User authentication (shared with exensioreload)            │
 └──────────────────────────────────────────────────────────────┘
 ```
 

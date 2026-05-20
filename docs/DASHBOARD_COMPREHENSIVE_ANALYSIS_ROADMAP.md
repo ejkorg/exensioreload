@@ -1183,7 +1183,7 @@ body.light-theme {
 
 **Solution:**
 - Add "View Full Site Dashboard" action in site modal
-- New route: `/resender/site/:siteId/dashboard`
+- New route: `/exensioreload/site/:siteId/dashboard`
 - Shows all metrics, hourly trends, sender breakdown, export options
 - Breadcrumb navigation back to main dashboard
 

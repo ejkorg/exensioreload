@@ -92,7 +92,7 @@ interface DuplicateStageContext {
     styleUrls: ['./stepper.component.scss']
 })
 export class StepperComponent implements OnInit, OnDestroy {
-    private readonly monitoringResumeStorageKey = 'resender.activeMonitoringSessionId';
+    private readonly monitoringResumeStorageKey = 'exensioreload.activeMonitoringSessionId';
     private readonly ftAllowedTestPhases = new Set(['FT', 'QA', 'RG', 'CRSS']);
     private stagedPreviewRows = signal<DiscoveryPreviewRow[]>([]);
 
@@ -2672,7 +2672,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     }
 
     onFinishAndReturnToHub() {
-        this.router.navigate(['/resender']);
+        this.router.navigate(['/exensioreload']);
         setTimeout(() => this.stopMonitoring(true, false), 0);
     }
 

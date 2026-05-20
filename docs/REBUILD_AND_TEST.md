@@ -23,7 +23,7 @@ mvn clean package -DskipTests
 
 ### Test 1: Basic SSE (No Auth)
 ```javascript
-const es = new EventSource('/resender/api/stage/test-sse');
+const es = new EventSource('/exensioreload/api/stage/test-sse');
 es.onopen = () => console.log('✅ SSE WORKS!');
 es.onerror = (e) => console.error('❌ FAILED:', es.readyState);
 es.addEventListener('TEST', (e) => console.log('📨', e.data));
@@ -33,7 +33,7 @@ es.addEventListener('TEST', (e) => console.log('📨', e.data));
 ```javascript
 const token = localStorage.getItem('token');
 const sessionId = 'YOUR_SESSION_ID'; // Replace with actual
-const es = new EventSource(`/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`);
+const es = new EventSource(`/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`);
 es.onopen = () => console.log('✅ MONITORING WORKS!');
 es.addEventListener('HEARTBEAT', (e) => console.log('💓', e.data));
 ```

@@ -49,7 +49,7 @@ refdb:
     per-send: 100
     interval-ms: 60000
 
-exensio-dearchiver:
+exensioreload:
   dtp-db:
     yaml:
       path: classpath:dbconnections.yml
@@ -108,8 +108,8 @@ reloader:
     tenant-id: ${ONSEMI_SSO_TENANT_ID:}
     default-role: USER
     role-mappings:
-      onsemi-resender-admins: ADMIN
-      onsemi-resender-superadmins: SUPER_ADMIN
+      onsemi-exensioreload-admins: ADMIN
+      onsemi-exensioreload-superadmins: SUPER_ADMIN
 
 # Exensio Loading API integration
 # Set EXENSIO_ENABLED=true and configure credentials to activate ExensioLoadMonitor.

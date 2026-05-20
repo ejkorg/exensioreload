@@ -17,7 +17,7 @@ mvn clean install
 # Run with Oracle profile
 mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=onsemi-oracle"
 # Or standard run
-java -jar target/resender-1.0.0-SNAPSHOT.jar --spring.profiles.active=onsemi-oracle
+java -jar target/exensioreload-1.0.0-SNAPSHOT.jar --spring.profiles.active=onsemi-oracle
 ```
 
 ### Frontend Build

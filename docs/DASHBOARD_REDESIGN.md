@@ -170,7 +170,7 @@ Dashboard page (Level 0 + Level 1)
   ├─ Click site card → expands to show ALL senders (fixes D7)
   │
   ├─ Click sender row → navigates to Sender Detail (Level 2)
-  │   Route: /resender/dashboard/sites/:site/senders/:senderId
+  │   Route: /exensioreload/dashboard/sites/:site/senders/:senderId
   │   OR: slide-over panel (stays on dashboard)
   │
   └─ Click session row → navigates to Session Monitor
@@ -547,7 +547,7 @@ If screen real estate or deep-linking is preferred:
 
 ```typescript
 // In app.routes.ts
-{ path: 'resender/sites/:site/senders/:senderId', component: SenderDetailComponent, canActivate: [authGuard] }
+{ path: 'exensioreload/sites/:site/senders/:senderId', component: SenderDetailComponent, canActivate: [authGuard] }
 ```
 
 ---

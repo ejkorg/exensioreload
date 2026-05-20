@@ -47,7 +47,7 @@ Open browser console and paste:
 ```javascript
 const token = localStorage.getItem('token');
 const sessionId = '4f4b0beb-a3a6-42fe-a2f5-e4fcf3b43ed7'; // Your session ID from logs
-const url = `/resender/api/stage/sessions/${sessionId}/monitor?token=${token}`;
+const url = `/exensioreload/api/stage/sessions/${sessionId}/monitor?token=${token}`;
 
 console.log('Testing SSE connection to:', url);
 

@@ -24,8 +24,8 @@ interface SenderOption { id: number; label: string; }
 <div class="cov-shell">
   <!-- Sub-nav shared with analytics -->
   <nav class="analytics-subnav">
-    <a routerLink="/resender/analytics" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Live Analytics</a>
-    <a routerLink="/resender/analytics/coverage" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Data Coverage</a>
+    <a routerLink="/exensioreload/analytics" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Live Analytics</a>
+    <a routerLink="/exensioreload/analytics/coverage" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Data Coverage</a>
   </nav>
 
   <header class="cov-header">

@@ -24,7 +24,7 @@ Look for these console logs:
 [StagingSession] connectToSession called with sessionId: <sessionId>
 [StagingSession] loadSnapshot called: <sessionId>
 [StagingSession] loadFiles called: { sessionId, page: 0, size: 100 }
-[StagingSession] Connecting SSE to: /resender/api/stage/sessions/<sessionId>/monitor?token=...
+[StagingSession] Connecting SSE to: /exensioreload/api/stage/sessions/<sessionId>/monitor?token=...
 [StagingSession] Token length: <number>
 [StagingSession] SSE connection opened successfully
 [StagingSession] Session snapshot loaded: { ... }
@@ -42,7 +42,7 @@ Look for these console logs:
 ### 2. Check Network Tab (F12 → Network)
 
 **Filter by "monitor":**
-- Should see: `GET /resender/api/stage/sessions/<sessionId>/monitor?token=...`
+- Should see: `GET /exensioreload/api/stage/sessions/<sessionId>/monitor?token=...`
 - Status should be: `200 OK` (or pending for SSE)
 - Type should be: `eventsource`
 

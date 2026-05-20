@@ -26,7 +26,7 @@ Updated `connectSse()` method to include token as query parameter:
 private connectSse(sessionId: string): void {
   // EventSource doesn't support custom headers, so we need to pass the token as a query parameter
   const token = localStorage.getItem('token') || '';
-  const url = `/resender/api/stage/sessions/${encodeURIComponent(sessionId)}/monitor?token=${encodeURIComponent(token)}`;
+  const url = `/exensioreload/api/stage/sessions/${encodeURIComponent(sessionId)}/monitor?token=${encodeURIComponent(token)}`;
   this.eventSource = new EventSource(url);
   // ... rest of the method
 }
@@ -205,8 +205,8 @@ To verify the fix works:
 ## Files Modified
 
 ### Backend
-- `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/controller/StageController.java`
-- `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/config/JwtAuthenticationFilter.java`
+- `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/StageController.java`
+- `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/JwtAuthenticationFilter.java`
 
 ### Frontend
 - `new_frontend/src/app/shared/services/staging-session.service.ts`

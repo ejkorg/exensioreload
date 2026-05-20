@@ -527,7 +527,7 @@ CREATE INDEX idx_sender_stage_request_status ON SENDER_STAGE(request_id, status)
 
 - **Backward compatible**: Existing `requestId` values in SENDER_STAGE will NOT have matching `staging_session` rows. The system should handle missing sessions gracefully (show raw data without session metadata).
 - **No schema-breaking changes**: New table `staging_session` is additive. New index on SENDER_STAGE is non-blocking.
-- **Frontend routes unchanged**: Step 3 still at `/resender/new`, My Sessions still at `/my-sessions`.
+- **Frontend routes unchanged**: Step 3 still at `/exensioreload/new`, My Sessions still at `/my-sessions`.
 - **Old monitoring code deprecated**: `MonitoringService` polling fallback remains available but not used when SSE is connected.
 
 ---

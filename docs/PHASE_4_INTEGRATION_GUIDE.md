@@ -20,7 +20,7 @@ export const routes: Routes = [
     // ... existing routes ...
     
     {
-        path: 'resender',
+        path: 'exensioreload',
         component: AppComponent,
         children: [
             // ... existing dashboard, stepper, etc ...
@@ -122,12 +122,12 @@ Add to your main navigation/header:
 ```html
 <!-- In navigation menu -->
 <div class="admin-menu">
-    <a routerLink="/resender/alerts" routerLinkActive="active">
+    <a routerLink="/exensioreload/alerts" routerLinkActive="active">
         <mat-icon>notifications_active</mat-icon>
         <span>Alert Configuration</span>
     </a>
     
-    <a routerLink="/resender/export-reports" routerLinkActive="active">
+    <a routerLink="/exensioreload/export-reports" routerLinkActive="active">
         <mat-icon>description</mat-icon>
         <span>Export & Reports</span>
     </a>
@@ -344,7 +344,7 @@ describe('BulkActionsComponent', () => {
 // dashboard-bulk.e2e.ts
 describe('Dashboard Bulk Operations E2E', () => {
     beforeEach(() => {
-        cy.visit('/resender/dashboard');
+        cy.visit('/exensioreload/dashboard');
     });
     
     it('should bulk resume multiple senders', () => {

@@ -71,7 +71,7 @@ This Phase 4 implementation delivers enterprise-grade features for the DTP Resen
 ## 📁 File Structure
 
 ```
-dtp-resender-fullstack/
+exensioreload/
 ├── new_frontend/src/app/
 │   ├── api/
 │   │   └── backend.service.ts (UPDATED)
@@ -112,11 +112,11 @@ dtp-resender-fullstack/
 ```typescript
 // app.routes.ts
 {
-    path: 'resender/alerts',
+    path: 'exensioreload/alerts',
     component: AlertConfigurationComponent
 },
 {
-    path: 'resender/export-reports',
+    path: 'exensioreload/export-reports',
     component: ExportReportingComponent
 }
 ```
@@ -142,7 +142,7 @@ selectedSenderIds = signal(new Set<number>());
 ### 4. Add Navigation
 ```html
 <!-- navigation.component.html -->
-<a routerLink="/resender/alerts">
+<a routerLink="/exensioreload/alerts">
     <mat-icon>notifications_active</mat-icon>
     Alerts
 </a>
@@ -326,7 +326,7 @@ Bulk Actions:
   ☐ Keyboard: Ctrl+R, Esc work
 
 Alerts:
-  ☐ Navigate to /resender/alerts
+  ☐ Navigate to /exensioreload/alerts
   ☐ Toggle email notifications
   ☐ Enter email recipients
   ☐ Save configuration
@@ -334,7 +334,7 @@ Alerts:
   ☐ Acknowledge an alert
 
 Export/Reports:
-  ☐ Navigate to /resender/export-reports
+  ☐ Navigate to /exensioreload/export-reports
   ☐ Click "Export as CSV" - file downloads
   ☐ Click "Export as Excel" - file downloads
   ☐ Create new scheduled report

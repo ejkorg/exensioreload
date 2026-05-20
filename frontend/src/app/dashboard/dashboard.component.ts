@@ -98,7 +98,7 @@ interface DashboardErrorDetails {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-    private readonly monitoringResumeStorageKey = 'resender.activeMonitoringSessionId';
+    private readonly monitoringResumeStorageKey = 'exensioreload.activeMonitoringSessionId';
 
     // Make Math available in template for accessibility labels
     Math = Math;
@@ -277,7 +277,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     resumeMonitoring() {
-        this.router.navigate(['/resender/new'], { queryParams: { resume: '1' } });
+        this.router.navigate(['/exensioreload/new'], { queryParams: { resume: '1' } });
     }
 
     startOrResumeMonitoring(): void {
@@ -285,7 +285,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             this.resumeMonitoring();
             return;
         }
-        this.router.navigate(['/resender/new']);
+        this.router.navigate(['/exensioreload/new']);
     }
 
     getPrimaryMonitoringActionLabel(): string {

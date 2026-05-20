@@ -2,7 +2,7 @@
 
 ## Overview
 
-The current session expiry handling in `dtp-resender-fullstack` is a silent hard-redirect: a 401 response triggers `auth.logout()` in the interceptor, which clears state and navigates to `/login` with no user feedback. This is disorienting and causes users to lose unsaved work.
+The current session expiry handling in `exensioreload` is a silent hard-redirect: a 401 response triggers `auth.logout()` in the interceptor, which clears state and navigates to `/login` with no user feedback. This is disorienting and causes users to lose unsaved work.
 
 This design introduces an industry-standard two-phase session expiry UX:
 
@@ -152,7 +152,7 @@ After successful login, read `returnUrl` from query params and navigate there (w
 
 ```typescript
 const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-const safeUrl = returnUrl && returnUrl.startsWith('/') ? returnUrl : '/resender';
+const safeUrl = returnUrl && returnUrl.startsWith('/') ? returnUrl : '/exensioreload';
 this.router.navigateByUrl(safeUrl);
 ```
 
@@ -215,7 +215,7 @@ Property 4: Modal singleton — no stacking on repeated events
 ---
 
 Property 5: returnUrl safety — only relative internal paths are accepted
-*For any* string value of `returnUrl`, the `LoginComponent` should navigate to `returnUrl` only if it starts with `/` and does not contain `://`. For all other values (absolute URLs, empty strings, null), it should navigate to `/resender`.
+*For any* string value of `returnUrl`, the `LoginComponent` should navigate to `returnUrl` only if it starts with `/` and does not contain `://`. For all other values (absolute URLs, empty strings, null), it should navigate to `/exensioreload`.
 **Validates: Requirements 3.2, 3.3**
 
 ---
@@ -227,7 +227,7 @@ Property 5: returnUrl safety — only relative internal paths are accepted
 | Token refresh fails when user clicks "Stay Logged In" | Close warning modal, emit `expired$`, open expired modal |
 | `GlassDialogService.open()` throws | Catch error, fall back to `auth.logout()` + router redirect |
 | JWT payload cannot be parsed (malformed token) | `scheduleWarning` is a no-op; no warning shown |
-| `returnUrl` contains encoded characters | `decodeURIComponent` before use; if decoding throws, fall back to `/resender` |
+| `returnUrl` contains encoded characters | `decodeURIComponent` before use; if decoding throws, fall back to `/exensioreload` |
 | Multiple 401s fired in rapid succession (e.g. parallel requests) | Singleton guard in `SessionExpiryService` ensures only one modal opens |
 
 ---

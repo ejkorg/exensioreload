@@ -1,14 +1,14 @@
 # Auth and Admin UI Plan
 
 ## Objective
-- Fix JWT authentication so `/resender/api/auth/me` returns user info (200) after login/refresh.
+- Fix JWT authentication so `/exensioreload/api/auth/me` returns user info (200) after login/refresh.
 - Expose the existing Admin user-management UI and verify admin APIs.
 
 ## Current state
 - Login and refresh flows succeed (cookies set and rotated), but `/auth/me` returns 401.
 - `JwtAuthenticationFilter` was added to `SecurityConfig` but backend still rejects tokens when presented.
-- Nginx now forwards `Authorization`, and SPA is served under `/resender`.
-- `UserAdminController` and `AdminDashboardComponent` exist but `admin` routes are redirected to `resender`.
+- Nginx now forwards `Authorization`, and SPA is served under `/exensioreload`.
+- `UserAdminController` and `AdminDashboardComponent` exist but `admin` routes are redirected to `exensioreload`.
 
 ## High-level plan (steps)
 
@@ -28,7 +28,7 @@
    - Confirm the `JwtAuthenticationFilter` is present by adding a temporary log in the filter or checking startup logs.
 
 4. Confirm token acceptance locally
-   - Use `curl` against backend directly with `Authorization: Bearer <accessToken>` to `/resender/api/auth/me`.
+   - Use `curl` against backend directly with `Authorization: Bearer <accessToken>` to `/exensioreload/api/auth/me`.
    - If still 401, decode the JWT locally (jwt.io or `openssl`/`jq`) and verify claims and signature.
 
 5. Nginx / proxy checks
@@ -41,8 +41,8 @@
    - Build and open SPA to verify admin-only visibility for users with `ROLE_ADMIN`/`ROLE_SUPER_ADMIN`.
 
 7. Functional tests
-   - Use the Admin endpoints to list users: GET `/resender/api/admin/users`.
-   - Use POST `/resender/api/admin/users/seed-admin` or `/create-test-admin/{username}` to ensure an admin exists.
+   - Use the Admin endpoints to list users: GET `/exensioreload/api/admin/users`.
+   - Use POST `/exensioreload/api/admin/users/seed-admin` or `/create-test-admin/{username}` to ensure an admin exists.
    - From SPA, log in as admin and verify the Users page loads and role toggles persist.
 
 8. Deployment notes
@@ -70,13 +70,13 @@ backend/tests/auth_test.sh admin admin123
 
 ```bash
 # on the backend host
-tail -n 200 logs/resender.log
+tail -n 200 logs/exensioreload.log
 ```
 
 - Curl `/auth/me` directly with token:
 
 ```bash
-curl -v -H "Authorization: Bearer <accessToken>" http://127.0.0.1:8004/resender/api/auth/me
+curl -v -H "Authorization: Bearer <accessToken>" http://127.0.0.1:8004/exensioreload/api/auth/me
 ```
 
 ## If token validation fails (common causes)
@@ -91,4 +91,4 @@ curl -v -H "Authorization: Bearer <accessToken>" http://127.0.0.1:8004/resender/
 - Check `application-*.yml` for `reloader.jwt.secret` and suggest a fix.
 
 ---
-Created by automated plan generator. Refer to `backend/src/main/java/com/onsemi/cim/apps/exensio/resender/config/SecurityConfig.java` for the JWT filter registration.
+Created by automated plan generator. Refer to `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/SecurityConfig.java` for the JWT filter registration.

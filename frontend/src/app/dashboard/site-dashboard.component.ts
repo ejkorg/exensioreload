@@ -16,7 +16,7 @@ import { environment } from '../../environments/environment';
         <div class="site-dashboard">
             <header class="site-header">
                 <div class="header-left">
-                    <button mat-stroked-button routerLink="/resender" class="back-btn">
+                    <button mat-stroked-button routerLink="/exensioreload" class="back-btn">
                         <mat-icon>arrow_back</mat-icon>
                         Back to Dashboard
                     </button>
@@ -90,7 +90,7 @@ import { environment } from '../../environments/environment';
             <div class="empty" *ngIf="!loading() && !site() && !error()">
                 <mat-icon>info</mat-icon>
                 <p>No site data found for {{ siteId() }}</p>
-                <button mat-stroked-button routerLink="/resender">Back to Dashboard</button>
+                <button mat-stroked-button routerLink="/exensioreload">Back to Dashboard</button>
             </div>
         </div>
     `,

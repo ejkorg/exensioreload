@@ -17,7 +17,7 @@ npm run build
 ## What to Check
 
 ### 1. Browser Network Tab (F12 → Network)
-Look for: `GET /resender/api/stage/sessions/{sessionId}/monitor?token=...`
+Look for: `GET /exensioreload/api/stage/sessions/{sessionId}/monitor?token=...`
 
 **Good Signs:**
 - Status: `200` or `(pending)`
@@ -33,7 +33,7 @@ Look for: `GET /resender/api/stage/sessions/{sessionId}/monitor?token=...`
 ### 2. Browser Console
 **Good Signs:**
 ```
-[StagingSession] Connecting SSE to: /resender/api/stage/sessions/xxx/monitor?token=...
+[StagingSession] Connecting SSE to: /exensioreload/api/stage/sessions/xxx/monitor?token=...
 [StagingSession] SSE connection opened successfully
 [StagingSession] EventSource readyState: 1
 [StagingSession] HEARTBEAT received: {...}

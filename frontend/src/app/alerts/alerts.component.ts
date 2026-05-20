@@ -17,7 +17,7 @@ import { AlertConfigurationComponent } from '../shared/components/alert-configur
                     <p class="subtitle">Configure notifications, thresholds, and active alerts.</p>
                 </div>
                 <div class="header-actions">
-                    <button mat-stroked-button routerLink="/resender">
+                    <button mat-stroked-button routerLink="/exensioreload">
                         <mat-icon>dashboard</mat-icon>
                         Back to Dashboard
                     </button>

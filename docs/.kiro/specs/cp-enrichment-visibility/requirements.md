@@ -17,7 +17,7 @@ Currently, when a record disappears from the `DTP_SENDER_QUEUE_ITEM` table (mean
 - **CpLogMonitor:** New scheduled backend service that polls ES to detect CP enrichment outcomes.
 - **idData:** ES log field that maps to `data_id` in `SENDER_STAGE`.
 - **mLot:** ES log field that maps to `lot` in `SENDER_STAGE`.
-- **cpConfig:** ES log field containing the CP configuration name — always contains `sender` (case-insensitive) for files triggered by our resender system.
+- **cpConfig:** ES log field containing the CP configuration name — always contains `sender` (case-insensitive) for files triggered by our ExensioReload system.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ Currently, when a record disappears from the `DTP_SENDER_QUEUE_ITEM` table (mean
 
 1. THE `CpLogMonitor` SHALL poll the Elasticsearch index `logs*dataport*` on a configurable interval (default: 60 seconds).
 2. WHEN polling, THE `CpLogMonitor` SHALL query only for records currently in `ENRICHMENT` status.
-3. THE `CpLogMonitor` SHALL filter ES logs using `cpConfig: *sender*` (case-insensitive) to isolate logs triggered by our resender system.
+3. THE `CpLogMonitor` SHALL filter ES logs using `cpConfig: *sender*` (case-insensitive) to isolate logs triggered by our ExensioReload system.
 4. THE `CpLogMonitor` SHALL match ES log entries to `SENDER_STAGE` records using `idData` → `data_id` as the primary key.
 5. WHEN `idData` alone is ambiguous, THE `CpLogMonitor` SHALL additionally match on `mLot` → `lot` to confirm the correct record.
 6. THE `CpLogMonitor` SHALL only consider ES log entries with `@timestamp` greater than or equal to the record's `updated_at` when it entered `ENRICHMENT` status, to avoid matching stale logs from previous runs.

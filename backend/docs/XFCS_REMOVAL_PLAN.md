@@ -1,7 +1,7 @@
 # Refactoring DTP Resender Backend — XFCS Removal
 
 ## Objective
-Remove all **XFCS/Exensio Dearchiver/Archive Reloader** functionality from `dtp-resender-fullstack`, keeping only **DTP Resender** features.
+Remove all **XFCS/Exensio Dearchiver/Archive Reloader** functionality from `exensioreload`, keeping only **DTP Resender** features.
 
 ## Classification Method
 Each file was traced through its dependency chain. A file is **XFCS-only** if it is only referenced by other XFCS files and has no DTP Resender consumers.
@@ -41,18 +41,18 @@ Each file was traced through its dependency chain. A file is **XFCS-only** if it
 - Removed `net.schmizz:sshj:0.34.0` dependency
 
 ### `application.yml`
-- Context-path: `/exensio-dearchiver` → `/dtp-resender`
-- Log file: `exensio-dearchiver.log` → `dtp-resender.log`
-- Logging packages: `com.onsemi.cim.apps.exensio.*` → `com.onsemi.dtp.resender.*`
+- Context-path: `/exensio-dearchiver` → `/exensioreload`
+- Log file: `exensio-dearchiver.log` → `exensioreload.log`
+- Logging packages: `com.onsemi.cim.apps.exensio.*` → `com.onsemi.cim.apps.exensio.exensioreload.*`
 - Removed entire `xfcs:` config block (30 lines)
 - Removed XFCS log level line
 
 ### `application-onsemi-oracle.yml`
 - Removed ~130-line `xfcs:` config block (archives, SSH, env.conf, reload settings, servers, filename-parse-rules)
 - Removed `exensio.metadata.forceAllView` block
-- Renamed config key `exensio-dearchiver:` → `dtp-resender:`
+- Renamed config key `exensio-dearchiver:` → `exensioreload:`
 - Updated logging packages and log file name
-- Updated reset-url-base path from `/exensio-dearchiver/` to `/dtp-resender/`
+- Updated reset-url-base path from `/exensio-dearchiver/` to `/exensioreload/`
 
 ### `DashboardController.java`
 - Replaced broken `ExensioDearchiveService` import with direct `RefDbService` calls

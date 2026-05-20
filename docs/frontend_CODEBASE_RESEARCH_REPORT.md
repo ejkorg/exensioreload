@@ -100,10 +100,10 @@ All routes defined in `app.routes.ts`. Auth pages are unguarded; all app pages r
 
 | Path | Component | Guard | Lazy |
 |------|-----------|-------|------|
-| `/` | Redirect → `/resender` | — | — |
-| `/resender` | `DashboardComponent` | `AuthGuard` | Yes |
-| `/resender/new` | `StepperComponent` | `AuthGuard` | Yes |
-| `/resender/edit/:id` | `StepperComponent` | `AuthGuard` | Yes |
+| `/` | Redirect → `/exensioreload` | — | — |
+| `/exensioreload` | `DashboardComponent` | `AuthGuard` | Yes |
+| `/exensioreload/new` | `StepperComponent` | `AuthGuard` | Yes |
+| `/exensioreload/edit/:id` | `StepperComponent` | `AuthGuard` | Yes |
 | `/my-sessions` | `MySessionsComponent` | `AuthGuard` | Yes |
 | `/admin/users` | `UserListComponent` | `AuthGuard` + `isSuperAdmin()` | Yes |
 | `/login` | `LoginComponent` | — | Yes |
@@ -246,7 +246,7 @@ Custom dialog system (NOT Angular Material).
 │  2. Store token in sessionStorage + localStorage  │
 │  3. Set currentUser BehaviorSubject + signal      │
 │  4. Schedule auto-refresh = (exp - 30s) from now  │
-│  5. Navigate to /resender                         │
+│  5. Navigate to /exensioreload                         │
 └──────────────────────────────────────────────────┘
       │
       ▼
@@ -490,7 +490,7 @@ Mobile-first adjustments:
 
 ## 10. All API Endpoints
 
-### Authentication (`/resender/api/auth/*`)
+### Authentication (`/exensioreload/api/auth/*`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/auth/login` | Authenticate, returns `accessToken` + `user` |
@@ -502,7 +502,7 @@ Mobile-first adjustments:
 | POST | `/auth/request-reset` | Request password reset email |
 | POST | `/auth/reset-password` | Reset password with token |
 
-### Dashboard (`/resender/api/dashboard/*`)
+### Dashboard (`/exensioreload/api/dashboard/*`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/dashboard/snapshot` | Global metrics snapshot |
@@ -558,7 +558,7 @@ Mobile-first adjustments:
 | GET | `/stage/sessions/details` | Session details |
 | POST | `/stage/sessions/{id}/stop` | Stop a staging session |
 
-### Admin (`/resender/api/admin/*`)
+### Admin (`/exensioreload/api/admin/*`)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/admin/users` | List users (paginated, filterable) |
@@ -569,8 +569,8 @@ Mobile-first adjustments:
 | GET | `/admin/users/statistics` | User statistics |
 | GET | `/admin/users/roles` | Available roles |
 
-**Base URL**: All endpoints prefixed with `/resender/api` (via `environment.apiUrl`)  
-**Dev Proxy**: `proxy.conf.json` forwards `/resender/api` → `http://127.0.0.1:8004` with WebSocket support
+**Base URL**: All endpoints prefixed with `/exensioreload/api` (via `environment.apiUrl`)  
+**Dev Proxy**: `proxy.conf.json` forwards `/exensioreload/api` → `http://127.0.0.1:8004` with WebSocket support
 
 ---
 

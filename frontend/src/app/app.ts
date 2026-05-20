@@ -20,8 +20,8 @@ export class App {
     public themeService = inject(ThemeService);
 
     navItems = [
-        { label: 'Dashboard', icon: 'dashboard', path: '/resender', exact: true },
-        { label: 'Analytics', icon: 'insights', path: '/resender/analytics', exact: false },
+        { label: 'Dashboard', icon: 'dashboard', path: '/exensioreload', exact: true },
+        { label: 'Analytics', icon: 'insights', path: '/exensioreload/analytics', exact: false },
         { label: 'My Sessions', icon: 'history', path: '/my-sessions', exact: false },
         { label: 'Users', icon: 'people', path: '/admin/users', admin: true, exact: false },
     ];

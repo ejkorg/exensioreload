@@ -109,7 +109,7 @@ For a single file, the total time from "file enters external queue" to "UI shows
 **Cause**: SSE connection not establishing
 **Solutions**:
 1. Check browser console for SSE errors
-2. Verify `/resender/api/stage/sessions/{id}/monitor` endpoint is accessible
+2. Verify `/exensioreload/api/stage/sessions/{id}/monitor` endpoint is accessible
 3. Check for proxy/firewall blocking SSE connections
 4. System will auto-fallback to polling after 3 seconds
 

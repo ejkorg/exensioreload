@@ -260,7 +260,7 @@
 }
 
 // User Table
-.resender-table {
+.exensioreload-table {
     width: 100%;
     background: transparent !important;
 
@@ -584,7 +584,7 @@ app-glass-pagination {
         color: #0f172a;
     }
 
-    .resender-table {
+    .exensioreload-table {
         th {
             background: rgba(15, 23, 42, 0.03);
             border-bottom-color: rgba(15, 23, 42, 0.09);
@@ -769,7 +769,7 @@ app-glass-pagination {
         min-width: 120px;
     }
 
-    .resender-table {
+    .exensioreload-table {
         th,
         td {
             padding: 0.625rem !important;
@@ -825,7 +825,7 @@ app-glass-pagination {
         }
     }
 
-    .resender-table {
+    .exensioreload-table {
         th,
         td {
             padding: 0.5rem !important;
@@ -833,7 +833,7 @@ app-glass-pagination {
         }
     }
 
-    .resender-table {
+    .exensioreload-table {
         th:nth-child(5),
         td:nth-child(5) {
             display: none;

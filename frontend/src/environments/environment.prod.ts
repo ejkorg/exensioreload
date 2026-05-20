@@ -2,7 +2,7 @@ export const environment = {
     production: true,
     apiBaseUrl: '',
     useProxy: false,
-    apiUrl: '/resender/api',
+    apiUrl: '/exensioreload/api',
     showSenderLookupSql: false,
     showPreviewDebug: false,
     monitoring: {

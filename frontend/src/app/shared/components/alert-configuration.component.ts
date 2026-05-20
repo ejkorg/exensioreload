@@ -463,7 +463,7 @@ export class AlertConfigurationComponent implements OnInit {
         // Placeholder until backend endpoint for template thresholds is available.
         // Persist locally to maintain UX continuity.
         const values = this.thresholdTemplateForm.getRawValue();
-        localStorage.setItem('resender.alertTemplates', JSON.stringify(values));
+        localStorage.setItem('exensioreload.alertTemplates', JSON.stringify(values));
 
         setTimeout(() => {
             this.thresholdTemplateLoading.set(false);

@@ -68,7 +68,7 @@ This feature adds Single Sign-On (SSO) login support for onsemi.com corporate us
 
 #### Acceptance Criteria
 
-1. WHEN the IdP assertion contains group or role claims, THE AuthController SHALL map configured IdP group names to local application roles (e.g., `onsemi-resender-admins` → `ADMIN`).
+1. WHEN the IdP assertion contains group or role claims, THE AuthController SHALL map configured IdP group names to local application roles (e.g., `onsemi-exensioreload-admins` → `ADMIN`).
 2. WHEN no matching group claim is found in the IdP assertion, THE AuthController SHALL assign the default role `USER` to the authenticated user.
 3. WHEN a role mapping is configured, THE System SHALL apply it at every SSO login, updating the user's roles if IdP group membership has changed.
 4. THE System SHALL support configuring IdP-to-role mappings via application properties without requiring code changes.
