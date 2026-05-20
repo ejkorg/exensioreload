@@ -1,4 +1,5 @@
 # Angular specific
+frontend/dist/
 /dist/
 /out-tsc/
 /tmp/

@@ -386,7 +386,7 @@ export class StepperComponent implements OnInit, OnDestroy {
         if (this.stageExecutionMode() === 'all') {
             return `Stage All ${this.previewTotal().toLocaleString()} Files`;
         }
-        const count = this.selectedWaferCount();
+        const count = this.selectedRows().size;
         return `Stage ${count} Payload${count === 1 ? '' : 's'}`;
     });
 
@@ -460,8 +460,6 @@ export class StepperComponent implements OnInit, OnDestroy {
     selectedRows = signal<Set<string>>(new Set());
     selectedRowLookup = signal<Map<string, DiscoveryPreviewRow>>(new Map());
 
-    selectedWaferCount = computed(() => this.selectedRows().size);
-
     selectedFamilyCount = computed(() => {
         const selected = Array.from(this.selectedRowLookup().values()) as DiscoveryPreviewRow[];
         if (selected.length === 0) {
@@ -477,7 +475,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     });
 
     stageSelectionTooltip = computed(() => {
-        const wafers = this.selectedWaferCount();
+        const wafers = this.selectedRows().size;
         const families = this.selectedFamilyCount();
 
         if (wafers === 0) {
@@ -1725,6 +1723,23 @@ export class StepperComponent implements OnInit, OnDestroy {
         this.toggleSelection(row, true);
     }
 
+    onCheckboxToggle(row: DiscoveryPreviewRow, checked: boolean) {
+        const id = this.getRowKey(row);
+        const next = new Set(this.selectedRows());
+        const lookup = new Map(this.selectedRowLookup());
+
+        if (checked) {
+            next.add(id);
+            lookup.set(id, row);
+        } else {
+            next.delete(id);
+            lookup.delete(id);
+        }
+
+        this.selectedRows.set(next);
+        this.selectedRowLookup.set(lookup);
+    }
+
     toggleSelectionByRow(row: DiscoveryPreviewRow) {
         const familyKeys = this.getRowFamilyKeys(row);
         const current = this.selectedRows();
@@ -2046,7 +2061,7 @@ export class StepperComponent implements OnInit, OnDestroy {
             data: {
                 queryFilters: filters,
                 totalDiscovered: this.previewTotal(),
-                selectedCount: this.selectedWaferCount()
+                selectedCount: this.selectedRows().size
             } as ConfirmStageAllDialogData,
             disableClose: false,
             panelClass: 'glass-dialog',
