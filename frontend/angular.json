@@ -55,7 +55,8 @@
                   "maximumError": "40kb"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "baseHref": "/exensio-reload/"
             },
             "development": {
               "optimization": false,
