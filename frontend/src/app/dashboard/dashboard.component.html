@@ -7,12 +7,12 @@
                 <p class="header-subtitle">Real-time dispatch and payload operations overview</p>
             </div>
             <div class="header-actions" role="toolbar" aria-label="Dashboard controls">
-                <button mat-stroked-button [routerLink]="['/exensioreload/alerts']" class="refresh-btn"
+                <button mat-stroked-button [routerLink]="['/alerts']" class="refresh-btn"
                         aria-label="Open alert center">
                     <mat-icon aria-hidden="true">notifications_active</mat-icon>
                     <span class="btn-label">Alert Center</span>
                 </button>
-                <button mat-stroked-button [routerLink]="['/exensioreload/analytics']" class="refresh-btn"
+                <button mat-stroked-button [routerLink]="['/analytics']" class="refresh-btn"
                         aria-label="Open analytics dashboard">
                     <mat-icon aria-hidden="true">insights</mat-icon>
                     <span class="btn-label">Analytics</span>
@@ -35,7 +35,7 @@
                       aria-live="polite">
                     {{ getFileListLabel(stagingSession.sessionFiles().length, stagingSession.currentSession()?.totalFiles ?? 0, resolvedMonitorMaxRows()) }}
                 </span>
-                <button mat-flat-button color="primary" routerLink="/exensioreload/new" class="new-request-btn"
+                <button mat-flat-button color="primary" routerLink="/new" class="new-request-btn"
                         aria-label="Create new request">
                     <mat-icon aria-hidden="true">add</mat-icon>
                     <span class="btn-label">New Request</span>
@@ -302,7 +302,7 @@
                             <mat-icon>arrow_forward</mat-icon>
                             View Details
                         </button>
-                        <button mat-stroked-button class="view-dashboard" [routerLink]="['/exensioreload/site', site.site, 'dashboard']" (click)="$event.stopPropagation()">
+                        <button mat-stroked-button class="view-dashboard" [routerLink]="['/site', site.site, 'dashboard']" (click)="$event.stopPropagation()">
                             <mat-icon>insights</mat-icon>
                             Site Dashboard
                         </button>
@@ -388,7 +388,7 @@
         <mat-icon class="empty-icon">inbox</mat-icon>
         <h3>No Sites Configured</h3>
         <p>You don't have any sender sites set up yet. Create your first request to get started.</p>
-        <button mat-raised-button color="primary" routerLink="/exensioreload/new">
+        <button mat-raised-button color="primary" routerLink="/new">
             <mat-icon>add_circle</mat-icon>
             Create New Request
         </button>

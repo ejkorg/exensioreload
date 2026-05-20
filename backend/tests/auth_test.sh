@@ -4,7 +4,7 @@
 # reach the nginx host (usaz15ls088:8080).
 
 set -euo pipefail
-BASE=http://usaz15ls088:8080/exensioreload/api
+BASE=http://usaz15ls088:8080/api
 USER=${1:-admin}
 PASS=${2:-password}
 JAR=$(mktemp)

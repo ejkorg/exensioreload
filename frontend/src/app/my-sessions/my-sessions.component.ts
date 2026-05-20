@@ -1030,7 +1030,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         return;
       }
       this.persistMonitoringSession(session.sessionId);
-      this.router.navigate(['/exensioreload/new']);
+      this.router.navigate(['/new']);
     }
 
     selectSession(session: StagingSessionSummary) {

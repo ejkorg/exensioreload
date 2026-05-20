@@ -44,7 +44,7 @@ public class SsoController {
     public static final String SESSION_SILENT_FLAG = "sso_silent_prompt_none";
 
     /** Default landing page when no valid returnUrl is available. */
-    private static final String DEFAULT_RETURN_URL = "/exensioreload";
+    private static final String DEFAULT_RETURN_URL = "/";
 
     private final SsoProperties ssoProperties;
 

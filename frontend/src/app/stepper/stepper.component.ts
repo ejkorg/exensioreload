@@ -2672,7 +2672,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     }
 
     onFinishAndReturnToHub() {
-        this.router.navigate(['/exensioreload']);
+        this.router.navigate(['/']);
         setTimeout(() => this.stopMonitoring(true, false), 0);
     }
 

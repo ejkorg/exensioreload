@@ -1,8 +1,6 @@
 server:
   port: 8004
   forward-headers-strategy: native
-  servlet:
-    context-path: /exensioreload
 
 spring:
   autoconfigure:

@@ -47,14 +47,14 @@ public class SecurityConfig {
                                            @org.springframework.beans.factory.annotation.Autowired(required = false)
                                            ClientRegistrationRepository clientRegistrationRepository) throws Exception {
         // For API endpoints we want JSON 401 responses rather than redirects to HTML login pages.
-        RequestMatcher apiMatcher = new AntPathRequestMatcher("/exensioreload/api/**");
+        RequestMatcher apiMatcher = new AntPathRequestMatcher("/api/**");
 
         LinkedHashMap<RequestMatcher, org.springframework.security.web.AuthenticationEntryPoint> entryPoints = new LinkedHashMap<>();
         entryPoints.put(apiMatcher, new RestAuthenticationEntryPoint());
 
         DelegatingAuthenticationEntryPoint delegatingEntryPoint = new DelegatingAuthenticationEntryPoint(entryPoints);
         // fallback to the standard login page for non-API requests
-        delegatingEntryPoint.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/exensioreload/login"));
+        delegatingEntryPoint.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/login"));
 
         http
                 .csrf(csrf -> csrf.disable())
@@ -66,7 +66,7 @@ public class SecurityConfig {
                                 "/api/auth/sso/**",
                                 "/sso-callback"
                         ).permitAll()
-                        .requestMatchers("/exensioreload/api/**").authenticated()
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(delegatingEntryPoint))
