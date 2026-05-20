@@ -1,5 +1,7 @@
 server:
   port: 8004
+  servlet:
+    context-path: /exensio-reload
   forward-headers-strategy: native
   compression:
     enabled: true
@@ -129,7 +131,6 @@ security:
     http://172.21.172.136:8004,
     http://usaz15ls088:8080,
     http://usaz15ls088:8004
-    http://usaz15ls088
 
 # Optional: from address used when sending automated messages
 app:
@@ -137,7 +138,7 @@ app:
     from: "no-reply@onsemi.com"
     # Reset URL base(s) used when sending password reset emails. Can be a YAML list, CSV, or folded scalar.
     reset-url-base:
-      - "http://usaz15ls088:8080/reset-password"
+      - "http://usaz15ls088:8080/exensio-reload/reset-password"
       - "http://127.0.0.1:4200/reset-password"
     # Probe the first N configured reset-url-base entries and prefer the first reachable one.
     reset-url-probe-first: 1
