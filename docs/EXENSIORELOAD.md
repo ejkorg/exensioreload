@@ -83,6 +83,9 @@ com.onsemi.cim.apps.exensio.exensioreload
 | `app.stage.max-rows-cap` | 10000 | Max stage-all rows |
 | `external-db.allow-writes` | false | Gate for external DB writes |
 
+### SSO Registration
+Information for the Windows/SSO team can be found in [docs/SSO_ONBOARDING_DETAILS.md](docs/SSO_ONBOARDING_DETAILS.md).
+
 ### Configuration Files
 - `application.yml` — Default config, profiles, Liquibase, CORS
 - `application-onsemi-oracle.yml` — Production Oracle/SMTP/CORS config

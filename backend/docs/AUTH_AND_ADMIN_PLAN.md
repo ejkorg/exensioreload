@@ -50,9 +50,9 @@
    - Ensure nginx sets `proxy_set_header X-Forwarded-Proto $scheme;` and forwards `Host` and `X-Forwarded-*` headers.
    - Monitor logs for cookie warnings (SameSite) and adjust `reloader.refresh.cookie-secure` in `application-*.yml` as needed.
 
-## Quick verification commands
+## SSO Registration
+For the specific URLs and parameters required to register the app with the Windows/SSO team, see [docs/SSO_ONBOARDING_DETAILS.md](docs/SSO_ONBOARDING_DETAILS.md).
 
-- Rebuild backend:
 
 ```powershell
 cd backend
