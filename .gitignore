@@ -15,7 +15,9 @@
 /.idea
 
 # Node modules and dependency files
+frontend/node_modules/
 /node_modules/
+/node_modules/*
 /package-lock.json
 /yarn.lock
 
