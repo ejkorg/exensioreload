@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add nullable filename/original_file_name/wafer to the staging table used by RefDbService.
+         This changelog is written to be safe to re-run: each changeSet will be marked ran if the column already exists. -->
+
+    <!-- Add filename column if missing -->
+    <changeSet id="4.1-add-stage-filename" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="filename" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="filename" type="VARCHAR(1024)" />
+        </addColumn>
+    </changeSet>
+
+    <!-- Add original_file_name column if missing -->
+    <changeSet id="4.1-add-stage-original-file-name" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="original_file_name" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="original_file_name" type="VARCHAR(1024)" />
+        </addColumn>
+    </changeSet>
+
+    <!-- Add wafer column if missing -->
+    <changeSet id="4.1-add-stage-wafer" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="wafer" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="wafer" type="VARCHAR(255)" />
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

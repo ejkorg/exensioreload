@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="2026-02-28-01-create-staging-session" author="copilot">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="staging_session"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="staging_session">
+            <column name="id" type="VARCHAR(36)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site" type="VARCHAR(60)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_name" type="VARCHAR(200)"/>
+            <column name="environment" type="VARCHAR(20)"/>
+
+            <column name="total_files" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="files_staged" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="files_enqueued" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="files_done" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="files_failed" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="status" type="VARCHAR(30)" defaultValue="STAGING">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="last_checked_at" type="TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="2026-02-28-02-session-status-check" author="copilot">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="staging_session"/>
+        </preConditions>
+        <sql>
+            ALTER TABLE staging_session ADD CONSTRAINT staging_session_status_chk
+            CHECK (status IN ('STAGING','DISPATCHING','MONITORING','COMPLETED','PARTIALLY_FAILED','CANCELLED'))
+        </sql>
+    </changeSet>
+
+    <changeSet id="2026-02-28-03-session-index-user" author="copilot">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="staging_session"/>
+                <not>
+                    <indexExists indexName="idx_staging_session_user" tableName="staging_session"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex indexName="idx_staging_session_user" tableName="staging_session">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2026-02-28-04-session-index-status" author="copilot">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="staging_session"/>
+                <not>
+                    <indexExists indexName="idx_staging_session_status" tableName="staging_session"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex indexName="idx_staging_session_status" tableName="staging_session">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2026-02-28-05-stage-request-status-index" author="copilot">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <not>
+                    <indexExists indexName="idx_sender_stage_request_status" tableName="SENDER_STAGE"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex indexName="idx_sender_stage_request_status" tableName="SENDER_STAGE">
+            <column name="request_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

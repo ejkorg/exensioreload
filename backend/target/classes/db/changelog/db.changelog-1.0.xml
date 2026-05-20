@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="1" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="sender_queue" />
+            </not>
+        </preConditions>
+        <createTable tableName="sender_queue">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="payload_id" type="VARCHAR(1000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_id" type="INT"/>
+            <column name="status" type="VARCHAR(50)"/>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="processed_at" type="TIMESTAMP"/>
+            <column name="source" type="VARCHAR(200)"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="3" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <or>
+                <and>
+                    <tableExists tableName="sender_queue" />
+                    <dbms type="oracle"/>
+                    <sqlCheck expectedResult="0">SELECT COUNT(*) FROM user_constraints WHERE constraint_name = 'UK_SENDER_PAYLOAD' AND constraint_type IN ('U','P')</sqlCheck>
+                </and>
+                <and>
+                    <tableExists tableName="sender_queue" />
+                    <dbms type="postgresql"/>
+                    <sqlCheck expectedResult="0">SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_name = 'uk_sender_payload' AND constraint_type = 'UNIQUE'</sqlCheck>
+                </and>
+                <and>
+                    <tableExists tableName="sender_queue" />
+                    <dbms type="h2"/>
+                    <sqlCheck expectedResult="0">SELECT COUNT(*) FROM information_schema.constraints WHERE constraint_name = 'UK_SENDER_PAYLOAD'</sqlCheck>
+                </and>
+            </or>
+        </preConditions>
+        <addUniqueConstraint tableName="sender_queue" columnNames="sender_id, payload_id" constraintName="uk_sender_payload" />
+    </changeSet>
+
+    <changeSet id="2" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="refresh_tokens" />
+            </not>
+        </preConditions>
+        <createTable tableName="refresh_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="token" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_token_token">
+            <column name="token"/>
+        </createIndex>
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_token_username">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="4" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="external_environment" />
+            </not>
+        </preConditions>
+        <createTable tableName="external_environment">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="VARCHAR(255)"/>
+        </createTable>
+
+    </changeSet>
+
+    <changeSet id="4b-create-external-location" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="external_location" />
+            </not>
+        </preConditions>
+        <createTable tableName="external_location">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="environment_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="db_connection_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="details" type="VARCHAR(2000)"/>
+        </createTable>
+
+        <createIndex tableName="external_location" indexName="idx_loc_env">
+            <column name="environment_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="4a-add-fk-external-location" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="external_location" />
+                <tableExists tableName="external_environment" />
+                <not>
+                    <foreignKeyConstraintExists foreignKeyName="fk_env_loc_env" />
+                </not>
+            </and>
+        </preConditions>
+        <addForeignKeyConstraint baseTableName="external_location" baseColumnNames="environment_id" referencedTableName="external_environment" referencedColumnNames="id" constraintName="fk_env_loc_env"/>
+    </changeSet>
+
+    <changeSet id="5" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="external_location" />
+                <not>
+                    <columnExists tableName="external_location" columnName="site" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="external_location">
+            <column name="site" type="VARCHAR(100)" />
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="6" author="fg8n8x">
+        <comment>Backfill site column using first token of label (uppercase). Separate SQL for H2 and Oracle.</comment>
+        <sql dbms="h2">UPDATE external_location SET site = UPPER(CASE WHEN LOCATE(' ', label) &gt; 0 THEN SUBSTRING(label, 1, LOCATE(' ', label)-1) ELSE label END);</sql>
+        <sql dbms="oracle">UPDATE external_location SET site = UPPER(CASE WHEN INSTR(label, ' ') &gt; 0 THEN SUBSTR(label, 1, INSTR(label, ' ')-1) ELSE label END);</sql>
+    </changeSet>
+    <!-- Create load_session table -->
+    <changeSet id="6a-create-load-session" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="load_session" />
+            </not>
+        </preConditions>
+        <createTable tableName="load_session">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="initiated_by" type="VARCHAR(255)" />
+            <column name="site" type="VARCHAR(100)" />
+            <column name="environment" type="VARCHAR(100)" />
+            <column name="sender_id" type="INT" />
+            <column name="source" type="VARCHAR(200)" />
+            <column name="status" type="VARCHAR(50)" />
+            <column name="total_payloads" type="INT" />
+            <column name="enqueued_local_count" type="INT" />
+            <column name="pushed_remote_count" type="INT" />
+            <column name="skipped_count" type="INT" />
+            <column name="failed_count" type="INT" />
+            <column name="created_at" type="TIMESTAMP" />
+            <column name="updated_at" type="TIMESTAMP" />
+        </createTable>
+    </changeSet>
+
+    <!-- Create load_session_payload table -->
+    <changeSet id="6a-create-load-session-payload" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="load_session_payload" />
+            </not>
+        </preConditions>
+        <createTable tableName="load_session_payload">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="session_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_id" type="VARCHAR(1000)" />
+            <column name="status" type="VARCHAR(50)" />
+            <column name="error" type="VARCHAR(2000)" />
+            <column name="external_id" type="VARCHAR(255)" />
+            <column name="pushed_at" type="TIMESTAMP" />
+            <column name="next_attempt_at" type="TIMESTAMP" />
+            <column name="attempts" type="INT" />
+            <column name="created_at" type="TIMESTAMP" />
+            <column name="updated_at" type="TIMESTAMP" />
+            <column name="global_payload_id" type="BIGINT" />
+        </createTable>
+    </changeSet>
+
+    <!-- Add foreign key after both tables exist -->
+    <changeSet id="6a-add-fk-load-session-payload" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload" />
+                <tableExists tableName="load_session" />
+                <not>
+                    <foreignKeyConstraintExists foreignKeyName="fk_lsp_session" />
+                </not>
+            </and>
+        </preConditions>
+        <addForeignKeyConstraint baseTableName="load_session_payload" baseColumnNames="session_id" referencedTableName="load_session" referencedColumnNames="id" constraintName="fk_lsp_session"/>
+    </changeSet>
+
+    <changeSet id="7" author="fg8n8x">
+        <!-- Only add column if it does not already exist. If it exists, mark this changeset as ran. -->
+        <!-- validCheckSum ANY prevents checksum validation failures in DBs where this changeset was already applied with the previous content. -->
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload" />
+                <not>
+                    <columnExists tableName="load_session_payload" columnName="next_attempt_at" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="load_session_payload">
+            <column name="next_attempt_at" type="TIMESTAMP" />
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="7a-refresh-tokens-oracle-timestamps" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <dbms type="oracle"/>
+            <and>
+                <tableExists tableName="refresh_tokens" />
+                <not>
+                    <columnExists tableName="refresh_tokens" columnName="expires_at_tz" />
+                </not>
+                <sqlCheck expectedResult="0">SELECT COUNT(*) FROM user_tab_cols WHERE table_name = 'REFRESH_TOKENS' AND column_name IN ('EXPIRES_AT','CREATED_AT') AND data_type LIKE 'TIMESTAMP%WITH TIME ZONE'</sqlCheck>
+            </and>
+        </preConditions>
+        <addColumn tableName="refresh_tokens">
+            <column name="expires_at_tz" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+        <addColumn tableName="refresh_tokens">
+            <column name="created_at_tz" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+        <sql dbms="oracle">
+            UPDATE refresh_tokens
+            SET expires_at_tz = CASE WHEN expires_at IS NOT NULL THEN FROM_TZ(expires_at, 'UTC') ELSE NULL END,
+            created_at_tz = CASE WHEN created_at IS NOT NULL THEN FROM_TZ(created_at, 'UTC') ELSE NULL END;
+        </sql>
+        <dropColumn tableName="refresh_tokens" columnName="expires_at"/>
+        <dropColumn tableName="refresh_tokens" columnName="created_at"/>
+        <renameColumn tableName="refresh_tokens" oldColumnName="expires_at_tz" newColumnName="expires_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+        <renameColumn tableName="refresh_tokens" oldColumnName="created_at_tz" newColumnName="created_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+        <addDefaultValue tableName="refresh_tokens" columnName="expires_at" defaultValueComputed="SYSTIMESTAMP"/>
+        <addDefaultValue tableName="refresh_tokens" columnName="created_at" defaultValueComputed="SYSTIMESTAMP"/>
+        <addNotNullConstraint tableName="refresh_tokens" columnName="expires_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+        <addNotNullConstraint tableName="refresh_tokens" columnName="created_at" columnDataType="TIMESTAMP(6) WITH TIME ZONE"/>
+    </changeSet>
+
+    <!-- Oracle-specific sequences and triggers for auto-increment behavior -->
+    <!-- Oracle sequences and triggers split into per-object changeSets with existence checks -->
+    <changeSet id="6b-oracle-seq-load-session" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <dbms type="oracle" />
+                <not>
+                    <sequenceExists sequenceName="app_seq_load_session" />
+                </not>
+            </and>
+        </preConditions>
+        <createSequence sequenceName="app_seq_load_session" startValue="1" incrementBy="1" />
+    </changeSet>
+
+    <changeSet id="6b-oracle-seq-load-session-payload" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <dbms type="oracle" />
+                <not>
+                    <sequenceExists sequenceName="app_seq_load_session_payload" />
+                </not>
+            </and>
+        </preConditions>
+        <createSequence sequenceName="app_seq_load_session_payload" startValue="1" incrementBy="1" />
+    </changeSet>
+
+    <changeSet id="6b-oracle-trg-load-session" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <dbms type="oracle" />
+                <!-- trigger existence check via SQL against user_triggers; returns 0 when not present -->
+                <sqlCheck expectedResult="0">SELECT COUNT(*) FROM user_triggers WHERE trigger_name = 'APP_TRG_LOAD_SESSION_BI'</sqlCheck>
+            </and>
+        </preConditions>
+        <sql dbms="oracle" splitStatements="false">
+            CREATE OR REPLACE TRIGGER app_trg_load_session_bi
+            BEFORE INSERT ON load_session
+            FOR EACH ROW
+            BEGIN
+            IF :new.id IS NULL THEN
+            SELECT app_seq_load_session.NEXTVAL INTO :new.id FROM dual;
+            END IF;
+            END;
+        </sql>
+    </changeSet>
+
+    <changeSet id="6b-oracle-trg-load-session-payload" author="fg8n8x">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <dbms type="oracle" />
+                <sqlCheck expectedResult="0">SELECT COUNT(*) FROM user_triggers WHERE trigger_name = 'APP_TRG_LSP_BI'</sqlCheck>
+            </and>
+        </preConditions>
+        <sql dbms="oracle" splitStatements="false">
+            CREATE OR REPLACE TRIGGER app_trg_lsp_bi
+            BEFORE INSERT ON load_session_payload
+            FOR EACH ROW
+            BEGIN
+            IF :new.id IS NULL THEN
+            SELECT app_seq_load_session_payload.NEXTVAL INTO :new.id FROM dual;
+            END IF;
+            END;
+        </sql>
+    </changeSet>
+
+    <!-- Include additional changelogs -->
+    <!-- <include file="db.changelog-1.1-add-load-session-payload-remote-fields.xml" relativeToChangelogFile="true" />
+    <include file="db.changelog-3.0-authz-refdb.xml" relativeToChangelogFile="true" /> -->
+    <!-- Modern authentication system - foundational schema -->
+    <include file="db.changelog-4.0-users.xml" relativeToChangelogFile="true" />
+    <!-- <include file="db.changelog-4.1-add-stage-file-columns.xml" relativeToChangelogFile="true" />
+    <include file="db.changelog-4.2-add-sender-name.xml" relativeToChangelogFile="true" />
+    <include file="db.changelog-4.3-add-completion-notification.xml" relativeToChangelogFile="true" /> -->
+    <include file="db.changelog-4.4-add-stage-end-time.xml" relativeToChangelogFile="true" />
+    <!-- Drop legacy constraint and add new 6-column unique constraint on SENDER_STAGE -->
+    <include file="db.changelog-6.0-add-stage-unique-constraint.xml" relativeToChangelogFile="true" />
+    <!-- Per-wafer mapping for queued files -->
+    <include file="db.changelog-6.1-queue-wafers.xml" relativeToChangelogFile="true" />
+    <!-- Add Request ID for isolation -->
+    <include file="db.changelog-6.2-add-stage-request-id.xml" relativeToChangelogFile="true" />
+    <!-- Super Admin functionality enhancement -->
+    <include file="db.changelog-7.0-super-admin-enhancement.xml" relativeToChangelogFile="true" />
+    <!-- Complete authentication system modernization -->
+    <include file="db.changelog-8.0-complete-auth-modernization.xml" relativeToChangelogFile="true" />
+    <!-- Staging session persistence and request/status index -->
+    <include file="db.changelog-9.0-staging-session.xml" relativeToChangelogFile="true" />
+    <!-- Promote ENQUEUED to PROCESSING status for CP visibility -->
+    <include file="db.changelog-9.1-stage-processing-status.xml" relativeToChangelogFile="true" />
+    <!-- Ensure SENDER_STAGE.status CHECK includes PROCESSING -->
+    <include file="db.changelog-9.2-stage-status-constraint.xml" relativeToChangelogFile="true" />
+    <!-- Add CP enrichment output path and target columns -->
+    <include file="db.changelog-9.3-cp-enrichment-columns.xml" relativeToChangelogFile="true" />
+    <!-- Add Exensio wafer_key and pg_key columns for load confirmation -->
+    <include file="db.changelog-9.4-exensio-columns.xml" relativeToChangelogFile="true" />
+
+</databaseChangeLog>
