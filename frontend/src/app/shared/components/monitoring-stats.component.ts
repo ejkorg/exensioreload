@@ -1,0 +1,385 @@
+import { Component, Input } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { MonitoringStats } from '../services/monitoring.service';
+import { GlassIconComponent } from './glass-icon.component';
+
+@Component({
+  selector: 'app-monitoring-stats',
+  standalone: true,
+  imports: [CommonModule, GlassIconComponent],
+  template: `
+    <div class="monitoring-stats">
+      <!-- Overview Cards -->
+      <div class="stats-grid">
+        <div class="stat-card glass-panel">
+          <div class="stat-icon total">
+            <app-glass-icon name="dashboard" [size]="24" color="primary"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total Files</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel">
+          <div class="stat-icon staged">
+            <app-glass-icon name="upload" [size]="24" color="primary"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.ready }}</div>
+            <div class="stat-label">Staged</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel">
+          <div class="stat-icon queued">
+            <app-glass-icon name="clock" [size]="24" color="warning"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.enqueued }}</div>
+            <div class="stat-label">In Queue (pending CP)</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel">
+          <div class="stat-icon processing">
+            <app-glass-icon name="refresh" [size]="24" color="primary"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.processing }}</div>
+            <div class="stat-label">Enrichment / Translation</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel">
+          <div class="stat-icon completed">
+            <app-glass-icon name="check_circle" [size]="24" color="success"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.completed }}</div>
+            <div class="stat-label">Completed</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel" *ngIf="stats.failed > 0">
+          <div class="stat-icon failed">
+            <app-glass-icon name="error" [size]="24" color="error"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.failed }}</div>
+            <div class="stat-label">Failed</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-section glass-panel">
+        <div class="progress-header">
+          <span class="progress-label">Overall Progress</span>
+          <span class="progress-percentage">{{ stats.progress }}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill"
+               [style.width.%]="stats.progress"
+               [class.complete]="stats.progress === 100"
+               [class.has-errors]="stats.failed > 0">
+          </div>
+        </div>
+        <div class="progress-details">
+          <span class="detail-item">
+            <app-glass-icon name="clock" [size]="16" color="muted"></app-glass-icon>
+            Elapsed: {{ stats.elapsedTime }}
+          </span>
+          <span class="detail-item" *ngIf="stats.progress < 100">
+            <app-glass-icon name="calendar" [size]="16" color="muted"></app-glass-icon>
+            ETA: {{ stats.eta }}
+          </span>
+          <span class="detail-item">
+            <app-glass-icon name="dashboard" [size]="16" color="muted"></app-glass-icon>
+            {{ stats.throughput }} files/min
+          </span>
+          <span class="detail-item" [class.success]="stats.successRate >= 95" [class.warning]="stats.successRate < 95">
+            <app-glass-icon [name]="stats.successRate >= 95 ? 'check_circle' : 'warning'" [size]="16"
+                           [color]="stats.successRate >= 95 ? 'success' : 'warning'"></app-glass-icon>
+            {{ stats.successRate }}% success
+          </span>
+        </div>
+      </div>
+
+      <!-- Status Distribution -->
+      <div class="status-distribution glass-panel">
+        <div class="distribution-header">
+          <span class="distribution-label">Status Distribution</span>
+        </div>
+        <div class="distribution-bars">
+          <div class="distribution-bar" *ngIf="stats.completed > 0">
+            <div class="bar-label">Completed</div>
+            <div class="bar-track">
+              <div class="bar-fill completed" [style.width.%]="getPercentage(stats.completed)"></div>
+            </div>
+            <div class="bar-value">{{ stats.completed }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.processing > 0">
+            <div class="bar-label">Enrichment / Translation</div>
+            <div class="bar-track">
+              <div class="bar-fill processing" [style.width.%]="getPercentage(stats.processing)"></div>
+            </div>
+            <div class="bar-value">{{ stats.processing }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.ready > 0">
+            <div class="bar-label">Staged</div>
+            <div class="bar-track">
+              <div class="bar-fill staged" [style.width.%]="getPercentage(stats.ready)"></div>
+            </div>
+            <div class="bar-value">{{ stats.ready }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.enqueued > 0">
+            <div class="bar-label">In Queue (pending CP)</div>
+            <div class="bar-track">
+              <div class="bar-fill queued" [style.width.%]="getPercentage(stats.enqueued)"></div>
+            </div>
+            <div class="bar-value">{{ stats.enqueued }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.failed > 0">
+            <div class="bar-label">Failed</div>
+            <div class="bar-track">
+              <div class="bar-fill failed" [style.width.%]="getPercentage(stats.failed)"></div>
+            </div>
+            <div class="bar-value">{{ stats.failed }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .monitoring-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.6rem;
+    }
+
+    .stat-card {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      transition: transform 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-1px);
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-icon.total { background: rgba(129, 140, 248, 0.15); }
+    .stat-icon.staged { background: rgba(129, 140, 248, 0.15); }
+    .stat-icon.queued { background: rgba(245, 158, 11, 0.15); }
+    .stat-icon.processing { background: rgba(129, 140, 248, 0.15); }
+    .stat-icon.completed { background: rgba(16, 185, 129, 0.15); }
+    .stat-icon.failed { background: rgba(239, 68, 68, 0.15); }
+
+    .stat-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .stat-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1;
+      margin-bottom: 0.2rem;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .progress-section {
+      padding: 0.875rem 1rem;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .progress-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .progress-percentage {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-color);
+    }
+
+    .progress-bar {
+      height: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-color), #a78bfa);
+      border-radius: 6px;
+      transition: width 0.5s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+      );
+      animation: shimmer 2s infinite;
+    }
+
+    .progress-fill.complete {
+      background: linear-gradient(90deg, #10b981, #34d399);
+    }
+
+    .progress-fill.has-errors {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .progress-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    .detail-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .detail-item.success { color: #10b981; }
+    .detail-item.warning { color: #f59e0b; }
+
+    .status-distribution {
+      padding: 0.875rem 1rem;
+    }
+
+    .distribution-header {
+      margin-bottom: 1rem;
+    }
+
+    .distribution-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .distribution-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .distribution-bar {
+      display: grid;
+      grid-template-columns: 100px 1fr 60px;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .bar-label {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .bar-track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .bar-fill.completed { background: #10b981; }
+    .bar-fill.processing { background: var(--accent-color); }
+    .bar-fill.staged { background: #818cf8; }
+    .bar-fill.queued { background: #f59e0b; }
+    .bar-fill.failed { background: #ef4444; }
+
+    .bar-value {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-main);
+      text-align: right;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .progress-details {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .distribution-bar {
+        grid-template-columns: 80px 1fr 50px;
+        gap: 0.5rem;
+      }
+    }
+  `]
+})
+export class MonitoringStatsComponent {
+  @Input() stats!: MonitoringStats;
+
+  getPercentage(value: number): number {
+    return this.stats.total > 0 ? (value / this.stats.total) * 100 : 0;
+  }
+}

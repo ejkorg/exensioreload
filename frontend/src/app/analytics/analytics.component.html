@@ -1,0 +1,112 @@
+<div class="analytics-container" role="main" aria-label="Analytics dashboard">
+    <nav class="analytics-subnav">
+        <a routerLink="/resender/analytics" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Live Analytics</a>
+        <a routerLink="/resender/analytics/coverage" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="subnav-link">Data Coverage</a>
+    </nav>
+    <header class="analytics-header">
+        <div>
+            <h1>Analytics</h1>
+            <p class="subtitle">Hourly trends, throughput, site distribution, and sender performance insights</p>
+        </div>
+        <div class="header-actions">
+            <button mat-stroked-button routerLink="/resender" aria-label="Back to dashboard overview">
+                <mat-icon aria-hidden="true">dashboard</mat-icon>
+                <span>Dashboard</span>
+            </button>
+            <button mat-flat-button color="primary" (click)="refresh()" [disabled]="loading()" [matTooltip]="'Last updated: ' + formatTimeAgo(lastUpdated())" aria-label="Refresh analytics data">
+                <mat-icon aria-hidden="true">{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+                <span>Refresh Analytics</span>
+            </button>
+            <button mat-stroked-button (click)="exportHistory()" [disabled]="filteredHistory().length === 0" aria-label="Export analytics history to CSV">
+                <mat-icon aria-hidden="true">download</mat-icon>
+                <span>Export CSV</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="analytics-toolbar" *ngIf="hasData()">
+        <span class="toolbar-label">Range</span>
+        <button
+                *ngFor="let option of rangeOptions"
+                mat-stroked-button
+                class="range-btn"
+                [class.active]="timeRangeMinutes() === option.minutes"
+                (click)="setRange(option.minutes)">
+            {{ option.label }}
+        </button>
+        <span class="toolbar-note">Showing last {{ timeRangeMinutes() / 60 }}h</span>
+    </div>
+
+    <section class="summary-grid" *ngIf="!error()">
+        <div class="summary-card glass-panel">
+            <span class="label">Success Rate</span>
+            <span class="value">{{ successRate() }}%</span>
+        </div>
+        <div class="summary-card glass-panel">
+            <span class="label">Total Backlog</span>
+            <span class="value">{{ totalBacklog() | number }}</span>
+        </div>
+        <div class="summary-card glass-panel">
+            <span class="label">Active Sites</span>
+            <span class="value">{{ activeSites() }}</span>
+        </div>
+        <div class="summary-card glass-panel">
+            <span class="label">Data Freshness</span>
+            <span class="value small">{{ formatTimeAgo(lastUpdated()) }}</span>
+        </div>
+    </section>
+
+    <div class="error-container" *ngIf="error() as err">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <p>{{ err }}</p>
+        <button mat-stroked-button (click)="refresh()">Retry</button>
+    </div>
+
+    <div class="empty-state" *ngIf="!loading() && !error() && !hasData()">
+        <mat-icon aria-hidden="true">insights</mat-icon>
+        <h3>No analytics data available</h3>
+        <p>Data will appear once dashboard snapshots are available.</p>
+    </div>
+
+    <section class="charts-grid" *ngIf="!error() && hasData()">
+        <article class="chart-card glass-panel chart-wide">
+            <div class="chart-header">
+                <h2>Hourly Trend Overview</h2>
+                <span>Backlog, ready, enqueued, completed</span>
+            </div>
+            <div #trendChartRef class="chart-host" role="img" aria-label="Hourly trend chart"></div>
+        </article>
+
+        <article class="chart-card glass-panel">
+            <div class="chart-header">
+                <h2>Success Rate Trend</h2>
+                <span>Live percentage over snapshot history</span>
+            </div>
+            <div #successRateChartRef class="chart-host" role="img" aria-label="Success rate trend chart"></div>
+        </article>
+
+        <article class="chart-card glass-panel">
+            <div class="chart-header">
+                <h2>Throughput Over Time</h2>
+                <span>Completed items extrapolated per hour</span>
+            </div>
+            <div #throughputChartRef class="chart-host" role="img" aria-label="Throughput chart"></div>
+        </article>
+
+        <article class="chart-card glass-panel">
+            <div class="chart-header">
+                <h2>Site Volume Distribution</h2>
+                <span>Volume share by active site</span>
+            </div>
+            <div #siteVolumeChartRef class="chart-host" role="img" aria-label="Site volume distribution chart"></div>
+        </article>
+
+        <article class="chart-card glass-panel">
+            <div class="chart-header">
+                <h2>Sender Comparison</h2>
+                <span>Backlog vs success rate</span>
+            </div>
+            <div #senderComparisonChartRef class="chart-host" role="img" aria-label="Sender comparison chart"></div>
+        </article>
+    </section>
+</div>

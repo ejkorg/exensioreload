@@ -1,0 +1,167 @@
+<div class="user-hub-container">
+    <header class="hub-title">
+        <div class="hub-header-text">
+            <h1>User <span class="accent">Management</span></h1>
+            <p class="subtitle">System oversight and permission orchestrator.</p>
+        </div>
+        <div class="hub-actions">
+            <button type="button" (click)="createUser()" class="hub-action-btn">
+                <app-glass-icon name="person_add" [size]="18"></app-glass-icon>
+                Add User
+            </button>
+            <button type="button" (click)="goToAudit()" class="hub-action-btn">
+                <app-glass-icon name="history" [size]="18"></app-glass-icon>
+                Audit Logs
+            </button>
+        </div>
+    </header>
+
+    <div class="stats-row" *ngIf="stats()">
+        <div class="stat-card glass-panel clickable">
+            <div class="stat-icon-area"><app-glass-icon name="people" [size]="22"></app-glass-icon></div>
+            <div class="stat-data">
+                <span class="stat-value">{{ stats()?.totalUsers }}</span>
+                <span class="stat-label">Total Users</span>
+            </div>
+        </div>
+        <div class="stat-card glass-panel clickable active">
+            <div class="stat-icon-area"><app-glass-icon name="verified" [size]="22"></app-glass-icon></div>
+            <div class="stat-data">
+                <span class="stat-value">{{ stats()?.activeUsers }}</span>
+                <span class="stat-label">Active</span>
+            </div>
+        </div>
+        <div class="stat-card glass-panel clickable warn">
+            <div class="stat-icon-area"><app-glass-icon name="vpn_key" [size]="22"></app-glass-icon></div>
+            <div class="stat-data">
+                <span class="stat-value">{{ stats()?.superAdmins }}</span>
+                <span class="stat-label">Super Admins</span>
+            </div>
+        </div>
+        <div class="stat-card glass-panel clickable accent">
+            <div class="stat-icon-area"><app-glass-icon name="manage_accounts" [size]="22"></app-glass-icon></div>
+            <div class="stat-data">
+                <span class="stat-value">{{ stats()?.admins }}</span>
+                <span class="stat-label">Admins</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-bar glass-panel">
+        <div class="search-box">
+            <app-glass-icon name="search" [size]="18"></app-glass-icon>
+            <input type="text" [formControl]="searchControl" placeholder="Find user by name or email...">
+        </div>
+        <div class="filter-group">
+            <app-glass-select
+                    class="mini-filter"
+                    label="Role"
+                    placeholder="All Roles"
+                    [formControl]="roleFilter"
+                    [options]="roles()"
+            ></app-glass-select>
+
+            <app-glass-select
+                    class="mini-filter"
+                    label="Status"
+                    placeholder="All Statuses"
+                    [formControl]="statusFilter"
+                    [options]="['ACTIVE', 'INACTIVE', 'LOCKED']"
+            ></app-glass-select>
+
+            <button type="button" (click)="loadUsers()" [glassTooltip]="'Refresh data'" class="refresh-btn">
+                <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+            </button>
+        </div>
+    </div>
+
+    <div class="content-area glass-panel table-overflow">
+        <table class="resender-table">
+            <thead>
+            <tr>
+                <th>
+                    <button type="button" class="sort-header-btn" (click)="setSort('username')">
+                        User
+                        <app-glass-icon [name]="sortIcon('username')" [size]="14"></app-glass-icon>
+                    </button>
+                </th>
+                <th>Roles</th>
+                <th>
+                    <button type="button" class="sort-header-btn" (click)="setSort('status')">
+                        Status
+                        <app-glass-icon [name]="sortIcon('status')" [size]="14"></app-glass-icon>
+                    </button>
+                </th>
+                <th>Access</th>
+                <th>
+                    <button type="button" class="sort-header-btn" (click)="setSort('createdAt')">
+                        Created
+                        <app-glass-icon [name]="sortIcon('createdAt')" [size]="14"></app-glass-icon>
+                    </button>
+                </th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr *ngFor="let user of dataSource.data; trackBy: trackByUserId">
+                <td>
+                    <div class="user-identity">
+                        <div class="user-avatar">{{ user.username.charAt(0).toUpperCase() }}</div>
+                        <div class="user-info">
+                            <span class="username">{{ user.username }}</span>
+                            <span class="email">{{ user.email }}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="role-pills">
+              <span class="role-pill" *ngFor="let role of user.roles" [class.admin]="role.includes('ADMIN')">
+                {{ role }}
+              </span>
+                    </div>
+                </td>
+                <td>
+            <span class="status-tag" [attr.data-status]="user.status">
+              {{ user.status }}
+            </span>
+                </td>
+                <td>
+                    <button
+                            type="button"
+                            class="access-icon-btn"
+                            [class.enabled]="user.enabled"
+                            [class.disabled]="!user.enabled"
+                            [glassTooltip]="user.enabled ? 'Disable access' : 'Enable access'"
+                            [attr.aria-label]="user.enabled ? 'Disable access' : 'Enable access'"
+                            (click)="toggleEnabled(user)">
+                        <app-glass-icon [name]="user.enabled ? 'check_circle' : 'cancel'" [size]="18"></app-glass-icon>
+                    </button>
+                </td>
+                <td>{{ user.createdAt | date:'shortDate' }}</td>
+                <td>
+                    <div class="row-actions">
+                        <button type="button" class="actions-menu-btn" (click)="editUser(user)" [glassTooltip]="'Edit user'" aria-label="Edit user">
+                            <app-glass-icon name="edit" [size]="16"></app-glass-icon>
+                        </button>
+                        <button type="button" class="actions-menu-btn danger" (click)="deleteUser(user)" [glassTooltip]="'Delete user'" aria-label="Delete user">
+                            <app-glass-icon name="delete" [size]="16"></app-glass-icon>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="loading-overlay" *ngIf="loading()">
+            <div class="hub-spinner" aria-label="Loading"></div>
+        </div>
+
+        <app-glass-pagination
+                [length]="totalElements()"
+                [pageSize]="pageSize"
+                [pageIndex]="pageIndex"
+                [pageSizeOptions]="[10, 20, 50]"
+                (page)="onPage($event)">
+        </app-glass-pagination>
+    </div>
+</div>

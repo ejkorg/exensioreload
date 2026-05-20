@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Complete Authentication System Modernization -->
+    <changeSet id="2025-02-02-01-migrate-legacy-users" author="auth-modernization">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="APP_USERS"/>
+            <tableExists tableName="users"/>
+        </preConditions>
+        
+        <!-- Migrate any remaining users from APP_USERS to users table -->
+        <sql>
+            INSERT INTO users (username, email, password_hash, enabled, status, created_at, updated_at)
+            SELECT 
+                au.username,
+                COALESCE(au.username || '@localhost', 'unknown@localhost') as email,
+                COALESCE('$2a$10$defaulthash', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.') as password_hash,
+                CASE WHEN au.active = 1 THEN 1 ELSE 0 END as enabled,
+                'ACTIVE' as status,
+                SYSTIMESTAMP as created_at,
+                SYSTIMESTAMP as updated_at
+            FROM APP_USERS au
+            WHERE NOT EXISTS (
+                SELECT 1 FROM users u WHERE u.username = au.username
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="2025-02-02-02-migrate-legacy-roles" author="auth-modernization">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="APP_USER_ROLES"/>
+            <tableExists tableName="user_roles"/>
+        </preConditions>
+        
+        <!-- Migrate roles from APP_USER_ROLES to user_roles table -->
+        <sql>
+            INSERT INTO user_roles (user_id, role)
+            SELECT 
+                u.id,
+                aur.role_name
+            FROM APP_USER_ROLES aur
+            JOIN users u ON u.username = aur.username
+            WHERE NOT EXISTS (
+                SELECT 1 FROM user_roles ur 
+                WHERE ur.user_id = u.id AND ur.role = aur.role_name
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="2025-02-02-03-drop-legacy-tables" author="auth-modernization">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="APP_USERS"/>
+        </preConditions>
+        
+        <!-- Drop legacy authentication tables -->
+        <dropTable tableName="APP_USER_ROLES" cascadeConstraints="true"/>
+        <dropTable tableName="APP_USERS" cascadeConstraints="true"/>
+        <dropTable tableName="APP_ROLES" cascadeConstraints="true"/>
+    </changeSet>
+
+    <changeSet id="2025-02-02-04-ensure-admin-user" author="auth-modernization">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="users"/>
+        </preConditions>
+        
+        <!-- Ensure admin user exists with all required roles -->
+        <sql>
+            MERGE INTO users u
+            USING (SELECT 'admin' as username FROM dual) src
+            ON (u.username = src.username)
+            WHEN NOT MATCHED THEN
+                INSERT (username, email, password_hash, enabled, status, created_at, updated_at)
+                VALUES ('admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', 1, 'ACTIVE', SYSTIMESTAMP, SYSTIMESTAMP)
+        </sql>
+        
+        <!-- Ensure admin has all required roles -->
+        <sql>
+            INSERT INTO user_roles (user_id, role)
+            SELECT u.id, r.role_name
+            FROM users u
+            CROSS JOIN (
+                SELECT 'ROLE_USER' as role_name FROM dual
+                UNION ALL SELECT 'ROLE_ADMIN' FROM dual
+                UNION ALL SELECT 'ROLE_SUPER_ADMIN' FROM dual
+            ) r
+            WHERE u.username = 'admin'
+            AND NOT EXISTS (
+                SELECT 1 FROM user_roles ur 
+                WHERE ur.user_id = u.id AND ur.role = r.role_name
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="2025-02-02-05a-create-index-users-username" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="users"/>
+                <not>
+                    <indexExists tableName="users" indexName="idx_users_username"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="users" indexName="idx_users_username" unique="true">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2025-02-02-05b-create-index-users-email" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="users"/>
+                <not>
+                    <indexExists tableName="users" indexName="idx_users_email"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="users" indexName="idx_users_email" unique="true">
+            <column name="email"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2025-02-02-05c-create-index-users-status" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="users"/>
+                <not>
+                    <indexExists tableName="users" indexName="idx_users_status"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="users" indexName="idx_users_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2025-02-02-05d-create-index-user-roles-user-id" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="user_roles"/>
+                <not>
+                    <indexExists tableName="user_roles" indexName="idx_user_roles_user_id"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="user_roles" indexName="idx_user_roles_user_id">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2025-02-02-05e-create-index-user-roles-role" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="user_roles"/>
+                <not>
+                    <indexExists tableName="user_roles" indexName="idx_user_roles_role"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="user_roles" indexName="idx_user_roles_role">
+            <column name="role"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

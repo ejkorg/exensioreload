@@ -1,0 +1,384 @@
+BE2-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: beyqsp-db.onsemi.com:1634/BEYQSP
+  password: dataport_us8r
+  user: DATAPORT_USER
+BE2-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: beyqsq-db.onsemi.com:1633/BEYQSQ
+  password: dataportq123
+  user: DATAPORT_USER
+CEBU-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: WLCCPPRD.fairchildsemi.com:1524/WLCCPPRD
+  password: dpUserp922
+  user: DATAPORT_USER
+CEBU-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: cpyqsq-db.onsemi.com:1528:CPYQSQ
+  password: dpUser123
+  user: DATAPORT_USER
+CNK-ONSC-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: szyqsp-db.onsemi.com:1613/szyqsp
+  password: dportp_17
+  user: DATAPORT_USER
+CNK-ONSC-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: szyqsq-db.onsemi.com:1617/szyqsq
+  password: dport_17
+  user: DATAPORT_USER
+CZ4-CZ2-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: cz4mfgp-db.onsemi.com:1554/CZ4MFGP
+  password: dportprd_19
+  user: DATAPORT_USER
+CZ4-CZ2-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: czrz04rac-qa1-scan.onsemi.com:1528/svcCZ4MFGQ_DATAPORT.onsemi.com
+  password: dportp_17
+  user: DATAPORT_USER
+EFK-MT-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gyqsp-db.onsemi.com:1546/GYQSP
+  password: ''
+  user: DATAPORT_USER
+EFK-MT-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gyqsq-db.onsemi.com:1545/GYQSq
+  password: ''
+  user: DATAPORT_USER
+EXTERNAL-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gyqsp-db.onsemi.com:1546/GYQSP.onsemi.com
+  password: "dpusr^182"
+  user: DATAPORT_USER
+EXTERNAL-QA:
+  host: gyqsq-db.onsemi.com:1545/GYQSQ.onsemi.com
+  user: DATAPORT_USER
+  password: "dpusr^401"
+  dbType: oracle
+  hikari:
+    maximumPoolSize: 10
+    minimumIdle: 1
+    connectionTimeoutMs: 20000
+#EXTERNAL-QA:
+#  dbType: oracle
+#  hikari:
+#    connectionTimeoutMs: 20000
+#    maximumPoolSize: 10
+#    minimumIdle: 1
+#  host: gyqsq-db.onsemi.com:1545/GYQSQ
+#  password: dpusr^401
+#  user: DATAPORT_USER
+JND-AIZU-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: jnd-proddb-scan:1540/JNDMFGP.onsemi.com
+  password: Aizu1234
+  user: DATAPORT_USER
+  downloadUrl: http://jndmfgapp.onsemi.com:60070/dataport/download/downloadFile/{id}?gzipped=true
+JND-AIZU-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: jnd-devdb-scan.onsemi.com:1537/JNDMFGQ.onsemi.com
+  password: Aizu123
+  user: DATAPORT_USER
+KRI-BUCHEON-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: bkyqsq-db.onsemi.com:1453/BKYQSQ.onsemi.com
+  password: dataport_us8r
+  user: DATAPORT_USER
+KRI-BUCHEON-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: bkyqsp-db.onsemi.com:1452/BKYQSP.onsemi.com
+  password: dport_usr_19
+  user: DATAPORT_USER
+LESHAN-CN1-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: lpsyqsp-db.onsemi.com:1532/LPSYQSP
+  password: dportp_298
+  user: DATAPORT_USER
+LESHAN-CN1-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: lpsyqsq-db.onsemi.com:1531/LPSYQSQ
+  password: dportq_910
+  user: DATAPORT_USER
+MYD-SBN-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: myyqsp-db.onsemi.com:1572/MYYQSP
+  password: DPuser20
+  user: DATAPORT_USER
+MYD-SBN-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: myyqsq-db.onsemi.com:1571/MYYQSQ
+  password: DPORTuser20
+  user: DATAPORT_USER
+OSPI-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: phyqsp-db.onsemi.com:1579/PHYQSP
+  password: useryqs231
+  user: DATAPORT_USER
+OSPI-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: phyqsq-db.onsemi.com:1770/PHYQSQ
+  password: DPORTuser.2018
+  user: DATAPORT_USER
+OSV-VIETNAM-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: osvyqsp-db.onsemi.com:1558/OSVYQSP
+  password: osvdtpusr863
+  user: DATAPORT_USER
+OSV-VIETNAM-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: osvyqsq-db.onsemi.com:1759/OSVYQSQ
+  password: osvdtpusr6543
+  user: DATAPORT_USER
+PHM-TARLAC-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: TLYQSP-db.onsemi.com:1772/TLYQSP
+  password: dataport_us8r
+  user: DATAPORT_USER
+PHM-TARLAC-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: tlyqsq-db.onsemi.com:1771/TLYQSQ
+  password: dportp_17
+  user: DATAPORT_USER
+SUZHOU-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: scyqsp-db.onsemi.com:1531/SCYQSP
+  password: dataport_us8r
+  user: DATAPORT_USER
+SUZHOU-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: scyqsq-db.onsemi.com:1530/SCYQSQ
+  password: dataport_us8r
+  user: DATAPORT_USER
+USR-GRESHAM-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gryqsp-db.usgr1.onsemi.com:1704/GRYQSP
+  password: DATAPORT_us8r
+  user: DATAPORT_USER
+USR-GRESHAM-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gryqsq-db.usgr1.onsemi.com:1703/GRYQSQ
+  password: DATAPORT_us8r
+  user: DATAPORT_USER
+UV5-EFK-GF-NETWORK-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: l4.usefk.com:1521/efkyqsp
+  password: Dp0746_us
+  user: DATAPORT_USER
+UV5-EFK-GF-NETWORK-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: l1.usefk.com:1521/efkyqsq
+  password: dpq0792_us
+  user: DATAPORT_USER
+UVA-NAMPA-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: nmyqsp-db.onsemi.com:1605/nmyqsp
+  password: UvaPDtpU#741
+  user: DATAPORT_USER
+UVA-NAMPA-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: nmyqsq-db.onsemi.com:1604/nmyqsq
+  password: UvaQDtpU#361
+  user: DATAPORT_USER
+UWA-MOUNTAIN-TOP-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: mtyqsp-db.onsemi.com:1553/MTYQSP
+  password: MtpDtpUsr173
+  user: DATAPORT_UWA_USER
+UWA-MOUNTAIN-TOP-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: mtyqsq-db.onsemi.com:1554/MTYQSQ
+  password: dpu2019
+  user: DATAPORT_UWA_USER
+UWH-GTAT-PROD:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gyqsp-db.onsemi.com:1546/GYQSP
+  password: uwhusr#456
+  user: DATAPORT_UWH_USER
+UWH-GTAT-QA:
+  dbType: oracle
+  hikari:
+    connectionTimeoutMs: 20000
+    maximumPoolSize: 10
+    minimumIdle: 1
+  host: gyqsq-db.onsemi.com:1545/GYQSQ
+  password: uwhusr#562
+  user: DATAPORT_UWH_USER
+
+#default-QA:
+#  host: gyqsq-db.onsemi.com:1545/GYQSQ.onsemi.com
+#  user: DATAPORT_USER
+#  password: dpusr^401
+#  dbType: oracle
+#  hikari:
+#    maximumPoolSize: 10
+#    minimumIdle: 1
+#    connectionTimeoutMs: 20000
+#
+#EXTERNAL-QA:
+#  host: gyqsq-db.onsemi.com:1545/GYQSQ.onsemi.com
+#  user: DATAPORT_USER
+#  password: dpusr^401
+#  dbType: oracle
+#  hikari:
+#    maximumPoolSize: 10
+#    minimumIdle: 1
+#    connectionTimeoutMs: 20000
+#
+## phyqsq-db.onsemi.com:1770:PHYQSQ
+#OSPI-QA:
+#  host: phyqsq-db.onsemi.com:1770/PHYQSQ.onsemi.com
+#  user: DATAPORT_USER
+#  password: DPORTuser.2018
+#  dbType: oracle
+#  hikari:
+#    maximumPoolSize: 10
+#    minimumIdle: 1
+#    connectionTimeoutMs: 20000
+

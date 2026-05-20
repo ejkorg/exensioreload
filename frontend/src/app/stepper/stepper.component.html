@@ -1,0 +1,762 @@
+<div class="stepper-container glass-panel">
+    <app-glass-stepper
+            [steps]="steps"
+            [linear]="true"
+            [selectedIndex]="currentStep()"
+            title="New Resend Request"
+            subtitle="Follow the steps to discover, stage and dispatch payloads."
+            (selectionChange)="onStepChange($event)">
+
+        <!-- Step 1: Configure Request -->
+        <div class="step-content" *ngIf="currentStep() === 0">
+            <header class="step-header-compact">
+                <h2>Request <span class="accent">Configuration</span></h2>
+            </header>
+
+            <!-- Resume prompt: shown when a non-terminal session was found in storage -->
+            <section class="resume-session-banner glass-panel" *ngIf="resumableSession() as session">
+                <div class="info-banner-content">
+                    <app-glass-icon name="info" class="info-icon" style="color:#60a5fa;flex-shrink:0;margin-top:2px"></app-glass-icon>
+                    <div class="info-text" style="flex:1">
+                        <h3 style="margin:0 0 0.25rem;font-size:0.9375rem;font-weight:600;color:var(--text-primary)">Active Session Detected</h3>
+                        <p style="margin:0;font-size:0.8125rem;color:var(--text-secondary)">
+                            A staging session for <strong>{{ session.senderLabel }}</strong> ({{ session.site | siteName }}) is still in progress.
+                            Resume monitoring or start a new request below.
+                        </p>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;flex-shrink:0;align-items:center">
+                        <app-glass-button variant="primary" size="small" (clicked)="resumePersistedSession()">
+                            Resume Monitoring
+                        </app-glass-button>
+                        <app-glass-button variant="tertiary" size="small" (clicked)="dismissResumePrompt()">
+                            Dismiss
+                        </app-glass-button>
+                    </div>
+                </div>
+            </section>
+
+            <div class="config-grid-optimized">
+                <!-- Single unified card for all filters -->
+                <section class="config-card-unified glass-panel">
+                    <!-- Environment & Site in one row -->
+                    <div class="form-row">
+                        <!-- Admin: full dropdown. User role: read-only PROD label -->
+                        <ng-container *ngIf="isAdminUser(); else envReadOnly">
+                            <app-glass-select
+                                    label="Environment"
+                                    placeholder="Select Env"
+                                    [ngModel]="selectedEnv()"
+                                    (ngModelChange)="onEnvChange($event)"
+                                    [options]="envOptions()">
+                            </app-glass-select>
+                        </ng-container>
+                        <ng-template #envReadOnly>
+                            <div class="env-readonly-field">
+                                <span class="env-readonly-label">ENVIRONMENT</span>
+                                <div class="env-readonly-box">PROD</div>
+                            </div>
+                        </ng-template>
+
+                        <app-glass-select
+                                label="Site / DTP Instance"
+                                placeholder="Select Site"
+                                [ngModel]="selectedSite()"
+                                (ngModelChange)="onSiteChange($event)"
+                                [disabled]="!isSiteEnabled()"
+                                [options]="siteOptions()">
+                        </app-glass-select>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Filter criteria in compact rows -->
+                    <div class="form-row">
+                        <app-glass-select
+                                label="Location"
+                                [ngModel]="selectedLocation()"
+                                (ngModelChange)="onLocationChange($event)"
+                                [disabled]="!areFiltersEnabled()"
+                                [options]="locations()">
+                        </app-glass-select>
+
+                        <app-glass-select
+                                label="Data Type"
+                                [ngModel]="selectedDataType()"
+                                (ngModelChange)="onDataTypeChange($event)"
+                                [disabled]="!areFiltersEnabled()"
+                                [options]="dataTypes()">
+                        </app-glass-select>
+
+                        <app-glass-select
+                                label="Tester Type"
+                                [ngModel]="selectedTesterType()"
+                                (ngModelChange)="onTesterTypeChange($event)"
+                                [disabled]="!areFiltersEnabled()"
+                                [options]="testerTypes()">
+                        </app-glass-select>
+                    </div>
+
+                    <div class="form-row">
+                        <app-glass-select
+                                label="Data Type Ext"
+                                [ngModel]="selectedDataTypeExt()"
+                                (ngModelChange)="onDataTypeExtChange($event)"
+                                [disabled]="!areFiltersEnabled()"
+                                [options]="dataTypeExt()">
+                        </app-glass-select>
+
+                        <div class="test-phase-field">
+                            <app-glass-select
+                                    label="Test Phase"
+                                    [ngModel]="selectedTestPhase()"
+                                    (ngModelChange)="onTestPhaseChange($event)"
+                                    [disabled]="!areFiltersEnabled()"
+                                    [options]="testPhases()">
+                            </app-glass-select>
+
+                            <div class="test-phase-loading" *ngIf="testPhasesLoading()">
+                                <span class="mini-spinner"></span>
+                                <span>Loading test phases...</span>
+                            </div>
+                        </div>
+
+                        <div class="checkbox-wrapper" *ngIf="isAdminUser()">
+                            <app-glass-checkbox
+                                    label="Historical Mode"
+                                    [checked]="historicalMode()"
+                                    (checkedChange)="onHistoricalModeChange($event)">
+                            </app-glass-checkbox>
+                        </div>
+                    </div>
+
+                    <!-- Date range inline if visible -->
+                    <div class="form-row" *ngIf="showDateRangePanel()">
+                        <app-glass-date-range
+                                label="Time Range"
+                                [includeTime]="true"
+                                [ngModel]="dateRange()"
+                                (ngModelChange)="dateRange.set($event)">
+                        </app-glass-date-range>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Sender Selection Section -->
+                    <div class="sender-prereq-hint" *ngIf="!senderPrerequisitesMet()">
+                        Sender selection appears after Site, Location, and Data Type are selected.
+                    </div>
+
+                    <div class="sender-section" *ngIf="senderPrerequisitesMet()">
+                        <div class="section-header-inline">
+                            <span class="section-label">Sender Configuration</span>
+                            <span *ngIf="senderAutoResolved()" class="auto-badge">
+                                    <app-glass-icon name="check_circle" [size]="16"></app-glass-icon>
+                                    Auto-Resolved
+                                </span>
+                        </div>
+
+                        <app-glass-sender-selector
+                                [senderOptions]="senderOptions()"
+                                [selectedSenderId]="selectedSenderId()"
+                                [selectedSenderName]="getSelectedSenderName()"
+                                [senderAutoResolved]="senderAutoResolved()"
+                                [senderLookupLoading]="senderLookupLoading()"
+                                [senderFallback]="senderFallback()"
+                                [canFindSender]="!!selectedSite() && !!selectedLocation() && !!selectedDataType()"
+                                [showFindSenderButton]="!!selectedSite() && !!selectedLocation() && !!selectedDataType() && !senderAutoResolved()"
+                                (senderSelected)="onSenderSelected($event)"
+                                (findSender)="onFindSenderClick()">
+                        </app-glass-sender-selector>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Lot/Wafer pairs - more compact -->
+                    <div class="lot-wafer-section">
+                        <div class="section-header-inline">
+                            <span class="section-label">Lot / Wafer Filters</span>
+                            <button class="collapse-toggle-btn" type="button" (click)="toggleLotWaferFilters()">
+                                {{ showLotWaferFilters() ? 'Hide' : 'Show' }}
+                            </button>
+                        </div>
+
+                        <ng-container *ngIf="showLotWaferFilters()">
+                            <div class="pairs-list-compact">
+                                <div *ngFor="let pair of lotWaferPairs(); let i = index" class="pair-row-compact">
+                                    <app-glass-input
+                                            class="lot-field-compact"
+                                            label="Lot"
+                                            placeholder="L12345"
+                                            [ngModel]="pair.lot"
+                                            (ngModelChange)="updateLot(i, $event)">
+                                    </app-glass-input>
+
+                                    <app-glass-input
+                                            class="wafer-field-compact"
+                                            label="Wafer"
+                                            placeholder="Optional"
+                                            [ngModel]="pair.wafer"
+                                            (ngModelChange)="updateWafer(i, $event)">
+                                    </app-glass-input>
+
+                                    <button
+                                            class="delete-btn-compact"
+                                            (click)="removePair(i)"
+                                            [disabled]="lotWaferPairs().length === 1"
+                                            [attr.aria-label]="'Remove pair ' + (i + 1)"
+                                            [title]="lotWaferPairs().length === 1 ? 'Cannot remove last pair' : 'Remove this lot/wafer pair'">
+                                        <app-glass-icon name="delete" [size]="20"></app-glass-icon>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button
+                                    class="add-pair-btn"
+                                    (click)="addPair()"
+                                    aria-label="Add another lot/wafer pair"
+                                    title="Add another lot/wafer pair">
+                                <app-glass-icon name="add" [size]="18"></app-glass-icon>
+                                <span>Add Pair</span>
+                            </button>
+                        </ng-container>
+                    </div>
+                </section>
+            </div>
+
+            <div class="step-actions-compact">
+                <app-glass-button
+                        variant="primary"
+                        size="medium"
+                        [disabled]="!canProceedToPreview() || previewLoading()"
+                        [loading]="previewLoading()"
+                        (clicked)="loadPreview()">
+                    <app-glass-icon name="search" [size]="18"></app-glass-icon>
+                    Preview Payloads
+                </app-glass-button>
+            </div>
+        </div>
+
+        <!-- Step 2: Discovery Preview -->
+        <div class="step-content-preview" *ngIf="currentStep() === 1">
+            <header class="step-header-compact">
+                <div class="header-row">
+                    <h2>Discovery <span class="accent">Preview</span></h2>
+                    <span class="found-count-badge">{{ previewTotal() | number }} found</span>
+                </div>
+            </header>
+
+            <div class="preview-summary-strip" *ngIf="previewTotal() > 0">
+                <span class="summary-pill">Preview loaded: {{ previewRows().length | number }}</span>
+                <span class="summary-pill subtle" *ngIf="previewTotal() > previewRows().length">
+                    Showing sampled preview only. Stage all will process all {{ previewTotal() | number }} files.
+                </span>
+            </div>
+
+            <div class="preview-container-optimized glass-panel">
+                <div class="table-toolbar">
+                    <div class="toolbar-left">
+                        <app-glass-checkbox
+                                label="Page"
+                                [checked]="allCurrentPageSelected()"
+                                [indeterminate]="someCurrentPageSelected()"
+                                (checkedChange)="toggleAll()">
+                        </app-glass-checkbox>
+
+                        <button
+                                *ngIf="hasMultiplePreviewPages()"
+                                class="toolbar-btn"
+                                (click)="selectAllPages()"
+                                [attr.aria-label]="'Use stage all for ' + previewTotal() + ' discovered items'"
+                                title="Use Stage All for {{ previewTotal() | number }} discovered items">
+                            <app-glass-icon name="done_all" [size]="20"></app-glass-icon>
+                        </button>
+
+                        <button
+                                *ngIf="selectedRows().size > 0"
+                                class="toolbar-btn"
+                                (click)="deselectAll()"
+                                aria-label="Clear selection"
+                                title="Clear selection">
+                            <app-glass-icon name="close" [size]="20"></app-glass-icon>
+                        </button>
+
+                        <span class="selection-badge" *ngIf="selectedRows().size > 0">
+                                {{ selectedRows().size }} selected
+                            </span>
+
+                        <span class="selection-hint" *ngIf="selectedRows().size === 0">
+                                Click row selects same lot+filename wafers • Ctrl/Cmd+Click for per-row multi-select
+                            </span>
+
+                        <!-- Navigation buttons -->
+                        <div class="nav-buttons" *ngIf="hasMultiplePreviewPages()">
+                            <button
+                                    class="toolbar-btn"
+                                    (click)="goToFirstPage()"
+                                    [disabled]="pageIndex() === 0"
+                                    aria-label="First page"
+                                    title="First page">
+                                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+                                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+                            </button>
+
+                            <button
+                                    class="toolbar-btn"
+                                    (click)="goToPreviousPage()"
+                                    [disabled]="pageIndex() === 0"
+                                    aria-label="Previous page"
+                                    title="Previous page">
+                                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+                            </button>
+
+                            <span class="page-indicator">
+                                    Page {{ pageIndex() + 1 }} of {{ totalPages() }}
+                                </span>
+
+                            <button
+                                    class="toolbar-btn"
+                                    (click)="goToNextPage()"
+                                    [disabled]="pageIndex() >= totalPages() - 1"
+                                    aria-label="Next page"
+                                    title="Next page">
+                                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
+                            </button>
+
+                            <button
+                                    class="toolbar-btn"
+                                    (click)="goToLastPage()"
+                                    [disabled]="pageIndex() >= totalPages() - 1"
+                                    aria-label="Last page"
+                                    title="Last page">
+                                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
+                                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-right">
+                        <app-glass-select
+                                class="file-type-filter"
+                                label="File Type"
+                                placeholder="All Types"
+                                [ngModel]="selectedFileType()"
+                                (ngModelChange)="onFileTypeChange($event)"
+                                [options]="fileTypeOptions()">
+                        </app-glass-select>
+
+                        <app-glass-input
+                                class="search-field-compact"
+                                label="Search"
+                                placeholder="Search lot, wafer, or filename..."
+                                prefixIcon="search"
+                                [ngModel]="filterText()"
+                                (ngModelChange)="filterText.set($event); pageIndex.set(0)">
+                        </app-glass-input>
+                    </div>
+                </div>
+
+                <div class="table-container-optimized">
+                    <table class="glass-table hub-table-compact">
+                        <thead>
+                        <tr>
+                            <th class="col-select"></th>
+                            <th>Lot</th>
+                            <th *ngIf="showWaferColumn()">Wafer</th>
+                            <th>Filename</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr *ngFor="let row of paginatedPreviewRows()"
+                            class="preview-row-compact"
+                            [class.selected]="isRowSelected(row)"
+                            (click)="onRowClick(row, $event)"
+                            role="button"
+                            tabindex="0"
+                            (keydown.enter)="toggleSelectionByRow(row)"
+                            (keydown.space)="$event.preventDefault(); toggleSelectionByRow(row)">
+                            <td class="col-select" (click)="onCheckboxCellClick(row, $event)">
+                                <app-glass-checkbox
+                                        [checked]="isRowSelected(row)">
+                                </app-glass-checkbox>
+                            </td>
+                            <td>{{ row.lot }}</td>
+                            <td *ngIf="showWaferColumn()">{{ row.wafer || '-' }}</td>
+                            <td class="filename-cell-compact" [glassTooltip]="row.filename">
+                                {{ row.filename }}
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="empty-state" *ngIf="!previewLoading() && paginatedPreviewRows().length === 0">
+                        <app-glass-icon name="search" [size]="48" color="muted"></app-glass-icon>
+                        <p>No payloads found</p>
+                    </div>
+
+                    <div class="loading-overlay" *ngIf="previewLoading()">
+                        <div class="hub-spinner"></div>
+                        <p>Discovering...</p>
+                    </div>
+                </div>
+
+                <app-glass-pagination
+                        *ngIf="!previewLoading() && previewTotal() > 0"
+                        [length]="previewTotal()"
+                        [pageSize]="pageSize()"
+                        [pageIndex]="pageIndex()"
+                        [pageSizeOptions]="pageSizeOptions()"
+                        (page)="onPageChange($event)">
+                </app-glass-pagination>
+            </div>
+
+            <div class="stage-mode-section" *ngIf="previewTotal() > 0">
+                <div class="stage-mode-header">
+                    <h3>Choose staging mode</h3>
+                    <p>Select whether to stage only selected rows or all matching discovery results.</p>
+                </div>
+
+                <div class="stage-mode-grid" role="radiogroup" aria-label="Staging mode">
+                    <button
+                            type="button"
+                            class="stage-mode-card"
+                            [class.active]="stageExecutionMode() === 'selected'"
+                            (click)="setStageExecutionMode('selected')"
+                            [attr.aria-checked]="stageExecutionMode() === 'selected'"
+                            role="radio">
+                        <div class="mode-title-row">
+                            <span class="mode-title">Stage Selected</span>
+                            <span class="mode-radio"></span>
+                        </div>
+                        <p>Stage only currently selected rows.</p>
+                        <span class="mode-metric">{{ selectedWaferCount() | number }} selected</span>
+                    </button>
+
+                    <button
+                            type="button"
+                            class="stage-mode-card danger"
+                            [class.active]="stageExecutionMode() === 'all'"
+                            (click)="setStageExecutionMode('all')"
+                            [attr.aria-checked]="stageExecutionMode() === 'all'"
+                            role="radio">
+                        <div class="mode-title-row">
+                            <span class="mode-title">Stage All Matching</span>
+                            <span class="mode-radio"></span>
+                        </div>
+                        <p>Stage every file matching this discovery query.</p>
+                        <span class="mode-metric">{{ previewTotal() | number }} total found</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="step-actions-compact preview-actions">
+                <app-glass-button
+                        variant="secondary"
+                        size="medium"
+                        [disabled]="staging()"
+                        (clicked)="backToConfig()">
+                    <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+                    Back to Config
+                </app-glass-button>
+                <app-glass-button
+                        [variant]="stageExecutionMode() === 'all' ? 'danger' : 'primary'"
+                        size="medium"
+                        [disabled]="primaryStageDisabled()"
+                        [loading]="staging()"
+                        [glassTooltip]="primaryStageTooltip()"
+                        (clicked)="runPrimaryStageAction()">
+                    <app-glass-icon [name]="stageExecutionMode() === 'all' ? 'done_all' : 'upload'" [size]="18"></app-glass-icon>
+                    {{ primaryStageLabel() }}
+                </app-glass-button>
+            </div>
+        </div>
+
+        <!-- Step 3: Monitor Dispatch -->
+        <div class="step-content-monitoring" *ngIf="currentStep() === 2">
+            <header class="step-header-compact">
+                <div class="header-title-row">
+                    <div>
+                        <h2>Monitor <span class="accent">Dispatch</span></h2>
+                        <p>Real-time monitoring of payload processing</p>
+                        <div class="monitor-target-sender" *ngIf="monitorTargetSender() as target">
+                            <span class="sender-label">Target Sender:</span>
+                            <span class="sender-id">{{ target.id != null ? target.id : '-' }}</span>
+                            <span class="sender-name" *ngIf="target.name">{{ target.name }}</span>
+                        </div>
+                    </div>
+                    <div class="stream-status-badge" [ngClass]="'status-' + stagingSession.streamStatus()"
+                         [attr.title]="streamStatusTooltip()">
+                        <span class="status-dot" [class.pulsing]="stagingSession.streamStatus() === 'live'"></span>
+                        <span class="status-text">{{ streamStatusLabel() }}</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- All-duplicates-skipped state: shown when every file was a duplicate and user chose to skip -->
+            <section *ngIf="allDuplicatesSkipped()" class="all-duplicates-panel glass-panel">
+                <div class="all-dup-icon">
+                    <app-glass-icon name="content_copy" [size]="48" color="warning"></app-glass-icon>
+                </div>
+                <h3 class="all-dup-title">All Files Were Duplicates</h3>
+                <p class="all-dup-body">
+                    <strong>{{ skippedDuplicatesCount() }}</strong> file{{ skippedDuplicatesCount() === 1 ? ' was' : 's were' }} already staged
+                    and skipped because you chose <em>Skip Duplicates</em>.
+                    <strong>0 files were staged.</strong>
+                </p>
+                <p class="all-dup-hint">
+                    Would you like to start a new resend request, or go back and force-include the duplicates?
+                </p>
+                <div class="all-dup-actions">
+                    <app-glass-button variant="primary" size="medium" (clicked)="backToConfig()">
+                        <app-glass-icon name="refresh" [size]="16"></app-glass-icon>
+                        New Resend Request
+                    </app-glass-button>
+                    <app-glass-button variant="secondary" size="medium" (clicked)="backToConfig()">
+                        <app-glass-icon name="chevron_left" [size]="16"></app-glass-icon>
+                        Go Back &amp; Force Include
+                    </app-glass-button>
+                </div>
+            </section>
+
+            <!-- Session summary card for completed state -->
+            <section *ngIf="!allDuplicatesSkipped() && monitorUiState() === 'completed' && sessionSummary()" class="session-summary-card">
+                <!-- Header -->
+                <div class="summary-header">
+                    <div class="summary-status-icon">
+                        <app-glass-icon name="check_circle" [size]="28" color="success"></app-glass-icon>
+                    </div>
+                    <div class="summary-header-text">
+                        <h3 class="summary-title">Session Complete</h3>
+                        <span class="summary-subtitle">{{ sessionSummary().site | siteName }} &bull; {{ sessionSummary().environment | uppercase }} &bull; {{ monitorTargetSender().name || ('Sender #' + monitorTargetSender().id) }} &bull; by {{ sessionSummary().username || '—' }}</span>
+                    </div>
+                    <span class="summary-status-badge completed">{{ sessionSummary().status }}</span>
+                </div>
+
+                <!-- KPI metrics row -->
+                <div class="summary-kpis">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total</span>
+                        <span class="kpi-value">{{ sessionSummary().total }}</span>
+                    </div>
+                    <div class="kpi-card success">
+                        <span class="kpi-label">Completed</span>
+                        <span class="kpi-value">{{ sessionSummary().completed }}</span>
+                    </div>
+                    <div class="kpi-card warning">
+                        <span class="kpi-label">Staged</span>
+                        <span class="kpi-value">{{ sessionSummary().staged }}</span>
+                    </div>
+                    <div class="kpi-card info">
+                        <span class="kpi-label">Enqueued</span>
+                        <span class="kpi-value">{{ sessionSummary().enqueued }}</span>
+                    </div>
+                    <div class="kpi-card" [class.danger]="sessionSummary().failed > 0">
+                        <span class="kpi-label">Failed</span>
+                        <span class="kpi-value">{{ sessionSummary().failed }}</span>
+                    </div>
+                </div>
+
+                <!-- Meta row -->
+                <div class="summary-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Sender ID</span>
+                        <span class="meta-value mono">{{ monitorTargetSender().id != null ? monitorTargetSender().id : '—' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Started</span>
+                        <span class="meta-value mono">{{ sessionSummary().startedAt || '—' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Finished</span>
+                        <span class="meta-value mono">{{ sessionSummary().finishedAt || '—' }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <div *ngIf="!allDuplicatesSkipped() && (monitorUiState() !== 'completed' && (monitorUiState() === 'live' || hasMonitoringData())); else noMonitoringData">
+                <section class="glass-panel warming-up-state" *ngIf="monitorUiState() === 'live' && !hasMonitoringData()">
+                    <div class="hub-spinner"></div>
+                    <div class="warming-up-copy">
+                        <strong>Live stream connected.</strong>
+                        <ng-container *ngIf="restagedCount() > 0; else defaultWarmup">
+                            <span>
+                                <strong>{{ restagedCount() }}</strong> file{{ restagedCount() === 1 ? ' was' : 's were' }} already in the queue and have been re-queued.
+                                They will appear here once the next dispatch cycle runs — usually within 60 seconds.
+                            </span>
+                        </ng-container>
+                        <ng-template #defaultWarmup>
+                            <span *ngIf="!warmupTimeoutReached(); else noRecordsYetMessage">Waiting for first monitoring data snapshot...</span>
+                            <ng-template #noRecordsYetMessage>
+                                <span>No records yet. Dispatch checks are still running in the background.</span>
+                            </ng-template>
+                        </ng-template>
+                    </div>
+                </section>
+
+                <!-- Stage All background staging banner: shown immediately when stageAllMode is active -->
+                <section class="stage-all-info-banner glass-panel" *ngIf="stageAllMode() && !hasMonitoringData()">
+                    <div class="info-banner-content">
+                        <app-glass-icon name="info" class="info-icon"></app-glass-icon>
+                        <div class="info-text">
+                            <h3>Staging in Background</h3>
+                            <p>
+                                <strong>{{ previewTotal() | number }}</strong> files are being staged.
+                                The queue accepts up to its capacity limit per dispatch cycle — remaining files will be enqueued automatically as slots free up.
+                                This page will update in real-time.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Re-queued banner: always visible when files were re-queued, regardless of whether data has loaded yet -->
+                <section class="requeued-info-banner glass-panel" *ngIf="restagedCount() > 0">
+                    <div class="info-banner-content">
+                        <app-glass-icon name="info" class="info-icon requeued-icon"></app-glass-icon>
+                        <div class="info-text">
+                            <h3>Re-queued for Dispatch</h3>
+                            <p>
+                                <strong>{{ restagedCount() }}</strong> file{{ restagedCount() === 1 ? ' was' : 's were' }} already staged from a previous request
+                                and {{ restagedCount() === 1 ? 'has' : 'have' }} been re-queued.
+                                They will appear in the list below once the next dispatch cycle runs — usually within 60 seconds.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <ng-container *ngIf="hasMonitoringData()">
+                    <!-- Stage All Info Banner -->
+                    <section class="stage-all-info-banner glass-panel" *ngIf="stageAllMode()">
+                        <div class="info-banner-content">
+                            <app-glass-icon name="info" class="info-icon"></app-glass-icon>
+                            <div class="info-text">
+                                <h3>Bulk Resend In Progress</h3>
+                                <p>
+                                    Staging <strong>{{ previewTotal() | number }}</strong> files from your discovery query.
+                                    Files are enqueued incrementally (up to the queue capacity limit per cycle).
+                                    The monitor updates in real-time as files move from <em>Staged → Enqueued → Completed</em>.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Queue throttle banner: shown when files are staged but waiting for queue slots -->
+                    <section class="queue-throttle-banner glass-panel"
+                             *ngIf="monitoringStats().ready > 0 && monitorUiState() !== 'completed'">
+                        <div class="info-banner-content">
+                            <app-glass-icon name="hourglass_empty" class="info-icon throttle-icon"></app-glass-icon>
+                            <div class="info-text">
+                                <h3>Queue Throttling Active</h3>
+                                <p>
+                                    <strong>{{ monitoringStats().ready | number }}</strong> file{{ monitoringStats().ready === 1 ? ' is' : 's are' }} staged and waiting for queue slots.
+                                    <strong>{{ monitoringStats().enqueued | number }}</strong> {{ monitoringStats().enqueued === 1 ? 'is' : 'are' }} currently in the dispatch queue.
+                                    The dispatch job runs every ~60 seconds and will enqueue more as slots free up — no action needed.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Skipped duplicates banner: persistent count of files not staged due to duplicates -->
+                    <section class="duplicates-skipped-banner glass-panel"
+                             *ngIf="skippedDuplicatesCount() > 0">
+                        <div class="info-banner-content">
+                            <app-glass-icon name="content_copy" class="info-icon duplicate-icon"></app-glass-icon>
+                            <div class="info-text">
+                                <h3>Duplicates Skipped</h3>
+                                <p>
+                                    <strong>{{ skippedDuplicatesCount() | number }}</strong> file{{ skippedDuplicatesCount() === 1 ? ' was' : 's were' }} already staged and skipped.
+                                    The totals above reflect only the newly staged files. To re-send the skipped files, go back and use <em>Force Include Duplicates</em>.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Monitoring Stats -->
+                    <app-monitoring-stats [stats]="monitoringStats()"></app-monitoring-stats>
+
+                    <!-- Lot/Wafer Progress -->
+                    <section class="lot-progress-collapsible glass-panel" *ngIf="lotProgressMapped().length > 0">
+                        <div class="section-header-inline lot-progress-header">
+                            <span class="section-label">Lot / Wafer Progress</span>
+                            <button class="collapse-toggle-btn" type="button" (click)="toggleLotProgressPanel()">
+                                {{ showLotProgressPanel() ? 'Hide' : 'Show' }}
+                            </button>
+                        </div>
+                        <app-lot-wafer-progress *ngIf="showLotProgressPanel()" [lotData]="lotProgressMapped()"></app-lot-wafer-progress>
+                    </section>
+
+                    <!-- File List and Activity Feed in Grid -->
+                    <div class="monitoring-grid">
+                        <app-monitoring-file-list [files]="monitoringFiles()"></app-monitoring-file-list>
+                        <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
+                    </div>
+                </ng-container>
+            </div>
+
+            <ng-template #noMonitoringData>
+                <section class="glass-panel empty-state monitoring-waiting-state" *ngIf="!allDuplicatesSkipped()">
+                    <div class="hub-spinner" *ngIf="monitorUiState() === 'connecting' || monitorUiState() === 'polling'"></div>
+                    <app-glass-icon *ngIf="monitorUiState() === 'completed'" name="check_circle" [size]="48" color="success"></app-glass-icon>
+                    <app-glass-icon *ngIf="monitorUiState() !== 'connecting' && monitorUiState() !== 'polling' && monitorUiState() !== 'completed'" name="clock" [size]="48" color="muted"></app-glass-icon>
+                    <div class="fallback-stream-status" [ngClass]="'status-' + stagingSession.streamStatus()" [attr.title]="streamStatusTooltip()">
+                        <span class="status-dot" [class.pulsing]="stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'connecting'"></span>
+                        <span>{{ streamStatusLabel() }}</span>
+                    </div>
+                    <p>{{ monitoringStatusText() }}</p>
+                    <span class="monitoring-background-note">Dispatch and queue checks continue in the background.</span>
+                </section>
+            </ng-template>
+
+            <div class="step-actions-compact">
+                <app-glass-button
+                        variant="secondary"
+                        [disabled]="allDuplicatesSkipped() || monitorUiState() === 'no-session' || monitorUiState() === 'stopped'"
+                        (clicked)="stopMonitoring()">
+                    <app-glass-icon name="close" [size]="18"></app-glass-icon>
+                    Stop Monitoring
+                </app-glass-button>
+
+                <!-- Reconnect / Retry when poll/fallback or during connecting -->
+                <app-glass-button
+                        *ngIf="!allDuplicatesSkipped() && (monitorUiState() === 'polling' || monitorUiState() === 'connecting' || monitorUiState() === 'stopped')"
+                        variant="tertiary"
+                        (clicked)="reconnectMonitoring()">
+                    <app-glass-icon name="wifi_tethering" [size]="18"></app-glass-icon>
+                    {{ monitorUiState() === 'stopped' ? 'Resume Live' : 'Reconnect Live' }}
+                </app-glass-button>
+
+                <!-- Manual refresh always available when a session exists -->
+                <app-glass-button
+                        *ngIf="!allDuplicatesSkipped() && monitorUiState() !== 'no-session'"
+                        variant="tertiary"
+                        (clicked)="refreshMonitoring()">
+                    <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+                    Refresh
+                </app-glass-button>
+
+                <!-- Export CSV of session files -->
+                <app-glass-button
+                        *ngIf="monitorUiState() !== 'no-session'"
+                        variant="tertiary"
+                        [disabled]="allDuplicatesSkipped() || stagingSession.sessionFiles().length === 0"
+                        (clicked)="onExportCsvClick()">
+                    <app-glass-icon name="download" [size]="18"></app-glass-icon>
+                    Export CSV
+                </app-glass-button>
+
+                <app-glass-button
+                        variant="primary"
+                        (clicked)="onFinishAndReturnToHub()">
+                    <app-glass-icon name="check_circle" [size]="18"></app-glass-icon>
+                    Return to Dashboard
+                </app-glass-button>
+            </div>
+        </div>
+    </app-glass-stepper>
+</div>
+
+
+<!-- Full-screen loading overlay for preview discovery -->
+<glass-loading-overlay
+        [visible]="previewLoading()"
+        [message]="'Discovering Payloads...'"
+        [subtext]="discoveryLoadingSubtext()">
+</glass-loading-overlay>

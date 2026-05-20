@@ -1,0 +1,26 @@
+package com.onsemi.cim.apps.exensio.resender.dto;
+
+public record StageRecordView(
+        long id,
+        String site,
+        int senderId,
+        String senderName,
+        String metadataId,
+        String dataId,
+        String lot,
+        String wafer,
+        String filename,
+        String endTime,
+        String status,
+        String errorMessage,
+        String createdAt,
+        String updatedAt,
+        String processedAt,
+        String stagedBy,
+        String lastRequestedBy,
+        String lastRequestedAt,
+        String cpOutputPath,
+        String cpOutputTarget,
+        Long exensioWaferKey,
+        Long exensioPgKey
+) {}

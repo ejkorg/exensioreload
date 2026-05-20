@@ -1,0 +1,28 @@
+# ETL Job Configurations
+# Each job defines a mapping between site/location and the CP command to execute
+
+jobs:
+  - jobKey: "default-cp-job"
+    command: "/opt/cp/bin/cp_cron.sh"
+    site: "default"
+    location: ""
+
+  - jobKey: "site-a-wafer-1"
+    command: "/opt/cp/bin/cp_cron.sh -w wafer1"
+    site: "site-a"
+    location: "wafer-1"
+
+  - jobKey: "site-a-wafer-2"
+    command: "/opt/cp/bin/cp_cron.sh -w wafer2"
+    site: "site-a"
+    location: "wafer-2"
+
+  - jobKey: "site-b-default"
+    command: "/opt/cp/bin/cp_cron.sh -s site-b"
+    site: "site-b"
+    location: ""
+
+  - jobKey: "site-c-all"
+    command: "/opt/cp/bin/cp_cron.sh --all"
+    site: "site-c"
+    location: ""

@@ -1,0 +1,409 @@
+<div class="dashboard-container" [class.loading]="loading()" role="main" aria-label="Dashboard - Real-time dispatch and payload operations">
+    <!-- Header Section -->
+    <header class="dashboard-header" role="banner">
+        <div class="header-content">
+            <div class="header-title">
+                <h3>Dashboard</h3>
+                <p class="header-subtitle">Real-time dispatch and payload operations overview</p>
+            </div>
+            <div class="header-actions" role="toolbar" aria-label="Dashboard controls">
+                <button mat-stroked-button [routerLink]="['/resender/alerts']" class="refresh-btn"
+                        aria-label="Open alert center">
+                    <mat-icon aria-hidden="true">notifications_active</mat-icon>
+                    <span class="btn-label">Alert Center</span>
+                </button>
+                <button mat-stroked-button [routerLink]="['/resender/analytics']" class="refresh-btn"
+                        aria-label="Open analytics dashboard">
+                    <mat-icon aria-hidden="true">insights</mat-icon>
+                    <span class="btn-label">Analytics</span>
+                </button>
+                <button mat-stroked-button (click)="refresh()" [disabled]="loading()" class="refresh-btn"
+                        [matTooltip]="'Last updated: ' + formatTimeAgo(lastUpdated())"
+                        aria-label="Refresh dashboard data"
+                        [attr.aria-busy]="loading()">
+                    <mat-icon aria-hidden="true">{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+                    <span class="btn-label">Refresh</span>
+                </button>
+                <button mat-flat-button color="accent" class="resume-monitoring-btn"
+                        (click)="startOrResumeMonitoring()"
+                        [matTooltip]="getPrimaryMonitoringActionTooltip()"
+                        [attr.aria-label]="getPrimaryMonitoringActionLabel()">
+                    <mat-icon aria-hidden="true">{{ getPrimaryMonitoringActionIcon() }}</mat-icon>
+                    <span class="btn-label">{{ getPrimaryMonitoringActionLabel() }}</span>
+                </button>
+                <span class="file-list-label" *ngIf="activeMonitoringSession() && stagingSession.sessionFiles().length > 0"
+                      aria-live="polite">
+                    {{ getFileListLabel(stagingSession.sessionFiles().length, stagingSession.currentSession()?.totalFiles ?? 0, resolvedMonitorMaxRows()) }}
+                </span>
+                <button mat-flat-button color="primary" routerLink="/resender/new" class="new-request-btn"
+                        aria-label="Create new request">
+                    <mat-icon aria-hidden="true">add</mat-icon>
+                    <span class="btn-label">New Request</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="freshness-banner" *ngIf="!loading() && shouldShowFreshnessBanner()" [class.stale]="dataFreshness() === 'stale'" [class.very-stale]="dataFreshness() === 'very-stale'"
+         role="alert"
+         [attr.aria-live]="dataFreshness() === 'very-stale' ? 'assertive' : 'polite'"
+         aria-atomic="true">
+        <mat-icon aria-hidden="true">{{ dataFreshness() === 'very-stale' ? 'warning' : 'info' }}</mat-icon>
+        <div class="freshness-text">
+            <strong>Data freshness</strong>
+            <span>{{ getFreshnessMessage() }}</span>
+        </div>
+        <div class="freshness-actions">
+            <button type="button" class="refresh-link" (click)="refresh()" aria-label="Refresh dashboard data now">
+                Refresh now
+            </button>
+            <button type="button" class="dismiss-btn" *ngIf="dataFreshness() === 'stale'" (click)="dismissFreshnessBanner()" aria-label="Dismiss freshness warning">
+                <mat-icon aria-hidden="true">close</mat-icon>
+            </button>
+        </div>
+    </div>
+
+    <div class="fallback-limits-banner" *ngIf="limitsError() && !limitsBannerDismissed()" role="alert" aria-live="polite">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>Using local fallback limits — backend configuration unavailable.</span>
+        <button mat-icon-button (click)="dismissLimitsBanner()" aria-label="Dismiss limits warning">
+            <mat-icon>close</mat-icon>
+        </button>
+    </div>
+
+    <div class="dashboard-content" *ngIf="!error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
+        <!-- Health Overview Card -->
+        <section class="health-section" aria-labelledby="health-heading">
+            <div class="health-card glass-panel">
+                <div class="health-header">
+                    <h3 id="health-heading">System Health</h3>
+                    <span class="health-badge" [style.background-color]="getHealthStatusColor(overallHealthScore())"
+                          role="img"
+                          [attr.aria-label]="'Health status: ' + getHealthStatusLabel(overallHealthScore())">
+                        {{ getHealthStatusLabel(overallHealthScore()) }}
+                    </span>
+                </div>
+                <div class="health-metrics">
+                    <div class="health-score">
+                        <div class="score-value" aria-label="Overall success rate">{{ overallHealthScore() }}%</div>
+                        <div class="score-label">Success Rate</div>
+                    </div>
+                    <div class="health-bar" role="progressbar" [attr.aria-valuenow]="overallHealthScore()" aria-valuemin="0" aria-valuemax="100">
+                        <div class="bar-fill" [style.width.%]="overallHealthScore()" [style.background-color]="getHealthStatusColor(overallHealthScore())"></div>
+                    </div>
+                </div>
+                <div class="health-utilization">
+                    <div class="util-item">
+                        <span class="util-label">Queue Utilization</span>
+                        <span class="util-value" [attr.aria-label]="'Queue utilization: ' + systemUtilization() + ' percent'">{{ systemUtilization() }}%</span>
+                    </div>
+                    <div class="util-item">
+                        <span class="util-label">Active Sites</span>
+                        <span class="util-value" [attr.aria-label]="'Active sites: ' + (snapshot()?.sites?.length || 0)">{{ snapshot()?.sites?.length || 0 }}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Primary KPI Metrics -->
+        <section class="metrics-section" aria-labelledby="kpi-heading">
+            <h2 class="section-title" id="kpi-heading">Key Performance Indicators</h2>
+            <div class="metrics-grid" role="region" aria-label="Key performance indicators">
+                <div *ngFor="let metric of primaryMetrics; let idx = index"
+                     class="metric-card glass-panel"
+                     [class.alert]="metric.alert"
+                     [class.updated]="changedMetrics().has(getMetricChangeKey(metric.label))"
+                     role="article"
+                     [attr.aria-label]="metric.label + ': ' + (metric.value | number)">
+                    <div class="metric-header-row">
+                        <div class="metric-icon-wrapper" [ngClass]="'color-' + metric.color" aria-hidden="true">
+                            <mat-icon class="metric-icon">{{ metric.icon }}</mat-icon>
+                        </div>
+                        <span *ngIf="metric.trend !== undefined" class="metric-trend" [class.positive]="metric.trend >= 0" [class.negative]="metric.trend < 0"
+                              role="img"
+                              [attr.aria-label]="'Trend: ' + (metric.trend > 0 ? 'increasing' : metric.trend < 0 ? 'decreasing' : 'stable') + ' by ' + Math.abs(metric.trend) + ' percent'">
+                            <mat-icon class="trend-icon" aria-hidden="true">{{ metric.trend > 0 ? 'trending_up' : metric.trend < 0 ? 'trending_down' : 'trending_flat' }}</mat-icon>
+                            <span class="trend-value">{{ metric.trend > 0 ? '+' : '' }}{{ metric.trend }}%</span>
+                        </span>
+                    </div>
+                    <div class="metric-body">
+                        <div class="metric-label">
+                            <span class="metric-label-title">
+                                <span class="metric-label-text">{{ metric.label }}</span>
+                                <span class="metric-label-abbrev">{{ metric.abbrev }}</span>
+                            </span>
+                        </div>
+                        <div class="metric-value">{{ metric.value | number }}</div>
+                        <div class="metric-subtext">{{ metric.subtext }}</div>
+                        @if (metric.key && getMetricHistory(metric.key).length > 1) {
+                        <div class="sparkline-container" role="img" [attr.aria-label]="metric.label + ' trend chart'">
+                            <app-sparkline [data]="getMetricHistory(metric.key)" [color]="metric.accentColor || '#10b981'"></app-sparkline>
+                        </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Supporting Metrics Row -->
+        <section class="supporting-metrics">
+            <h2 class="section-title">Infrastructure</h2>
+            <div class="metrics-row glass-panel infrastructure-banner">
+                <div *ngFor="let metric of supportingMetrics" class="metric-compact inner-item" [ngClass]="'color-' + metric.color">
+                    <div class="compact-header">
+                        <mat-icon>{{ metric.icon }}</mat-icon>
+                        <span class="compact-label">{{ metric.label }}</span>
+                    </div>
+                    <div class="compact-value">{{ metric.value | number }}</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Senders Performance -->
+        <section class="senders-section" *ngIf="topSenders().length > 0">
+            <h2 class="section-title">Top Senders by Backlog</h2>
+            <div class="senders-grid">
+                <div *ngFor="let sender of topSenders(); let index = index"
+                     class="sender-card glass-panel"
+                     [class.alert]="sender.alert"
+                     [class.top-sender]="index === 0"
+                     [class.critical]="sender.isCritical"
+                     [class.updated]="changedMetrics().has('sender-' + sender.senderId)"
+                     [class.bulk-selected]="selectedSenderIds().has(sender.senderId)"
+                     [style.opacity]="1 - (index * 0.05)">
+                    <!-- Phase 4.2: per-card selection checkbox -->
+                    <div class="sender-select-checkbox" (click)="toggleSenderSelection(sender.senderId, $event)">
+                        <app-glass-checkbox
+                                [checked]="selectedSenderIds().has(sender.senderId)"
+                                [label]="''"
+                                aria-label="Select sender for bulk action">
+                        </app-glass-checkbox>
+                    </div>
+                    <div class="sender-header">
+                        <div class="sender-info">
+                            <h4 class="sender-name">{{ sender.senderLabel }}</h4>
+                            <span class="sender-site">{{ sender.site }}</span>
+                        </div>
+                        <div class="sender-badges">
+                            @if (index === 0) {
+                            <span class="top-sender-badge">★ TOP</span>
+                            }
+                            <button
+                                    type="button"
+                                    class="alert-settings-btn"
+                                    (click)="openAlertSettings(sender); $event.stopPropagation()"
+                                    [matTooltip]="'Alert settings for ' + sender.senderLabel"
+                                    aria-label="Open alert settings">
+                                <mat-icon>notifications</mat-icon>
+                            </button>
+                            @if (sender.isCritical) {
+                            <span class="critical-badge" matTooltip="Backlog exceeds 5000">CRITICAL</span>
+                            } @else if (sender.alert) {
+                            <span class="alert-indicator" matTooltip="High backlog detected">
+                                    <mat-icon>warning</mat-icon>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="sender-metrics">
+                        <div class="metric-item">
+                            <span class="item-label">Backlog</span>
+                            <span class="item-value">{{ sender.backlog | number }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="item-label">Throughput</span>
+                            <span class="item-value">{{ sender.throughput | number }}/hr</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="item-label">Success Rate</span>
+                            <span class="item-value" [class.good]="sender.successRate >= 95">{{ sender.successRate }}%</span>
+                        </div>
+                    </div>
+                    <div class="backlog-indicator" [matTooltip]="getBacklogTooltip(sender)">
+                        <div class="backlog-track">
+                            <div class="backlog-fill"
+                                 [class.warning]="getBacklogStatus(sender) === 'warning'"
+                                 [class.critical]="getBacklogStatus(sender) === 'critical'"
+                                 [style.width.%]="getBacklogFillPercentage(sender)"></div>
+                        </div>
+                        <span class="capacity-label">
+                            {{ sender.backlog | number }} / {{ getBacklogCapacity(sender) | number }} backlog
+                        </span>
+                    </div>
+                    <div class="sender-status-row">
+                        <span class="backlog-status-chip"
+                              [class.chip-normal]="getBacklogStatus(sender) === 'normal'"
+                              [class.chip-warning]="getBacklogStatus(sender) === 'warning'"
+                              [class.chip-critical]="getBacklogStatus(sender) === 'critical'">
+                            {{ getBacklogStatus(sender) | titlecase }}
+                        </span>
+                        <button mat-stroked-button class="dispatch-quick-action"
+                                *ngIf="getBacklogStatus(sender) !== 'normal'"
+                                (click)="dispatchSender(sender); $event.stopPropagation()"
+                                [matTooltip]="'Dispatch queue for ' + sender.senderLabel">
+                            <mat-icon>send</mat-icon>
+                            Dispatch
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sites Overview -->
+        <section class="sites-section">
+            <div class="section-header">
+                <h2 class="section-title">Active Sites</h2>
+                <span class="site-count">{{ snapshot()?.sites?.length || 0 }} operational</span>
+            </div>
+            <div class="sites-grid" *ngIf="snapshot() as snap; else loadingState">
+                <div *ngFor="let site of snap.sites" class="site-card glass-panel" (click)="onSiteClick(site)"
+                     role="button" tabindex="0"
+                     (keydown.enter)="onSiteClick(site)"
+                     (keydown.space)="onSiteClick(site)"
+                     [attr.aria-label]="'Open site details for ' + site.site">
+                    <div class="site-card-header">
+                        <div class="site-title-block">
+                            <h3 class="site-title">{{ site.site }}</h3>
+                            <span class="site-sender-count">{{ site.senders.length }} senders</span>
+                        </div>
+                        <div class="site-status-block">
+                            <div class="status-metric">
+                                <span class="status-label">Backlog</span>
+                                <span class="status-value" [class.high]="site.metrics.backlog > 500">
+                                    {{ site.metrics.backlog | number }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="site-senders">
+                        <div class="sender-mini" *ngFor="let sender of visibleSenders(site)">
+                            <span class="sender-dot" [class.alert]="sender.alert"></span>
+                            <span class="sender-mini-label">{{ sender.senderLabel }}</span>
+                            <span class="sender-mini-value">{{ sender.metrics.backlog }}</span>
+                            <button
+                                    type="button"
+                                    class="sender-resume-btn"
+                                    *ngIf="hasActiveSessionForSender(site.site, sender.senderId)"
+                                    (click)="resumeMonitoring(); $event.stopPropagation()"
+                                    [matTooltip]="'Resume active monitoring for sender ' + sender.senderId + ' (Alt+R)'">
+                                Resume Monitoring
+                            </button>
+                        </div>
+                        <button
+                                type="button"
+                                class="more-badge"
+                                *ngIf="hasHiddenSenders(site)"
+                                (click)="toggleSiteSenders(site.site); $event.stopPropagation()">
+                            {{ isSiteExpanded(site.site) ? 'Show less' : '+' + hiddenSenderCount(site) + ' more' }}
+                        </button>
+                    </div>
+                    <div class="site-actions">
+                        <button mat-button class="view-details" [routerLink]="['/my-sessions']" [queryParams]="{ site: site.site }" (click)="$event.stopPropagation()">
+                            <mat-icon>arrow_forward</mat-icon>
+                            View Details
+                        </button>
+                        <button mat-stroked-button class="view-dashboard" [routerLink]="['/resender/site', site.site, 'dashboard']" (click)="$event.stopPropagation()">
+                            <mat-icon>insights</mat-icon>
+                            Site Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <ng-template #loadingState>
+                <div class="skeleton-grid">
+                    <div class="skeleton-card" *ngFor="let i of [1,2,3,4]"></div>
+                </div>
+            </ng-template>
+        </section>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-sync-status">
+                <mat-icon class="sync-icon" [class.spinning]="loading()" [class.pulsing]="lastUpdatePulse()">{{ loading() ? 'cloud_sync' : 'cloud_done' }}</mat-icon>
+                <span class="sync-text">
+                    {{ loading() ? 'Updating...' : 'Live sync active • Last update: ' + formatTimeAgo(lastUpdated()) }}
+                </span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Empty or Error State -->
+    <ng-template #emptyOrErrorState>
+        @if (error()) {
+        <ng-container *ngTemplateOutlet="errorState"></ng-container>
+        } @else if (hasNoData()) {
+        <ng-container *ngTemplateOutlet="emptySites"></ng-container>
+        } @else if (hasZeroMetrics()) {
+        <ng-container *ngTemplateOutlet="emptyActivity"></ng-container>
+        }
+    </ng-template>
+
+    <!-- Error State -->
+    <ng-template #errorState>
+        <div class="error-container">
+            <mat-icon class="error-icon">error_outline</mat-icon>
+            <h3>{{ errorDetails()?.message || 'Unable to Load Dashboard' }}</h3>
+            <p class="error-message">{{ errorDetails()?.details || error() }}</p>
+
+            <div class="error-code-section" *ngIf="errorDetails() as details">
+                <span class="error-code">{{ details.code }}</span>
+                <span class="error-time">{{ details.timestamp | date:'short' }}</span>
+            </div>
+
+            <div class="retry-info" *ngIf="errorDetails() as details">
+                <p class="retry-countdown" *ngIf="details.retryAttempts < details.maxRetries && (details.retryIn ?? 0) > 0">
+                    <mat-icon>schedule</mat-icon>
+                    Auto-retrying in {{ details.retryIn }}s (Attempt {{ details.retryAttempts }}/{{ details.maxRetries }})
+                </p>
+                <p class="retry-failed" *ngIf="details.retryAttempts >= details.maxRetries">
+                    <mat-icon>error</mat-icon>
+                    Maximum retry attempts reached. Please retry manually.
+                </p>
+            </div>
+
+            <div class="error-actions">
+                <button mat-raised-button color="primary" (click)="manualRetry()" [disabled]="loading()">
+                    <mat-icon>{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+                    Try Now
+                </button>
+                <button mat-stroked-button type="button" (click)="contactSupport()">
+                    <mat-icon>help_outline</mat-icon>
+                    Contact Support
+                </button>
+            </div>
+        </div>
+    </ng-template>
+
+    <!-- Phase 4.2: Bulk Actions floating bar (appears when senders are selected) -->
+    <app-bulk-actions
+            [allItems]="selectableItems()"
+            [selectedIds]="selectedSenderIds()"
+            (selectionChanged)="onBulkSelectionChanged($event)">
+    </app-bulk-actions>
+</div>
+
+<!-- Empty State - No Sites -->
+<ng-template #emptySites>
+    <div class="empty-state-container">
+        <mat-icon class="empty-icon">inbox</mat-icon>
+        <h3>No Sites Configured</h3>
+        <p>You don't have any sender sites set up yet. Create your first request to get started.</p>
+        <button mat-raised-button color="primary" routerLink="/resender/new">
+            <mat-icon>add_circle</mat-icon>
+            Create New Request
+        </button>
+    </div>
+</ng-template>
+
+<!-- Empty State - No Activity -->
+<ng-template #emptyActivity>
+    <div class="empty-state-container">
+        <mat-icon class="empty-icon">sentiment_satisfied_alt</mat-icon>
+        <h3>All Caught Up!</h3>
+        <p>Your dashboard shows no pending items. All requests are completed or idle.</p>
+        <button mat-raised-button (click)="refresh()">
+            <mat-icon>refresh</mat-icon>
+            Refresh Dashboard
+        </button>
+    </div>
+</ng-template>
