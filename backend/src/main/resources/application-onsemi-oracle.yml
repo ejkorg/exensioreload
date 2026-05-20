@@ -29,11 +29,12 @@ spring:
     password: ${refdb.password}
     driver-class-name: oracle.jdbc.OracleDriver
     hikari:
-      maximum-pool-size: ${refdb.pool.max-size:5}
-      minimum-idle: ${refdb.pool.min-idle:1}
-      connection-timeout: 15000
+      maximum-pool-size: ${refdb.pool.max-size:10}
+      minimum-idle: ${refdb.pool.min-idle:2}
+      connection-timeout: 30000
       idle-timeout: 600000
       validation-timeout: 5000
+      leak-detection-threshold: 30000
   mail:
     host: mailhost.onsemi.com      # your SMTP host (e.g. smtp.sendgrid.net)
     port: 25                      # internal SMTP relay, no auth/STARTTLS
@@ -76,8 +77,8 @@ refdb:
   bootstrap-admins: "admin"
   staging-table: SENDER_STAGE
   pool:
-    max-size: 5
-    min-idle: 1
+    max-size: 10
+    min-idle: 2
   dispatch:
     per-send: 100
     interval-ms: 60000
