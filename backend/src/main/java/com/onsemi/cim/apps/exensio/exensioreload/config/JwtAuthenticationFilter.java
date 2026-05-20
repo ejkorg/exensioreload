@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final AntPathRequestMatcher publicAuthMatcher = new AntPathRequestMatcher("/api/auth/**");
+    private final AntPathRequestMatcher authMeMatcher = new AntPathRequestMatcher("/api/auth/me");
 
     public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
@@ -24,7 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        if (publicAuthMatcher.matches(request)) {
+        if (publicAuthMatcher.matches(request) && !authMeMatcher.matches(request)) {
             filterChain.doFilter(request, response);
             return;
         }
