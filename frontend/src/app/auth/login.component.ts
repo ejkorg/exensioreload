@@ -383,7 +383,8 @@ export class LoginComponent implements OnInit {
         this.success.set('Authenticated successfully. Redirecting...');
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
         const safeUrl = this.getSafeReturnUrl(returnUrl);
-        setTimeout(() => this.router.navigateByUrl(safeUrl), 800);
+        // Navigate immediately so the dashboard does not fire API calls with a stale pre-login token.
+        void this.router.navigateByUrl(safeUrl);
       },
       error: (err: any) => {
         const message = err?.error?.error || err?.message || 'Invalid credentials or connection error.';

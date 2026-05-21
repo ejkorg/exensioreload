@@ -46,20 +46,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        if (token != null) {
-            if (jwtUtil.validateToken(token)) {
-                String username = jwtUtil.extractUsername(token);
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.extractUsername(token);
+            if (username != null && !username.isBlank()) {
                 List<SimpleGrantedAuthority> authorities = jwtUtil.extractRoles(token)
                         .stream()
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList());
-                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(username, token, authorities);
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(username, token, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
-            } else {
-                // If a Bearer header was present but the token is invalid, throw an AuthenticationException
-                throw new org.springframework.security.core.AuthenticationException("Invalid or expired token") {};
             }
         }
+        // Invalid/expired Bearer tokens are ignored (request continues unauthenticated → 401 JSON).
         filterChain.doFilter(request, response);
     }
 }

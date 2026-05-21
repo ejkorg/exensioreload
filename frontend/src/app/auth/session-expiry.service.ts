@@ -145,6 +145,29 @@ export class SessionExpiryService {
     this.expiredSubject.next();
   }
 
+  /** True when the user is already on the login (or SSO callback) route. */
+  isOnLoginRoute(): boolean {
+    const path = this.router.url.split('?')[0];
+    return path === '/login'
+      || path.startsWith('/login/')
+      || path === '/sso-callback'
+      || path.startsWith('/sso-callback/');
+  }
+
+  /**
+   * Closes any open session modals and cancels idle timers.
+   * Called after a successful login so a prior expiry does not block navigation.
+   */
+  closeAllModals(): void {
+    this.cancelIdleTimers();
+    if (this.activeDialogRef) {
+      this.activeDialogRef.close();
+      this.activeDialogRef = null;
+    }
+    this.modalOpen = false;
+    this.activeModalType = null;
+  }
+
   /**
    * Open the session warning modal if no modal is currently open.
    * Uses lazy import to avoid circular dependency with the modal component.

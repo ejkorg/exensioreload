@@ -1,7 +1,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, Subscription, timer, tap, catchError, of, finalize, map, switchMap, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, timer, catchError, of, finalize, map, switchMap, throwError, shareReplay } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { SessionExpiryService } from './session-expiry.service';
 
@@ -43,6 +43,7 @@ export class AuthService {
 
     private refreshTimerSub: Subscription | null = null;
     private accessToken: string | null = null;
+    private refreshInFlight: Observable<boolean> | null = null;
 
     constructor() {
         // Wire up the refresh callback so SessionExpiryService can trigger a silent
@@ -51,10 +52,14 @@ export class AuthService {
             this.refresh().subscribe();
         });
 
-        // Load any persisted access token from sessionStorage/localStorage so auth survives reloads
+        // Restore only non-expired access tokens (expired tokens cause 401 loops after re-login).
         const stored = sessionStorage.getItem('accessToken') || localStorage.getItem('auth_token');
-        if (stored) {
+        if (stored && !this.isTokenExpired(stored)) {
             this.setSession(stored);
+        } else if (stored) {
+            sessionStorage.removeItem('accessToken');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_user');
         }
 
         // Open expired modal when session has fully expired
@@ -70,6 +75,7 @@ export class AuthService {
                 if (!res?.accessToken) {
                     throw new Error('No access token in response');
                 }
+                this.sessionExpiryService.closeAllModals();
                 this.setSession(res.accessToken);
                 return this.loadMe();
             }),
@@ -134,6 +140,21 @@ export class AuthService {
         );
     }
 
+    /**
+     * Coalesced refresh used by the HTTP interceptor on 401 (avoids refresh storms).
+     */
+    tryRefreshSession(): Observable<boolean> {
+        if (!this.refreshInFlight) {
+            this.refreshInFlight = this.refresh().pipe(
+                finalize(() => {
+                    this.refreshInFlight = null;
+                }),
+                shareReplay(1)
+            );
+        }
+        return this.refreshInFlight;
+    }
+
     private setSession(token: string | null) {
         this.cancelScheduledRefresh();
         this.accessToken = token;
@@ -180,6 +201,15 @@ export class AuthService {
         } catch {
             return null;
         }
+    }
+
+    private isTokenExpired(token: string): boolean {
+        const exp = this.parseExpiry(token);
+        if (!exp) {
+            return true;
+        }
+        const now = Math.floor(Date.now() / 1000);
+        return exp <= now;
     }
 
     private normalizeRoles(roles: any): string[] {
@@ -237,6 +267,7 @@ export class AuthService {
     }
 
     handleSsoCallback(token: string): Observable<void> {
+        this.sessionExpiryService.closeAllModals();
         this.setSession(token);
         return this.loadMe().pipe(
             map(userInfo => {
@@ -252,8 +283,12 @@ export class AuthService {
      * Used by AuthGuard to handle the new-tab scenario without redirecting to login.
      */
     restoreSession(): Observable<boolean> {
-        if (this.isAuthenticated()) {
+        const token = this.getToken();
+        if (this.isAuthenticated() && token && !this.isTokenExpired(token)) {
             return of(true);
+        }
+        if (token && this.isTokenExpired(token)) {
+            this.setSession(null);
         }
         return this.refresh().pipe(
             switchMap((refreshed: boolean) => {
