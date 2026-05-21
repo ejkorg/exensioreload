@@ -90,7 +90,8 @@ public class StageSessionService {
         // Call ETL SSH trigger after session creation
         TriggerResult triggerResult = null;
         try {
-            String senderConfigName = "sender-" + senderId;
+            // Prefer site-based key (matches etlservers.yml entries like CEBU-PROD); API may pass real cpConfig instead.
+            String senderConfigName = resolveEtlSenderConfigName(site, senderId);
             triggerResult = etlSshTriggerService.execute(
                     sessionId,  // requestId
                     username,   // userId
@@ -1207,6 +1208,21 @@ public class StageSessionService {
         } catch (Exception ex) {
             log.warn("Unable to ensure staging_session table at runtime: {}", ex.getMessage());
         }
+    }
+
+    /**
+     * Builds a sender config hint for ETL SSH port extraction.
+     * YAML keys use {@code SITE-PROD}; crontab lines often embed the SSH/sender port (e.g. 60170).
+     */
+    private String resolveEtlSenderConfigName(String site, int senderId) {
+        if (site != null && !site.isBlank()) {
+            String trimmed = site.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!trimmed.endsWith("-PROD") && !trimmed.endsWith("-QA")) {
+                return trimmed + "-PROD";
+            }
+            return trimmed;
+        }
+        return "sender-" + senderId;
     }
 
     private boolean tableExists(Connection connection, String tableName) {

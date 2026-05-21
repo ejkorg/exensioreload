@@ -89,6 +89,9 @@ Information for the Windows/SSO team can be found in [docs/SSO_ONBOARDING_DETAIL
 ### CP Elasticsearch & Exensio API
 Step-by-step enablement, environment variables, log/API requirements, verification, and troubleshooting: **[docs/INTEGRATION_ES_EXENSIO.md](docs/INTEGRATION_ES_EXENSIO.md)**.
 
+### ETL SSH trigger (`etlservers.yml`)
+Optional SSH + remote crontab kick (separate from queue dispatch): **[docs/ETL_SSH_TRIGGER.md](docs/ETL_SSH_TRIGGER.md)**.
+
 ### Configuration Files
 - `application.yml` — Default config, profiles, Liquibase, CORS
 - `application-onsemi-oracle.yml` — Production Oracle/SMTP/CORS config
@@ -297,6 +300,7 @@ The codebase is OIDC-based, not SAML-based. If the vendor form requires SAML fie
 | `DiscoveryScheduler` | cron (configurable) | Automated metadata discovery (disabled by default) |
 | `CpLogMonitor` | fixedDelay 60s (configurable) | Poll Elasticsearch for CP enrichment outcomes; drives `ENRICHMENT → EXENSIO_LOADING / FAILED`. No-op when ES not configured. |
 | `ExensioLoadMonitor` | fixedDelay 60s (configurable) | Poll Exensio API for load confirmation; drives `EXENSIO_LOADING → DONE / FAILED`. No-op when Exensio not configured. |
+| `EtlSshTriggerService` | on session create / `POST /api/etl-trigger/execute` | Optional SSH to hosts in `etlservers.yml`; runs matched remote crontab command. No-op when `etl.trigger.enabled=false` or YAML not loaded. See [ETL_SSH_TRIGGER.md](docs/ETL_SSH_TRIGGER.md). |
 
 ### Additional Backend Services (not in background tasks)
 | Service | Purpose |

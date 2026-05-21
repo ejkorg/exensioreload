@@ -1,5 +1,5 @@
-# DataPort Command Processor servers
-# Naming aligned with Dataport DB configuration (PROD only)
+# DataPort Command Processor servers (loaded at startup when etl.trigger.enabled=true)
+# See docs/ETL_SSH_TRIGGER.md — keys should match staging site (e.g. CEBU → CEBU-PROD)
 
 CEBU-PROD:
   host: pbxprdjsrv04.onsemi.com
