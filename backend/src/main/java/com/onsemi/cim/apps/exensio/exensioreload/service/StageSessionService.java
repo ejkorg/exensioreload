@@ -25,6 +25,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -846,7 +847,7 @@ public class StageSessionService {
             bindParams(ps, params);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String day = String.valueOf(rs.getObject("day_bucket"));
+                    String day = formatDayBucket(rs.getObject("day_bucket"));
                     points.add(new SessionDailyStatusPoint(
                             day,
                             rs.getLong("total_count"),
@@ -946,7 +947,7 @@ public class StageSessionService {
                     if (!selected.containsKey(buildKey(lot, wafer))) {
                         continue;
                     }
-                    String day = String.valueOf(rs.getObject("day_bucket"));
+                    String day = formatDayBucket(rs.getObject("day_bucket"));
                     String pointKey = day + "|" + lot + "|" + wafer;
                     compact.put(pointKey, new SessionLotWaferDailyPoint(day, lot, wafer, rs.getLong("point_total")));
                 }
@@ -1157,7 +1158,31 @@ public class StageSessionService {
     }
 
     private String toIso(Timestamp ts) {
-        return ts == null ? null : ts.toInstant().toString();
+        if (ts == null) {
+            return null;
+        }
+        return ts.toLocalDateTime().toInstant(ZoneOffset.UTC).toString();
+    }
+
+    /** Normalize JDBC day bucket values to YYYY-MM-DD (UTC wall-clock date). */
+    private String formatDayBucket(Object value) {
+        if (value == null) {
+            return "unknown";
+        }
+        if (value instanceof Date date) {
+            return date.toLocalDate().toString();
+        }
+        if (value instanceof Timestamp ts) {
+            return ts.toLocalDateTime().toLocalDate().toString();
+        }
+        if (value instanceof java.time.LocalDate localDate) {
+            return localDate.toString();
+        }
+        String raw = String.valueOf(value).trim();
+        if (raw.length() >= 10 && raw.charAt(4) == '-' && raw.charAt(7) == '-') {
+            return raw.substring(0, 10);
+        }
+        return raw;
     }
 
     private void ensureStagingSessionTable() {

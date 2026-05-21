@@ -2553,7 +2553,8 @@ public class RefDbService {
         if (timestamp == null) {
             return null;
         }
-        return timestamp.toInstant();
+        // Staging/metadata timestamps are stored as UTC wall-clock (no TZ column).
+        return timestamp.toLocalDateTime().toInstant(java.time.ZoneOffset.UTC);
     }
 
     private java.sql.Timestamp safeTimestamp(ResultSet rs, String column) {
