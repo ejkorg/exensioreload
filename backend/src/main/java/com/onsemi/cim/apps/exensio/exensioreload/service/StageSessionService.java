@@ -1,6 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
@@ -50,16 +49,16 @@ public class StageSessionService {
     private final RefDbService refDbService;
     private final ExternalDbConfig externalDbConfig;
     private final DataSource dataSource;
-    private final CpElasticsearchProperties esProperties;
+    private final StagePipelineOrchestrator pipelineOrchestrator;
     private final EtlSshTriggerService etlSshTriggerService;
 
     public StageSessionService(RefDbService refDbService, ExternalDbConfig externalDbConfig,
-                               CpElasticsearchProperties esProperties,
+                               StagePipelineOrchestrator pipelineOrchestrator,
                                EtlSshTriggerService etlSshTriggerService) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.dataSource = refDbService.getDataSource();
-        this.esProperties = esProperties;
+        this.pipelineOrchestrator = pipelineOrchestrator;
         this.etlSshTriggerService = etlSshTriggerService;
     }
 
@@ -553,11 +552,7 @@ public class StageSessionService {
         }
 
         if (!completedNow.isEmpty()) {
-            if (esProperties.isConfigured()) {
-                refDbService.markEnrichmentRecords(completedNow);
-            } else {
-                refDbService.markCompletedRecords(completedNow);
-            }
+            pipelineOrchestrator.onCpQueueConsumed(completedNow, session.site(), session.senderId());
         }
         refreshCounters(sessionId, session.status());
         return getOwnedSession(sessionId, username);
@@ -591,11 +586,7 @@ public class StageSessionService {
         }
 
         if (!completedNow.isEmpty()) {
-            if (esProperties.isConfigured()) {
-                refDbService.markEnrichmentRecords(completedNow);
-            } else {
-                refDbService.markCompletedRecords(completedNow);
-            }
+            pipelineOrchestrator.onCpQueueConsumed(completedNow, session.site(), session.senderId());
         }
         refreshCounters(sessionId, session.status());
         return isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);

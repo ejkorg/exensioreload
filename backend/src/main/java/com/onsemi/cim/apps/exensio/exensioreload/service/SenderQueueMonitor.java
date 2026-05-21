@@ -1,6 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
@@ -25,15 +24,8 @@ import java.util.Set;
  * Periodically inspects the external sender queue and drives status transitions when
  * records disappear from {@code DTP_SENDER_QUEUE_ITEM} (i.e. CP has consumed them).
  *
- * <p><b>Two modes depending on Elasticsearch configuration:</b></p>
- * <ul>
- *   <li><b>ES configured</b> ({@code cp.elasticsearch.url} is set): transitions to
- *       {@code ENRICHMENT} and lets {@link CpLogMonitor} drive the rest of the pipeline
- *       ({@code ENRICHMENT → EXENSIO_LOADING / FAILED}) based on actual CP log data.</li>
- *   <li><b>ES not configured</b>: transitions directly to {@code DONE} (skipping the
- *       ES-dependent intermediate states) so operators still see completion without
- *       requiring an Elasticsearch deployment.</li>
- * </ul>
+ * <p>Post-consumption routing is delegated to {@link StagePipelineOrchestrator}
+ * ({@link StagePipelinePolicy} capability chain: ES → Exensio API → immediate DONE).</p>
  */
 @Service
 public class SenderQueueMonitor {
@@ -44,20 +36,20 @@ public class SenderQueueMonitor {
     private final RefDbProperties properties;
     private final StageSessionService stageSessionService;
     private final StageMonitorService monitorService;
-    private final CpElasticsearchProperties esProperties;
+    private final StagePipelineOrchestrator pipelineOrchestrator;
 
     public SenderQueueMonitor(RefDbService refDbService,
                               ExternalDbConfig externalDbConfig,
                               RefDbProperties properties,
                               StageSessionService stageSessionService,
                               StageMonitorService monitorService,
-                              CpElasticsearchProperties esProperties) {
+                              StagePipelineOrchestrator pipelineOrchestrator) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.properties = properties;
         this.stageSessionService = stageSessionService;
         this.monitorService = monitorService;
-        this.esProperties = esProperties;
+        this.pipelineOrchestrator = pipelineOrchestrator;
     }
 
     @Scheduled(fixedDelayString = "${refdb.dispatch.monitor-interval-ms:10000}")
@@ -131,19 +123,7 @@ public class SenderQueueMonitor {
             }
         }
         if (!completed.isEmpty()) {
-            if (esProperties.isConfigured()) {
-                // ES is configured — transition to ENRICHMENT and let CpLogMonitor drive
-                // the rest of the pipeline (ENRICHMENT → EXENSIO_LOADING / FAILED).
-                refDbService.markEnrichmentRecords(completed);
-                log.info("ES configured: marked {} record(s) as ENRICHMENT for site {} sender {}",
-                        completed.size(), site, senderId);
-            } else {
-                // ES is not configured — transition directly to DONE so operators see
-                // completion without requiring an Elasticsearch deployment.
-                refDbService.markCompletedRecords(completed);
-                log.info("ES not configured: marked {} record(s) as DONE (direct) for site {} sender {}",
-                        completed.size(), site, senderId);
-            }
+            pipelineOrchestrator.onCpQueueConsumed(completed, site, senderId);
 
             // Lot progress tracking for LOT_UPDATE events
             Map<String, Map<String, Integer>> lotProgressBySession = new HashMap<>();
