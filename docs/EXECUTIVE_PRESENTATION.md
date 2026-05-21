@@ -246,7 +246,7 @@ timeline
 ```
 
 **Contact / ownership:** *[Add application owner name and distribution list]*  
-**Documentation:** `docs/EXENSIORELOAD.md` · `docs/SSO_ONBOARDING_DETAILS.md`
+**Documentation:** `docs/EXENSIORELOAD.md` · `docs/INTEGRATION_ES_EXENSIO.md` · `docs/SSO_ONBOARDING_DETAILS.md`
 
 ---
 

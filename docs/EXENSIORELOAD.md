@@ -86,6 +86,9 @@ com.onsemi.cim.apps.exensio.exensioreload
 ### SSO Registration
 Information for the Windows/SSO team can be found in [docs/SSO_ONBOARDING_DETAILS.md](docs/SSO_ONBOARDING_DETAILS.md).
 
+### CP Elasticsearch & Exensio API
+Step-by-step enablement, environment variables, log/API requirements, verification, and troubleshooting: **[docs/INTEGRATION_ES_EXENSIO.md](docs/INTEGRATION_ES_EXENSIO.md)**.
+
 ### Configuration Files
 - `application.yml` — Default config, profiles, Liquibase, CORS
 - `application-onsemi-oracle.yml` — Production Oracle/SMTP/CORS config

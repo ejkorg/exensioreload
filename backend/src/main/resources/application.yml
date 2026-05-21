@@ -109,9 +109,9 @@ reloader:
       onsemi-exensioreload-admins: ADMIN
       onsemi-exensioreload-superadmins: SUPER_ADMIN
 
-# Exensio Loading API integration
-# Set EXENSIO_ENABLED=true and configure credentials to activate ExensioLoadMonitor.
-# When disabled (default), records in EXENSIO_LOADING stay there indefinitely — safe no-op.
+# Exensio Loading API integration — see docs/INTEGRATION_ES_EXENSIO.md
+# EXENSIO_ENABLED=true + base URL activates ExensioLoadMonitor (StagePipelinePolicy).
+# When disabled, post-CP routing uses ES or immediate DONE per cp.elasticsearch.url.
 exensio:
   enabled: ${EXENSIO_ENABLED:false}
   env: ${EXENSIO_ENV:QA}
