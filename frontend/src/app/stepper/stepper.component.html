@@ -623,7 +623,7 @@
                     </div>
                 </section>
 
-                <ng-container *ngIf="hasMonitoringData()">
+                <div class="monitoring-cards-stack" *ngIf="hasMonitoringData()">
                     <!-- Stage All Info Banner -->
                     <section class="stage-all-info-banner glass-panel" *ngIf="stageAllMode()">
                         <div class="info-banner-content">
@@ -689,7 +689,7 @@
                         <app-monitoring-file-list [files]="monitoringFiles()"></app-monitoring-file-list>
                         <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
                     </div>
-                </ng-container>
+                </div>
             </div>
 
             <ng-template #noMonitoringData>

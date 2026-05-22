@@ -155,13 +155,13 @@ import { GlassIconComponent } from './glass-icon.component';
     .monitoring-stats {
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
+      gap: 1.25rem;
     }
 
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 0.6rem;
+      gap: 1rem;
     }
 
     .stat-card {
