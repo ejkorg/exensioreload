@@ -1,5 +1,7 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
+import com.onsemi.cim.apps.exensio.exensioreload.config.EtlServerConfigLoader;
+import com.onsemi.cim.apps.exensio.exensioreload.config.EtlTriggerProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.service.EtlSshTriggerService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.TriggerResult;
 import org.slf4j.Logger;
@@ -9,15 +11,24 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/etl-trigger")
 public class EtlTriggerController {
 
     private static final Logger logger = LoggerFactory.getLogger(EtlTriggerController.class);
 
+    private final EtlTriggerProperties etlTriggerProperties;
+    private final EtlServerConfigLoader configLoader;
     private final EtlSshTriggerService etlSshTriggerService;
 
-    public EtlTriggerController(EtlSshTriggerService etlSshTriggerService) {
+    public EtlTriggerController(EtlTriggerProperties etlTriggerProperties,
+                                EtlServerConfigLoader configLoader,
+                                EtlSshTriggerService etlSshTriggerService) {
+        this.etlTriggerProperties = etlTriggerProperties;
+        this.configLoader = configLoader;
         this.etlSshTriggerService = etlSshTriggerService;
     }
 
@@ -68,5 +79,21 @@ public class EtlTriggerController {
     @GetMapping("/health")
     public String health() {
         return "ETL Trigger Service is running";
+    }
+
+    /**
+     * Reports whether ETL SSH trigger is enabled and how many servers were loaded from etlservers.yml.
+     */
+    @GetMapping("/status")
+    public Map<String, Object> status() {
+        configLoader.ensureLoaded();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("enabled", etlTriggerProperties.isEnabled());
+        body.put("serversLoaded", configLoader.hasConfigs());
+        body.put("serverCount", configLoader.getConfigs().size());
+        if (configLoader.getLoadError() != null) {
+            body.put("loadError", configLoader.getLoadError());
+        }
+        return body;
     }
 }

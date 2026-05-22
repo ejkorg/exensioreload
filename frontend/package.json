@@ -6,8 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
-    "build:prod:subpath": "ng build --configuration production --base-href /exensioreload/",
-    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href /exensioreload/ --deploy-url /exensioreload/",
+    "build:prod:subpath": "ng build --configuration production --base-href /",
+    "build:prod:deploy": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production --base-href / --deploy-url /",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },

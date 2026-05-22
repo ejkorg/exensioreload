@@ -1,8 +1,6 @@
 server:
   port: 8004
   forward-headers-strategy: native
-  servlet:
-    context-path: /exensioreload
 
 spring:
   autoconfigure:
@@ -111,9 +109,9 @@ reloader:
       onsemi-exensioreload-admins: ADMIN
       onsemi-exensioreload-superadmins: SUPER_ADMIN
 
-# Exensio Loading API integration
-# Set EXENSIO_ENABLED=true and configure credentials to activate ExensioLoadMonitor.
-# When disabled (default), records in EXENSIO_LOADING stay there indefinitely — safe no-op.
+# Exensio Loading API integration — see docs/INTEGRATION_ES_EXENSIO.md
+# EXENSIO_ENABLED=true + base URL activates ExensioLoadMonitor (StagePipelinePolicy).
+# When disabled, post-CP routing uses ES or immediate DONE per cp.elasticsearch.url.
 exensio:
   enabled: ${EXENSIO_ENABLED:false}
   env: ${EXENSIO_ENV:QA}
@@ -140,8 +138,8 @@ exensio:
   circuit-breaker-threshold: ${EXENSIO_CIRCUIT_BREAKER_THRESHOLD:5}
   circuit-breaker-reset-ms: ${EXENSIO_CIRCUIT_BREAKER_RESET_MS:60000}
 
-# ETL SSH Trigger configuration
-# Set etl.trigger.enabled=true to activate the ETL trigger feature
+# ETL SSH Trigger — optional SSH + remote crontab (see docs/ETL_SSH_TRIGGER.md)
+# Requires classpath:etlservers.yml. Independent of refdb.dispatch (queue) path.
 etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}

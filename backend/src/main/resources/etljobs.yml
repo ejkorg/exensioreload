@@ -1,5 +1,6 @@
-# ETL Job Configurations
-# Each job defines a mapping between site/location and the CP command to execute
+# SAMPLE ONLY — not loaded by the application.
+# ETL SSH trigger reads commands from remote crontab on each host in etlservers.yml.
+# See docs/ETL_SSH_TRIGGER.md
 
 jobs:
   - jobKey: "default-cp-job"

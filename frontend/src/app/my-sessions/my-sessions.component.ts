@@ -16,6 +16,12 @@ import { GlassButtonComponent } from '../shared/components/glass-button.componen
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
+import {
+  formatUtcDate,
+  formatUtcDateLabel,
+  parseInstant,
+  toUtcDayKey
+} from '../shared/utils/datetime.util';
 import * as echarts from 'echarts';
 
 @Component({
@@ -377,7 +383,7 @@ import * as echarts from 'echarts';
                         <span class="status-badge" [class]="f.status.toLowerCase()">{{ f.status }}</span>
                       </td>
                       <td class="ft-col-date ft-date">{{ formatShortDate(f.createdAt) }}</td>
-                      <td class="ft-col-date ft-date ft-endtime">{{ formatShortDate(f.endTime) }}</td>
+                      <td class="ft-col-date ft-date ft-endtime">{{ formatEndTime(f.endTime) }}</td>
                     </tr>
                     <tr *ngIf="filteredFiles().length === 0" class="ft-empty-row">
                       <td colspan="6" class="ft-empty-cell">No files match the current filter.</td>
@@ -894,16 +900,25 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     fileCoverage = computed(() => {
       const filesList = this.files();
       if (!filesList.length) return null;
-      const dates = filesList
-        .map((f: StageRecordView) => f.endTime ? new Date(f.endTime) : null)
-        .filter((d: Date | null): d is Date => !!d && !Number.isNaN(d.getTime()));
-      if (!dates.length) return null;
-      const ms = dates.map((d: Date) => d.getTime());
-      const earliest = new Date(Math.min(...ms));
-      const latest = new Date(Math.max(...ms));
-      const days = Math.round((latest.getTime() - earliest.getTime()) / 86400000);
-      const fmt = (d: Date) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-      return { from: earliest, to: latest, days, fromLabel: fmt(earliest), toLabel: fmt(latest) };
+      const dayKeys = filesList
+        .map((f: StageRecordView) => toUtcDayKey(f.endTime))
+        .filter((d: string | null): d is string => !!d);
+      if (!dayKeys.length) return null;
+      const sorted = [...dayKeys].sort();
+      const fromKey = sorted[0];
+      const toKey = sorted[sorted.length - 1];
+      const fromMs = Date.parse(`${fromKey}T00:00:00Z`);
+      const toMs = Date.parse(`${toKey}T00:00:00Z`);
+      const days = Number.isFinite(fromMs) && Number.isFinite(toMs)
+        ? Math.round((toMs - fromMs) / 86400000)
+        : 0;
+      return {
+        from: fromKey,
+        to: toKey,
+        days,
+        fromLabel: formatUtcDateLabel(fromKey),
+        toLabel: formatUtcDateLabel(toKey)
+      };
     });
 
     constructor(private backend: BackendService, private route: ActivatedRoute, private auth: AuthService, private router: Router) {
@@ -1030,7 +1045,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         return;
       }
       this.persistMonitoringSession(session.sessionId);
-      this.router.navigate(['/exensioreload/new']);
+      this.router.navigate(['/new']);
     }
 
     selectSession(session: StagingSessionSummary) {
@@ -1230,7 +1245,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
       const heatKeyCount = new Map<string, number>();
 
       records.forEach((r: StageRecordView) => {
-        const day = this.toDayKey(r.endTime || r.createdAt) || 'unknown';
+        const day = (r.endTime ? toUtcDayKey(r.endTime) : this.toDayKey(r.createdAt)) || 'unknown';
         const entry = byDay.get(day) || { done: 0, enqueued: 0, failed: 0, cancelled: 0, staged: 0, total: 0 };
         const normalized = this.normalizeStatus(r.status);
         if (normalized === 'DONE') entry.done += 1;
@@ -1294,10 +1309,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     }
 
     private toDayKey(value?: string | null): string | null {
-      if (!value) return null;
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toISOString().slice(0, 10);
+      return toUtcDayKey(value);
     }
 
     openDatePicker(input: HTMLInputElement) {
@@ -1366,8 +1378,8 @@ export class MySessionsComponent implements OnInit, OnDestroy {
 
     formatShortDate(value: unknown): string {
       if (value === null || value === undefined || value === '') return '-';
-      const d = value instanceof Date ? value : new Date(String(value));
-      if (Number.isNaN(d.getTime())) return '-';
+      const d = parseInstant(value);
+      if (!d) return '-';
       return new Intl.DateTimeFormat(undefined, {
         year: 'numeric',
         month: 'numeric',
@@ -1375,6 +1387,16 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         hour: 'numeric',
         minute: '2-digit'
       }).format(d);
+    }
+
+    formatEndTime(value: unknown): string {
+      return formatUtcDate(value, {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
     }
 
     truncateSessionId(sessionId: string): string {
@@ -1400,27 +1422,23 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     }
 
     getEarliestDate(): Date | null {
-      const filesList = this.files();
-      if (filesList.length === 0) return null;
-
-      const dates = filesList
-        .map((f: StageRecordView) => (f.endTime ? new Date(f.endTime) : null))
-        .filter((d: Date | null): d is Date => !!d && !Number.isNaN(d.getTime()));
-
-      if (dates.length === 0) return null;
-      return new Date(Math.min(...dates.map((d: Date) => d.getTime())));
+      const keys = this.files()
+        .map((f: StageRecordView) => toUtcDayKey(f.endTime))
+        .filter((k: string | null): k is string => !!k)
+        .sort();
+      if (!keys.length) return null;
+      const parsed = parseInstant(`${keys[0]}T00:00:00Z`);
+      return parsed;
     }
 
     getLatestDate(): Date | null {
-      const filesList = this.files();
-      if (filesList.length === 0) return null;
-
-      const dates = filesList
-        .map((f: StageRecordView) => (f.endTime ? new Date(f.endTime) : null))
-        .filter((d: Date | null): d is Date => !!d && !Number.isNaN(d.getTime()));
-
-      if (dates.length === 0) return null;
-      return new Date(Math.max(...dates.map((d: Date) => d.getTime())));
+      const keys = this.files()
+        .map((f: StageRecordView) => toUtcDayKey(f.endTime))
+        .filter((k: string | null): k is string => !!k)
+        .sort();
+      if (!keys.length) return null;
+      const parsed = parseInstant(`${keys[keys.length - 1]}T00:00:00Z`);
+      return parsed;
     }
 
       exportCurrentSessionFiles() {

@@ -1,6 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
@@ -25,6 +24,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -49,16 +49,16 @@ public class StageSessionService {
     private final RefDbService refDbService;
     private final ExternalDbConfig externalDbConfig;
     private final DataSource dataSource;
-    private final CpElasticsearchProperties esProperties;
+    private final StagePipelineOrchestrator pipelineOrchestrator;
     private final EtlSshTriggerService etlSshTriggerService;
 
     public StageSessionService(RefDbService refDbService, ExternalDbConfig externalDbConfig,
-                               CpElasticsearchProperties esProperties,
+                               StagePipelineOrchestrator pipelineOrchestrator,
                                EtlSshTriggerService etlSshTriggerService) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.dataSource = refDbService.getDataSource();
-        this.esProperties = esProperties;
+        this.pipelineOrchestrator = pipelineOrchestrator;
         this.etlSshTriggerService = etlSshTriggerService;
     }
 
@@ -90,7 +90,8 @@ public class StageSessionService {
         // Call ETL SSH trigger after session creation
         TriggerResult triggerResult = null;
         try {
-            String senderConfigName = "sender-" + senderId;
+            // Prefer site-based key (matches etlservers.yml entries like CEBU-PROD); API may pass real cpConfig instead.
+            String senderConfigName = resolveEtlSenderConfigName(site, senderId);
             triggerResult = etlSshTriggerService.execute(
                     sessionId,  // requestId
                     username,   // userId
@@ -552,11 +553,7 @@ public class StageSessionService {
         }
 
         if (!completedNow.isEmpty()) {
-            if (esProperties.isConfigured()) {
-                refDbService.markEnrichmentRecords(completedNow);
-            } else {
-                refDbService.markCompletedRecords(completedNow);
-            }
+            pipelineOrchestrator.onCpQueueConsumed(completedNow, session.site(), session.senderId());
         }
         refreshCounters(sessionId, session.status());
         return getOwnedSession(sessionId, username);
@@ -590,11 +587,7 @@ public class StageSessionService {
         }
 
         if (!completedNow.isEmpty()) {
-            if (esProperties.isConfigured()) {
-                refDbService.markEnrichmentRecords(completedNow);
-            } else {
-                refDbService.markCompletedRecords(completedNow);
-            }
+            pipelineOrchestrator.onCpQueueConsumed(completedNow, session.site(), session.senderId());
         }
         refreshCounters(sessionId, session.status());
         return isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
@@ -846,7 +839,7 @@ public class StageSessionService {
             bindParams(ps, params);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String day = String.valueOf(rs.getObject("day_bucket"));
+                    String day = formatDayBucket(rs.getObject("day_bucket"));
                     points.add(new SessionDailyStatusPoint(
                             day,
                             rs.getLong("total_count"),
@@ -946,7 +939,7 @@ public class StageSessionService {
                     if (!selected.containsKey(buildKey(lot, wafer))) {
                         continue;
                     }
-                    String day = String.valueOf(rs.getObject("day_bucket"));
+                    String day = formatDayBucket(rs.getObject("day_bucket"));
                     String pointKey = day + "|" + lot + "|" + wafer;
                     compact.put(pointKey, new SessionLotWaferDailyPoint(day, lot, wafer, rs.getLong("point_total")));
                 }
@@ -1157,7 +1150,31 @@ public class StageSessionService {
     }
 
     private String toIso(Timestamp ts) {
-        return ts == null ? null : ts.toInstant().toString();
+        if (ts == null) {
+            return null;
+        }
+        return ts.toLocalDateTime().toInstant(ZoneOffset.UTC).toString();
+    }
+
+    /** Normalize JDBC day bucket values to YYYY-MM-DD (UTC wall-clock date). */
+    private String formatDayBucket(Object value) {
+        if (value == null) {
+            return "unknown";
+        }
+        if (value instanceof Date date) {
+            return date.toLocalDate().toString();
+        }
+        if (value instanceof Timestamp ts) {
+            return ts.toLocalDateTime().toLocalDate().toString();
+        }
+        if (value instanceof java.time.LocalDate localDate) {
+            return localDate.toString();
+        }
+        String raw = String.valueOf(value).trim();
+        if (raw.length() >= 10 && raw.charAt(4) == '-' && raw.charAt(7) == '-') {
+            return raw.substring(0, 10);
+        }
+        return raw;
     }
 
     private void ensureStagingSessionTable() {
@@ -1191,6 +1208,21 @@ public class StageSessionService {
         } catch (Exception ex) {
             log.warn("Unable to ensure staging_session table at runtime: {}", ex.getMessage());
         }
+    }
+
+    /**
+     * Builds a sender config hint for ETL SSH port extraction.
+     * YAML keys use {@code SITE-PROD}; crontab lines often embed the SSH/sender port (e.g. 60170).
+     */
+    private String resolveEtlSenderConfigName(String site, int senderId) {
+        if (site != null && !site.isBlank()) {
+            String trimmed = site.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!trimmed.endsWith("-PROD") && !trimmed.endsWith("-QA")) {
+                return trimmed + "-PROD";
+            }
+            return trimmed;
+        }
+        return "sender-" + senderId;
     }
 
     private boolean tableExists(Connection connection, String tableName) {

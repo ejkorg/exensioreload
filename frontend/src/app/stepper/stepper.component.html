@@ -374,9 +374,10 @@
                             tabindex="0"
                             (keydown.enter)="toggleSelectionByRow(row)"
                             (keydown.space)="$event.preventDefault(); toggleSelectionByRow(row)">
-                            <td class="col-select" (click)="onCheckboxCellClick(row, $event)">
+                            <td class="col-select">
                                 <app-glass-checkbox
-                                        [checked]="isRowSelected(row)">
+                                        [checked]="isRowSelected(row)"
+                                        (checkedChange)="onCheckboxToggle(row, $event)">
                                 </app-glass-checkbox>
                             </td>
                             <td>{{ row.lot }}</td>
@@ -428,7 +429,7 @@
                             <span class="mode-radio"></span>
                         </div>
                         <p>Stage only currently selected rows.</p>
-                        <span class="mode-metric">{{ selectedWaferCount() | number }} selected</span>
+                        <span class="mode-metric">{{ selectedRows().size | number }} selected</span>
                     </button>
 
                     <button

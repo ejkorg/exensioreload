@@ -569,9 +569,61 @@ public class RefDbService {
      */
     public void markExensioLoading(StageRecord record, String outputPath, String outputTarget) {
         if (record == null) return;
+        applyExensioLoading(record.id(), outputPath, outputTarget);
+        broadcastExensioLoadingEvent(record, outputPath, outputTarget, "Exensio Loading");
+    }
+
+    /**
+     * Transitions records to {@code EXENSIO_LOADING} after CP queue consumption when Elasticsearch
+     * is disabled but the Exensio API monitor is enabled. CP output paths are not yet known.
+     */
+    public void markExensioLoadingPending(List<StageRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_LOADING', cp_output_path = ?, cp_output_target = ?, error_message = NULL, updated_at = " + timestampExpr() +
+                " SET status = 'EXENSIO_LOADING', cp_output_path = NULL, cp_output_target = NULL," +
+                " error_message = NULL, updated_at = " + timestampExpr() + " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (StageRecord record : records) {
+                ps.setLong(1, record.id());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed marking records as EXENSIO_LOADING (pending)", ex);
+        }
+
+        if (monitorService != null) {
+            Map<String, List<StageRecord>> byRequest = new HashMap<>();
+            for (StageRecord r : records) {
+                if (r.requestId() != null) {
+                    byRequest.computeIfAbsent(r.requestId(), k -> new ArrayList<>()).add(r);
+                }
+            }
+            byRequest.forEach((reqId, group) -> {
+                for (StageRecord r : group) {
+                    broadcastExensioLoadingEvent(r, null, null,
+                            "Awaiting Exensio load confirmation (CP consumed)");
+                }
+                broadcastStats(reqId);
+            });
+        }
+    }
+
+    /**
+     * Marks {@code DONE} after Elasticsearch confirms CP success when Exensio verification is disabled.
+     */
+    public void markDoneFromCpEnrichment(StageRecord record, String outputPath, String outputTarget) {
+        if (record == null) {
+            return;
+        }
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET status = 'DONE', cp_output_path = ?, cp_output_target = ?, error_message = NULL," +
+                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -580,19 +632,53 @@ public class RefDbService {
             ps.setLong(3, record.id());
             ps.executeUpdate();
         } catch (SQLException ex) {
-            throw new IllegalStateException("Failed marking record as EXENSIO_LOADING", ex);
+            throw new IllegalStateException("Failed marking record DONE from CP enrichment", ex);
         }
 
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "EXENSIO_LOADING");
-            evt.put("msg", "Exensio Loading");
+            evt.put("status", "DONE");
+            evt.put("msg", "CP enrichment complete");
             evt.put("cpOutputPath", outputPath);
             evt.put("cpOutputTarget", outputTarget);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             broadcastStats(record.requestId());
         }
+    }
+
+    private void applyExensioLoading(long recordId, String outputPath, String outputTarget) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET status = 'EXENSIO_LOADING', cp_output_path = ?, cp_output_target = ?, error_message = NULL, updated_at = "
+                + timestampExpr() + " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, outputPath);
+            ps.setString(2, outputTarget);
+            ps.setLong(3, recordId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed marking record as EXENSIO_LOADING", ex);
+        }
+    }
+
+    private void broadcastExensioLoadingEvent(StageRecord record, String outputPath, String outputTarget, String msg) {
+        if (monitorService == null || record.requestId() == null) {
+            return;
+        }
+        Map<String, Object> evt = new HashMap<>();
+        evt.put("id", record.id());
+        evt.put("status", "EXENSIO_LOADING");
+        evt.put("msg", msg);
+        if (outputPath != null) {
+            evt.put("cpOutputPath", outputPath);
+        }
+        if (outputTarget != null) {
+            evt.put("cpOutputTarget", outputTarget);
+        }
+        monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+        broadcastStats(record.requestId());
     }
 
     /**
@@ -2553,7 +2639,8 @@ public class RefDbService {
         if (timestamp == null) {
             return null;
         }
-        return timestamp.toInstant();
+        // Staging/metadata timestamps are stored as UTC wall-clock (no TZ column).
+        return timestamp.toLocalDateTime().toInstant(java.time.ZoneOffset.UTC);
     }
 
     private java.sql.Timestamp safeTimestamp(ResultSet rs, String column) {

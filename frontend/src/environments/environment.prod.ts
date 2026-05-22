@@ -2,7 +2,7 @@ export const environment = {
     production: true,
     apiBaseUrl: '',
     useProxy: false,
-    apiUrl: '/exensioreload/api',
+    apiUrl: '/exensio-reload/api',
     showSenderLookupSql: false,
     showPreviewDebug: false,
     monitoring: {

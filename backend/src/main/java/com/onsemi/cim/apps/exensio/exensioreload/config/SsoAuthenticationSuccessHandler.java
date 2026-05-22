@@ -52,7 +52,7 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
     public static final String SESSION_RETURN_URL_KEY = "sso_return_url";
 
     /** Default landing page when no valid returnUrl is available. */
-    private static final String DEFAULT_RETURN_URL = "/exensioreload";
+    private static final String DEFAULT_RETURN_URL = "/";
 
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;

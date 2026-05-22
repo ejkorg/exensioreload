@@ -3,6 +3,7 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 import com.onsemi.cim.apps.exensio.exensioreload.config.CrontabJob;
 import com.onsemi.cim.apps.exensio.exensioreload.config.EtlServerConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.config.EtlServerConfigLoader;
+import com.onsemi.cim.apps.exensio.exensioreload.config.EtlTriggerProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.entity.IdempotencyRecord;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.IdempotencyRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,7 @@ public class EtlSshTriggerService {
 
     private static final Logger logger = LoggerFactory.getLogger(EtlSshTriggerService.class);
 
+    private final EtlTriggerProperties etlTriggerProperties;
     private final EtlServerConfigLoader configLoader;
     private final CrontabExtractor crontabExtractor;
     private final SenderPortExtractor senderPortExtractor;
@@ -35,12 +37,14 @@ public class EtlSshTriggerService {
     private final IdempotencyRepository idempotencyRepository;
 
     public EtlSshTriggerService(
+            EtlTriggerProperties etlTriggerProperties,
             EtlServerConfigLoader configLoader,
             CrontabExtractor crontabExtractor,
             SenderPortExtractor senderPortExtractor,
             CrontabJobMatcher jobMatcher,
             AuditService auditService,
             IdempotencyRepository idempotencyRepository) {
+        this.etlTriggerProperties = etlTriggerProperties;
         this.configLoader = configLoader;
         this.crontabExtractor = crontabExtractor;
         this.senderPortExtractor = senderPortExtractor;
@@ -73,9 +77,15 @@ public class EtlSshTriggerService {
      */
     public TriggerResult execute(String requestId, String userId, String site,
                                  String location, String senderConfigName) {
-        // Check if ETL servers are configured (kill switch check)
+        if (!etlTriggerProperties.isEnabled()) {
+            logger.debug("ETL SSH trigger disabled (etl.trigger.enabled=false) for requestId: {}", requestId);
+            return TriggerResult.notConfigured();
+        }
+
+        configLoader.ensureLoaded();
         if (!configLoader.hasConfigs()) {
-            logger.info("ETL trigger disabled - no ETL servers configured for requestId: {}", requestId);
+            logger.info("ETL SSH trigger skipped - no servers loaded from etlservers.yml for requestId: {}",
+                    requestId);
             return TriggerResult.notConfigured();
         }
 
@@ -97,9 +107,11 @@ public class EtlSshTriggerService {
         // Get remote IP for audit logging
         String remoteIp = getRemoteIp();
 
-        // Process each ETL server
+        List<EtlServerConfig> targetServers = configLoader.getConfigsForSite(site);
+
+        // Process each matching ETL server (site-filtered when possible)
         List<TriggerResult> results = new ArrayList<>();
-        for (EtlServerConfig config : configLoader.getConfigs()) {
+        for (EtlServerConfig config : targetServers) {
             TriggerResult result = processEtlServer(config, senderPort, requestId, userId, site, location, remoteIp);
             results.add(result);
         }
@@ -108,8 +120,8 @@ public class EtlSshTriggerService {
         TriggerResult overallResult = determineOverallStatus(results);
 
         // Log audit for each server result
-        for (int i = 0; i < configLoader.getConfigs().size(); i++) {
-            EtlServerConfig config = configLoader.getConfigs().get(i);
+        for (int i = 0; i < targetServers.size(); i++) {
+            EtlServerConfig config = targetServers.get(i);
             TriggerResult result = results.get(i);
 
             auditService.logEtlTrigger(
@@ -135,8 +147,9 @@ public class EtlSshTriggerService {
             // Extract crontab jobs from the ETL server
             List<CrontabJob> jobs = crontabExtractor.extract(config);
 
-            // Match sender port to crontab job
-            CrontabJob matchedJob = jobMatcher.match(jobs, senderPort);
+            // Match sender port to crontab job (fall back to SSH port from etlservers.yml when not in config name)
+            Integer portForMatch = senderPort != null ? senderPort : config.getPort();
+            CrontabJob matchedJob = jobMatcher.match(jobs, portForMatch);
             if (matchedJob == null) {
                 logger.warn("No matching crontab job found for sender port {} on ETL server {}",
                         senderPort, config.getName());

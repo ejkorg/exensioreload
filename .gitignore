@@ -1,4 +1,5 @@
 # Angular specific
+frontend/dist/
 /dist/
 /out-tsc/
 /tmp/
@@ -7,8 +8,17 @@
 /.angular/
 .angular/
 
+#java
+/backend/target/*
+/backend/logs/*
+/backend/backend.log
+/backend/backend.pid
+/.idea
+
 # Node modules and dependency files
+frontend/node_modules/
 /node_modules/
+/node_modules/*
 /package-lock.json
 /yarn.lock
 

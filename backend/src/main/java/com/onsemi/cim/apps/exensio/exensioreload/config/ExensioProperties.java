@@ -7,9 +7,9 @@ import org.springframework.stereotype.Component;
  * Configuration properties for the Exensio Loading API integration.
  * Bound from the {@code exensio} prefix in application.yml.
  *
- * When {@code enabled} is false (default) the ExensioLoadMonitor is a complete
- * no-op and records stay in EXENSIO_LOADING indefinitely — same safe fallback
- * pattern as CpElasticsearchProperties / CpLogMonitor.
+ * When {@code enabled} is false (default) the ExensioLoadMonitor is a no-op.
+ * {@link com.onsemi.cim.apps.exensio.exensioreload.service.StagePipelinePolicy} then
+ * completes records at CP queue consumption (if ES is also off) or after ES success.
  */
 @Component
 @ConfigurationProperties(prefix = "exensio")

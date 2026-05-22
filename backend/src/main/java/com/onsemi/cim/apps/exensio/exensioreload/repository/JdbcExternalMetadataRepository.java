@@ -73,14 +73,14 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         if (!hasOptionalFilters) {
             // Fast path: Use optimized query (indexed columns only)
             sql = buildOptimizedMetadataQuery(
-                    "select lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
+                    "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
                     start, end, dataType, lots, wafers);
             if (log.isDebugEnabled()) {
                 log.debug("Using optimized query path for findMetadataPage (no optional filters)");
             }
         } else {
             // Full path: Apply all filters if optional filters are provided
-            sql = buildMetadataQuery("select lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
+            sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
                     start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
         }
 
@@ -146,7 +146,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Use COUNT(*) OVER() window function to get total count with each row
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
-                "select lot, id as metadata_id, id_data, end_time, wafer, original_file_name, COUNT(*) OVER() as total_count from " + viewName,
+                "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name, COUNT(*) OVER() as total_count from " + viewName,
                 start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
         sql.append(" order by end_time desc");
         if (limit > 0) {
@@ -243,7 +243,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
-            SqlWithParams sql = buildMetadataQuery("select lot, id as metadata_id, id_data, end_time, wafer, original_file_name from all_metadata_view",
+            SqlWithParams sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from all_metadata_view",
                     start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");

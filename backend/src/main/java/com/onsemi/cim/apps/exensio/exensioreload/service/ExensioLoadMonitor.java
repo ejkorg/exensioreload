@@ -30,11 +30,10 @@ import java.util.stream.Collectors;
  * Scheduled monitor that polls the Exensio API for records in {@code EXENSIO_LOADING}
  * status and drives the final status transitions.
  *
- * <h3>Fallback behaviour (when Exensio is not configured)</h3>
- * <p>When {@code exensio.enabled=false} or no base URL is set, every poll cycle
- * exits immediately without touching any records. Records stay in
- * {@code EXENSIO_LOADING} indefinitely — the same safe no-op pattern used by
- * {@link CpLogMonitor} when Elasticsearch is not configured.</p>
+ * <h3>When Exensio is not configured</h3>
+ * <p>When {@code exensio.enabled=false} or no base URL is set, this monitor is a no-op.
+ * Post-CP routing is handled by {@link StagePipelinePolicy}: without Exensio, records
+ * go directly to {@code DONE} (or through Elasticsearch when ES is enabled).</p>
  *
  * <h3>Full pipeline (when Exensio is configured)</h3>
  * <ol>

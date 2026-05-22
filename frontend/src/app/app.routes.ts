@@ -4,9 +4,8 @@ import { AuthService } from './auth/auth.service';
 import { AuthGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
-    { path: '', pathMatch: 'full', redirectTo: 'exensioreload' },
     {
-        path: 'exensioreload',
+        path: '',
         canActivate: [AuthGuard],
         children: [
             { path: '', loadComponent: () => import('./dashboard/dashboard.component').then(m => m.DashboardComponent) },

@@ -38,13 +38,16 @@ public class CpLogMonitor {
     private final RefDbService refDbService;
     private final ElasticsearchLogService elasticsearchLogService;
     private final CpElasticsearchProperties props;
+    private final StagePipelineOrchestrator pipelineOrchestrator;
 
     public CpLogMonitor(RefDbService refDbService,
                         ElasticsearchLogService elasticsearchLogService,
-                        CpElasticsearchProperties props) {
+                        CpElasticsearchProperties props,
+                        StagePipelineOrchestrator pipelineOrchestrator) {
         this.refDbService = refDbService;
         this.elasticsearchLogService = elasticsearchLogService;
         this.props = props;
+        this.pipelineOrchestrator = pipelineOrchestrator;
     }
 
     /**
@@ -54,7 +57,8 @@ public class CpLogMonitor {
     @Scheduled(fixedDelayString = "${cp.elasticsearch.poll-interval-ms:60000}")
     public void monitorEnrichmentRecords() {
         if (!props.isConfigured()) {
-            log.debug("Elasticsearch not configured — CP log polling disabled (SenderQueueMonitor handles DONE transition)");
+            log.debug("Elasticsearch not configured — CP log polling disabled ({})",
+                    "SenderQueueMonitor routes to Exensio API or DONE");
             return;
         }
 
@@ -99,10 +103,9 @@ public class CpLogMonitor {
 
         switch (result) {
             case CpLogResult.Success success -> {
-                // Requirement 3.2: transition to EXENSIO_LOADING with output path and target
                 log.info("CP enrichment success for record id={} dataId={}: path={} target={}",
                         record.id(), record.dataId(), success.outputPath(), success.outputTarget());
-                refDbService.markExensioLoading(record, success.outputPath(), success.outputTarget());
+                pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
             }
             case CpLogResult.Failure failure -> {
                 // Requirement 4.2, 4.3, 4.5: transition to FAILED with truncated error message

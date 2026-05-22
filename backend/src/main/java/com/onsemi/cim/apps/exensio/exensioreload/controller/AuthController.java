@@ -392,11 +392,18 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
+            RefreshToken existing = stored.get();
+            String username = existing.getUsername();
+            if (username == null || username.isBlank()) {
+                logger.warn("[AuthController.refresh] refresh token has no username");
+                return ResponseEntity.status(401).build();
+            }
+
             // rotate
-            refreshTokenService.revoke(stored.get());
+            refreshTokenService.revoke(existing);
             RefreshToken rt = new RefreshToken();
             rt.setToken("refresh:" + System.currentTimeMillis());
-            rt.setUsername(stored.get().getUsername());
+            rt.setUsername(username);
             rt.setExpiresAt(java.time.Instant.now().plusSeconds(60 * 60 * 24 * 7));
             refreshTokenService.save(rt);
 
@@ -405,11 +412,10 @@ public class AuthController {
 
             Map<String, String> body = new HashMap<>();
             // On refresh we do not have Authentication; rebuild roles from DB
-            // Roles already have ROLE_ prefix in database, use them directly
-            java.util.List<String> roles = userRepository.findByUsername(rt.getUsername())
-                    .map(u -> new java.util.ArrayList<String>(u.getRoles()))
+            java.util.List<String> roles = userRepository.findByUsername(username)
+                    .map(u -> new java.util.ArrayList<>(u.getRoles()))
                     .orElse(new java.util.ArrayList<>());
-            body.put("accessToken", jwtUtil.generateToken(rt.getUsername(), roles));
+            body.put("accessToken", jwtUtil.generateToken(username, roles));
             return ResponseEntity.ok(body);
         } catch (Exception e) {
             logger.error("[AuthController.refresh] unexpected error rotating refresh token for='{}'", incoming, e);

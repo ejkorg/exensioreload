@@ -83,6 +83,15 @@ com.onsemi.cim.apps.exensio.exensioreload
 | `app.stage.max-rows-cap` | 10000 | Max stage-all rows |
 | `external-db.allow-writes` | false | Gate for external DB writes |
 
+### SSO Registration
+Information for the Windows/SSO team can be found in [docs/SSO_ONBOARDING_DETAILS.md](docs/SSO_ONBOARDING_DETAILS.md).
+
+### CP Elasticsearch & Exensio API
+Step-by-step enablement, environment variables, log/API requirements, verification, and troubleshooting: **[docs/INTEGRATION_ES_EXENSIO.md](docs/INTEGRATION_ES_EXENSIO.md)**.
+
+### ETL SSH trigger (`etlservers.yml`)
+Optional SSH + remote crontab kick (separate from queue dispatch): **[docs/ETL_SSH_TRIGGER.md](docs/ETL_SSH_TRIGGER.md)**.
+
 ### Configuration Files
 - `application.yml` — Default config, profiles, Liquibase, CORS
 - `application-onsemi-oracle.yml` — Production Oracle/SMTP/CORS config
@@ -291,6 +300,7 @@ The codebase is OIDC-based, not SAML-based. If the vendor form requires SAML fie
 | `DiscoveryScheduler` | cron (configurable) | Automated metadata discovery (disabled by default) |
 | `CpLogMonitor` | fixedDelay 60s (configurable) | Poll Elasticsearch for CP enrichment outcomes; drives `ENRICHMENT → EXENSIO_LOADING / FAILED`. No-op when ES not configured. |
 | `ExensioLoadMonitor` | fixedDelay 60s (configurable) | Poll Exensio API for load confirmation; drives `EXENSIO_LOADING → DONE / FAILED`. No-op when Exensio not configured. |
+| `EtlSshTriggerService` | on session create / `POST /api/etl-trigger/execute` | Optional SSH to hosts in `etlservers.yml`; runs matched remote crontab command. No-op when `etl.trigger.enabled=false` or YAML not loaded. See [ETL_SSH_TRIGGER.md](docs/ETL_SSH_TRIGGER.md). |
 
 ### Additional Backend Services (not in background tasks)
 | Service | Purpose |
@@ -528,16 +538,14 @@ External Oracle DBs (20+ sites)
 SENDER_STAGE table (RefDB Oracle)
     ↓ (SenderDispatchService @Scheduled 60s)
 External sender queues (DTP_SENDER_QUEUE_ITEM) → ENRICHMENT
-    ↓ (SenderQueueMonitor detects row gone from queue)
-[ES not configured] → DONE (direct)
-[ES configured] → stays ENRICHMENT
-    ↓ (CpLogMonitor polls ES every 60s)
-ENRICHMENT → EXENSIO_LOADING (cp_output_path + cp_output_target stored)
-          → FAILED (CP error or 30min timeout)
-    ↓ (ExensioLoadMonitor polls Exensio API every 60s)
-[Exensio not configured] → stuck at EXENSIO_LOADING
-[Exensio configured] → DONE (exensio_wafer_key + exensio_pg_key stored)
-                     → FAILED (Exensio error or 60min timeout)
+    ↓ (SenderQueueMonitor detects row gone from queue — StagePipelinePolicy)
+[ES configured]     → ENRICHMENT (CpLogMonitor polls ES)
+[ES off, Exensio on] → EXENSIO_LOADING (ExensioLoadMonitor polls API)
+[ES off, Exensio off] → DONE (direct)
+    ↓ (CpLogMonitor when ES on)
+ENRICHMENT → EXENSIO_LOADING or DONE (per Exensio config) or FAILED
+    ↓ (ExensioLoadMonitor when Exensio on)
+EXENSIO_LOADING → DONE (exensio_wafer_key + exensio_pg_key) or FAILED
     ↓ (CompletionNotificationService cron 5min)
 All session files DONE → Email notification
 ```
@@ -612,5 +620,5 @@ frontend/src/app/                # 44 .ts files, 5 .html, 5 .scss (54 total)
 16. **CP Elasticsearch polling** — `CpLogMonitor` is safe to deploy with ES unconfigured (`cp.elasticsearch.url` blank = no-op). Configure via `application.yml` under `cp.elasticsearch.*`. Uses JDK `java.net.http.HttpClient` — no extra Maven dependencies.
 17. **No ES client library** — ES queries are raw HTTP POST to `/{index}/_search` using `java.net.http.HttpClient` + Jackson. Auth header (API key or Basic) is computed in `ElasticsearchLogService` constructor from `CpElasticsearchProperties`.
 18. **Exensio Loading API integration** — `ExensioLoadMonitor` polls `EXENSIO_LOADING` records and calls `POST /v1/key/lot-wafer-lookup` (lot + wafer). Safe to deploy unconfigured (`exensio.enabled=false` = no-op). Enable via env vars: `EXENSIO_ENABLED=true`, `EXENSIO_QA_URL`, `EXENSIO_USERNAME`, `EXENSIO_PASSWORD`. On success stores `exensio_wafer_key` + `exensio_pg_key` on the record for future results queries.
-19. **Three-tier fallback** — deploy with any combination: no ES + no Exensio (`ENRICHMENT → DONE`), ES only (`ENRICHMENT → EXENSIO_LOADING`, stuck), or both (`ENRICHMENT → EXENSIO_LOADING → DONE`). Each monitor gates on its own `isConfigured()` check independently.
+19. **Capability-based completion** — `StagePipelinePolicy` routes after CP queue consumption: ES → `CpLogMonitor`; else Exensio → `EXENSIO_LOADING` + `ExensioLoadMonitor`; else `DONE`. After ES success, Exensio is used only when configured; otherwise `DONE` with CP output metadata.
 20. **`AuthGuard` is async** — on new tab / browser restart, the guard calls `restoreSession()` which hits `/api/auth/refresh` using the persistent cookie before deciding to redirect to login. `APP_INITIALIZER` also awaits the refresh before Angular activates any route.
