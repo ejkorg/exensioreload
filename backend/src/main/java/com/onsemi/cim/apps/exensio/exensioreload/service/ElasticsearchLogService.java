@@ -76,7 +76,7 @@ public class ElasticsearchLogService {
      * <p>Hit evaluation order (Requirements 3.1, 4.1):</p>
      * <ol>
      *   <li>If any hit has {@code error.type} or {@code error.message} → {@link CpLogResult.Failure}</li>
-     *   <li>Else if any hit has "output path" in {@code message} → {@link CpLogResult.Success}</li>
+     *   <li>Else if any hit has service.environment ∈ {PRD, SBX, SANDBOX} and message contains "output path" → {@link CpLogResult.Success}</li>
      *   <li>Else → {@link CpLogResult.NotFound}</li>
      * </ol>
      *
@@ -265,10 +265,16 @@ public class ElasticsearchLogService {
                 }
             }
 
-            // Success check — look for "output path" in message
+            // Success check — verify service.environment is a valid production/sandbox env (PRD, SBX, or SANDBOX)
+            // and look for "output path" in message
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
                 if (source.isMissingNode()) continue;
+
+                String environment = source.path("service.environment").asText(null);
+                if (!isValidEnvironment(environment)) {
+                    continue; // skip logs with invalid or missing environment
+                }
 
                 String message = source.path("message").asText(null);
                 if (message != null && message.toLowerCase().contains("output path")) {
@@ -277,8 +283,8 @@ public class ElasticsearchLogService {
                         String path = outputPath.get().trim();
                         String target = detectOutputTarget(path);
                         Instant timestamp = parseTimestamp(source);
-                        log.debug("CP success log found for dataId={}, lot={}: path={}, target={}",
-                                dataId, lot, path, target);
+                        log.debug("CP success log found for dataId={}, lot={}: env={}, path={}, target={}",
+                                dataId, lot, environment, path, target);
                         return new CpLogResult.Success(path, target, timestamp);
                     }
                 }
@@ -298,6 +304,16 @@ public class ElasticsearchLogService {
         String errorType = errorNode.path("type").asText(null);
         String errorMessage = errorNode.path("message").asText(null);
         return isNonBlank(errorType) || isNonBlank(errorMessage);
+    }
+
+    /**
+     * Validates that the environment string is one of the allowed production/sandbox values:
+     * PRD, SBX, or SANDBOX (case-insensitive).
+     */
+    private boolean isValidEnvironment(String environment) {
+        if (!isNonBlank(environment)) return false;
+        String upper = environment.toUpperCase().trim();
+        return upper.equals("PRD") || upper.equals("SBX") || upper.equals("SANDBOX");
     }
 
     private String extractErrorMessage(JsonNode source) {
