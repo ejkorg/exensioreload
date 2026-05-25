@@ -68,6 +68,7 @@ public class ExensioAuthService {
 
     /**
      * Performs a fresh login and caches the resulting token.
+     * If only Exensio is configured (ES not configured), retries with fallback schema on failure.
      */
     public String login() {
         loginLock.lock();
@@ -77,13 +78,45 @@ public class ExensioAuthService {
                 return cachedToken;
             }
 
+            String primarySchema = props.resolvedDbschema();
+            String fallbackSchema = props.resolvedDbschemaFallback();
+            
+            // Try primary schema first
+            ExensioAuthException primaryError = null;
+            try {
+                return loginWithSchema(primarySchema);
+            } catch (ExensioAuthException e) {
+                primaryError = e;
+            }
+            
+            // If fallback schema is available, try it
+            if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                try {
+                    log.debug("Primary schema {} failed, retrying with fallback schema {}", primarySchema, fallbackSchema);
+                    return loginWithSchema(fallbackSchema);
+                } catch (ExensioAuthException fallbackError) {
+                    log.warn("Both schemas failed: primary={}, fallback={}", primaryError.getMessage(), fallbackError.getMessage());
+                    throw fallbackError;
+                }
+            }
+            
+            // No fallback available, throw primary error
+            throw primaryError;
+            
+        } finally {
+            loginLock.unlock();
+        }
+    }
+    
+    private String loginWithSchema(String schema) {
+        try {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/session/login";
 
             ObjectNode body = objectMapper.createObjectNode();
             body.put("username", props.getUsername());
             body.put("password", props.getPassword());
             body.put("dbname", props.resolvedDbname());
-            body.put("dbschema", props.getDbschema());
+            body.put("dbschema", schema);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -96,25 +129,23 @@ public class ExensioAuthService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new ExensioAuthException("Exensio login failed with HTTP " + response.statusCode());
+                throw new ExensioAuthException("Exensio login failed with HTTP " + response.statusCode() + " on schema " + schema);
             }
 
             JsonNode json = objectMapper.readTree(response.body());
             String token = json.path("token").asText(null);
             if (token == null || token.isBlank()) {
-                throw new ExensioAuthException("Exensio login response missing 'token' field");
+                throw new ExensioAuthException("Exensio login response missing 'token' field for schema " + schema);
             }
 
             cachedToken = token;
-            log.info("Exensio session established (env={})", props.getEnv());
+            log.info("Exensio session established (env={}, schema={})", props.getEnv(), schema);
             return token;
 
         } catch (ExensioAuthException e) {
             throw e;
         } catch (Exception e) {
-            throw new ExensioAuthException("Exensio login error: " + e.getMessage(), e);
-        } finally {
-            loginLock.unlock();
+            throw new ExensioAuthException("Exensio login error on schema " + schema + ": " + e.getMessage(), e);
         }
     }
 

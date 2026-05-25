@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -55,6 +56,14 @@ public class ExensioClient {
      * empty or absent, and {@link ExensioLotWaferResult.Error} on any HTTP or parse failure.
      */
     public ExensioLotWaferResult lotWaferLookup(String lot, String wafer) {
+        return lotWaferLookup(lot, wafer, null);
+    }
+
+    /**
+     * Single-record lot/wafer lookup with optional target end-time matching.
+     * When wafer is null/blank, this uses pgc_key=2 and matches the best wafer by end_time.
+     */
+    public ExensioLotWaferResult lotWaferLookup(String lot, String wafer, Instant targetEndTime) {
         String token;
         try {
             token = authService.getToken();
@@ -62,7 +71,7 @@ public class ExensioClient {
             return new ExensioLotWaferResult.Error("Auth failed: " + e.getMessage());
         }
 
-        ExensioLotWaferResult result = doLotWaferLookup(lot, wafer, token);
+        ExensioLotWaferResult result = doLotWaferLookup(lot, wafer, targetEndTime, token);
 
         // Retry once on 401 with a fresh token
         if (result instanceof ExensioLotWaferResult.Error err && err.message().contains("HTTP 401")) {
@@ -73,7 +82,7 @@ public class ExensioClient {
             } catch (ExensioAuthService.ExensioAuthException e) {
                 return new ExensioLotWaferResult.Error("Re-auth failed: " + e.getMessage());
             }
-            result = doLotWaferLookup(lot, wafer, token);
+            result = doLotWaferLookup(lot, wafer, targetEndTime, token);
         }
 
         return result;
@@ -81,16 +90,20 @@ public class ExensioClient {
 
     // --- private ---
 
-    private ExensioLotWaferResult doLotWaferLookup(String lot, String wafer, String token) {
+    private ExensioLotWaferResult doLotWaferLookup(String lot, String wafer, Instant targetEndTime, String token) {
         try {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
+            boolean waferBlank = wafer == null || wafer.isBlank();
+            int pgcKey = waferBlank ? 2 : 1;
 
             ObjectNode body = objectMapper.createObjectNode();
-            body.put("pgc_key", 1);
+            body.put("pgc_key", pgcKey);
             ArrayNode lotIds = body.putArray("lot_ids");
             lotIds.add(lot);
             ArrayNode waferIds = body.putArray("wafer_ids");
-            waferIds.add(wafer);
+            if (!waferBlank) {
+                waferIds.add(wafer);
+            }
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -110,7 +123,7 @@ public class ExensioClient {
                 return new ExensioLotWaferResult.Error("HTTP " + response.statusCode());
             }
 
-            return parseResponse(response.body(), wafer);
+            return parseResponse(response.body(), wafer, targetEndTime);
 
         } catch (Exception e) {
             log.warn("Exensio lot-wafer-lookup failed for lot={} wafer={}: {}", lot, wafer, e.getMessage());
@@ -191,14 +204,20 @@ public class ExensioClient {
 
             // Build request body
             ObjectNode body = objectMapper.createObjectNode();
-            body.put("pgc_key", 1);
+            // Dynamic pgc strategy:
+            // - If all records in batch have blank wafer, use pgc_key=2 (lot-level lookup)
+            // - Otherwise use pgc_key=1 (wafer-level lookup)
+            boolean allWafersBlank = records.stream().allMatch(r -> r.wafer() == null || r.wafer().isBlank());
+            body.put("pgc_key", allWafersBlank ? 2 : 1);
             ArrayNode lotIds = body.putArray("lot_ids");
             for (String lot : uniqueLots) {
                 lotIds.add(lot);
             }
             ArrayNode waferIds = body.putArray("wafer_ids");
             for (String wafer : uniqueWafers) {
-                waferIds.add(wafer);
+                if (wafer != null && !wafer.isBlank()) {
+                    waferIds.add(wafer);
+                }
             }
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -260,7 +279,7 @@ public class ExensioClient {
      * }
      * </pre>
      */
-    private ExensioLotWaferResult parseResponse(String body, String targetWaferId) {
+    private ExensioLotWaferResult parseResponse(String body, String targetWaferId, Instant targetEndTime) {
         try {
             JsonNode root = objectMapper.readTree(body);
             JsonNode lots = root.path("lots");
@@ -269,6 +288,10 @@ public class ExensioClient {
                 return new ExensioLotWaferResult.NotFound();
             }
 
+            JsonNode bestWaferNode = null;
+            long bestLotKey = 0;
+            long bestDeltaSeconds = Long.MAX_VALUE;
+
             for (JsonNode lotNode : lots) {
                 long lotKey = lotNode.path("lot_key").asLong(0);
                 JsonNode wafers = lotNode.path("wafers");
@@ -276,18 +299,38 @@ public class ExensioClient {
 
                 for (JsonNode waferNode : wafers) {
                     String waferId = waferNode.path("wafer_id").asText(null);
-                    // Match by wafer_id if provided; otherwise take the first entry
+                    // Match by wafer_id if provided; otherwise use end_time proximity / first available.
                     if (targetWaferId != null && !targetWaferId.isBlank()
                             && !targetWaferId.equalsIgnoreCase(waferId)) {
                         continue;
                     }
-                    long waferKey = waferNode.path("wafer_key").asLong(0);
-                    long pgKey = waferNode.path("pg_key").asLong(0);
-                    String ppid = waferNode.path("ppid").asText(null);
 
-                    if (waferKey > 0) {
-                        return new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+                    if (targetEndTime == null) {
+                        long waferKey = waferNode.path("wafer_key").asLong(0);
+                        long pgKey = waferNode.path("pg_key").asLong(0);
+                        String ppid = waferNode.path("ppid").asText(null);
+                        if (waferKey > 0) {
+                            return new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+                        }
+                        continue;
                     }
+
+                    Instant exEnd = parseInstantSafe(waferNode.path("end_time").asText(null));
+                    long delta = exEnd == null ? Long.MAX_VALUE : Math.abs(Duration.between(targetEndTime, exEnd).getSeconds());
+                    if (bestWaferNode == null || delta < bestDeltaSeconds) {
+                        bestWaferNode = waferNode;
+                        bestLotKey = lotKey;
+                        bestDeltaSeconds = delta;
+                    }
+                }
+            }
+
+            if (bestWaferNode != null) {
+                long waferKey = bestWaferNode.path("wafer_key").asLong(0);
+                long pgKey = bestWaferNode.path("pg_key").asLong(0);
+                String ppid = bestWaferNode.path("ppid").asText(null);
+                if (waferKey > 0) {
+                    return new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid);
                 }
             }
 
@@ -296,6 +339,15 @@ public class ExensioClient {
         } catch (Exception e) {
             log.warn("Failed to parse Exensio lot-wafer-lookup response: {}", e.getMessage());
             return new ExensioLotWaferResult.Error("Parse error: " + e.getMessage());
+        }
+    }
+
+    private Instant parseInstantSafe(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.parse(value);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 }

@@ -254,12 +254,11 @@ public class ExensioLoadMonitor {
         List<StageRecord> validRecords = new ArrayList<>();
         List<BatchResult.RecordUpdate> invalidUpdates = new ArrayList<>();
         for (StageRecord record : batch) {
-            if (record.lot() == null || record.lot().isBlank()
-                    || record.wafer() == null || record.wafer().isBlank()) {
-                log.warn("Record id={} missing lot or wafer — marking FAILED", record.id());
+            if (record.lot() == null || record.lot().isBlank()) {
+                log.warn("Record id={} missing lot — marking FAILED", record.id());
                 invalidUpdates.add(new BatchResult.RecordUpdate(
                         record.id(), BatchResult.UpdateType.FAILED, null, null,
-                        "Missing lot or wafer for Exensio lookup"));
+                        "Missing lot for Exensio lookup"));
             } else {
                 validRecords.add(record);
             }
@@ -370,7 +369,7 @@ public class ExensioLoadMonitor {
 
         for (StageRecord record : records) {
             try {
-                ExensioLotWaferResult result = exensioClient.lotWaferLookup(record.lot(), record.wafer());
+                ExensioLotWaferResult result = exensioClient.lotWaferLookup(record.lot(), record.wafer(), record.endTime());
 
                 switch (result) {
                     case ExensioLotWaferResult.Found found -> {
