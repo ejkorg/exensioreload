@@ -32,11 +32,14 @@ public class CpElasticsearchProperties {
     /** ES index pattern to query for CP logs. Default: logs*dataport* */
     private String indexPattern = "logs*dataport*";
 
-    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *sender* */
-    private String cpConfigFilter = "*sender*";
+    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *_sender* */
+    private String cpConfigFilter = "*_sender*";
 
     /** Optional service.country filter to isolate a specific external log source. */
     private String serviceCountryFilter = "";
+
+    /** Whether to require lot (mLot) matching in ES queries. Default: false (rely on idData only). */
+    private boolean requireLot = false;
 
     /** Optional per-location mapping for the service-country field name in ES documents.
      * Key: upper-cased site key as found in dbconnections.yml (e.g. EXTERNAL-PROD or EXTERNAL-QA)
@@ -101,6 +104,9 @@ public class CpElasticsearchProperties {
 
     public int getEnrichmentTimeoutMinutes() { return enrichmentTimeoutMinutes; }
     public void setEnrichmentTimeoutMinutes(int enrichmentTimeoutMinutes) { this.enrichmentTimeoutMinutes = enrichmentTimeoutMinutes; }
+
+    public boolean isRequireLot() { return requireLot; }
+    public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }
 
     /** Returns true if Elasticsearch is configured (url is non-blank). */
     public boolean isConfigured() {

@@ -86,29 +86,25 @@ public class ElasticsearchLogService {
      * @return the enrichment outcome
      */
     public CpLogResult findCpLog(String dataId, String lot, Instant since, String site) {
-        String queryJson = buildQuery(dataId, lot, since, site);
+        String initialFilter = props.getCpConfigFilter();
         String url = props.getUrl().replaceAll("/$", "") + "/" + props.getIndexPattern() + "/_search";
 
         try {
-            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(15))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(queryJson));
+            // First attempt using configured cpConfig filter
+            String queryJson = buildQuery(dataId, lot, since, site, initialFilter);
+            CpLogResult result = executeSearch(url, queryJson, dataId, lot);
 
-            if (authHeader != null) {
-                requestBuilder.header("Authorization", authHeader);
+            // If no hit found and the configured filter is different from the broad fallback,
+            // retry once with fallback "*sender*" (case-insensitive) to improve recall.
+            if (result instanceof CpLogResult.NotFound
+                    && initialFilter != null
+                    && !initialFilter.equalsIgnoreCase("*sender*")) {
+                log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={}", initialFilter, dataId);
+                String fallbackQuery = buildQuery(dataId, lot, since, site, "*sender*");
+                return executeSearch(url, fallbackQuery, dataId, lot);
             }
 
-            HttpResponse<String> response = httpClient.send(requestBuilder.build(),
-                    HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("ES query returned HTTP {} for dataId={}", response.statusCode(), dataId);
-                throw new ElasticsearchQueryException("ES returned HTTP " + response.statusCode());
-            }
-
-            return parseResponse(response.body(), dataId, lot);
+            return result;
 
         } catch (ElasticsearchQueryException e) {
             throw e;
@@ -116,6 +112,30 @@ public class ElasticsearchLogService {
             log.warn("Elasticsearch query failed for dataId={}, lot={}: {}", dataId, lot, e.getMessage());
             throw new ElasticsearchQueryException("ES query failed for dataId=" + dataId, e);
         }
+    }
+
+    /**
+     * Execute the HTTP request and parse the response into a {@link CpLogResult}.
+     */
+    private CpLogResult executeSearch(String url, String queryJson, String dataId, String lot) throws Exception {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(queryJson));
+
+        if (authHeader != null) {
+            requestBuilder.header("Authorization", authHeader);
+        }
+
+        HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            log.warn("ES query returned HTTP {} for dataId={}", response.statusCode(), dataId);
+            throw new ElasticsearchQueryException("ES returned HTTP " + response.statusCode());
+        }
+
+        return parseResponse(response.body(), dataId, lot);
     }
 
     /**
@@ -160,6 +180,13 @@ public class ElasticsearchLogService {
      * Builds the ES query JSON as a string.
      */
     String buildQuery(String dataId, String lot, Instant since, String site) {
+        return buildQuery(dataId, lot, since, site, props.getCpConfigFilter());
+    }
+
+    /**
+     * Builds the ES query JSON as a string, using an explicit cpConfig wildcard filter when provided.
+     */
+    String buildQuery(String dataId, String lot, Instant since, String site, String cpConfigFilter) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode query = root.putObject("query");
@@ -170,7 +197,7 @@ public class ElasticsearchLogService {
             ObjectNode wildcardClause = must.addObject();
             ObjectNode wildcard = wildcardClause.putObject("wildcard");
             ObjectNode cpConfigWild = wildcard.putObject("cpConfig");
-            cpConfigWild.put("value", props.getCpConfigFilter());
+            cpConfigWild.put("value", cpConfigFilter == null ? props.getCpConfigFilter() : cpConfigFilter);
             cpConfigWild.put("case_insensitive", true);
 
             // Optional service.country filter (for example, PHO for the External source)
@@ -186,10 +213,12 @@ public class ElasticsearchLogService {
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
-            // mLot term match (Requirement 2.5)
-            ObjectNode termLot = must.addObject();
-            ObjectNode termLotInner = termLot.putObject("term");
-            termLotInner.put("mLot", lot);
+            // mLot term match (Requirement 2.5) — only add when requireLot is true AND lot is provided
+            if (props.isRequireLot() && lot != null && !lot.isBlank()) {
+                ObjectNode termLot = must.addObject();
+                ObjectNode termLotInner = termLot.putObject("term");
+                termLotInner.put("mLot", lot);
+            }
 
             // @timestamp range (Requirement 2.6)
             ObjectNode rangeClause = must.addObject();
