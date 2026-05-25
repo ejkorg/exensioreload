@@ -89,6 +89,15 @@ cp:
     password: ${CP_ES_PASSWORD:}
     index-pattern: logs*dataport*
     cp-config-filter: "*sender*"
+        # Optional: If different sites index the country under different field names,
+        # provide a per-location mapping. Keys are the site keys from dbconnections.yml
+        # (upper-cased, e.g. EXTERNAL-PROD or EXTERNAL-QA). Values are the ES field
+        # name that contains the country (e.g. service.country, service_country).
+        # Prefer adding this mapping to your profile YAML (application-*.yml).
+        # Example:
+        # service-country-field-by-location:
+        #   EXTERNAL-PROD: service.country
+        #   EXTERNAL-QA: service_country
     poll-interval-ms: 60000
     enrichment-timeout-minutes: 30
 ```
@@ -120,6 +129,7 @@ cp:
 | ES field | Match |
 |----------|--------|
 | `cpConfig` | wildcard `*sender*` (configurable) |
+| `service.country` | optional term filter, for example `PHO` for External logs |
 | `idData` | term = staged `data_id` |
 | `mLot` | term = staged `lot` |
 | `@timestamp` | `gte` record `updated_at` (when enrichment started) |
@@ -131,6 +141,10 @@ Path is parsed with regex `output path\s*=\s*(.+)`.
 **Failure detection:** `_source` has `error.type` or `error.message`.
 
 Ensure your CP/dataport logs index documents use these field names (or adjust code/index mapping with your platform team).
+
+If your environments/sites use a different field name than `service.country`, configure the
+per-location mapping described above. The application resolves the correct field name at
+runtime using the site key from `SENDER_STAGE.site` (the same keys used in `dbconnections.yml`).
 
 ### 3.4 Example manual ES test
 
@@ -146,6 +160,7 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
       "bool": {
         "must": [
           { "wildcard": { "cpConfig": { "value": "*sender*", "case_insensitive": true } } },
+          { "term": { "service.country": "PHO" } },
           { "term": { "idData": "YOUR_DATA_ID" } },
           { "term": { "mLot": "YOUR_LOT" } },
           { "range": { "@timestamp": { "gte": "2025-05-31T16:00:00Z" } } }
@@ -156,9 +171,24 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
   }'
 ```
 
+If your site indexes the country as `service_country`, update the `term` clause accordingly
+or add a per-location mapping in your profile so the application builds the query correctly.
+
+Recommended profile YAML snippet (add to `application-onsemi-oracle.yml` or `application.yml`):
+
+```yaml
+cp:
+  elasticsearch:
+    service-country-filter: PHO
+    service-country-field-by-location:
+      EXTERNAL-PROD: service.country
+      EXTERNAL-QA: service_country
+```
+
 ### 3.5 Verification checklist (ES)
 
 1. Set `CP_ES_URL` (and auth), restart backend.
+  - If your ES cluster mixes regions/services, set `CP_ES_SERVICE_COUNTRY_FILTER=PHO` to isolate External logs.
 2. Stage and dispatch a small session (1–2 files).
 3. In UI, files should stay **ENRICHMENT** / “Enrichment / Translation” after leaving the queue (not immediate DONE).
 4. In logs, look for:

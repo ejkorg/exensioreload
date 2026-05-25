@@ -89,6 +89,15 @@ cp:
     password: ${CP_ES_PASSWORD:}
     index-pattern: logs*dataport*
     cp-config-filter: "*sender*"
+    # Optional: set to PHO to isolate the External log source when ES contains mixed regions/services.
+    service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
+    # Optional: per-location ES field name overrides when different sites index the country
+    # Example:
+    # service-country-field-by-location:
+    #   EXTERNAL-PROD: service.country
+    #   EXTERNAL-QA: service_country
+    #   PHM-TARLAC-PROD: service.country
+    service-country-field-by-location: ${CP_ES_SERVICE_COUNTRY_FIELD_BY_LOCATION:}
     poll-interval-ms: 60000
     enrichment-timeout-minutes: 30
 

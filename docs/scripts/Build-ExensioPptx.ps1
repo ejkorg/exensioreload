@@ -328,290 +328,235 @@ $($overrides -join "`n")
 # --- Executive presentation slides ---
 $executiveSlides = @(
     @{
-        Title = 'ExensioReload - Executive Overview'
+        Title = 'ExensioReload — Executive Briefing'
         Body  = @(
-            'Controlled, self-service resend of semiconductor test data across 20+ manufacturing sites',
-            'Audience: Engineering leadership, operations, IT',
-            'Version 1.0 - onsemi internal'
+            'Leadership briefing on controlled, self-service semiconductor test-data resend across 20+ manufacturing sites',
+            'Audience: engineering leadership, operations, and IT',
+            'Goal: align on business impact, governance, and rollout'
         )
         Bullets = $false
     },
     @{
-        Title = 'The challenge'
+        Title = 'Why it matters'
         Body  = @(
-            'Test data gaps and late-arriving files force teams to re-push lot/wafer payloads into downstream systems.',
-            'Today: manual SQL/scripts, opaque status, duplicate-send risk, slow site-specific playbooks.',
-            'Cost: engineer time, delayed yield decisions, repeated fire drills.'
+            'Missing or late test-data files force teams to re-push lot and wafer payloads into downstream systems.',
+            'Today this work is manual, opaque, and risky: SQL scripts, ticket handoffs, duplicate-send exposure, and site-specific playbooks.',
+            'The result is wasted engineer time, slower yield decisions, and repeated operational fire drills.'
         )
     },
     @{
-        Title = 'The solution'
+        Title = 'The answer'
         Body  = @(
-            'ExensioReload standardizes discover, stage, dispatch, and monitor for test-data resends.',
-            'One platform: search metadata, stage only what is needed, track every file to completion.',
-            'Prove coverage by site, sender, lot, and end-time date range.'
+            'ExensioReload standardizes discovery, staging, dispatch, and monitoring for test-data resends.',
+            'One governed platform lets teams search metadata, stage only what is needed, and track every file to completion.',
+            'Coverage is provable by site, sender, lot, wafer, and end-time date range.'
         )
     },
     @{
-        Title = 'How it works - 3 steps'
+        Title = 'How teams use it'
         Body  = @(
-            'Configure: Pick environment, site, sender; filter by lot, wafer, date range, tester/data type.',
-            'Preview: See matching files; warnings for already-staged duplicates.',
-            'Monitor: Live status per file; session history, analytics, and export.'
+            'Configure: choose environment, site, sender, and the right filters for lot, wafer, dates, tester, or data type.',
+            'Preview: review matching files and get warnings for already-staged duplicates before dispatch.',
+            'Monitor: follow live file status, session history, analytics, and exports in one place.'
         )
     },
     @{
-        Title = 'End-to-end data pipeline'
+        Title = 'Business impact'
         Body  = @(
-            'NEW - staged from discovery',
-            'ENRICHMENT - dispatched to sender queue; CP success when ES enabled',
-            'EXENSIO_LOADING - Exensio confirms load (optional)',
-            'DONE / FAILED / CANCELLED - background services poll; single UI status; email on session complete'
+            'Time to resolution drops from multi-day script cycles to self-service resend in minutes.',
+            'Coverage clarity shows exactly which end-time ranges were resent, reducing overlap and gaps.',
+            'One app supports 20+ sites instead of 20 different playbooks.',
+            'Teams spend less time on manual recovery and more time on yield and throughput decisions.'
         )
     },
     @{
-        Title = 'Operational impact'
+        Title = 'Governance and visibility'
         Body  = @(
-            'Time to resolution: self-service resend in minutes, not multi-day script cycles.',
-            'Coverage clarity: session end-time coverage shows exactly which dates were resent.',
-            'Scale: one app for 20+ sites (PROD/QA), not 20 different playbooks.',
-            'Governance: role-based access, audit logs, duplicate detection.'
+            'Duplicate staging warnings appear before dispatch.',
+            'Immutable staging ledger in SENDER_STAGE captures request IDs and timestamps.',
+            'Dashboard and My Sessions provide live status, drill-down, charts, and export.',
+            'Microsoft Entra SSO and role-based access keep control aligned with enterprise policy.'
         )
     },
     @{
-        Title = 'Risk reduction'
+        Title = 'Rollout path'
         Body  = @(
-            'Duplicate staging warnings before dispatch.',
-            'Immutable staging ledger (SENDER_STAGE) with request IDs and timestamps.',
-            'Controlled writes to external DBs (gated by configuration).',
-            'Enterprise SSO (Microsoft Entra OIDC) with group-to-role mapping.'
-        )
-    },
-    @{
-        Title = 'Visibility'
-        Body  = @(
-            'Dashboard: staged / ready / in-flight / done / failed across sites (auto-refresh).',
-            'My Sessions: drill-down, charts, CSV export, file-level end times.',
-            'Coverage reporting: cross-session view by data end-time (day/week/month).'
-        )
-    },
-    @{
-        Title = 'Technology at a glance'
-        Body  = @(
-            'Frontend: Angular 21, standalone components - maintainable UX, real-time monitoring.',
-            'Backend: Spring Boot 3, Java 21 - schedulers, security, standard stack.',
-            'Data: Oracle RefDB + per-site Oracle pools - fits manufacturing data estate.',
-            'Ops: Prometheus metrics, pool diagnostics, email alerts.'
-        )
-    },
-    @{
-        Title = 'Who uses it'
-        Body  = @(
-            'Test / yield engineer: resend missing CP or Exensio loads for lot/wafer/date window.',
-            'Site operations: track open sessions and confirm completion.',
-            'Platform / admin: user provisioning, SSO groups, environment configuration.',
-            'Leadership: dashboard health and session outcomes.'
-        )
-    },
-    @{
-        Title = 'Deployment & security'
-        Body  = @(
-            'Deployment: on-prem / internal enterprise (context path /exensioreload).',
-            'Authentication: local JWT + optional Microsoft Entra SSO (7-day refresh cookie).',
-            'Authorization: SUPER_ADMIN, ADMIN, USER with method-level security.',
-            'Audit: user actions, IP, and user-agent on sensitive operations.'
-        )
-    },
-    @{
-        Title = 'Suggested rollout'
-        Body  = @(
-            'Phase 1 - Pilot: 2-3 sites, wizard + monitoring; success = fewer manual scripts/tickets.',
-            'Phase 2 - Expand: remaining sites, dbconnections.yml, Entra role mapping.',
-            'Phase 3 - Optimize: coverage analytics and dashboard KPIs; fewer duplicate resends, faster MTTR.'
+            'Phase 1 - Pilot: 2-3 sites with wizard and monitoring; success means fewer manual scripts and tickets.',
+            'Phase 2 - Expand: onboard remaining sites and complete Entra role mapping.',
+            'Phase 3 - Optimize: add coverage analytics and dashboard KPIs to reduce duplicate resends and MTTR.',
+            'Decision needed: sponsor site onboarding, Entra group mapping, and operational ownership.'
         )
     },
     @{
         Title = 'Bottom line'
         Body  = @(
             'ExensioReload turns test-data resend from a tribal, site-by-site exercise into a governed, observable factory capability.',
-            'Audit, roles, real-time status, and clear date coverage - production-grade rigor.',
-            'Ask: Sponsor site onboarding, Entra group mapping, and operational ownership.'
+            'Audit, roles, real-time status, and clear date coverage deliver production-grade rigor.',
+            'The result is lower MTTR, fewer duplicates, and more confidence in downstream manufacturing data.'
         )
         Bullets = $false
-    },
-    @{
-        Title = 'Appendix - One-page cheat sheet'
-        Body  = @(
-            'PROBLEM: Manual resends, duplicates, no coverage view',
-            'SOLUTION: 3-step wizard + staging ledger + live monitoring',
-            'USERS: Engineers, ops, admins',
-            'INTEGRATIONS: Site Oracle, sender queues, CP/ES, Exensio (opt.)',
-            'SECURITY: Entra SSO, RBAC, audit trail',
-            'WIN: Faster MTTR, fewer duplicates, provable coverage',
-            'Docs: EXENSIORELOAD.md, INTEGRATION_ES_EXENSIO.md, ETL_SSH_TRIGGER.md, SSO_ONBOARDING_DETAILS.md'
-        )
     }
 )
 
 # --- Technical / project intelligence slides ---
 $technicalSlides = @(
     @{
-        Title = 'ExensioReload - Project Intelligence'
+        Title = 'ExensioReload Technical Overview'
         Body  = @(
             'Fullstack application for semiconductor test data resend across 20+ manufacturing sites.',
             'Discover metadata from Oracle DBs, stage payloads, dispatch to sender queues, monitor completion.',
-            'Modern glassmorphism UI - Angular 21 + Spring Boot 3 / Java 21'
+            'Modern glassmorphism UI built with Angular 21, Spring Boot 3, and Java 21.'
         )
         Bullets = $false
     },
     @{
         Title = 'Architecture summary'
         Body  = @(
-            'Frontend: Angular 21.2, port 4200 (dev) proxied to backend; Signals + RxJS; glass design system.',
-            'Backend: Spring Boot, port 8004, context /exensioreload; JWT + Entra OIDC; Liquibase; HikariCP per site.',
-            'Data: Oracle RefDB (staging) + 20+ site Oracle DBs; H2 for dev/test.',
-            'Active app: frontend/ only (no separate new_frontend workspace).'
+            'Frontend: Angular 21.2 on port 4200 in dev, proxied to backend; Signals + RxJS; glass design system.',
+            'Backend: Spring Boot on port 8004 with context /exensioreload; JWT + Entra OIDC; Liquibase; HikariCP per site.',
+            'Data: Oracle RefDB for staging plus 20+ site Oracle DBs; H2 for dev and test.',
+            'Active app location: frontend/ only; there is no separate new_frontend workspace.'
         )
     },
     @{
         Title = 'Backend tech stack'
         Body  = @(
-            'Java 21, Spring Boot 4.0.6, Maven, JPA/Hibernate',
-            'Oracle ojdbc 23.3, H2 (test), Liquibase, HikariCP 5.0.1',
-            'JWT (jjwt) + Microsoft Entra OIDC, Caffeine cache, Micrometer/Prometheus',
-            'Package: com.onsemi.cim.apps.exensio.exensioreload (~148 Java source files)'
+            'Java 21, Spring Boot 4.0.6, Maven, and JPA/Hibernate.',
+            'Oracle ojdbc 23.3, H2 for tests, Liquibase, and HikariCP 5.0.1.',
+            'JWT (jjwt) plus Microsoft Entra OIDC, Caffeine cache, and Micrometer/Prometheus.',
+            'Package root: com.onsemi.cim.apps.exensio.exensioreload, with roughly 148 Java source files.'
         )
     },
     @{
         Title = 'Key configuration'
         Body  = @(
-            'server.port=8004, context-path=/exensioreload',
-            'jwt.ttl=900s, refresh cookie max-age=604800 (7 days)',
-            'refdb.dispatch.interval-ms=60000',
-            'app.preview.fetch-cap / max-rows-cap: 2000 default; app.stage.max-rows-cap: 10000',
-            'external-db.allow-writes=false (gate for external DB writes)',
-            'dbconnections.yml: 20+ site Oracle connections (PROD/QA)'
+            'server.port=8004 and context-path=/exensioreload.',
+            'jwt.ttl=900s and refresh cookie max-age=604800 seconds (7 days).',
+            'refdb.dispatch.interval-ms=60000.',
+            'app.preview.fetch-cap and app.preview.max-rows-cap default to 2000; app.stage.max-rows-cap is 10000.',
+            'external-db.allow-writes=false to gate external database writes.',
+            'dbconnections.yml contains 20+ site Oracle connections for PROD and QA.'
         )
     },
     @{
         Title = 'REST API - Auth and senders'
         Body  = @(
-            'Auth (public): login, refresh, register, verify, password reset.',
-            'Senders: discover/preview, preview-with-duplicates, historical-summary, stage-all, stage, dispatch.',
-            'Lookups: senders, locations, dataTypes, testerTypes, external metadata filters.',
-            'Exports: preview CSV; duplicate checks before staging.'
+            'Auth endpoints cover login, refresh, registration, verification, and password reset.',
+            'Sender endpoints include discover/preview, preview-with-duplicates, historical-summary, stage-all, stage, and dispatch.',
+            'Lookup endpoints expose senders, locations, dataTypes, testerTypes, and external metadata filters.',
+            'Exports support preview CSV downloads and duplicate checks before staging.'
         )
     },
     @{
         Title = 'REST API - Stage, dashboard, admin'
         Body  = @(
-            'Stage: records, stats, SSE monitor/{requestId}, CSV export, active-sessions.',
-            'Dashboard: snapshot, per-site/sender records and CSV export.',
-            'Admin users (SUPER_ADMIN): CRUD, roles, toggle status, audit-logs, stats.',
-            'Internal: pool stats/evict, metrics, session management.',
-            'Config: /api/config/limits for preview/stage thresholds.'
+            'Stage APIs provide records, stats, SSE monitor/{requestId}, CSV export, and active sessions.',
+            'Dashboard APIs provide snapshot metrics plus per-site and per-sender records with CSV export.',
+            'Admin APIs for SUPER_ADMIN support CRUD, role changes, status toggles, audit logs, and stats.',
+            'Internal APIs expose pool stats, evict, metrics, and session management.',
+            'Config APIs expose /api/config/limits for preview and stage thresholds.'
         )
     },
     @{
         Title = 'Database schema (Liquibase)'
         Body  = @(
-            'SENDER_STAGE - core staging on RefDB (status, request_id, CP/Exensio keys).',
-            'sender_queue, load_session, load_session_payload - batch processing.',
-            'users, user_roles, refresh/verification/password tokens, audit_log.',
-            'external_environment, external_location - environment definitions.',
-            '15 changelogs; Oracle-specific SQL in JdbcExternalMetadataRepository.'
+            'SENDER_STAGE is the core staging table on RefDB and tracks status, request_id, and CP/Exensio keys.',
+            'sender_queue, load_session, and load_session_payload support batch processing.',
+            'users, user_roles, refresh tokens, verification tokens, password tokens, and audit_log support identity and audit.',
+            'external_environment and external_location define environments.',
+            'Liquibase manages 15 changelogs; JdbcExternalMetadataRepository contains Oracle-specific SQL.'
         )
     },
     @{
         Title = 'Authentication & authorization'
         Body  = @(
-            'Local JWT + refresh token in DB; HTTP-only refresh cookie survives browser restart.',
-            'Entra OIDC when reloader.sso.enabled=true; groups map to ADMIN and SUPER_ADMIN.',
-            'JwtAuthenticationFilter, stateless sessions, CSRF disabled.',
-            'Role hierarchy: SUPER_ADMIN, then ADMIN, then USER; PreAuthorize on controllers.',
-            'SSO: /api/auth/sso/initiate, /api/auth/sso/silent, callback /sso-callback.'
+            'Local JWT plus refresh token storage in DB; HTTP-only refresh cookie survives browser restart.',
+            'Entra OIDC activates when reloader.sso.enabled=true, with groups mapped to ADMIN and SUPER_ADMIN.',
+            'JwtAuthenticationFilter runs in a stateless session model with CSRF disabled.',
+            'Role hierarchy is SUPER_ADMIN, then ADMIN, then USER, enforced with PreAuthorize on controllers.',
+            'SSO routes include /api/auth/sso/initiate, /api/auth/sso/silent, and callback /sso-callback.'
         )
     },
     @{
         Title = 'Background tasks'
         Body  = @(
-            'SenderDispatchService 60s: NEW to DTP_SENDER_QUEUE_ITEM to ENRICHMENT.',
-            'SenderQueueMonitor 10s: queue consumption; ES on/off routing.',
-            'CpLogMonitor 60s: ES polling when configured; ENRICHMENT to EXENSIO_LOADING or FAILED.',
-            'ExensioLoadMonitor 60s: API load confirm to DONE or FAILED.',
-            'CompletionNotificationService every 5 min: email when session complete.',
-            'EtlSshTriggerService: optional SSH crontab kick (etlservers.yml).'
+            'SenderDispatchService runs every 60s and moves NEW items into the sender queue and then ENRICHMENT.',
+            'SenderQueueMonitor runs every 10s for queue consumption and ES on/off routing.',
+            'CpLogMonitor runs every 60s for ES polling and routes ENRICHMENT to EXENSIO_LOADING or FAILED.',
+            'ExensioLoadMonitor runs every 60s and moves API load confirmation to DONE or FAILED.',
+            'CompletionNotificationService runs every 5 minutes and emails users when a session completes.',
+            'EtlSshTriggerService provides an optional SSH crontab kick via etlservers.yml.'
         )
     },
     @{
         Title = 'Status pipeline'
         Body  = @(
-            'Active: NEW to ENRICHMENT to EXENSIO_LOADING to DONE, FAILED, or CANCELLED.',
-            'SenderDispatchService: NEW to ENRICHMENT directly (ENQUEUED is dead code).',
-            'StagePipelinePolicy: after CP queue - ES to CpLogMonitor; else Exensio or DONE.',
-            'Capability-based completion; StatusMapper uses inExternalQueue for UI labels.',
+            'Active states flow from NEW to ENRICHMENT to EXENSIO_LOADING to DONE, FAILED, or CANCELLED.',
+            'SenderDispatchService sends NEW directly to ENRICHMENT; ENQUEUED is dead code.',
+            'StagePipelinePolicy routes after the CP queue: ES to CpLogMonitor, otherwise Exensio or DONE.',
+            'Completion is capability-based and StatusMapper uses inExternalQueue for UI labels.',
             'See docs/STATUS_PIPELINE.md for full detail.'
         )
     },
     @{
         Title = 'Frontend - Angular 21'
         Body  = @(
-            '100% standalone components, lazy routes, functional guards/interceptors.',
-            'Signals for UI state; RxJS for HTTP/SSE; glassmorphism design (not Material-themed).',
-            'Key routes: /exensioreload (dashboard), /exensioreload/new (stepper), /my-sessions, /admin/users.',
-            'GlassDialogService for dialogs; CVA form controls; dark + light themes.',
-            'Charts: ECharts in MySessionsComponent (trend + pie, ResizeObserver).'
+            'Frontend uses 100% standalone components, lazy routes, and functional guards/interceptors.',
+            'Signals manage UI state; RxJS powers HTTP and SSE; the design system is glassmorphism, not Material.',
+            'Key routes include /exensioreload, /exensioreload/new, /my-sessions, and /admin/users.',
+            'GlassDialogService handles dialogs, CVA form controls support form composition, and both dark and light themes are available.',
+            'ECharts in MySessionsComponent provides trend and pie visualizations with ResizeObserver support.'
         )
     },
     @{
-        Title = 'Core business flow - 3-step stepper'
+        Title = 'Core business flow'
         Body  = @(
-            '1. Configure: environment, site, sender; filters (lot, wafer, dates, tester, data type).',
-            '2. Preview: query external Oracle; duplicates vs SENDER_STAGE; stage selected or stage-all.',
-            '   Adaptive sizing: 1000 rows normal; 10000 + bypassCap for historical/super-admin date range.',
-            '3. Monitor: SSE progress; dispatch to queues; email on session completion.',
-            'Dashboard: 10s polling snapshot; drill-down by site and sender.'
+            '1. Configure: environment, site, sender, and filters for lot, wafer, dates, tester, or data type.',
+            '2. Preview: query external Oracle, compare duplicates against SENDER_STAGE, and stage selected rows or stage-all.',
+            '   Adaptive sizing uses 1000 rows normally and 10000 plus bypassCap for historical or super-admin date ranges.',
+            '3. Monitor: SSE progress, queue dispatch, and session-completion email.',
+            'Dashboard polling runs every 10s and enables drill-down by site and sender.'
         )
     },
     @{
         Title = 'Key services & patterns'
         Body  = @(
-            'BackendService (598 LOC): all API calls; AuthService: JWT + refresh + SSO restore.',
-            'MonitoringService: EventSource SSE + polling fallback.',
-            'Immutable Java records for DTOs; thin controllers; @Scheduled + @Async.',
-            'Dynamic HikariCP pools per site; Caffeine preview cache (200 entries, 30s TTL).',
-            'Claim-based batch processing for concurrent-safe payload claiming.'
+            'BackendService centralizes API calls; AuthService handles JWT, refresh, and SSO restore.',
+            'MonitoringService combines EventSource SSE with polling fallback.',
+            'Immutable Java records back the DTOs, controllers stay thin, and scheduling uses @Scheduled plus @Async.',
+            'Dynamic HikariCP pools are created per site and preview caching uses Caffeine with 200 entries and 30s TTL.',
+            'Claim-based batch processing keeps payload claiming concurrency-safe.'
         )
     },
     @{
         Title = 'Development conventions'
         Body  = @(
-            'Backend: records for DTOs, transactional services, audit IP/UserAgent, JSON error handlers.',
-            'Frontend: inject(), signal() for form state, glass-* component prefix, no NgModules.',
-            'Use frontend/, context /exensioreload/api, dev proxy :4200 to :8004.',
-            'Oracle SQL (ROWNUM, NVL); EXTERNAL_DB_ALLOW_WRITES for writes.',
-            'Standards: Signals-first UI state; preserve glass + dark/light themes.'
+            'Backend conventions favor records for DTOs, transactional services, audit IP/UserAgent capture, and JSON error handlers.',
+            'Frontend conventions favor inject(), signal() for form state, a glass-* component prefix, and no NgModules.',
+            'Use frontend/ with context /exensioreload/api and a dev proxy from :4200 to :8004.',
+            'Oracle SQL uses ROWNUM and NVL; EXTERNAL_DB_ALLOW_WRITES gates writes.',
+            'Standards remain Signals-first UI state with glass plus dark/light themes preserved.'
         )
     },
     @{
         Title = 'Critical gotchas'
         Body  = @(
-            'StepperComponent ~2098 LOC; SenderController ~1644; RefDbService ~2334.',
-            'AuthGuard async: restoreSession via refresh cookie on new tab.',
-            'GlassDialogService vs Material Dialog - prefer Glass for new work.',
-            'CP ES + Exensio: safe to deploy unconfigured (no-op when URLs disabled).',
-            'No ES client library - raw HTTP via java.net.http.HttpClient.',
-            'Hub link: /exensio-integration-hub/ in app header.'
+            'StepperComponent is ~2098 LOC, SenderController ~1644, and RefDbService ~2334.',
+            'AuthGuard restores the session asynchronously via refresh cookie on a new tab.',
+            'Prefer GlassDialogService over Material Dialog for new work.',
+            'CP ES and Exensio integrations are safe to deploy unconfigured because they no-op when URLs are disabled.',
+            'There is no ES client library; raw HTTP uses java.net.http.HttpClient.',
+            'The app header exposes /exensio-integration-hub/.'
         )
     },
     @{
         Title = 'Related documentation'
         Body  = @(
-            'docs/EXENSIORELOAD.md - this intelligence doc',
-            'docs/INTEGRATION_ES_EXENSIO.md - CP Elasticsearch and Exensio API',
-            'docs/ETL_SSH_TRIGGER.md - optional SSH ETL trigger',
-            'docs/SSO_ONBOARDING_DETAILS.md - Entra registration',
-            'docs/STATUS_PIPELINE.md, RXJS_VS_SIGNALS_GUIDE.md'
+            'docs/EXENSIORELOAD.md - project intelligence and architecture notes.',
+            'docs/INTEGRATION_ES_EXENSIO.md - CP Elasticsearch and Exensio API enablement.',
+            'docs/ETL_SSH_TRIGGER.md - optional SSH ETL trigger.',
+            'docs/SSO_ONBOARDING_DETAILS.md - Entra registration details.',
+            'docs/STATUS_PIPELINE.md and RXJS_VS_SIGNALS_GUIDE.md.'
         )
         Bullets = $false
     }

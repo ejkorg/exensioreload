@@ -85,8 +85,8 @@ public class ElasticsearchLogService {
      * @param since  the instant the record entered ENRICHMENT status
      * @return the enrichment outcome
      */
-    public CpLogResult findCpLog(String dataId, String lot, Instant since) {
-        String queryJson = buildQuery(dataId, lot, since);
+    public CpLogResult findCpLog(String dataId, String lot, Instant since, String site) {
+        String queryJson = buildQuery(dataId, lot, since, site);
         String url = props.getUrl().replaceAll("/$", "") + "/" + props.getIndexPattern() + "/_search";
 
         try {
@@ -159,7 +159,7 @@ public class ElasticsearchLogService {
     /**
      * Builds the ES query JSON as a string.
      */
-    private String buildQuery(String dataId, String lot, Instant since) {
+    String buildQuery(String dataId, String lot, Instant since, String site) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode query = root.putObject("query");
@@ -172,6 +172,14 @@ public class ElasticsearchLogService {
             ObjectNode cpConfigWild = wildcard.putObject("cpConfig");
             cpConfigWild.put("value", props.getCpConfigFilter());
             cpConfigWild.put("case_insensitive", true);
+
+            // Optional service.country filter (for example, PHO for the External source)
+            if (props.getServiceCountryFilter() != null && !props.getServiceCountryFilter().isBlank()) {
+                String fieldName = props.resolveServiceCountryField(site);
+                ObjectNode termServiceCountry = must.addObject();
+                ObjectNode termServiceCountryInner = termServiceCountry.putObject("term");
+                termServiceCountryInner.put(fieldName, props.getServiceCountryFilter().trim());
+            }
 
             // idData term match (Requirement 2.4)
             ObjectNode termIdData = must.addObject();
