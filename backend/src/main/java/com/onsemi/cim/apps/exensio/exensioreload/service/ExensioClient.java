@@ -56,7 +56,7 @@ public class ExensioClient {
      * empty or absent, and {@link ExensioLotWaferResult.Error} on any HTTP or parse failure.
      */
     public ExensioLotWaferResult lotWaferLookup(String lot, String wafer) {
-        return lotWaferLookup(lot, wafer, null);
+        return lotWaferLookup(lot, wafer, null, null);
     }
 
     /**
@@ -64,6 +64,33 @@ public class ExensioClient {
      * When wafer is null/blank, this uses pgc_key=2 and matches the best wafer by end_time.
      */
     public ExensioLotWaferResult lotWaferLookup(String lot, String wafer, Instant targetEndTime) {
+        return lotWaferLookup(lot, wafer, targetEndTime, null);
+    }
+
+    /**
+     * Single-record lot/wafer lookup with explicit pgc_key override.
+     *
+     * <p>When {@code pgcKey} is non-null it is used directly in the request body.
+     * When {@code pgcKey} is null the existing wafer-presence fallback applies
+     * ({@code pgc_key=1} if wafer is present, {@code pgc_key=2} if wafer is absent).</p>
+     *
+     * <p>Requirements: 4.1, 4.2, 6.1</p>
+     */
+    public ExensioLotWaferResult lotWaferLookup(String lot, String wafer, Instant targetEndTime, Integer pgcKey) {
+        return lotWaferLookup(lot, wafer, targetEndTime, pgcKey, null);
+    }
+
+    /**
+     * Single-record lot/wafer lookup with explicit pgc_key override and PPID test-phase validation.
+     *
+     * <p>When {@code testPhase} is non-blank, a {@link ExensioLotWaferResult.Found} result is
+     * only returned when the PPID ends with {@code _<testPhase>} (case-insensitive). A mismatch
+     * downgrades the result to {@link ExensioLotWaferResult.NotFound} so the monitor retries.</p>
+     *
+     * <p>Requirements: 4.1, 4.2, 5.1–5.5, 6.1, 6.2</p>
+     */
+    public ExensioLotWaferResult lotWaferLookup(String lot, String wafer, Instant targetEndTime,
+                                                 Integer pgcKey, String testPhase) {
         String token;
         try {
             token = authService.getToken();
@@ -71,7 +98,7 @@ public class ExensioClient {
             return new ExensioLotWaferResult.Error("Auth failed: " + e.getMessage());
         }
 
-        ExensioLotWaferResult result = doLotWaferLookup(lot, wafer, targetEndTime, token);
+        ExensioLotWaferResult result = doLotWaferLookup(lot, wafer, targetEndTime, pgcKey, testPhase, token);
 
         // Retry once on 401 with a fresh token
         if (result instanceof ExensioLotWaferResult.Error err && err.message().contains("HTTP 401")) {
@@ -82,7 +109,7 @@ public class ExensioClient {
             } catch (ExensioAuthService.ExensioAuthException e) {
                 return new ExensioLotWaferResult.Error("Re-auth failed: " + e.getMessage());
             }
-            result = doLotWaferLookup(lot, wafer, targetEndTime, token);
+            result = doLotWaferLookup(lot, wafer, targetEndTime, pgcKey, testPhase, token);
         }
 
         return result;
@@ -90,14 +117,16 @@ public class ExensioClient {
 
     // --- private ---
 
-    private ExensioLotWaferResult doLotWaferLookup(String lot, String wafer, Instant targetEndTime, String token) {
+    private ExensioLotWaferResult doLotWaferLookup(String lot, String wafer, Instant targetEndTime,
+                                                    Integer pgcKey, String testPhase, String token) {
         try {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
             boolean waferBlank = wafer == null || wafer.isBlank();
-            int pgcKey = waferBlank ? 2 : 1;
+            // Use the explicit pgcKey when provided; otherwise fall back to wafer-presence logic.
+            int resolvedPgcKey = (pgcKey != null) ? pgcKey : (waferBlank ? 2 : 1);
 
             ObjectNode body = objectMapper.createObjectNode();
-            body.put("pgc_key", pgcKey);
+            body.put("pgc_key", resolvedPgcKey);
             ArrayNode lotIds = body.putArray("lot_ids");
             lotIds.add(lot);
             ArrayNode waferIds = body.putArray("wafer_ids");
@@ -123,7 +152,7 @@ public class ExensioClient {
                 return new ExensioLotWaferResult.Error("HTTP " + response.statusCode());
             }
 
-            return parseResponse(response.body(), wafer, targetEndTime);
+            return parseResponse(response.body(), wafer, targetEndTime, testPhase);
 
         } catch (Exception e) {
             log.warn("Exensio lot-wafer-lookup failed for lot={} wafer={}: {}", lot, wafer, e.getMessage());
@@ -204,11 +233,19 @@ public class ExensioClient {
 
             // Build request body
             ObjectNode body = objectMapper.createObjectNode();
-            // Dynamic pgc strategy:
-            // - If all records in batch have blank wafer, use pgc_key=2 (lot-level lookup)
-            // - Otherwise use pgc_key=1 (wafer-level lookup)
-            boolean allWafersBlank = records.stream().allMatch(r -> r.wafer() == null || r.wafer().isBlank());
-            body.put("pgc_key", allWafersBlank ? 2 : 1);
+            // Derive pgc_key per record from its dataType, then use the most common value across the batch.
+            // Requirements: 4.3, 4.4, 6.1
+            java.util.Map<Integer, Long> pgcKeyCounts = new java.util.HashMap<>();
+            for (StageRecord record : records) {
+                boolean waferBlank = record.wafer() == null || record.wafer().isBlank();
+                int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType(), waferBlank);
+                pgcKeyCounts.merge(pgcKey, 1L, Long::sum);
+            }
+            int batchPgcKey = pgcKeyCounts.entrySet().stream()
+                    .max(java.util.Map.Entry.comparingByValue())
+                    .map(java.util.Map.Entry::getKey)
+                    .orElse(1);
+            body.put("pgc_key", batchPgcKey);
             ArrayNode lotIds = body.putArray("lot_ids");
             for (String lot : uniqueLots) {
                 lotIds.add(lot);
@@ -262,7 +299,8 @@ public class ExensioClient {
     }
 
     /**
-     * Parses the lot-wafer-lookup response.
+     * Parses the lot-wafer-lookup response, applying PPID suffix validation when a
+     * {@code testPhase} is provided.
      *
      * <p>Response shape (from Python reference):
      * <pre>
@@ -278,8 +316,14 @@ public class ExensioClient {
      *   }]
      * }
      * </pre>
+     *
+     * <p>Requirements: 5.1–5.5, 6.2 — when {@code testPhase} is non-blank and the
+     * candidate PPID does not end with {@code _<testPhase>} (case-insensitive), the
+     * result is downgraded to {@link ExensioLotWaferResult.NotFound} so the monitor
+     * retries on the next cycle.</p>
      */
-    private ExensioLotWaferResult parseResponse(String body, String targetWaferId, Instant targetEndTime) {
+    private ExensioLotWaferResult parseResponse(String body, String targetWaferId,
+                                                 Instant targetEndTime, String testPhase) {
         try {
             JsonNode root = objectMapper.readTree(body);
             JsonNode lots = root.path("lots");
@@ -310,7 +354,9 @@ public class ExensioClient {
                         long pgKey = waferNode.path("pg_key").asLong(0);
                         String ppid = waferNode.path("ppid").asText(null);
                         if (waferKey > 0) {
-                            return new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+                            ExensioLotWaferResult candidate =
+                                    new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+                            return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, waferId);
                         }
                         continue;
                     }
@@ -330,7 +376,10 @@ public class ExensioClient {
                 long pgKey = bestWaferNode.path("pg_key").asLong(0);
                 String ppid = bestWaferNode.path("ppid").asText(null);
                 if (waferKey > 0) {
-                    return new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid);
+                    ExensioLotWaferResult candidate =
+                            new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid);
+                    return applyPpidCheck(candidate, ppid, testPhase, targetWaferId,
+                            bestWaferNode.path("wafer_id").asText(null));
                 }
             }
 
@@ -340,6 +389,47 @@ public class ExensioClient {
             log.warn("Failed to parse Exensio lot-wafer-lookup response: {}", e.getMessage());
             return new ExensioLotWaferResult.Error("Parse error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Applies the PPID suffix check to a candidate {@link ExensioLotWaferResult.Found} result.
+     *
+     * <p>When the check fails the result is downgraded to {@link ExensioLotWaferResult.NotFound}
+     * and a DEBUG message is logged (Requirements: 5.5).</p>
+     */
+    private ExensioLotWaferResult applyPpidCheck(ExensioLotWaferResult candidate,
+                                                  String ppid, String testPhase,
+                                                  String lot, String wafer) {
+        if (candidate instanceof ExensioLotWaferResult.Found) {
+            if (!ppidMatchesTestPhase(ppid, testPhase)) {
+                log.debug("PPID suffix mismatch — downgrading Found to NotFound: " +
+                                "lot={}, wafer={}, expectedTestPhase={}, actualPpid={}",
+                        lot, wafer, testPhase, ppid);
+                return new ExensioLotWaferResult.NotFound();
+            }
+        }
+        return candidate;
+    }
+
+    /**
+     * Returns {@code true} when the PPID is consistent with the expected test phase.
+     *
+     * <p>Four cases (Requirements: 5.1–5.4, 6.2):
+     * <ol>
+     *   <li>testPhase is null or blank → accept (no check needed)</li>
+     *   <li>ppid is null or blank → accept (cannot validate, treat as pass)</li>
+     *   <li>ppid ends with {@code _<testPhase>} (case-insensitive) → accept</li>
+     *   <li>otherwise → reject (caller should downgrade to NotFound)</li>
+     * </ol>
+     */
+    // Feature: exensio-pgc-key-matching, Property 5: PPID suffix validation correctly gates Found results
+    boolean ppidMatchesTestPhase(String ppid, String testPhase) {
+        // Case 1: no test phase specified — skip check
+        if (testPhase == null || testPhase.isBlank()) return true;
+        // Case 2: PPID absent — cannot validate, accept
+        if (ppid == null || ppid.isBlank()) return true;
+        // Case 3 / 4: compare suffix case-insensitively
+        return ppid.toUpperCase().endsWith("_" + testPhase.trim().toUpperCase());
     }
 
     private Instant parseInstantSafe(String value) {

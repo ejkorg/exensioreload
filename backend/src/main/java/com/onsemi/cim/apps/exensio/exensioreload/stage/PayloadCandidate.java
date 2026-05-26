@@ -1,6 +1,6 @@
 package com.onsemi.cim.apps.exensio.exensioreload.stage;
 
-public record PayloadCandidate(String metadataId, String dataId, String lot, String wafer, String filename, java.time.Instant endTime) {
+public record PayloadCandidate(String metadataId, String dataId, String lot, String wafer, String filename, java.time.Instant endTime, String dataType, String testPhase) {
     public PayloadCandidate {
         if (metadataId == null || metadataId.isBlank()) {
             throw new IllegalArgumentException("metadataId is required");
@@ -15,6 +15,10 @@ public record PayloadCandidate(String metadataId, String dataId, String lot, Str
     }
 
     public PayloadCandidate(String metadataId, String dataId) {
-        this(metadataId, dataId, null, null, null, null);
+        this(metadataId, dataId, null, null, null, null, null, null);
+    }
+
+    public PayloadCandidate(String metadataId, String dataId, String lot, String wafer, String filename, java.time.Instant endTime) {
+        this(metadataId, dataId, lot, wafer, filename, endTime, null, null);
     }
 }

@@ -2015,7 +2015,9 @@ export class StepperComponent implements OnInit, OnDestroy {
                     payloads: payloads,
                     triggerDispatch: true,
                     forceDuplicates: forceDuplicates,
-                    requestId: session.sessionId
+                    requestId: session.sessionId,
+                    dataType: this.selectedDataType() || null,
+                    testPhase: this.selectedTestPhase() || null
                 };
 
                 console.log('[STAGING] Staging payloads...', { count: payloads.length, sessionId: session.sessionId });
@@ -2195,7 +2197,9 @@ export class StepperComponent implements OnInit, OnDestroy {
                             payloads,
                             triggerDispatch: true,
                             forceDuplicates: forceDuplicates, // set by user's duplicate policy choice in confirm dialog
-                            requestId: session.sessionId
+                            requestId: session.sessionId,
+                            dataType: filters.dataType || null,
+                            testPhase: filters.testPhase || null
                         };
 
                         this.backend.stagePayloads(senderId, body).subscribe({
@@ -2593,7 +2597,9 @@ export class StepperComponent implements OnInit, OnDestroy {
             payloads: duplicatePayloads,
             triggerDispatch: true,
             forceDuplicates: true,
-            requestId: context.sessionId
+            requestId: context.sessionId,
+            dataType: context.filters?.dataType || this.selectedDataType() || null,
+            testPhase: context.filters?.testPhase || this.selectedTestPhase() || null
         };
 
         this.backend.stagePayloads(context.senderId, body).subscribe({

@@ -379,5 +379,7 @@
     <include file="db.changelog-9.3-cp-enrichment-columns.xml" relativeToChangelogFile="true" />
     <!-- Add Exensio wafer_key and pg_key columns for load confirmation -->
     <include file="db.changelog-9.4-exensio-columns.xml" relativeToChangelogFile="true" />
+    <!-- Add data_type and test_phase columns for pgc_key derivation and PPID validation -->
+    <include file="db.changelog-9.5-data-type-test-phase.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

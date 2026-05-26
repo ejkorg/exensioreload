@@ -878,7 +878,9 @@ public class SenderController {
                 request.triggerDispatch(),
                 request.forceDuplicates(),
                 request.userEmail(),
-                request.requestId()
+                request.requestId(),
+                request.dataType(),
+                request.testPhase()
         );
         StagePayloadResponse partial = stagePayloads(id, proxyRequest).getBody();
         if (partial == null) {
@@ -1122,7 +1124,7 @@ public class SenderController {
             return ResponseEntity.ok(new StagePayloadResponse(0, 0, List.<DuplicatePayloadView>of(), 0, false, 0, false, 0));
         }
         List<PayloadCandidate> candidates = payloads.stream()
-                .map(p -> new PayloadCandidate(p.metadataId(), p.dataId(), p.lot(), p.wafer(), p.filename(), parseIsoInstant(p.endTime())))
+                .map(p -> new PayloadCandidate(p.metadataId(), p.dataId(), p.lot(), p.wafer(), p.filename(), parseIsoInstant(p.endTime()), request.dataType(), request.testPhase()))
                 .collect(Collectors.toList());
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String requestedBy = authentication != null && authentication.getName() != null ? authentication.getName().trim() : "ui";
