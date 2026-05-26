@@ -78,6 +78,17 @@ refdb:
   staging-table: SENDER_STAGE
   pool:
     max-size: 10
+  # Separate connection for pp_log queries — must point to PRODUCTION so that
+  # CP enrichment fallback reads real processing outcomes, not QA data.
+  pplog:
+    host: "exnprd-db.onsemi.com"
+    port: 1729
+    service: "EXNPRD.onsemi.com"
+    user: refdb
+    password: "88sgX%#$29-azx"
+    pool:
+      max-size: 3
+      min-idle: 1
     min-idle: 2
   dispatch:
     per-send: 100

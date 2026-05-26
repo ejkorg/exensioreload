@@ -1,5 +1,6 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
+import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
@@ -47,12 +48,16 @@ public class RefDbService {
 
     private final RefDbProperties properties;
     private final HikariDataSource dataSource;
+    /** Separate datasource for pp_log queries — points to PRODUCTION when configured. */
+    private final HikariDataSource ppLogDataSource;
     private final boolean isOracle;
     private final com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService;
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
-    public RefDbService(RefDbProperties properties, com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService) {
+    public RefDbService(RefDbProperties properties,
+                        PpLogDbProperties ppLogDbProperties,
+                        com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService) {
         this.properties = properties;
         this.monitorService = monitorService;
         this.isOracle = properties.getHost() != null && !properties.getHost().isBlank();
@@ -73,6 +78,25 @@ public class RefDbService {
         config.setMinimumIdle(properties.getPool().getMinIdle());
         config.setPoolName("refdb-staging");
         this.dataSource = new HikariDataSource(config);
+
+        // Build a separate datasource for pp_log queries (PRODUCTION) if configured.
+        // Falls back to the main dataSource when refdb.pplog.host is not set.
+        if (ppLogDbProperties != null && ppLogDbProperties.isConfigured()) {
+            HikariConfig ppConfig = new HikariConfig();
+            ppConfig.setJdbcUrl(ppLogDbProperties.buildJdbcUrl());
+            ppConfig.setUsername(ppLogDbProperties.getUser());
+            ppConfig.setPassword(ppLogDbProperties.getPassword());
+            ppConfig.setDriverClassName("oracle.jdbc.OracleDriver");
+            ppConfig.setMaximumPoolSize(ppLogDbProperties.getPool().getMaxSize());
+            ppConfig.setMinimumIdle(ppLogDbProperties.getPool().getMinIdle());
+            ppConfig.setPoolName("refdb-pplog");
+            this.ppLogDataSource = new HikariDataSource(ppConfig);
+            log.info("pp_log datasource configured separately: {}", ppLogDbProperties.buildJdbcUrl());
+        } else {
+            // No separate pp_log config — reuse the main staging datasource
+            this.ppLogDataSource = this.dataSource;
+            log.info("pp_log datasource not separately configured — using main refdb datasource");
+        }
     }
 
     @PostConstruct
@@ -88,6 +112,9 @@ public class RefDbService {
 
     @PreDestroy
     public void shutdown() {
+        if (ppLogDataSource != null && ppLogDataSource != dataSource) {
+            ppLogDataSource.close();
+        }
         if (dataSource != null) {
             dataSource.close();
         }
@@ -3399,7 +3426,7 @@ public class RefDbService {
                 "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code = 0 " +
                 "FETCH FIRST 1 ROWS ONLY";
         String likeParam = "%" + idFile + "%";
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, lot);
             ps.setString(2, likeParam);
@@ -3430,7 +3457,7 @@ public class RefDbService {
                 "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code != 0 " +
                 "FETCH FIRST 1 ROWS ONLY";
         String likeParam = "%" + idFile + "%";
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, lot);
             ps.setString(2, likeParam);
