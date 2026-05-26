@@ -67,6 +67,11 @@ public class RefDbService {
             config.setUsername(properties.getUser());
             config.setPassword(properties.getPassword());
             config.setDriverClassName("oracle.jdbc.OracleDriver");
+            // Tell the Oracle JDBC driver the DB server's local timezone so that
+            // TIMESTAMP (without time zone) columns are interpreted correctly.
+            // The DB server runs in US Mountain time (UTC-7 / UTC-6 DST).
+            config.addDataSourceProperty("oracle.jdbc.timezoneAsRegion", "false");
+            config.setConnectionInitSql("ALTER SESSION SET TIME_ZONE = 'America/Phoenix'");
         } else {
             // Test environment fallback: use an embedded H2 datasource so tests don't try to contact Oracle
             config.setJdbcUrl("jdbc:h2:mem:refdb;DB_CLOSE_DELAY=-1");
@@ -2672,8 +2677,11 @@ public class RefDbService {
         if (timestamp == null) {
             return null;
         }
-        // Staging/metadata timestamps are stored as UTC wall-clock (no TZ column).
-        return timestamp.toLocalDateTime().toInstant(java.time.ZoneOffset.UTC);
+        // Oracle stores TIMESTAMP columns without timezone info using the DB server's local time.
+        // Use Timestamp.toInstant() which correctly uses the millisecond epoch value from the JDBC driver,
+        // provided the JDBC connection timezone matches the DB server timezone (configured via
+        // refdb.connection-timezone in application.yml, defaulting to UTC for backward compatibility).
+        return timestamp.toInstant();
     }
 
     private java.sql.Timestamp safeTimestamp(ResultSet rs, String column) {
