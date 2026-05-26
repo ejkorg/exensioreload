@@ -9,6 +9,7 @@ public final class DataTypePgcKeyMapper {
     public static final int PGC_KEY_PROBE  = 1;
     public static final int PGC_KEY_FT     = 2;
     public static final int PGC_KEY_WMAP   = 4;
+    public static final int PGC_KEY_PCM    = 5;
     public static final int PGC_KEY_DEFECT = 14;
 
     private DataTypePgcKeyMapper() {}
@@ -18,11 +19,12 @@ public final class DataTypePgcKeyMapper {
      * Mapping is case-insensitive.
      *
      * <ul>
-     *   <li>PROBE                          → 1</li>
-     *   <li>FT / FINAL TEST / FINAL_TEST   → 2</li>
-     *   <li>DEFECT                         → 14</li>
-     *   <li>MAP / BIN MAP / BINMAP / WMAP  → 4</li>
-     *   <li>anything else / null           → 1 if wafer present, 2 if wafer absent</li>
+     *   <li>PROBE                               → 1</li>
+     *   <li>FT / FINAL TEST / FINAL_TEST        → 2</li>
+     *   <li>MAP / BIN MAP / BINMAP / WMAP / WMP → 4</li>
+     *   <li>PCM                                 → 5</li>
+     *   <li>DEFECT                              → 14</li>
+     *   <li>anything else / null                → 1 if wafer present, 2 if wafer absent</li>
      * </ul>
      *
      * @param dataType   the data type string from the stepper (may be null)
@@ -39,13 +41,16 @@ public final class DataTypePgcKeyMapper {
                 case "FINAL TEST":
                 case "FINAL_TEST":
                     return PGC_KEY_FT;
-                case "DEFECT":
-                    return PGC_KEY_DEFECT;
                 case "MAP":
                 case "BIN MAP":
                 case "BINMAP":
                 case "WMAP":
+                case "WMP":
                     return PGC_KEY_WMAP;
+                case "PCM":
+                    return PGC_KEY_PCM;
+                case "DEFECT":
+                    return PGC_KEY_DEFECT;
                 default:
                     break;
             }
