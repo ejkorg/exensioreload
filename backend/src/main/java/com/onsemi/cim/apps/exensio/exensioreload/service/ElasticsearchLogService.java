@@ -23,14 +23,14 @@ import java.util.regex.Pattern;
  * Queries the CP Elasticsearch index to determine the enrichment outcome for a given file.
  * Uses the JDK built-in {@link HttpClient} and the ES REST API directly — no extra client libs.
  *
- * <p>Requirements: 2.3, 2.4, 2.5, 2.6, 3.1, 3.3, 4.1, 5.3</p>
+ * <p>Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.7, 3.1–3.8, 4.1–4.3, 5.1, 5.3, 6.3, 6.4, 7.1–7.3</p>
  */
 @Service
 public class ElasticsearchLogService {
 
     private static final Logger log = LoggerFactory.getLogger(ElasticsearchLogService.class);
 
-    /** Regex to extract the output path from a CP success log message. Requirements: 3.3 */
+    /** Regex to extract the output path from a CP success log message. Retained for pp_log output_directory. */
     private static final Pattern OUTPUT_PATH_PATTERN =
             Pattern.compile("output path\\s*=\\s*(.+)", Pattern.CASE_INSENSITIVE);
 
@@ -38,14 +38,18 @@ public class ElasticsearchLogService {
     private final String authHeader;
     private final CpElasticsearchProperties props;
     private final ObjectMapper objectMapper;
+    /** May be null in test environments where RefDB is not configured. Requirements: 6.3, 6.4 */
+    private final RefDbService refDbService;
 
     public ElasticsearchLogService(HttpClient elasticsearchHttpClient,
                                    CpElasticsearchProperties props,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   RefDbService refDbService) {
         this.httpClient = elasticsearchHttpClient;
         this.authHeader = buildAuthHeader(props);
         this.props = props;
         this.objectMapper = objectMapper;
+        this.refDbService = refDbService;
     }
 
     private static String buildAuthHeader(CpElasticsearchProperties props) {
@@ -65,34 +69,39 @@ public class ElasticsearchLogService {
     /**
      * Searches the CP Elasticsearch index for a log entry matching the given file.
      *
-     * <p>Query filters (Requirements 2.3, 2.4, 2.5, 2.6):</p>
+     * <p>Query filters (Requirements 1.1, 1.2, 1.3, 2.3–2.6):</p>
      * <ul>
      *   <li>{@code cpConfig: *sender*} — isolates ExensioReload-triggered files</li>
-     *   <li>{@code idData: <dataId>} — primary key match</li>
+     *   <li>{@code idFile: <idFile>} — file-level key match (when non-blank)</li>
+     *   <li>{@code idData: <dataId>} — data-level key match</li>
      *   <li>{@code mLot: <lot>} — disambiguation when idData is ambiguous</li>
      *   <li>{@code @timestamp >= since} — only logs after enrichment started</li>
      * </ul>
      *
-     * <p>Hit evaluation order (Requirements 3.1, 4.1):</p>
+     * <p>Hit evaluation order (Requirements 4.1, 2.6, 2.7, 3.1):</p>
      * <ol>
-     *   <li>If any hit has {@code error.type} or {@code error.message} → {@link CpLogResult.Failure}</li>
-     *   <li>Else if any hit has service.environment ∈ {PRD, SBX, SANDBOX} and message contains "output path" → {@link CpLogResult.Success}</li>
+     *   <li>If {@code log.level == ERROR} → {@link CpLogResult.Failure}</li>
+     *   <li>Else if message contains PRODUCTION → {@link CpLogResult.Success}</li>
+     *   <li>Else if message contains SANDBOX → {@link CpLogResult.Success}</li>
+     *   <li>Else if message contains "executed successfully" → pp_log fallback</li>
      *   <li>Else → {@link CpLogResult.NotFound}</li>
      * </ol>
      *
+     * @param idFile the metadata_id of the SENDER_STAGE record (may be null/blank)
      * @param dataId the data_id of the SENDER_STAGE record
      * @param lot    the lot of the SENDER_STAGE record
      * @param since  the instant the record entered ENRICHMENT status
+     * @param site   the site identifier
      * @return the enrichment outcome
      */
-    public CpLogResult findCpLog(String dataId, String lot, Instant since, String site) {
+    public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site) {
         String initialFilter = props.getCpConfigFilter();
         String url = props.getUrl().replaceAll("/$", "") + "/" + props.getIndexPattern() + "/_search";
 
         try {
             // First attempt using configured cpConfig filter
-            String queryJson = buildQuery(dataId, lot, since, site, initialFilter);
-            CpLogResult result = executeSearch(url, queryJson, dataId, lot);
+            String queryJson = buildQuery(idFile, dataId, lot, since, site, initialFilter);
+            CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot);
 
             // If no hit found and the configured filter is different from the broad fallback,
             // retry once with fallback "*sender*" (case-insensitive) to improve recall.
@@ -100,8 +109,8 @@ public class ElasticsearchLogService {
                     && initialFilter != null
                     && !initialFilter.equalsIgnoreCase("*sender*")) {
                 log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={}", initialFilter, dataId);
-                String fallbackQuery = buildQuery(dataId, lot, since, site, "*sender*");
-                return executeSearch(url, fallbackQuery, dataId, lot);
+                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, "*sender*");
+                return executeSearch(url, fallbackQuery, idFile, dataId, lot);
             }
 
             return result;
@@ -117,7 +126,7 @@ public class ElasticsearchLogService {
     /**
      * Execute the HTTP request and parse the response into a {@link CpLogResult}.
      */
-    private CpLogResult executeSearch(String url, String queryJson, String dataId, String lot) throws Exception {
+    private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot) throws Exception {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
@@ -135,7 +144,7 @@ public class ElasticsearchLogService {
             throw new ElasticsearchQueryException("ES returned HTTP " + response.statusCode());
         }
 
-        return parseResponse(response.body(), dataId, lot);
+        return parseResponse(response.body(), idFile, dataId, lot);
     }
 
     /**
@@ -177,16 +186,18 @@ public class ElasticsearchLogService {
     // ── private helpers ──────────────────────────────────────────────────────
 
     /**
-     * Builds the ES query JSON as a string.
+     * Builds the ES query JSON using the default cpConfig filter.
+     * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
-    String buildQuery(String dataId, String lot, Instant since, String site) {
-        return buildQuery(dataId, lot, since, site, props.getCpConfigFilter());
+    String buildQuery(String idFile, String dataId, String lot, Instant since, String site) {
+        return buildQuery(idFile, dataId, lot, since, site, props.getCpConfigFilter());
     }
 
     /**
-     * Builds the ES query JSON as a string, using an explicit cpConfig wildcard filter when provided.
+     * Builds the ES query JSON with an explicit cpConfig wildcard filter.
+     * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
-    String buildQuery(String dataId, String lot, Instant since, String site, String cpConfigFilter) {
+    String buildQuery(String idFile, String dataId, String lot, Instant since, String site, String cpConfigFilter) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode query = root.putObject("query");
@@ -200,7 +211,7 @@ public class ElasticsearchLogService {
             cpConfigWild.put("value", cpConfigFilter == null ? props.getCpConfigFilter() : cpConfigFilter);
             cpConfigWild.put("case_insensitive", true);
 
-            // Optional service.country filter (for example, PHO for the External source)
+            // Optional service.country filter
             if (props.getServiceCountryFilter() != null && !props.getServiceCountryFilter().isBlank()) {
                 String fieldName = props.resolveServiceCountryField(site);
                 ObjectNode termServiceCountry = must.addObject();
@@ -208,23 +219,68 @@ public class ElasticsearchLogService {
                 termServiceCountryInner.put(fieldName, props.getServiceCountryFilter().trim());
             }
 
-            // idData term match (Requirement 2.4)
+            // idFile term match — only when non-blank (Requirements 1.1, 1.3, 7.1)
+            if (idFile != null && !idFile.isBlank()) {
+                ObjectNode termIdFile = must.addObject();
+                ObjectNode termIdFileInner = termIdFile.putObject("term");
+                termIdFileInner.put("idFile", idFile);
+            }
+
+            // idData term match (Requirement 1.2)
             ObjectNode termIdData = must.addObject();
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
-            // mLot term match (Requirement 2.5) — only add when requireLot is true AND lot is provided
+            // mLot term match — only add when requireLot is true AND lot is provided
             if (props.isRequireLot() && lot != null && !lot.isBlank()) {
                 ObjectNode termLot = must.addObject();
                 ObjectNode termLotInner = termLot.putObject("term");
                 termLotInner.put("mLot", lot);
             }
 
-            // @timestamp range (Requirement 2.6)
+            // @timestamp range
             ObjectNode rangeClause = must.addObject();
             ObjectNode range = rangeClause.putObject("range");
             ObjectNode tsRange = range.putObject("@timestamp");
             tsRange.put("gte", since.toString());
+
+            // should clauses for scoring (Requirements 2.1–2.4)
+            ArrayNode should = bool.putArray("should");
+
+            // Boost 4: PRODUCTION output path in message
+            ObjectNode shouldProd = should.addObject();
+            ObjectNode wildcardProd = shouldProd.putObject("wildcard");
+            ObjectNode wildcardProdMsg = wildcardProd.putObject("message");
+            wildcardProdMsg.put("value", "*output path*PRODUCTION*");
+            wildcardProdMsg.put("case_insensitive", true);
+            wildcardProdMsg.put("boost", 4);
+
+            // Boost 3: SANDBOX in message
+            ObjectNode shouldSbx = should.addObject();
+            ObjectNode wildcardSbx = shouldSbx.putObject("wildcard");
+            ObjectNode wildcardSbxMsg = wildcardSbx.putObject("message");
+            wildcardSbxMsg.put("value", "*SANDBOX*");
+            wildcardSbxMsg.put("case_insensitive", true);
+            wildcardSbxMsg.put("boost", 3);
+
+            // Boost 3: non-ERROR log level
+            ObjectNode shouldNonError = should.addObject();
+            ObjectNode boolNonError = shouldNonError.putObject("bool");
+            boolNonError.put("boost", 3);
+            ArrayNode mustNotArr = boolNonError.putArray("must_not");
+            ObjectNode mustNotTerm = mustNotArr.addObject();
+            ObjectNode mustNotTermInner = mustNotTerm.putObject("term");
+            mustNotTermInner.put("log.level", "ERROR");
+
+            // Boost 1: ERROR log level
+            ObjectNode shouldError = should.addObject();
+            ObjectNode termError = shouldError.putObject("term");
+            ObjectNode termErrorInner = termError.putObject("log.level");
+            termErrorInner.put("value", "ERROR");
+            termErrorInner.put("boost", 1);
+
+            // Requirement 2.5: at least one should clause must match
+            bool.put("minimum_should_match", 1);
 
             // Sort by @timestamp desc, fetch up to 10 hits
             ArrayNode sort = root.putArray("sort");
@@ -234,6 +290,15 @@ public class ElasticsearchLogService {
 
             root.put("size", 10);
 
+            // Requirement 1.4: include idFile and idData in _source
+            ArrayNode source = root.putArray("_source");
+            source.add("@timestamp");
+            source.add("cpConfig");
+            source.add("idData");
+            source.add("idFile");
+            source.add("message");
+            source.add("log.level");
+
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             throw new ElasticsearchQueryException("Failed to build ES query", e);
@@ -242,8 +307,17 @@ public class ElasticsearchLogService {
 
     /**
      * Parses the ES search response body and returns the appropriate {@link CpLogResult}.
+     *
+     * <p>Priority order per hit (Requirements 4.1, 4.3, 2.6, 2.7, 3.1–3.8):</p>
+     * <ol>
+     *   <li>{@code log.level == ERROR} → {@link CpLogResult.Failure}</li>
+     *   <li>message contains PRODUCTION → {@link CpLogResult.Success}</li>
+     *   <li>message contains SANDBOX → {@link CpLogResult.Success}</li>
+     *   <li>message contains "executed successfully" → pp_log fallback via RefDbService</li>
+     *   <li>no match → continue to next hit</li>
+     * </ol>
      */
-    private CpLogResult parseResponse(String body, String dataId, String lot) {
+    private CpLogResult parseResponse(String body, String idFile, String dataId, String lot) {
         try {
             JsonNode root = objectMapper.readTree(body);
             JsonNode hits = root.path("hits").path("hits");
@@ -252,41 +326,40 @@ public class ElasticsearchLogService {
                 return new CpLogResult.NotFound();
             }
 
-            // Failure check first — error takes priority over success (Requirements 3.1, 4.1)
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
                 if (source.isMissingNode()) continue;
 
-                if (hasError(source)) {
-                    String errorMessage = extractErrorMessage(source);
-                    Instant timestamp = parseTimestamp(source);
-                    log.debug("CP failure log found for dataId={}, lot={}: {}", dataId, lot, errorMessage);
+                String logLevel = source.path("log.level").asText(null);
+                String message = source.path("message").asText(null);
+                Instant timestamp = parseTimestamp(source);
+
+                // Priority 1: ERROR log level → always a failure (Requirements 4.1, 4.3)
+                if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
+                    String errorMessage = isNonBlank(message) ? message : "CP processing error";
+                    log.debug("CP failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
                     return new CpLogResult.Failure(errorMessage, timestamp);
                 }
-            }
 
-            // Success check — verify service.environment is a valid production/sandbox env (PRD, SBX, or SANDBOX)
-            // and look for "output path" in message
-            for (JsonNode hit : hits) {
-                JsonNode source = hit.path("_source");
-                if (source.isMissingNode()) continue;
+                if (message == null) continue;
+                String messageUpper = message.toUpperCase();
 
-                String environment = source.path("service.environment").asText(null);
-                if (!isValidEnvironment(environment)) {
-                    continue; // skip logs with invalid or missing environment
+                // Priority 2: PRODUCTION in message (Requirement 2.6)
+                if (messageUpper.contains("PRODUCTION")) {
+                    log.debug("CP success (PRODUCTION in message) for dataId={}", dataId);
+                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
                 }
 
-                String message = source.path("message").asText(null);
-                if (message != null && message.toLowerCase().contains("output path")) {
-                    Optional<String> outputPath = extractOutputPath(message);
-                    if (outputPath.isPresent()) {
-                        String path = outputPath.get().trim();
-                        String target = detectOutputTarget(path);
-                        Instant timestamp = parseTimestamp(source);
-                        log.debug("CP success log found for dataId={}, lot={}: env={}, path={}, target={}",
-                                dataId, lot, environment, path, target);
-                        return new CpLogResult.Success(path, target, timestamp);
-                    }
+                // Priority 3: SANDBOX in message (Requirement 2.6)
+                if (messageUpper.contains("SANDBOX")) {
+                    log.debug("CP success (SANDBOX in message) for dataId={}", dataId);
+                    return new CpLogResult.Success(message, "SANDBOX", timestamp);
+                }
+
+                // Priority 4: "executed successfully" → pp_log fallback (Requirements 3.1–3.8)
+                if (message.toLowerCase().contains("executed successfully")) {
+                    log.debug("CP 'executed successfully' hit for dataId={} — querying pp_log", dataId);
+                    return queryPpLogFallback(idFile, lot, timestamp);
                 }
             }
 
@@ -298,31 +371,38 @@ public class ElasticsearchLogService {
         }
     }
 
-    private boolean hasError(JsonNode source) {
-        JsonNode errorNode = source.path("error");
-        if (errorNode.isMissingNode() || errorNode.isNull()) return false;
-        String errorType = errorNode.path("type").asText(null);
-        String errorMessage = errorNode.path("message").asText(null);
-        return isNonBlank(errorType) || isNonBlank(errorMessage);
-    }
-
     /**
-     * Validates that the environment string is one of the allowed production/sandbox values:
-     * PRD, SBX, or SANDBOX (case-insensitive).
+     * Delegates to RefDbService to query pp_log for the output directory or error message.
+     * Requirements: 3.2–3.8, 6.3, 6.4
      */
-    private boolean isValidEnvironment(String environment) {
-        if (!isNonBlank(environment)) return false;
-        String upper = environment.toUpperCase().trim();
-        return upper.equals("PRD") || upper.equals("SBX") || upper.equals("SANDBOX");
-    }
-
-    private String extractErrorMessage(JsonNode source) {
-        JsonNode errorNode = source.path("error");
-        String msg = errorNode.path("message").asText(null);
-        if (isNonBlank(msg)) return msg;
-        String type = errorNode.path("type").asText(null);
-        if (isNonBlank(type)) return type;
-        return "Unknown error";
+    private CpLogResult queryPpLogFallback(String idFile, String lot, Instant timestamp) {
+        // Requirement 6.4: guard against RefDbService being unavailable
+        if (refDbService == null || idFile == null || idFile.isBlank()) {
+            log.debug("pp_log fallback skipped — refDbService={} idFile={}", refDbService, idFile);
+            return new CpLogResult.NotFound();
+        }
+        try {
+            // Requirement 3.2–3.4: query for success row
+            String outputDirectory = refDbService.queryPpLogSuccess(lot, idFile);
+            if (outputDirectory != null) {
+                String target = detectOutputTarget(outputDirectory);
+                log.debug("pp_log success for idFile={} lot={}: dir={} target={}", idFile, lot, outputDirectory, target);
+                return new CpLogResult.Success(outputDirectory, target, timestamp);
+            }
+            // Requirement 3.5–3.6: query for error row
+            String logMessage = refDbService.queryPpLogError(lot, idFile);
+            if (logMessage != null) {
+                log.debug("pp_log error for idFile={} lot={}: {}", idFile, lot, logMessage);
+                return new CpLogResult.Failure(logMessage, timestamp);
+            }
+            // Requirement 3.7: no rows in either query → retry next cycle
+            log.debug("pp_log returned no rows for idFile={} lot={}", idFile, lot);
+            return new CpLogResult.NotFound();
+        } catch (Exception ex) {
+            // Requirement 3.8: SQLException or other error → log warning, retry next cycle
+            log.warn("pp_log fallback failed for idFile={} lot={}: {}", idFile, lot, ex.getMessage());
+            return new CpLogResult.NotFound();
+        }
     }
 
     private Instant parseTimestamp(JsonNode source) {

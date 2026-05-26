@@ -93,7 +93,7 @@ public class CpLogMonitor {
 
         CpLogResult result;
         try {
-            result = elasticsearchLogService.findCpLog(record.dataId(), record.lot(), enrichmentStartedAt, record.site());
+            result = elasticsearchLogService.findCpLog(record.metadataId(), record.dataId(), record.lot(), enrichmentStartedAt, record.site());
         } catch (ElasticsearchLogService.ElasticsearchQueryException e) {
             // Requirement 6.7: ES unreachable — log warning, skip this record, do not mark failed
             log.warn("Elasticsearch query failed for record id={} dataId={} — skipping: {}",

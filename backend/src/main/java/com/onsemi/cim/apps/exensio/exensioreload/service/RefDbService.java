@@ -3380,6 +3380,72 @@ public class RefDbService {
         return successCount;
     }
 
+    // -------------------------------------------------------------------------
+    // pp_log fallback queries (Requirements 6.1, 6.2)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Queries {@code pp_log} for a successful CP run ({@code process_code = 0}).
+     *
+     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
+     * match on both {@code extension} and {@code file_name}.
+     *
+     * @param lot    the lot identifier from {@link StageRecord#lot()}
+     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
+     * @return the {@code output_directory} of the first matching row, or {@code null} if none found
+     */
+    public String queryPpLogSuccess(String lot, String idFile) {
+        String sql = "SELECT output_directory FROM pp_log " +
+                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code = 0 " +
+                "FETCH FIRST 1 ROWS ONLY";
+        String likeParam = "%" + idFile + "%";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, lot);
+            ps.setString(2, likeParam);
+            ps.setString(3, likeParam);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("output_directory");
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("pp_log success query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Queries {@code pp_log} for a failed CP run ({@code process_code != 0}).
+     *
+     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
+     * match on both {@code extension} and {@code file_name}.
+     *
+     * @param lot    the lot identifier from {@link StageRecord#lot()}
+     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
+     * @return the {@code log_message} of the first matching row, or {@code null} if none found
+     */
+    public String queryPpLogError(String lot, String idFile) {
+        String sql = "SELECT log_message FROM pp_log " +
+                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code != 0 " +
+                "FETCH FIRST 1 ROWS ONLY";
+        String likeParam = "%" + idFile + "%";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, lot);
+            ps.setString(2, likeParam);
+            ps.setString(3, likeParam);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("log_message");
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("pp_log error query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+        }
+        return null;
+    }
+
     /**
      * Broadcast SSE events for a batch of record updates.
      *

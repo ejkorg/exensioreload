@@ -298,7 +298,7 @@ The codebase is OIDC-based, not SAML-based. If the vendor form requires SAML fie
 | `SenderService` | cron | Process local sender_queue entries |
 | `CompletionNotificationService` | cron (5min) | Check completions → email notifications |
 | `DiscoveryScheduler` | cron (configurable) | Automated metadata discovery (disabled by default) |
-| `CpLogMonitor` | fixedDelay 60s (configurable) | Poll Elasticsearch for CP enrichment outcomes; drives `ENRICHMENT → EXENSIO_LOADING / FAILED`. No-op when ES not configured. |
+| `CpLogMonitor` | fixedDelay 60s (configurable) | Poll Elasticsearch for CP enrichment outcomes; drives `ENRICHMENT → EXENSIO_LOADING / FAILED`. ES query filters by both `idFile` and `idData`. Success detection: PRODUCTION/SANDBOX in message → direct success; "executed successfully" → `pp_log` fallback; `log.level: ERROR` → failure. No-op when ES not configured. |
 | `ExensioLoadMonitor` | fixedDelay 60s (configurable) | Poll Exensio API for load confirmation; drives `EXENSIO_LOADING → DONE / FAILED`. No-op when Exensio not configured. |
 | `EtlSshTriggerService` | on session create / `POST /api/etl-trigger/execute` | Optional SSH to hosts in `etlservers.yml`; runs matched remote crontab command. No-op when `etl.trigger.enabled=false` or YAML not loaded. See [ETL_SSH_TRIGGER.md](docs/ETL_SSH_TRIGGER.md). |
 
@@ -308,7 +308,7 @@ The codebase is OIDC-based, not SAML-based. If the vendor form requires SAML fie
 | `AuthTokenService` | JWT + refresh token orchestration |
 | `ExternalDbResolverService` | Resolves site → DataSource from `ExternalDbConfig` |
 | `SenderQueueMonitor` | Monitors queue; transitions consumed records to `ENRICHMENT` (not `DONE`) |
-| `ElasticsearchLogService` | Queries CP Elasticsearch logs via JDK HttpClient; returns `CpLogResult` (Success/Failure/NotFound) |
+| `ElasticsearchLogService` | Queries CP Elasticsearch logs via JDK HttpClient; returns `CpLogResult` (Success/Failure/NotFound). Query filters by both `idFile` (`metadata_id`) and `idData` (`data_id`). Success detection uses message-based PRODUCTION/SANDBOX keyword matching; falls back to `RefDbService.queryPpLogSuccess/Error` when message contains "executed successfully" but no environment keyword. |
 | `ExensioAuthService` | Manages Exensio API session token (login/logout/cache/401 retry) |
 | `ExensioClient` | Calls `POST /v1/key/lot-wafer-lookup`; returns `ExensioLotWaferResult` (Found/NotFound/Error) |
 | `MetricsService` | Custom Micrometer counters for external operations |
@@ -622,3 +622,6 @@ frontend/src/app/                # 44 .ts files, 5 .html, 5 .scss (54 total)
 18. **Exensio Loading API integration** — `ExensioLoadMonitor` polls `EXENSIO_LOADING` records and calls `POST /v1/key/lot-wafer-lookup` (lot + wafer). Safe to deploy unconfigured (`exensio.enabled=false` = no-op). Enable via env vars: `EXENSIO_ENABLED=true`, `EXENSIO_QA_URL`, `EXENSIO_USERNAME`, `EXENSIO_PASSWORD`. On success stores `exensio_wafer_key` + `exensio_pg_key` on the record for future results queries.
 19. **Capability-based completion** — `StagePipelinePolicy` routes after CP queue consumption: ES → `CpLogMonitor`; else Exensio → `EXENSIO_LOADING` + `ExensioLoadMonitor`; else `DONE`. After ES success, Exensio is used only when configured; otherwise `DONE` with CP output metadata.
 20. **`AuthGuard` is async** — on new tab / browser restart, the guard calls `restoreSession()` which hits `/api/auth/refresh` using the persistent cookie before deciding to redirect to login. `APP_INITIALIZER` also awaits the refresh before Angular activates any route.
+21. **ES query uses both `idFile` and `idData`** — `ElasticsearchLogService.findCpLog` now accepts `idFile` (= `StageRecord.metadataId()`) as a first argument and adds it as a `must` term filter alongside `idData`. When `idFile` is null/blank the filter is omitted (backward compat). `CpLogMonitor.processRecord` passes `record.metadataId()` as `idFile`.
+22. **CP enrichment success detection is message-based** — The old `service.environment` + "output path" check is replaced by: (1) `log.level: ERROR` → failure; (2) `message` contains `PRODUCTION` → success PRODUCTION; (3) `message` contains `SANDBOX` → success SANDBOX; (4) `message` contains `executed successfully` → `pp_log` fallback. The ES query includes four `should` clauses with boost scores and `minimum_should_match: 1`.
+23. **`pp_log` fallback via `RefDbService`** — When the ES message says "executed successfully" but has no PRODUCTION/SANDBOX keyword, `ElasticsearchLogService` calls `RefDbService.queryPpLogSuccess(lot, idFile)` (queries `pp_log` with `process_code = 0`, returns `output_directory`) or `RefDbService.queryPpLogError(lot, idFile)` (queries `pp_log` with `process_code != 0`, returns `log_message`). No rows on either query → `NotFound` (retry next cycle).
