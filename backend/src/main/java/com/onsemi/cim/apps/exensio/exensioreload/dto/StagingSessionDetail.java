@@ -4,6 +4,8 @@ package com.onsemi.cim.apps.exensio.exensioreload.dto;
  * @author fg8n8x
  */
 
+import java.util.Map;
+
 public record StagingSessionDetail(
         String sessionId,
         String username,
@@ -21,7 +23,8 @@ public record StagingSessionDetail(
         String updatedAt,
         String completedAt,
         String lastCheckedAt,
-        double progress
+        double progress,
+        Map<String, Object> integration
 ) {
 }
 

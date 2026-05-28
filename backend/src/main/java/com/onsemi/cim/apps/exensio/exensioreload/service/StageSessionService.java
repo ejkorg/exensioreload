@@ -1,5 +1,7 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
@@ -51,15 +53,24 @@ public class StageSessionService {
     private final DataSource dataSource;
     private final StagePipelineOrchestrator pipelineOrchestrator;
     private final EtlSshTriggerService etlSshTriggerService;
+    private final CpElasticsearchProperties elasticsearchProperties;
+    private final ExensioProperties exensioProperties;
+    private final IntegrationStatusService integrationStatusService;
 
     public StageSessionService(RefDbService refDbService, ExternalDbConfig externalDbConfig,
                                StagePipelineOrchestrator pipelineOrchestrator,
-                               EtlSshTriggerService etlSshTriggerService) {
+                               EtlSshTriggerService etlSshTriggerService,
+                               CpElasticsearchProperties elasticsearchProperties,
+                               ExensioProperties exensioProperties,
+                               IntegrationStatusService integrationStatusService) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.dataSource = refDbService.getDataSource();
         this.pipelineOrchestrator = pipelineOrchestrator;
         this.etlSshTriggerService = etlSshTriggerService;
+        this.elasticsearchProperties = elasticsearchProperties;
+        this.exensioProperties = exensioProperties;
+        this.integrationStatusService = integrationStatusService;
     }
 
     @PostConstruct
@@ -1117,36 +1128,46 @@ public class StageSessionService {
                                                             String lastCheckedAt,
                                                             double progress,
                                                             SessionMetrics metrics) {
+        Map<String, Object> integration = buildIntegrationSnapshot(sessionId);
         try {
-            var ctor20 = StagingSessionDetail.class.getConstructor(
+            var ctor21 = StagingSessionDetail.class.getConstructor(
                     String.class, String.class, String.class, int.class, String.class, String.class, String.class,
                     long.class, long.class, long.class, long.class, long.class,
                     String.class, String.class, String.class, String.class,
-                    double.class, double.class, int.class, double.class);
-            return ctor20.newInstance(
+                    double.class, double.class, int.class, double.class, Map.class);
+            return ctor21.newInstance(
                     sessionId, username, site, senderId, senderName, environment, status,
                     total, filesStaged, filesEnqueued, done, failed,
                     createdAt, updatedAt, completedAt, lastCheckedAt,
-                    progress, metrics.throughput(), metrics.eta(), metrics.successRate());
+                    progress, metrics.throughput(), metrics.eta(), metrics.successRate(), integration);
         } catch (NoSuchMethodException ignored) {
             // Backward compatibility for older DTO shape without throughput/eta/successRate
             try {
-                var ctor17 = StagingSessionDetail.class.getConstructor(
+                var ctor18 = StagingSessionDetail.class.getConstructor(
                         String.class, String.class, String.class, int.class, String.class, String.class, String.class,
                         long.class, long.class, long.class, long.class, long.class,
                         String.class, String.class, String.class, String.class,
-                        double.class);
-                return ctor17.newInstance(
+                        double.class, Map.class);
+                return ctor18.newInstance(
                         sessionId, username, site, senderId, senderName, environment, status,
                         total, filesStaged, filesEnqueued, done, failed,
                         createdAt, updatedAt, completedAt, lastCheckedAt,
-                        progress);
+                        progress, integration);
             } catch (ReflectiveOperationException ex) {
-                throw new IllegalStateException("Failed to construct StagingSessionDetail (17-arg)", ex);
+                throw new IllegalStateException("Failed to construct StagingSessionDetail (18-arg)", ex);
             }
         } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException("Failed to construct StagingSessionDetail (20-arg)", ex);
+            throw new IllegalStateException("Failed to construct StagingSessionDetail (21-arg)", ex);
         }
+    }
+
+    private Map<String, Object> buildIntegrationSnapshot(String sessionId) {
+        if (integrationStatusService == null) {
+            return null;
+        }
+        boolean esConfigured = elasticsearchProperties != null && elasticsearchProperties.isConfigured();
+        boolean exensioConfigured = exensioProperties != null && exensioProperties.isConfigured();
+        return integrationStatusService.snapshot(sessionId, esConfigured, exensioConfigured);
     }
 
     private String toIso(Timestamp ts) {

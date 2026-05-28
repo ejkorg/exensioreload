@@ -53,19 +53,6 @@ import { GlassIconComponent } from './glass-icon.component';
         </div>
 
         <div class="stat-card glass-panel">
-          <div class="integration-status glass-panel" *ngIf="integrationItems().length > 0">
-            <div class="integration-header">Integrations</div>
-            <div class="integration-grid">
-              <div class="integration-row" *ngFor="let item of integrationItems()">
-                <div class="integration-name">{{ item.name }}</div>
-                <div class="integration-state" [ngClass]="item.statusClass">
-                  <app-glass-icon [name]="item.icon" [size]="16" color="muted"></app-glass-icon>
-                  <span class="integration-label">{{ item.message }}</span>
-                </div>
-                <div class="integration-time" *ngIf="item.lastAt">{{ item.lastAt }}</div>
-              </div>
-            </div>
-          </div>
           <div class="stat-icon completed">
             <app-glass-icon name="check_circle" [size]="24" color="success"></app-glass-icon>
           </div>
