@@ -117,6 +117,10 @@ export class StepperComponent implements OnInit, OnDestroy {
     private getPreviewDisplayKey(row: DiscoveryPreviewRow): string {
         const lot = String(row.lot || '').trim();
         const wafer = this.normalizePreviewWafer(row.wafer);
+        const normalizedType = String(this.selectedDataType() || '').trim().toUpperCase();
+        if (normalizedType === 'PCM') {
+            return `${lot}::${wafer}`;
+        }
         const filename = this.getPreviewFilename(row);
         return `${lot}::${wafer}::${filename}`;
     }

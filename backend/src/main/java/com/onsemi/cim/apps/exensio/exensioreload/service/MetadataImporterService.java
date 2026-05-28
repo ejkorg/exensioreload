@@ -427,7 +427,7 @@ public class MetadataImporterService {
                                 nullSafe(row.getOriginalFileName()),
                                 toIsoString(row.getEndTime())
                         ))
-                        .toList());
+                    .toList(), dataType);
 
                 if (!bypassCap) {
                     if (items.size() == resolvedSize) {
@@ -570,7 +570,7 @@ public class MetadataImporterService {
     public String cacheDiscoveryResults(List<DiscoveryPreviewRow> rows) {
         if (rows == null || rows.isEmpty()) return null;
         String token = java.util.UUID.randomUUID().toString();
-        putCachedDiscoveryResults(token, rows);
+        putCachedDiscoveryResults(token, rows, null);
         return token;
     }
 
@@ -578,8 +578,12 @@ public class MetadataImporterService {
      * Cache a discovery result set under an explicitly provided token.
      */
     public void putCachedDiscoveryResults(String token, List<DiscoveryPreviewRow> rows) {
+        putCachedDiscoveryResults(token, rows, null);
+    }
+
+    public void putCachedDiscoveryResults(String token, List<DiscoveryPreviewRow> rows, String dataType) {
         if (token == null || rows == null || rows.isEmpty()) return;
-        rows = deduplicatePreviewRows(rows);
+        rows = deduplicatePreviewRows(rows, dataType);
         discoveryResultsCache.put(token, rows);
         log.info("Discovery results cached under token={}, rows={}", token, rows.size());
     }
@@ -1024,14 +1028,14 @@ public class MetadataImporterService {
      * Collapse multiple metadata ids for the same lot+wafer+filename to a single preview row.
      * Keeps the row with the latest end_time (ties broken by metadata id).
      */
-    List<DiscoveryPreviewRow> deduplicatePreviewRows(List<DiscoveryPreviewRow> rows) {
+    List<DiscoveryPreviewRow> deduplicatePreviewRows(List<DiscoveryPreviewRow> rows, String dataType) {
         if (rows == null || rows.size() <= 1) {
             return rows == null ? List.of() : rows;
         }
 
         Map<String, DiscoveryPreviewRow> best = new LinkedHashMap<>();
         for (DiscoveryPreviewRow row : rows) {
-            String key = previewDedupKey(row);
+            String key = previewDedupKey(row, dataType);
             DiscoveryPreviewRow existing = best.get(key);
             if (existing == null || isNewerPreviewRow(row, existing)) {
                 best.put(key, row);
@@ -1047,9 +1051,16 @@ public class MetadataImporterService {
         return new ArrayList<>(best.values());
     }
 
-    private String previewDedupKey(DiscoveryPreviewRow row) {
+    private String previewDedupKey(DiscoveryPreviewRow row, String dataType) {
         String lot = nullSafe(row.lot());
         String wafer = normalizePreviewWafer(row.wafer());
+        String normalizedDataType = dataType == null ? "" : dataType.trim().toUpperCase();
+        if ("PCM".equals(normalizedDataType)) {
+            return String.join("|",
+                    lot == null ? "" : lot,
+                    wafer == null ? "" : wafer,
+                    "");
+        }
         String filename = nullSafe(row.originalFileName());
         return String.join("|",
                 lot == null ? "" : lot,

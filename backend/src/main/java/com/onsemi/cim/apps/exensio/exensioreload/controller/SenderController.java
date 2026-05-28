@@ -613,7 +613,7 @@ public class SenderController {
             discoveryToken = java.util.UUID.randomUUID().toString();
             if (previewResponse.returned() == previewResponse.total()) {
                 // We already fetched all of them, cache synchronously and immediately
-                metadataImporterService.putCachedDiscoveryResults(discoveryToken, previewResponse.items());
+                metadataImporterService.putCachedDiscoveryResults(discoveryToken, previewResponse.items(), request.dataType());
             } else {
                 // We only fetched a page. Kick off a background thread to fetch the full set
                 // so when the user clicks 'Stage All' a few seconds later, it's ready.
@@ -631,7 +631,7 @@ public class SenderController {
                                 strictFilters, true // bypass cap
                         );
                         if (fullResponse != null && fullResponse.items() != null) {
-                            metadataImporterService.putCachedDiscoveryResults(asyncToken, fullResponse.items());
+                            metadataImporterService.putCachedDiscoveryResults(asyncToken, fullResponse.items(), request.dataType());
                         }
                     } catch (Exception ex) {
                         log.warn("Failed to cache full discovery results in background: {}", ex.getMessage());
