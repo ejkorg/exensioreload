@@ -1,0 +1,82 @@
+curl -sS -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
+-H "Content-Type: application/json" \
+-X POST "https://elastic-mosdata-prod-uswest2.es.privatelink.westus2.azure.elastic-cloud.com/logs*/_search" \
+-d '{
+  "size": 20,
+  "_source": [
+    "@timestamp",
+    "cpConfig",
+    "idData",
+    "idFile",
+    "message",
+    "log.level"
+  ],
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "wildcard": {
+            "cpConfig": {
+              "value": "*_sender*",
+              "case_insensitive": true
+            }
+          }
+        },
+        { "term": { "idData": "19558647" } },
+        { "term": { "idFile": "5044500" } },
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "2026-05-19T02:33:26.040Z"
+            }
+          }
+        }
+      ],
+      "should": [
+        {
+          "wildcard": {
+            "message": {
+              "value": "*output path*PRODUCTION*",
+              "case_insensitive": true,
+              "boost": 4
+            }
+          }
+        },
+        {
+          "wildcard": {
+            "message": {
+              "value": "*SANDBOX*",
+              "case_insensitive": true,
+              "boost": 3
+            }
+          }
+        },
+        
+        {
+          "bool": {
+            "must_not": [
+              { "term": { "log.level": "ERROR" } }
+            ],
+            "boost": 3
+          }
+        },
+        {
+          "term": {
+            "log.level": {
+              "value": "ERROR",
+              "boost": 1
+            }
+          }
+        }
+      ],
+      "minimum_should_match": 1
+    }
+  },
+  "sort": [
+    {
+      "@timestamp": {
+        "order": "desc"
+      }
+    }
+  ]
+}'

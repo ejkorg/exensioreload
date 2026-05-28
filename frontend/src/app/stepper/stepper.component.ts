@@ -106,6 +106,57 @@ export class StepperComponent implements OnInit, OnDestroy {
         return String(value || '').trim();
     }
 
+    private normalizePreviewWafer(wafer: string | null | undefined): string {
+        const trimmed = String(wafer ?? '').trim();
+        if (!trimmed || trimmed === '-') {
+            return '';
+        }
+        return trimmed;
+    }
+
+    private getPreviewDisplayKey(row: DiscoveryPreviewRow): string {
+        const lot = String(row.lot || '').trim();
+        const wafer = this.normalizePreviewWafer(row.wafer);
+        const filename = this.getPreviewFilename(row);
+        return `${lot}::${wafer}::${filename}`;
+    }
+
+    private isNewerPreviewRow(candidate: DiscoveryPreviewRow, existing: DiscoveryPreviewRow): boolean {
+        const candidateEnd = candidate.endTime ? String(candidate.endTime) : '';
+        const existingEnd = existing.endTime ? String(existing.endTime) : '';
+        if (candidateEnd && existingEnd) {
+            const cmp = candidateEnd.localeCompare(existingEnd);
+            if (cmp !== 0) {
+                return cmp > 0;
+            }
+        } else if (candidateEnd) {
+            return true;
+        } else if (existingEnd) {
+            return false;
+        }
+
+        const candidateId = String(candidate.metadataId || '');
+        const existingId = String(existing.metadataId || '');
+        return candidateId.localeCompare(existingId) > 0;
+    }
+
+    private deduplicatePreviewRows(rows: DiscoveryPreviewRow[]): DiscoveryPreviewRow[] {
+        if (!rows || rows.length <= 1) {
+            return rows || [];
+        }
+
+        const best = new Map<string, DiscoveryPreviewRow>();
+        for (const row of rows) {
+            const key = this.getPreviewDisplayKey(row);
+            const existing = best.get(key);
+            if (!existing || this.isNewerPreviewRow(row, existing)) {
+                best.set(key, row);
+            }
+        }
+
+        return best.size === rows.length ? rows : Array.from(best.values());
+    }
+
     private monitoringStopped = signal(false);
 
     monitorUiState = computed<'no-session' | 'connecting' | 'waiting' | 'live' | 'polling' | 'completed' | 'stopped'>(() => {
@@ -1514,16 +1565,20 @@ export class StepperComponent implements OnInit, OnDestroy {
             next: (res: any) => {
                 // Handle both old response format (items) and new format (rows)
                 const rawRows = res.rows || res.items || [];
-                const rows = (rawRows || []).map((row: any) => ({
+                const mappedRows = (rawRows || []).map((row: any) => ({
                     ...row,
                     filename: this.getPreviewFilename(row),
                     originalFileName: row?.originalFileName ?? row?.originalFilename ?? row?.original_file_name ?? row?.filename ?? ''
                 }));
+                const rows = this.deduplicatePreviewRows(mappedRows);
                 this.previewRows.set(rows);
-                this.previewTotal.set(res.total || 0);
+                const serverTotal = Number(res.total || 0);
+                const totalFound = mappedRows.length > rows.length
+                    ? Math.max(rows.length, serverTotal - (mappedRows.length - rows.length))
+                    : (serverTotal || rows.length);
+                this.previewTotal.set(totalFound);
                 // If all rows came back in one shot, store them for client-side pagination
                 // so subsequent page changes don't re-query the backend.
-                const totalFound = Number(res.total || 0);
                 if (rows.length >= totalFound && totalFound > 0) {
                     this.allPreviewRows.set(rows);
                 } else {
@@ -1621,14 +1676,18 @@ export class StepperComponent implements OnInit, OnDestroy {
         this.backend.getDiscoveryPreview(senderId, params).subscribe({
             next: (res: any) => {
                 const rawRows = res.rows || res.items || [];
-                const rows = (rawRows || []).map((row: any) => ({
+                const mappedRows = (rawRows || []).map((row: any) => ({
                     ...row,
                     filename: this.getPreviewFilename(row),
                     originalFileName: row?.originalFileName ?? row?.originalFilename ?? row?.original_file_name ?? row?.filename ?? ''
                 }));
+                const rows = this.deduplicatePreviewRows(mappedRows);
 
                 this.previewRows.set(rows);
-                this.previewTotal.set(res.total || 0);
+                const adjustedTotal = rows.length < mappedRows.length
+                    ? Math.max(0, Number(res.total || 0) - (mappedRows.length - rows.length))
+                    : Number(res.total || rows.length);
+                this.previewTotal.set(adjustedTotal);
                 this.pageIndex.set(page);
                 this.pageSize.set(size);
                 this.previewLoading.set(false);
@@ -1956,7 +2015,9 @@ export class StepperComponent implements OnInit, OnDestroy {
                     payloads: payloads,
                     triggerDispatch: true,
                     forceDuplicates: forceDuplicates,
-                    requestId: session.sessionId
+                    requestId: session.sessionId,
+                    dataType: this.selectedDataType() || null,
+                    testPhase: this.selectedTestPhase() || null
                 };
 
                 console.log('[STAGING] Staging payloads...', { count: payloads.length, sessionId: session.sessionId });
@@ -2136,7 +2197,9 @@ export class StepperComponent implements OnInit, OnDestroy {
                             payloads,
                             triggerDispatch: true,
                             forceDuplicates: forceDuplicates, // set by user's duplicate policy choice in confirm dialog
-                            requestId: session.sessionId
+                            requestId: session.sessionId,
+                            dataType: filters.dataType || null,
+                            testPhase: filters.testPhase || null
                         };
 
                         this.backend.stagePayloads(senderId, body).subscribe({
@@ -2534,7 +2597,9 @@ export class StepperComponent implements OnInit, OnDestroy {
             payloads: duplicatePayloads,
             triggerDispatch: true,
             forceDuplicates: true,
-            requestId: context.sessionId
+            requestId: context.sessionId,
+            dataType: context.filters?.dataType || this.selectedDataType() || null,
+            testPhase: context.filters?.testPhase || this.selectedTestPhase() || null
         };
 
         this.backend.stagePayloads(context.senderId, body).subscribe({

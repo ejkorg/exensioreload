@@ -72,16 +72,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         SqlWithParams sql;
         if (!hasOptionalFilters) {
             // Fast path: Use optimized query (indexed columns only)
-            sql = buildOptimizedMetadataQuery(
-                    "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
-                    start, end, dataType, lots, wafers);
+            sql = buildPreviewDedupedPageQuery(viewName, true, start, end, dataType, null, null, null, null, lots, wafers);
             if (log.isDebugEnabled()) {
                 log.debug("Using optimized query path for findMetadataPage (no optional filters)");
             }
         } else {
             // Full path: Apply all filters if optional filters are provided
-            sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
-                    start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+            sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
         }
 
         sql.append(" order by end_time desc");
@@ -216,8 +213,11 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     @Override
     public long countMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers) {
         String viewName = getPreviewViewName(dataType);
-        SqlWithParams sql = buildMetadataQuery("select count(1) from " + viewName,
-                start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+        boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
+                (testPhase != null && !testPhase.isBlank()) ||
+                (testerType != null && !testerType.isBlank()) ||
+                (location != null && !location.isBlank());
+        SqlWithParams sql = buildPreviewDedupedCountQuery(viewName, !hasOptionalFilters, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
         try (Connection c = externalDbConfig.getConnection(site, environment);
              PreparedStatement ps = prepareStatement(c, sql);
              ResultSet rs = ps.executeQuery()) {
@@ -1454,6 +1454,62 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         String originalFileName = null;
         try { originalFileName = rs.getString("original_file_name"); } catch (Exception ignore) {}
         return new MetadataRow(lot, metadataId, idData, endTime, wafer, originalFileName);
+    }
+
+    private static final String PREVIEW_ROW_NUMBER =
+            "ROW_NUMBER() OVER (PARTITION BY lot, NVL(TRIM(wafer), ' '), NVL(TRIM(original_file_name), ' ') "
+                    + "ORDER BY end_time DESC NULLS LAST, id DESC) rn";
+
+    /**
+     * Preview rows are shown one line per lot+wafer+filename. External views can return multiple
+     * metadata ids for the same file; keep only the newest row per business key.
+     */
+    private SqlWithParams buildPreviewDedupedPageQuery(String viewName,
+                                                       boolean optimized,
+                                                       LocalDateTime start,
+                                                       LocalDateTime end,
+                                                       String dataType,
+                                                       String dataTypeExt,
+                                                       String testPhase,
+                                                       String testerType,
+                                                       String location,
+                                                       java.util.List<String> lots,
+                                                       java.util.List<String> wafers) {
+        String innerSelect = "select lot, id as metadata_id, id_data, end_time, wafer, original_file_name, "
+                + PREVIEW_ROW_NUMBER + " from " + viewName;
+        SqlWithParams ranked = optimized
+                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers)
+                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+        ranked.append(") preview_ranked where rn = 1");
+
+        SqlWithParams outer = new SqlWithParams(
+                "select lot, metadata_id, id_data, end_time, wafer, original_file_name from (");
+        outer.sql.append(ranked.sql);
+        outer.params.addAll(ranked.params);
+        return outer;
+    }
+
+    private SqlWithParams buildPreviewDedupedCountQuery(String viewName,
+                                                        boolean optimized,
+                                                        LocalDateTime start,
+                                                        LocalDateTime end,
+                                                        String dataType,
+                                                        String dataTypeExt,
+                                                        String testPhase,
+                                                        String testerType,
+                                                        String location,
+                                                        java.util.List<String> lots,
+                                                        java.util.List<String> wafers) {
+        String innerSelect = "select distinct lot, wafer, original_file_name from " + viewName;
+        SqlWithParams inner = optimized
+                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers)
+                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+
+        SqlWithParams outer = new SqlWithParams("select count(*) from (");
+        outer.sql.append(inner.sql);
+        outer.params.addAll(inner.params);
+        outer.append(")");
+        return outer;
     }
 
     private static class SqlWithParams {

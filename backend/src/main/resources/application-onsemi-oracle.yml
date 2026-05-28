@@ -78,6 +78,17 @@ refdb:
   staging-table: SENDER_STAGE
   pool:
     max-size: 10
+  # Separate connection for pp_log queries — must point to PRODUCTION so that
+  # CP enrichment fallback reads real processing outcomes, not QA data.
+  pplog:
+    host: "exnprd-db.onsemi.com"
+    port: 1729
+    service: "EXNPRD.onsemi.com"
+    user: refdb
+    password: "88sgX%#$29-azx"
+    pool:
+      max-size: 3
+      min-idle: 1
     min-idle: 2
   dispatch:
     per-send: 100
@@ -149,4 +160,24 @@ app:
   discovery:
     debug-sql: false
 # Dev note: in the 'test' profile the app returns reset/verification tokens in HTTP responses
+
+# CP Elasticsearch settings for onsemi profile — tune in production via env vars or vault
+cp:
+  elasticsearch:
+    url: ${CP_ES_URL:}
+    api-key: ${CP_ES_API_KEY:}
+    username: ${CP_ES_USERNAME:}
+    password: ${CP_ES_PASSWORD:}
+    index-pattern: logs*dataport*
+    cp-config-filter: "*sender*"
+    # Optional: per-location field name overrides for the country term. Keys are site
+    # names from dbconnections.yml (upper-cased). Values are the ES field name that
+    # contains the country code for that site.
+    service-country-field-by-location:
+      EXTERNAL-PROD: service.country
+      EXTERNAL-QA: service_country
+      PHM-TARLAC-PROD: service.country
+    # Default country filter value can be set by env var CP_ES_SERVICE_COUNTRY_FILTER
+    service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
+    poll-interval-ms: 60000
 

@@ -32,8 +32,10 @@ import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -416,7 +418,7 @@ public class MetadataImporterService {
                     log.info("Preview query completed for site={} sender={} returnedRows={} total={} durationMs={}", site, senderId, rows != null ? rows.size() : 0, total, queryDurationMs);
                 }
 
-                List<DiscoveryPreviewRow> items = rows.stream()
+                List<DiscoveryPreviewRow> items = deduplicatePreviewRows(rows.stream()
                         .map(row -> new DiscoveryPreviewRow(
                                 nullSafe(row.getId()),
                                 nullSafe(row.getIdData()),
@@ -425,7 +427,17 @@ public class MetadataImporterService {
                                 nullSafe(row.getOriginalFileName()),
                                 toIsoString(row.getEndTime())
                         ))
-                        .toList();
+                        .toList());
+
+                if (!bypassCap) {
+                    if (items.size() == resolvedSize) {
+                        if (total <= resolvedSize) {
+                            total = items.size();
+                        }
+                    } else {
+                        total = items.size();
+                    }
+                }
 
                 if (log.isDebugEnabled()) {
                     log.debug("Preview result total={} page={} size={} returned={}", total, resolvedPage, resolvedSize, items.size());
@@ -567,6 +579,7 @@ public class MetadataImporterService {
      */
     public void putCachedDiscoveryResults(String token, List<DiscoveryPreviewRow> rows) {
         if (token == null || rows == null || rows.isEmpty()) return;
+        rows = deduplicatePreviewRows(rows);
         discoveryResultsCache.put(token, rows);
         log.info("Discovery results cached under token={}, rows={}", token, rows.size());
     }
@@ -1005,5 +1018,72 @@ public class MetadataImporterService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Collapse multiple metadata ids for the same lot+wafer+filename to a single preview row.
+     * Keeps the row with the latest end_time (ties broken by metadata id).
+     */
+    List<DiscoveryPreviewRow> deduplicatePreviewRows(List<DiscoveryPreviewRow> rows) {
+        if (rows == null || rows.size() <= 1) {
+            return rows == null ? List.of() : rows;
+        }
+
+        Map<String, DiscoveryPreviewRow> best = new LinkedHashMap<>();
+        for (DiscoveryPreviewRow row : rows) {
+            String key = previewDedupKey(row);
+            DiscoveryPreviewRow existing = best.get(key);
+            if (existing == null || isNewerPreviewRow(row, existing)) {
+                best.put(key, row);
+            }
+        }
+
+        if (best.size() == rows.size()) {
+            return rows;
+        }
+        if (log.isInfoEnabled()) {
+            log.info("Preview rows deduplicated from {} to {}", rows.size(), best.size());
+        }
+        return new ArrayList<>(best.values());
+    }
+
+    private String previewDedupKey(DiscoveryPreviewRow row) {
+        String lot = nullSafe(row.lot());
+        String wafer = normalizePreviewWafer(row.wafer());
+        String filename = nullSafe(row.originalFileName());
+        return String.join("|",
+                lot == null ? "" : lot,
+                wafer == null ? "" : wafer,
+                filename == null ? "" : filename);
+    }
+
+    private String normalizePreviewWafer(String wafer) {
+        String normalized = nullSafe(wafer);
+        if (normalized == null || "-".equals(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private boolean isNewerPreviewRow(DiscoveryPreviewRow candidate, DiscoveryPreviewRow existing) {
+        String candidateEnd = candidate.endTime();
+        String existingEnd = existing.endTime();
+        if (candidateEnd != null && existingEnd != null) {
+            int cmp = candidateEnd.compareTo(existingEnd);
+            if (cmp != 0) {
+                return cmp > 0;
+            }
+        } else if (candidateEnd != null) {
+            return true;
+        } else if (existingEnd != null) {
+            return false;
+        }
+
+        String candidateId = nullSafe(candidate.metadataId());
+        String existingId = nullSafe(existing.metadataId());
+        if (candidateId != null && existingId != null) {
+            return candidateId.compareTo(existingId) > 0;
+        }
+        return candidateId != null;
     }
 }

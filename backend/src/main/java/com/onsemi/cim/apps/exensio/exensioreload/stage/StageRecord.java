@@ -25,5 +25,7 @@ public record StageRecord(
         String cpOutputPath,
         String cpOutputTarget,
         Long exensioWaferKey,
-        Long exensioPgKey
+        Long exensioPgKey,
+        String dataType,
+        String testPhase
 ) {}

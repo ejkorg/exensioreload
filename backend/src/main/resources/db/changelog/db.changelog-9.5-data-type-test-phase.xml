@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add data_type column to SENDER_STAGE for pgc_key derivation -->
+    <changeSet id="9.5-add-data-type" author="kiro">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="data_type"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="data_type" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Add test_phase column to SENDER_STAGE for PPID suffix validation -->
+    <changeSet id="9.5-add-test-phase" author="kiro">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="test_phase"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="test_phase" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

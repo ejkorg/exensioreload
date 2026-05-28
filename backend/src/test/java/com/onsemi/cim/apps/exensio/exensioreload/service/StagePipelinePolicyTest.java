@@ -44,7 +44,7 @@ class StagePipelinePolicyTest {
         if (es) {
             esProps.setUrl("https://es.example:9200");
         }
-        ExensioProperties exProps = new ExensioProperties();
+        ExensioProperties exProps = new ExensioProperties(esProps);
         exProps.setEnabled(exensio);
         if (exensio) {
             exProps.setQaBaseUrl("https://exensio.example");

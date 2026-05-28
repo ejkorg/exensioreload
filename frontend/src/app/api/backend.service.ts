@@ -132,6 +132,8 @@ export interface StagePayloadRequestBody {
     triggerDispatch: boolean;
     forceDuplicates?: boolean;
     requestId?: string | null;
+    dataType?: string | null;
+    testPhase?: string | null;
 }
 
 export interface StageAllRequestBody {

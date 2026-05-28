@@ -8,6 +8,8 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -44,8 +46,8 @@ public class BatchLookupResult {
     /**
      * Represents a single lot result with its wafers.
      */
-    public record LotResult(long lotKey, List<WaferResult> wafers) {
-        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid) {}
+    public record LotResult(String lotId, long lotKey, List<WaferResult> wafers) {
+        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid, Instant endTime) {}
     }
 
     /**
@@ -124,12 +126,19 @@ public class BatchLookupResult {
             return updates;
         }
 
-        // Build a lookup map: waferId → WaferResult (wafer IDs are globally unique in the response)
-        Map<String, LotResult.WaferResult> waferLookup = new HashMap<>();
+        // Build lookups:
+        // - waferId -> wafer entries (can have multiple entries per wafer_id with different pg/ppid/end_time)
+        // - lotId -> all wafer entries under that lot
+        Map<String, List<LotResult.WaferResult>> waferLookup = new HashMap<>();
+        Map<String, List<LotResult.WaferResult>> lotLookup = new HashMap<>();
         for (LotResult lot : lots) {
+            String lotKey = lot.lotId() == null ? null : lot.lotId().toUpperCase();
+            if (lotKey != null) {
+                lotLookup.computeIfAbsent(lotKey, k -> new ArrayList<>()).addAll(lot.wafers());
+            }
             for (LotResult.WaferResult wafer : lot.wafers()) {
                 if (wafer.waferId() != null) {
-                    waferLookup.put(wafer.waferId().toUpperCase(), wafer);
+                    waferLookup.computeIfAbsent(wafer.waferId().toUpperCase(), k -> new ArrayList<>()).add(wafer);
                 }
             }
         }
@@ -137,8 +146,18 @@ public class BatchLookupResult {
         // Map each original record to an update
         List<BatchResult.RecordUpdate> updates = new ArrayList<>();
         for (StageRecord record : originalRecords) {
-            String waferKey = record.wafer() != null ? record.wafer().toUpperCase() : null;
-            LotResult.WaferResult waferResult = waferKey != null ? waferLookup.get(waferKey) : null;
+            String recordWafer = record.wafer() != null ? record.wafer().toUpperCase() : null;
+            String recordLot = record.lot() != null ? record.lot().toUpperCase() : null;
+
+            List<LotResult.WaferResult> candidates = null;
+            if (recordWafer != null && !recordWafer.isBlank()) {
+                candidates = waferLookup.get(recordWafer);
+            }
+            if ((candidates == null || candidates.isEmpty()) && recordLot != null && !recordLot.isBlank()) {
+                candidates = lotLookup.get(recordLot);
+            }
+
+            LotResult.WaferResult waferResult = selectBestCandidate(candidates, record.endTime());
 
             if (waferResult != null) {
                 // Wafer found - mark as DONE
@@ -162,6 +181,27 @@ public class BatchLookupResult {
         }
 
         return updates;
+    }
+
+    private LotResult.WaferResult selectBestCandidate(List<LotResult.WaferResult> candidates, Instant targetEndTime) {
+        if (candidates == null || candidates.isEmpty()) return null;
+        if (targetEndTime == null) return candidates.get(0);
+
+        LotResult.WaferResult best = null;
+        long bestDelta = Long.MAX_VALUE;
+        for (LotResult.WaferResult c : candidates) {
+            if (c == null) continue;
+            if (c.endTime() == null) {
+                if (best == null) best = c;
+                continue;
+            }
+            long delta = Math.abs(Duration.between(targetEndTime, c.endTime()).getSeconds());
+            if (best == null || delta < bestDelta) {
+                best = c;
+                bestDelta = delta;
+            }
+        }
+        return best;
     }
 
     /**
@@ -199,6 +239,7 @@ public class BatchLookupResult {
 
             List<LotResult> lotResults = new ArrayList<>();
             for (JsonNode lotNode : lotsNode) {
+                String lotId = lotNode.path("lot_id").asText(null);
                 long lotKey = lotNode.path("lot_key").asLong(0);
                 JsonNode wafersNode = lotNode.path("wafers");
 
@@ -213,13 +254,14 @@ public class BatchLookupResult {
                     long waferKey = waferNode.path("wafer_key").asLong(0);
                     long pgKey = waferNode.path("pg_key").asLong(0);
                     String ppid = waferNode.path("ppid").asText(null);
+                    Instant endTime = parseInstantSafe(waferNode.path("end_time").asText(null));
 
                     if (waferId != null && waferKey > 0) {
-                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid));
+                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime));
                     }
                 }
 
-                lotResults.add(new LotResult(lotKey, waferResults));
+                lotResults.add(new LotResult(lotId, lotKey, waferResults));
             }
 
             return new BatchLookupResult(lotResults);
@@ -239,7 +281,8 @@ public class BatchLookupResult {
      */
     public static ObjectNode buildRequestBody(List<StageRecord> records, ObjectMapper objectMapper) {
         ObjectNode body = objectMapper.createObjectNode();
-        body.put("pgc_key", 1);
+        boolean allWafersBlank = records.stream().allMatch(r -> r.wafer() == null || r.wafer().isBlank());
+        body.put("pgc_key", allWafersBlank ? 2 : 1);
 
         // Extract unique lot IDs
         ArrayNode lotIds = body.putArray("lot_ids");
@@ -252,11 +295,20 @@ public class BatchLookupResult {
         // Extract unique wafer IDs
         ArrayNode waferIds = body.putArray("wafer_ids");
         for (StageRecord record : records) {
-            if (!waferIds.toString().contains(record.wafer())) {
+            if (record.wafer() != null && !record.wafer().isBlank() && !waferIds.toString().contains(record.wafer())) {
                 waferIds.add(record.wafer());
             }
         }
 
         return body;
+    }
+
+    private static Instant parseInstantSafe(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.parse(value);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

@@ -3,6 +3,10 @@ package com.onsemi.cim.apps.exensio.exensioreload.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
 /**
  * Configuration properties for the CP Elasticsearch integration.
  * Bound from the {@code cp.elasticsearch} prefix in application.yml.
@@ -28,8 +32,20 @@ public class CpElasticsearchProperties {
     /** ES index pattern to query for CP logs. Default: logs*dataport* */
     private String indexPattern = "logs*dataport*";
 
-    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *sender* */
-    private String cpConfigFilter = "*sender*";
+    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *_sender* */
+    private String cpConfigFilter = "*_sender*";
+
+    /** Optional service.country filter to isolate a specific external log source. */
+    private String serviceCountryFilter = "";
+
+    /** Whether to require lot (mLot) matching in ES queries. Default: false (rely on idData only). */
+    private boolean requireLot = false;
+
+    /** Optional per-location mapping for the service-country field name in ES documents.
+     * Key: upper-cased site key as found in dbconnections.yml (e.g. EXTERNAL-PROD or EXTERNAL-QA)
+     * Value: the ES field name to use for the country term (e.g. service.country, service_country)
+     */
+    private Map<String, String> serviceCountryFieldByLocation = new HashMap<>();
 
     /** Polling interval in milliseconds. Default: 60 000 ms (1 minute). */
     private long pollIntervalMs = 60_000L;
@@ -55,11 +71,42 @@ public class CpElasticsearchProperties {
     public String getCpConfigFilter() { return cpConfigFilter; }
     public void setCpConfigFilter(String cpConfigFilter) { this.cpConfigFilter = cpConfigFilter; }
 
+    public String getServiceCountryFilter() { return serviceCountryFilter; }
+    public void setServiceCountryFilter(String serviceCountryFilter) { this.serviceCountryFilter = serviceCountryFilter; }
+
+    public Map<String, String> getServiceCountryFieldByLocation() { return serviceCountryFieldByLocation; }
+    public void setServiceCountryFieldByLocation(Map<String, String> serviceCountryFieldByLocation) {
+        this.serviceCountryFieldByLocation = serviceCountryFieldByLocation == null ? new HashMap<>() : serviceCountryFieldByLocation;
+    }
+
+    /**
+     * Resolve the ES field name to use for the service-country term for a given site.
+     * Falls back to "service.country" when no mapping is found.
+     */
+    public String resolveServiceCountryField(String site) {
+        if (serviceCountryFieldByLocation == null || serviceCountryFieldByLocation.isEmpty()) {
+            return "service.country";
+        }
+        if (site == null || site.isBlank()) return "service.country";
+        String key = site.trim().toUpperCase(Locale.ROOT);
+        String v = serviceCountryFieldByLocation.get(key);
+        if (v != null && !v.isBlank()) return v.trim();
+        // try common variants
+        v = serviceCountryFieldByLocation.get(key + "-PROD");
+        if (v != null && !v.isBlank()) return v.trim();
+        v = serviceCountryFieldByLocation.get(key + "-QA");
+        if (v != null && !v.isBlank()) return v.trim();
+        return "service.country";
+    }
+
     public long getPollIntervalMs() { return pollIntervalMs; }
     public void setPollIntervalMs(long pollIntervalMs) { this.pollIntervalMs = pollIntervalMs; }
 
     public int getEnrichmentTimeoutMinutes() { return enrichmentTimeoutMinutes; }
     public void setEnrichmentTimeoutMinutes(int enrichmentTimeoutMinutes) { this.enrichmentTimeoutMinutes = enrichmentTimeoutMinutes; }
+
+    public boolean isRequireLot() { return requireLot; }
+    public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }
 
     /** Returns true if Elasticsearch is configured (url is non-blank). */
     public boolean isConfigured() {

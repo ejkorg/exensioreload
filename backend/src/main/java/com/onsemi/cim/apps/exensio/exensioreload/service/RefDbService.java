@@ -1,5 +1,6 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
+import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
@@ -47,12 +48,16 @@ public class RefDbService {
 
     private final RefDbProperties properties;
     private final HikariDataSource dataSource;
+    /** Separate datasource for pp_log queries — points to PRODUCTION when configured. */
+    private final HikariDataSource ppLogDataSource;
     private final boolean isOracle;
     private final com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService;
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
-    public RefDbService(RefDbProperties properties, com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService) {
+    public RefDbService(RefDbProperties properties,
+                        PpLogDbProperties ppLogDbProperties,
+                        com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService) {
         this.properties = properties;
         this.monitorService = monitorService;
         this.isOracle = properties.getHost() != null && !properties.getHost().isBlank();
@@ -62,6 +67,11 @@ public class RefDbService {
             config.setUsername(properties.getUser());
             config.setPassword(properties.getPassword());
             config.setDriverClassName("oracle.jdbc.OracleDriver");
+            // Tell the Oracle JDBC driver the DB server's local timezone so that
+            // TIMESTAMP (without time zone) columns are interpreted correctly.
+            // The DB server runs in US Mountain time (UTC-7 / UTC-6 DST).
+            config.addDataSourceProperty("oracle.jdbc.timezoneAsRegion", "false");
+            config.setConnectionInitSql("ALTER SESSION SET TIME_ZONE = 'America/Phoenix'");
         } else {
             // Test environment fallback: use an embedded H2 datasource so tests don't try to contact Oracle
             config.setJdbcUrl("jdbc:h2:mem:refdb;DB_CLOSE_DELAY=-1");
@@ -73,6 +83,25 @@ public class RefDbService {
         config.setMinimumIdle(properties.getPool().getMinIdle());
         config.setPoolName("refdb-staging");
         this.dataSource = new HikariDataSource(config);
+
+        // Build a separate datasource for pp_log queries (PRODUCTION) if configured.
+        // Falls back to the main dataSource when refdb.pplog.host is not set.
+        if (ppLogDbProperties != null && ppLogDbProperties.isConfigured()) {
+            HikariConfig ppConfig = new HikariConfig();
+            ppConfig.setJdbcUrl(ppLogDbProperties.buildJdbcUrl());
+            ppConfig.setUsername(ppLogDbProperties.getUser());
+            ppConfig.setPassword(ppLogDbProperties.getPassword());
+            ppConfig.setDriverClassName("oracle.jdbc.OracleDriver");
+            ppConfig.setMaximumPoolSize(ppLogDbProperties.getPool().getMaxSize());
+            ppConfig.setMinimumIdle(ppLogDbProperties.getPool().getMinIdle());
+            ppConfig.setPoolName("refdb-pplog");
+            this.ppLogDataSource = new HikariDataSource(ppConfig);
+            log.info("pp_log datasource configured separately: {}", ppLogDbProperties.buildJdbcUrl());
+        } else {
+            // No separate pp_log config — reuse the main staging datasource
+            this.ppLogDataSource = this.dataSource;
+            log.info("pp_log datasource not separately configured — using main refdb datasource");
+        }
     }
 
     @PostConstruct
@@ -88,6 +117,9 @@ public class RefDbService {
 
     @PreDestroy
     public void shutdown() {
+        if (ppLogDataSource != null && ppLogDataSource != dataSource) {
+            ppLogDataSource.close();
+        }
         if (dataSource != null) {
             dataSource.close();
         }
@@ -140,8 +172,8 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NEW', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NEW', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -174,6 +206,8 @@ public class RefDbService {
                 ps.setString(10, normalizedUser);
                 ps.setString(11, normalizedUser);
                 ps.setString(12, requestId);
+                ps.setString(13, candidate.dataType());
+                ps.setString(14, candidate.testPhase());
                 log.info("About to add batch for metadataId={}", candidate.metadataId());
                 ps.addBatch();
                 log.info("Batch added successfully");
@@ -295,8 +329,8 @@ public class RefDbService {
         int requeuedCount = 0;
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NEW', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NEW', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (PayloadCandidate candidate : batch) {
@@ -316,6 +350,8 @@ public class RefDbService {
                 ps.setString(10, user);
                 ps.setString(11, user);
                 ps.setString(12, requestId);
+                ps.setString(13, candidate.dataType());
+                ps.setString(14, candidate.testPhase());
                 try {
                     ps.executeUpdate();
                     freshInserted++;
@@ -403,7 +439,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatch(int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status = 'NEW' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -922,7 +958,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSite(String site, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status = 'NEW' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -942,7 +978,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSender(String site, int senderId, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status = 'NEW' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -966,7 +1002,7 @@ public class RefDbService {
             limit = 200;
         }
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') AND processed_at IS NULL ORDER BY updated_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1020,7 +1056,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
                 .append(coalesce("error_message", "''"))
-                .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target FROM ")
+                .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase FROM ")
                 .append(table)
                 .append(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
@@ -1759,7 +1795,9 @@ public class RefDbService {
                 safeString(rs, "cp_output_path"),
                 safeString(rs, "cp_output_target"),
                 safeLong(rs, "exensio_wafer_key"),
-                safeLong(rs, "exensio_pg_key")
+                safeLong(rs, "exensio_pg_key"),
+                safeString(rs, "data_type"),
+                safeString(rs, "test_phase")
         );
     }
 
@@ -2639,8 +2677,11 @@ public class RefDbService {
         if (timestamp == null) {
             return null;
         }
-        // Staging/metadata timestamps are stored as UTC wall-clock (no TZ column).
-        return timestamp.toLocalDateTime().toInstant(java.time.ZoneOffset.UTC);
+        // Oracle stores TIMESTAMP columns without timezone info using the DB server's local time.
+        // Use Timestamp.toInstant() which correctly uses the millisecond epoch value from the JDBC driver,
+        // provided the JDBC connection timezone matches the DB server timezone (configured via
+        // refdb.connection-timezone in application.yml, defaulting to UTC for backward compatibility).
+        return timestamp.toInstant();
     }
 
     private java.sql.Timestamp safeTimestamp(ResultSet rs, String column) {
@@ -3372,6 +3413,72 @@ public class RefDbService {
         }
 
         return successCount;
+    }
+
+    // -------------------------------------------------------------------------
+    // pp_log fallback queries (Requirements 6.1, 6.2)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Queries {@code pp_log} for a successful CP run ({@code process_code = 0}).
+     *
+     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
+     * match on both {@code extension} and {@code file_name}.
+     *
+     * @param lot    the lot identifier from {@link StageRecord#lot()}
+     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
+     * @return the {@code output_directory} of the first matching row, or {@code null} if none found
+     */
+    public String queryPpLogSuccess(String lot, String idFile) {
+        String sql = "SELECT output_directory FROM pp_log " +
+                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code = 0 " +
+                "FETCH FIRST 1 ROWS ONLY";
+        String likeParam = "%" + idFile + "%";
+        try (Connection connection = ppLogDataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, lot);
+            ps.setString(2, likeParam);
+            ps.setString(3, likeParam);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("output_directory");
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("pp_log success query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Queries {@code pp_log} for a failed CP run ({@code process_code != 0}).
+     *
+     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
+     * match on both {@code extension} and {@code file_name}.
+     *
+     * @param lot    the lot identifier from {@link StageRecord#lot()}
+     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
+     * @return the {@code log_message} of the first matching row, or {@code null} if none found
+     */
+    public String queryPpLogError(String lot, String idFile) {
+        String sql = "SELECT log_message FROM pp_log " +
+                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code != 0 " +
+                "FETCH FIRST 1 ROWS ONLY";
+        String likeParam = "%" + idFile + "%";
+        try (Connection connection = ppLogDataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, lot);
+            ps.setString(2, likeParam);
+            ps.setString(3, likeParam);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("log_message");
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("pp_log error query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+        }
+        return null;
     }
 
     /**

@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "exensio")
 public class ExensioProperties {
 
+    private final CpElasticsearchProperties esProps;
+
     /** Master switch. Set EXENSIO_ENABLED=true to activate the monitor. */
     private boolean enabled = false;
 
@@ -34,8 +36,12 @@ public class ExensioProperties {
      */
     private String dbname = "";
 
-    /** dbschema passed to the login body. */
-    private String dbschema = "PRODUCTION";
+    /**
+     * dbschema passed to the login body.
+     * Always derived automatically based on configuration and environment.
+     * (Kept for backward compatibility but not used; automatic detection always applies.)
+     */
+    private String dbschema = "";
 
     /** How often ExensioLoadMonitor polls EXENSIO_LOADING records (ms). */
     private long pollIntervalMs = 60_000L;
@@ -87,6 +93,12 @@ public class ExensioProperties {
      */
     private long circuitBreakerResetMs = 60_000L;
 
+    // --- constructor ---
+
+    public ExensioProperties(CpElasticsearchProperties esProps) {
+        this.esProps = esProps;
+    }
+
     // --- validation ---
 
     @jakarta.annotation.PostConstruct
@@ -125,6 +137,44 @@ public class ExensioProperties {
         return (dbname != null && !dbname.isBlank()) ? dbname : env;
     }
 
+    /** Returns the primary schema to use, always derived from configuration (no manual override). */
+    public String resolvedDbschema() {
+        boolean esConfigured = esProps.isConfigured();
+        boolean exensioConfigured = isConfigured();
+        
+        // Case 1: Both ES and Exensio configured → use environment-based detection
+        if (esConfigured && exensioConfigured) {
+            if ("PROD".equalsIgnoreCase(env) || "PRD".equalsIgnoreCase(env)) {
+                return "PRODUCTION";
+            } else if ("SBX".equalsIgnoreCase(env) || "SANDBOX".equalsIgnoreCase(env)) {
+                return "SANDBOX";
+            }
+            return "PRODUCTION";
+        }
+        
+        // Case 2: Only Exensio configured or neither configured → default to PRODUCTION (will fallback to SANDBOX if needed)
+        return "PRODUCTION";
+    }
+
+    /** Returns the fallback schema to try if primary schema fails. Always provided except when both ES and Exensio use environment-based detection. */
+    public String resolvedDbschemaFallback() {
+        boolean esConfigured = esProps.isConfigured();
+        boolean exensioConfigured = isConfigured();
+        
+        // No fallback when Exensio is not configured
+        if (!exensioConfigured) {
+            return null;
+        }
+        
+        // No fallback when both ES and Exensio are configured (environment determines single schema)
+        if (esConfigured && exensioConfigured) {
+            return null;
+        }
+        
+        // In all other cases where Exensio is configured, provide SANDBOX fallback
+        return "SANDBOX";
+    }
+
     // --- getters / setters ---
 
     public boolean isEnabled() { return enabled; }
@@ -149,7 +199,10 @@ public class ExensioProperties {
     public void setDbname(String dbname) { this.dbname = dbname == null ? "" : dbname; }
 
     public String getDbschema() { return dbschema; }
-    public void setDbschema(String dbschema) { this.dbschema = dbschema == null ? "PRODUCTION" : dbschema; }
+    public void setDbschema(String dbschema) { 
+        // Ignored - schema is always auto-detected. Kept for backward compatibility with YAML configs.
+        this.dbschema = dbschema == null ? "" : dbschema; 
+    }
 
     public long getPollIntervalMs() { return pollIntervalMs; }
     public void setPollIntervalMs(long pollIntervalMs) { this.pollIntervalMs = pollIntervalMs; }
