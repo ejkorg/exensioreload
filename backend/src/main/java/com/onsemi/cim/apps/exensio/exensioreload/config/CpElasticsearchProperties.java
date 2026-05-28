@@ -53,8 +53,14 @@ public class CpElasticsearchProperties {
     /** Timeout in minutes before a record stuck in ENRICHMENT is marked FAILED. Default: 30 minutes. */
     private int enrichmentTimeoutMinutes = 30;
 
+    /** Whether to log Elasticsearch request payloads (query JSON). */
+    private boolean logRequestPayloads = false;
+
     public String getUrl() { return url; }
     public void setUrl(String url) { this.url = url == null ? "" : url; }
+
+    public boolean isLogRequestPayloads() { return logRequestPayloads; }
+    public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
 
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey == null ? "" : apiKey; }

@@ -127,6 +127,9 @@ public class ElasticsearchLogService {
      * Execute the HTTP request and parse the response into a {@link CpLogResult}.
      */
     private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot) throws Exception {
+        if (props.isLogRequestPayloads()) {
+            log.info("ES query payload (dataId={}, idFile={}): url={}, body={}", dataId, idFile, url, queryJson);
+        }
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))

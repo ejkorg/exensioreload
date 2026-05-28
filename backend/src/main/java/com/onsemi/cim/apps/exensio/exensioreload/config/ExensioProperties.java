@@ -46,6 +46,9 @@ public class ExensioProperties {
     /** How often ExensioLoadMonitor polls EXENSIO_LOADING records (ms). */
     private long pollIntervalMs = 60_000L;
 
+    /** Whether to log Exensio API request URLs and payloads. */
+    private boolean logRequestPayloads = false;
+
     /**
      * Minutes a record may stay in EXENSIO_LOADING before being marked FAILED.
      * Starts counting from when the record entered EXENSIO_LOADING (updatedAt).
@@ -206,6 +209,9 @@ public class ExensioProperties {
 
     public long getPollIntervalMs() { return pollIntervalMs; }
     public void setPollIntervalMs(long pollIntervalMs) { this.pollIntervalMs = pollIntervalMs; }
+
+    public boolean isLogRequestPayloads() { return logRequestPayloads; }
+    public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
 
     public int getTimeoutMinutes() { return timeoutMinutes; }
     public void setTimeoutMinutes(int timeoutMinutes) { this.timeoutMinutes = timeoutMinutes; }

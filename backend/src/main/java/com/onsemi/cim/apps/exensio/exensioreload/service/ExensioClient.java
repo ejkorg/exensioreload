@@ -134,6 +134,10 @@ public class ExensioClient {
                 waferIds.add(wafer);
             }
 
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio lot-wafer-lookup request: url={}, body={}", url, body.toString());
+            }
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
@@ -255,6 +259,10 @@ public class ExensioClient {
                 if (wafer != null && !wafer.isBlank()) {
                     waferIds.add(wafer);
                 }
+            }
+
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio batch lot-wafer-lookup request: url={}, body={}", url, body.toString());
             }
 
             HttpRequest request = HttpRequest.newBuilder()
