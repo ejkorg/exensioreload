@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, signal, WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, Output, signal, WritableSignal } from '@angular/core';
 
 export interface GlassStep {
   label: string;
@@ -22,14 +22,14 @@ export interface GlassStep {
           <ng-container *ngFor="let step of steps; let i = index">
             <div class="step-indicator"
                  [class.active]="i === _selectedIndex()"
-                 [class.completed]="step.completed && i !== _selectedIndex()"
+                 [class.completed]="step.completed"
                  [class.clickable]="step.editable || step.completed"
                  (click)="onStepClick(i)">
               <span class="step-num">
-                <svg *ngIf="step.completed && i !== _selectedIndex()" viewBox="0 0 24 24" width="14" height="14">
+                <svg *ngIf="step.completed" viewBox="0 0 24 24" width="14" height="14">
                   <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
                 </svg>
-                <span *ngIf="!step.completed || i === _selectedIndex()">{{ i + 1 }}</span>
+                <span *ngIf="!step.completed">{{ i + 1 }}</span>
               </span>
               <span class="step-label">{{ step.label }}</span>
             </div>
