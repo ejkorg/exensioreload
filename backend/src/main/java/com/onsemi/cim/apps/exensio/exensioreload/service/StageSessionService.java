@@ -1153,7 +1153,7 @@ public class StageSessionService {
         if (ts == null) {
             return null;
         }
-        return ts.toLocalDateTime().toInstant(ZoneOffset.UTC).toString();
+        return ts.toInstant().toString();
     }
 
     /** Normalize JDBC day bucket values to YYYY-MM-DD (UTC wall-clock date). */
