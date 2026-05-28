@@ -1,0 +1,72 @@
+{
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Backend: clean install",
+        "type": "shell",
+        "command": "mvn clean install -DskipTests",
+        "options": { "cwd": "${workspaceFolder}/backend" },
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "Backend: spring-boot:run",
+        "type": "shell",
+        "command": "mvn spring-boot:run -Dspring-boot.run.arguments=\"--spring.profiles.active=onsemi-oracle\"",
+        "options": { "cwd": "${workspaceFolder}/backend" },
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "java",
+          "pattern": { "regexp": "^.*$", "file": 1, "location": 2, "message": 3 }
+        }
+      },
+      {
+        "label": "Frontend: npm install",
+        "type": "shell",
+        "command": "npm install",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "Frontend: ng serve",
+        "type": "shell",
+        "command": "npm start",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "typescript",
+          "pattern": {
+            "regexp": "^$",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          }
+        }
+      },
+      {
+        "label": "Frontend: build prod",
+        "type": "shell",
+        "command": "npm run build:prod:deploy",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "Frontend: type check",
+        "type": "shell",
+        "command": "npx tsc --noEmit -p tsconfig.app.json",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "group": "test",
+        "problemMatcher": ["$tsc"]
+      },
+      {
+        "label": "Full Build",
+        "dependsOn": ["Backend: clean install", "Frontend: build prod"],
+        "dependsOrder": "sequence",
+        "group": "build"
+      }
+    ]
+  }
+}

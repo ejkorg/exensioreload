@@ -1145,6 +1145,52 @@
     .info-text p strong { color: #7f1d1d; }
 }
 
+// PCM full-reload warning banner
+.pcm-full-reload-banner {
+    @extend .info-banner-base;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, var(--bg-card) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    margin-bottom: 0.75rem;
+
+    .pcm-warning-icon { color: #f59e0b; flex-shrink: 0; margin-top: 0.2rem; }
+    .info-text h3 { color: #fbbf24; }
+    .info-text p { color: var(--text-muted); }
+    .info-text p strong { color: #fbbf24; }
+    .info-text p em { color: #fcd34d; }
+
+    .pcm-file-breakdown {
+        margin: 0.5rem 0 0 0;
+        padding: 0;
+        list-style: none;
+
+        li {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            padding: 0.2rem 0;
+            line-height: 1.3;
+
+            strong { color: #fbbf24; font-weight: 600; }
+        }
+
+        .pcm-more-files {
+            font-style: italic;
+            opacity: 0.7;
+        }
+    }
+}
+
+:host-context(body.light-theme) .pcm-full-reload-banner {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(255,255,255,0.9) 100%);
+    border-color: rgba(217, 119, 6, 0.3);
+
+    .pcm-warning-icon { color: #d97706; }
+    .info-text h3 { color: #b45309; }
+    .info-text p strong { color: #b45309; }
+    .info-text p em { color: #d97706; }
+
+    .pcm-file-breakdown li strong { color: #b45309; }
+}
+
 .staging-loader {
     display: flex;
     align-items: center;

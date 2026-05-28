@@ -623,6 +623,35 @@
                     </div>
                 </section>
 
+                <!-- PCM partial-wafer truth banner: warn user that entire file (all wafers) is reloaded -->
+                <section class="pcm-full-reload-banner glass-panel" *ngIf="pcmFileFullReloadWarning() as warn">
+                    <div class="info-banner-content">
+                        <app-glass-icon name="warning" class="info-icon pcm-warning-icon"></app-glass-icon>
+                        <div class="info-text">
+                            <h3>PCM Data Type — Full File Reload</h3>
+                            <p>
+                                PCM data files contain <strong>all wafers</strong> for a lot in a single file.
+                                You selected <strong>{{ warn.files.reduce((sum, f) => sum + f.selected, 0) }} wafers</strong>
+                                across <strong>{{ warn.fileCount }} PCM file{{ warn.fileCount === 1 ? '' : 's' }}</strong>,
+                                but the reload processes the <em>entire file</em> —
+                                <strong>all {{ warn.files.reduce((sum, f) => sum + f.total, 0) }} wafers</strong>
+                                in those files will be reloaded, including
+                                <strong>{{ warn.extraWafers }} unselected wafer{{ warn.extraWafers === 1 ? '' : 's' }}</strong>.
+                            </p>
+                            <ul class="pcm-file-breakdown">
+                                <li *ngFor="let f of warn.files.slice(0, 5)">
+                                    Lot <strong>{{ f.lot }}</strong> —
+                                    file {{ f.filename }}:
+                                    <strong>{{ f.total }} wafers</strong> in file, you selected {{ f.selected }}
+                                </li>
+                                <li *ngIf="warn.files.length > 5" class="pcm-more-files">
+                                    …and {{ warn.files.length - 5 }} more PCM file{{ warn.files.length - 5 === 1 ? '' : 's' }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
                 <div class="monitoring-cards-stack" *ngIf="hasMonitoringData()">
                     <!-- Stage All Info Banner -->
                     <section class="stage-all-info-banner glass-panel" *ngIf="stageAllMode()">

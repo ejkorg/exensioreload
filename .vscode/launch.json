@@ -1,0 +1,64 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // ── Spring Boot Backend ──
+    {
+      "type": "java",
+      "name": "Backend (onsemi-oracle)",
+      "request": "launch",
+      "mainClass": "com.onsemi.cim.apps.exensio.exensioreload.ExensioreloadApplication",
+      "projectName": "exensio-reload",
+      "args": "--spring.profiles.active=onsemi-oracle",
+      "vmArgs": "-Dserver.port=8004"
+    },
+    {
+      "type": "java",
+      "name": "Backend (localhost)",
+      "request": "launch",
+      "mainClass": "com.onsemi.cim.apps.exensio.exensioreload.ExensioreloadApplication",
+      "projectName": "exensio-reload",
+      "args": "--spring.profiles.active=localhost",
+      "vmArgs": "-Dserver.port=8004"
+    },
+    {
+      "type": "java",
+      "name": "Backend (onsemi-ldap)",
+      "request": "launch",
+      "mainClass": "com.onsemi.cim.apps.exensio.exensioreload.ExensioreloadApplication",
+      "projectName": "exensio-reload",
+      "args": "--spring.profiles.active=onsemi-ldap",
+      "vmArgs": "-Dserver.port=8004"
+    },
+
+    // ── Angular Frontend ──
+    {
+      "type": "node",
+      "name": "Frontend (ng serve)",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "console": "integratedTerminal"
+    },
+
+    // ── Full Stack (backend + frontend) ──
+    {
+      "type": "node",
+      "name": "Frontend (watch)",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "watch"],
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "node",
+      "name": "Frontend Build (prod)",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build:prod:deploy"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
