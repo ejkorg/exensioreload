@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    // ── Languages ──
+    "vscjava.vscode-java-pack",
+    "vmware.vscode-boot-dev-pack",
+    "angular.ng-template",
+    "gabrielbb.vscode-lombok",
+
+    // ── Formatting / Linting ──
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+
+    // ── Utilities ──
+    "eamodio.gitlens",
+    "gruntfuggly.todo-tree",
+    "ms-azuretools.vscode-docker",
+    "redhat.vscode-yaml",
+    "mechatroner.rainbow-csv"
+  ],
+  "unwantedRecommendations": []
+}

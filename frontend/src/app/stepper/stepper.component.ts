@@ -388,6 +388,68 @@ export class StepperComponent implements OnInit, OnDestroy {
     showWaferColumn = computed(() =>
         this.filteredPreviewRows().some((r: DiscoveryPreviewRow) => r.wafer != null && r.wafer.trim() !== '' && r.wafer !== '-')
     );
+
+    /**
+     * PCM data type files contain ALL wafers for a lot in a single file.
+     * When the user selects individual wafers (e.g. 1-4 out of 1-10), the
+     * reality is the entire file gets reloaded — every wafer in that lot.
+     * This computed signal detects that mismatch and drives a truth banner.
+     */
+    pcmFileFullReloadWarning = computed(() => {
+        const dataType = (this.selectedDataType() || '').trim().toUpperCase();
+        if (dataType !== 'PCM') return null;
+
+        // Only relevant for staged-selected (not stage-all or no staging)
+        if (!this.stagedPreviewRows() || this.stagedPreviewRows().length === 0) return null;
+
+        const staged = this.stagedPreviewRows();
+        const allRows = this.allPreviewRows().length > 0
+            ? this.allPreviewRows()
+            : this.previewRows();
+
+        let filesWithMoreWafers = 0;
+        let totalExtraWafers = 0;
+        const filesReloadingAll: Array<{ lot: string; filename: string; selected: number; total: number }> = [];
+
+        // Group all rows by lot+filename to count total wafers per file
+        const fileWaferCounts = new Map<string, number>();
+        allRows.forEach((r: DiscoveryPreviewRow) => {
+            const lot = String(r.lot || '').trim();
+            const filename = String(this.getPreviewFilename(r) || '').trim();
+            if (!lot || !filename) return;
+            const key = `${lot}::${filename}`;
+            fileWaferCounts.set(key, (fileWaferCounts.get(key) || 0) + 1);
+        });
+
+        // Count how many wafers the user selected per file
+        const selectedPerFile = new Map<string, number>();
+        staged.forEach((r: DiscoveryPreviewRow) => {
+            const lot = String(r.lot || '').trim();
+            const filename = String(this.getPreviewFilename(r) || '').trim();
+            if (!lot || !filename) return;
+            const key = `${lot}::${filename}`;
+            selectedPerFile.set(key, (selectedPerFile.get(key) || 0) + 1);
+        });
+
+        // Compare selected vs total per file
+        selectedPerFile.forEach((selected, key) => {
+            const total = fileWaferCounts.get(key) || selected;
+            if (total > selected) {
+                const [lot, filename] = key.split('::');
+                filesWithMoreWafers++;
+                totalExtraWafers += (total - selected);
+                filesReloadingAll.push({ lot, filename, selected, total });
+            }
+        });
+
+        if (filesWithMoreWafers === 0) return null;
+
+        return {
+            fileCount: filesWithMoreWafers,
+            extraWafers: totalExtraWafers,
+            files: filesReloadingAll
+        };
+    });
     filterText = signal('');
     selectedFileType = signal('ALL');
 
