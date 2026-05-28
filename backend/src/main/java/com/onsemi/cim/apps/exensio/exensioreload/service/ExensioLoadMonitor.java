@@ -65,6 +65,7 @@ public class ExensioLoadMonitor {
     private final ExensioProperties props;
     private final ExensioClient exensioClient;
     private final RefDbService refDbService;
+    private final IntegrationStatusService integrationStatusService;
 
     // Thread pool and parallel processing
     private ExecutorService executorService;
@@ -81,10 +82,12 @@ public class ExensioLoadMonitor {
 
     public ExensioLoadMonitor(ExensioProperties props,
                               ExensioClient exensioClient,
-                              RefDbService refDbService) {
+                              RefDbService refDbService,
+                              IntegrationStatusService integrationStatusService) {
         this.props = props;
         this.exensioClient = exensioClient;
         this.refDbService = refDbService;
+        this.integrationStatusService = integrationStatusService;
     }
 
     /**
@@ -348,12 +351,38 @@ public class ExensioLoadMonitor {
 
         BatchResult result = buildBatchResult(updates, batchStart);
 
+        recordBatchIntegrationStatus(batch, result);
+
         // 6.2 Log batch metrics
         log.debug("Batch done: records={}, done={}, failed={}, notFound={}, timeMs={}",
                 batch.size(), result.successCount(), result.failureCount(),
                 result.notFoundCount(), result.processingTimeMs());
 
         return result;
+    }
+
+    private void recordBatchIntegrationStatus(List<StageRecord> batch, BatchResult result) {
+        if (batch == null || batch.isEmpty() || result == null || result.updates() == null) {
+            return;
+        }
+        java.util.Map<Long, StageRecord> byId = new java.util.HashMap<>();
+        for (StageRecord record : batch) {
+            byId.put(record.id(), record);
+        }
+
+        for (BatchResult.RecordUpdate update : result.updates()) {
+            StageRecord record = byId.get(update.recordId());
+            if (record == null) {
+                continue;
+            }
+            String requestId = record.requestId();
+            switch (update.type()) {
+                case DONE -> integrationStatusService.updateExensio(requestId, "success", "Exensio wafer confirmed");
+                case NOT_FOUND -> integrationStatusService.updateExensio(requestId, "not_found", "Exensio wafer not found yet — retrying");
+                case FAILED -> integrationStatusService.updateExensio(requestId, "failure", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed");
+                case ERROR -> integrationStatusService.updateExensio(requestId, "error", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error");
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

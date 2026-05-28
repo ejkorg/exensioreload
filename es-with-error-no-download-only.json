@@ -1,6 +1,6 @@
 curl -sS -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 -H "Content-Type: application/json" \
--X POST "https://elastic-mosdata-prod-uswest2.es.privatelink.westus2.azure.elastic-cloud.com/logs*/_search" \
+-X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
 -d '{
   "size": 20,
   "_source": [

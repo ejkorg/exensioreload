@@ -1,7 +1,7 @@
-import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
-import { map, catchError, timeout } from 'rxjs/operators';
+import { catchError, map, timeout } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 // ============================================================================
@@ -372,6 +372,19 @@ export interface StagingSessionDetail {
     completedAt?: string | null;
     lastCheckedAt?: string | null;
     progress: number;
+    integration?: IntegrationStatusSnapshot;
+}
+
+export interface IntegrationStatusEntry {
+    configured: boolean;
+    status: string;
+    message: string;
+    lastAt?: string | null;
+}
+
+export interface IntegrationStatusSnapshot {
+    elasticsearch: IntegrationStatusEntry;
+    exensio: IntegrationStatusEntry;
 }
 
 export interface StagingSessionSummary {

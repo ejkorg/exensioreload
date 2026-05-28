@@ -1,34 +1,33 @@
-import { Component, OnInit, signal, computed, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterModule, Router, ActivatedRoute } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { map, debounceTime, switchMap, catchError } from 'rxjs/operators';
-import { Subject, of } from 'rxjs';
-import { GlassInputComponent } from '../shared/components/glass-input.component';
-import { GlassSelectComponent, GlassOption } from '../shared/components/glass-select.component';
-import { GlassDateRangeComponent, DateRange } from '../shared/components/glass-date-range.component';
-import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
-import { GlassStepperComponent, GlassStep } from '../shared/components/glass-stepper.component';
-import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
-import { GlassButtonComponent } from '../shared/components/glass-button.component';
-import { GlassIconComponent } from '../shared/components/glass-icon.component';
-import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.directive';
-import { MonitoringStatsComponent } from '../shared/components/monitoring-stats.component';
-import { MonitoringFileListComponent } from '../shared/components/monitoring-file-list.component';
-import { LotWaferProgressComponent } from '../shared/components/lot-wafer-progress.component';
-import { ActivityFeedComponent } from '../shared/components/activity-feed.component';
-import { GlassSenderSelectorComponent } from '../shared/components/glass-sender-selector.component';
-import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
-import { SiteNamePipe, formatSiteName } from '../shared/pipes/site-name.pipe';
-import { BackendService, CreateSessionResponse, DiscoveryPreviewRow, LotWaferProgress, ReloadFilterOptions, SenderOption, StageRecordView, StagePayloadRequestBody } from '../api/backend.service';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { Subject, Subscription, of } from 'rxjs';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
+import { BackendService, CreateSessionResponse, DiscoveryPreviewRow, ReloadFilterOptions, SenderOption, StagePayloadRequestBody, StageRecordView } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
-import { ToastService } from '../shared/services/toast.service';
-import { MonitoringService, MonitoringFile } from '../shared/services/monitoring.service';
-import { SessionActivityEvent, SessionStreamStatus, StagingSessionService } from '../shared/services/staging-session.service';
+import { ActivityFeedComponent } from '../shared/components/activity-feed.component';
+import { GlassButtonComponent } from '../shared/components/glass-button.component';
+import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
+import { DateRange, GlassDateRangeComponent } from '../shared/components/glass-date-range.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
+import { GlassInputComponent } from '../shared/components/glass-input.component';
+import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
+import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
+import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
+import { GlassSenderSelectorComponent } from '../shared/components/glass-sender-selector.component';
+import { GlassStep, GlassStepperComponent } from '../shared/components/glass-stepper.component';
+import { LotWaferProgressComponent } from '../shared/components/lot-wafer-progress.component';
+import { MonitoringFileListComponent } from '../shared/components/monitoring-file-list.component';
+import { MonitoringStatsComponent } from '../shared/components/monitoring-stats.component';
+import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.directive';
+import { SiteNamePipe, formatSiteName } from '../shared/pipes/site-name.pipe';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
-import { DuplicateWarningDialogComponent, DuplicateWarningDialogData, DuplicatePayloadInfo, DuplicateWarningDialogResult } from './duplicate-warning-dialog.component';
+import { MonitoringFile, MonitoringService } from '../shared/services/monitoring.service';
+import { SessionActivityEvent, SessionStreamStatus, StagingSessionService } from '../shared/services/staging-session.service';
+import { ToastService } from '../shared/services/toast.service';
 import { ConfirmStageAllDialogComponent, ConfirmStageAllDialogData } from './confirm-stage-all-dialog.component';
+import { DuplicatePayloadInfo, DuplicateWarningDialogComponent, DuplicateWarningDialogData } from './duplicate-warning-dialog.component';
 
 interface WaferMonitoringRow {
     lot: string;
@@ -977,7 +976,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
         effect(() => {
             const sessionStatus = (this.stagingSession.currentSession()?.status || '').toUpperCase();
-            if (this.currentStep() === 2 && (sessionStatus === 'COMPLETED' || sessionStatus === 'PARTIALLY_FAILED' || sessionStatus === 'CANCELLED')) {
+            if (sessionStatus === 'COMPLETED' || sessionStatus === 'PARTIALLY_FAILED' || sessionStatus === 'CANCELLED') {
                 this.completeStep(2);
                 this.clearPersistedMonitoringSession();
             }

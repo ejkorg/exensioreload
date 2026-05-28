@@ -1,5 +1,6 @@
-import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, Input } from '@angular/core';
+import { IntegrationStatusSnapshot } from '../../api/backend.service';
 import { MonitoringStats } from '../services/monitoring.service';
 import { GlassIconComponent } from './glass-icon.component';
 
@@ -52,6 +53,19 @@ import { GlassIconComponent } from './glass-icon.component';
         </div>
 
         <div class="stat-card glass-panel">
+          <div class="integration-status glass-panel" *ngIf="integrationItems().length > 0">
+            <div class="integration-header">Integrations</div>
+            <div class="integration-grid">
+              <div class="integration-row" *ngFor="let item of integrationItems()">
+                <div class="integration-name">{{ item.name }}</div>
+                <div class="integration-state" [ngClass]="item.statusClass">
+                  <app-glass-icon [name]="item.icon" [size]="16" color="muted"></app-glass-icon>
+                  <span class="integration-label">{{ item.message }}</span>
+                </div>
+                <div class="integration-time" *ngIf="item.lastAt">{{ item.lastAt }}</div>
+              </div>
+            </div>
+          </div>
           <div class="stat-icon completed">
             <app-glass-icon name="check_circle" [size]="24" color="success"></app-glass-icon>
           </div>
@@ -103,6 +117,21 @@ import { GlassIconComponent } from './glass-icon.component';
                            [color]="stats.successRate >= 95 ? 'success' : 'warning'"></app-glass-icon>
             {{ stats.successRate }}% success
           </span>
+        </div>
+      </div>
+
+      <!-- Integration Status -->
+      <div class="integration-status glass-panel" *ngIf="integrationItems().length > 0">
+        <div class="integration-header">Integrations</div>
+        <div class="integration-grid">
+          <div class="integration-row" *ngFor="let item of integrationItems()">
+            <div class="integration-name">{{ item.name }}</div>
+            <div class="integration-state" [ngClass]="item.statusClass">
+              <app-glass-icon [name]="item.icon" [size]="16" color="muted"></app-glass-icon>
+              <span class="integration-label">{{ item.message }}</span>
+            </div>
+            <div class="integration-time" *ngIf="item.lastAt">{{ item.lastAt }}</div>
+          </div>
         </div>
       </div>
 
@@ -300,6 +329,67 @@ import { GlassIconComponent } from './glass-icon.component';
     .detail-item.success { color: #10b981; }
     .detail-item.warning { color: #f59e0b; }
 
+    .integration-status {
+      padding: 0.875rem 1rem;
+    }
+
+    .integration-header {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 0.75rem;
+    }
+
+    .integration-grid {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .integration-row {
+      display: grid;
+      grid-template-columns: 160px 1fr auto;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .integration-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .integration-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      width: fit-content;
+    }
+
+    .integration-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 300px;
+    }
+
+    .integration-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .status-success { color: #10b981; background: rgba(16, 185, 129, 0.12); }
+    .status-warning { color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+    .status-error { color: #ef4444; background: rgba(239, 68, 68, 0.12); }
+    .status-muted { color: var(--text-muted); background: rgba(255, 255, 255, 0.05); }
+
     .status-distribution {
       padding: 0.875rem 1rem;
     }
@@ -378,6 +468,84 @@ import { GlassIconComponent } from './glass-icon.component';
 })
 export class MonitoringStatsComponent {
   @Input() stats!: MonitoringStats;
+  @Input() integration?: IntegrationStatusSnapshot | null;
+
+  integrationItems() {
+    if (!this.integration) {
+      return [];
+    }
+    return [
+      this.buildIntegrationItem('Elasticsearch', this.integration.elasticsearch),
+      this.buildIntegrationItem('Exensio', this.integration.exensio)
+    ];
+  }
+
+  private buildIntegrationItem(name: string, entry: { configured: boolean; status: string; message: string; lastAt?: string | null }) {
+    const status = (entry?.status || 'pending').toLowerCase();
+    return {
+      name,
+      status,
+      message: entry?.message || this.statusLabel(status),
+      lastAt: entry?.lastAt || null,
+      statusClass: this.statusClass(status),
+      icon: this.statusIcon(status)
+    };
+  }
+
+  private statusLabel(status: string): string {
+    switch (status) {
+      case 'success':
+        return 'Success';
+      case 'not_found':
+        return 'Not found (retrying)';
+      case 'timeout':
+        return 'Timed out';
+      case 'failure':
+        return 'Failed';
+      case 'error':
+        return 'Error';
+      case 'not_configured':
+        return 'Not configured';
+      case 'pending':
+      default:
+        return 'Waiting for first check';
+    }
+  }
+
+  private statusClass(status: string): string {
+    switch (status) {
+      case 'success':
+        return 'status-success';
+      case 'not_found':
+        return 'status-warning';
+      case 'timeout':
+      case 'failure':
+      case 'error':
+        return 'status-error';
+      case 'not_configured':
+      case 'pending':
+      default:
+        return 'status-muted';
+    }
+  }
+
+  private statusIcon(status: string): string {
+    switch (status) {
+      case 'success':
+        return 'check_circle';
+      case 'not_found':
+        return 'hourglass_empty';
+      case 'timeout':
+      case 'failure':
+      case 'error':
+        return 'error';
+      case 'not_configured':
+        return 'settings';
+      case 'pending':
+      default:
+        return 'clock';
+    }
+  }
 
   getPercentage(value: number): number {
     return this.stats.total > 0 ? (value / this.stats.total) * 100 : 0;

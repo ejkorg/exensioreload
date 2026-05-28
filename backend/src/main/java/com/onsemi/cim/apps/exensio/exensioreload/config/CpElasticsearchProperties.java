@@ -32,8 +32,8 @@ public class CpElasticsearchProperties {
     /** ES index pattern to query for CP logs. Default: logs*dataport* */
     private String indexPattern = "logs*dataport*";
 
-    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *_sender* */
-    private String cpConfigFilter = "*_sender*";
+    /** cpConfig wildcard filter to isolate ExensioReload-triggered files. Default: *sender* */
+    private String cpConfigFilter = "*sender*";
 
     /** Optional service.country filter to isolate a specific external log source. */
     private String serviceCountryFilter = "";
@@ -111,5 +111,25 @@ public class CpElasticsearchProperties {
     /** Returns true if Elasticsearch is configured (url is non-blank). */
     public boolean isConfigured() {
         return url != null && !url.isBlank();
+    }
+
+    /**
+     * Resolve the final Elasticsearch search URL.
+     * If the configured URL already ends with /_search (or contains it), use it as-is.
+     * Otherwise, append the index pattern and /_search.
+     */
+    public String resolveSearchUrl() {
+        if (url == null) {
+            return "";
+        }
+        String trimmed = url.trim();
+        if (trimmed.isBlank()) {
+            return trimmed;
+        }
+        String normalized = trimmed.replaceAll("/+$", "");
+        if (normalized.contains("/_search")) {
+            return normalized;
+        }
+        return normalized + "/" + indexPattern + "/_search";
     }
 }

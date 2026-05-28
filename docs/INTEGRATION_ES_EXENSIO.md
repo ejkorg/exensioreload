@@ -37,6 +37,26 @@ flowchart TD
 
 **Priority:** Elasticsearch wins over Exensio when both are configured (ES verifies CP first).
 
+### Wait-time behavior ("no ES monitor")
+
+The monitor path is chosen **immediately** when CP consumes the queue row. There is **no timer** that later “falls back” to **no ES**.
+
+- **ES configured** → record stays in **ENRICHMENT** until ES success/failure.
+  - If ES never finds a log, the record **fails** after `cp.elasticsearch.enrichment-timeout-minutes` (default **30 min**).
+  - There is **no automatic fallback** to Exensio if ES is configured but times out.
+- **ES not configured** → ES monitor is **skipped entirely** (no wait). The next step is decided immediately:
+  - **Exensio configured** → record moves to **EXENSIO_LOADING** and waits for Exensio polling.
+  - **Exensio not configured** → record is marked **DONE** immediately.
+
+### Exensio wait time (when Exensio is configured)
+
+If Exensio is configured, the system polls Exensio on a fixed interval and times out after a configured wait:
+
+- Poll interval: `exensio.poll-interval-ms` (default **60s**)
+- Max wait before FAILED: `exensio.timeout-minutes` (default **60 min**)
+
+So when ES is off but Exensio is on, records still **wait up to 60 minutes** in **EXENSIO_LOADING** before failing.
+
 **Code references:**
 
 - Policy: `StagePipelinePolicy.java`
@@ -106,7 +126,7 @@ cp:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `CP_ES_URL` | **Yes** (to enable) | Base URL, e.g. `https://elasticsearch.company.com:9200` (no trailing slash required) |
+| `CP_ES_URL` | **Yes** (to enable) | **Base ES URL only**, e.g. `https://elasticsearch.company.com:9200` (do **not** include `/logs*dataport*/_search`; the app appends that automatically) |
 | `CP_ES_API_KEY` | Preferred | Elasticsearch API key (Authorization: `ApiKey …`) |
 | `CP_ES_USERNAME` | If no API key | Basic auth user |
 | `CP_ES_PASSWORD` | If no API key | Basic auth password |
@@ -132,7 +152,9 @@ cp:
 | `service.country` | optional term filter, for example `PHO` for External logs |
 | `idData` | term = staged `data_id` |
 | `mLot` | term = staged `lot` |
-| `@timestamp` | `gte` record `updated_at` (when enrichment started) |
+| `@timestamp` | `gte` record `updated_at` (set when CP consumes the queue row and the status flips to `ENRICHMENT`) |
+
+In other words, the ES time window should start at the moment the payload is removed from `DTP_SENDER_QUEUE_ITEM` and the app marks the RefDB row as `ENRICHMENT`.
 
 **Success detection:** any hit whose `message` contains `output path` (case-insensitive).  
 Path is parsed with regex `output path\s*=\s*(.+)`.  
@@ -173,6 +195,8 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 
 If your site indexes the country as `service_country`, update the `term` clause accordingly
 or add a per-location mapping in your profile so the application builds the query correctly.
+
+If you are constructing a one-off curl by hand, use the **base ES host** in `CP_ES_URL` and keep the query path as `/<index-pattern>/_search`.
 
 Recommended profile YAML snippet (add to `application-onsemi-oracle.yml` or `application.yml`):
 

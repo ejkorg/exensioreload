@@ -96,7 +96,7 @@ public class ElasticsearchLogService {
      */
     public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site) {
         String initialFilter = props.getCpConfigFilter();
-        String url = props.getUrl().replaceAll("/$", "") + "/" + props.getIndexPattern() + "/_search";
+        String url = props.resolveSearchUrl();
 
         try {
             // First attempt using configured cpConfig filter

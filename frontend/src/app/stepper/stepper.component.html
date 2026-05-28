@@ -700,7 +700,10 @@
                     </section>
 
                     <!-- Monitoring Stats -->
-                    <app-monitoring-stats [stats]="monitoringStats()"></app-monitoring-stats>
+                    <app-monitoring-stats
+                        [stats]="monitoringStats()"
+                        [integration]="stagingSession.currentSession()?.integration">
+                    </app-monitoring-stats>
 
                     <!-- Lot/Wafer Progress -->
                     <section class="lot-progress-collapsible glass-panel" *ngIf="lotProgressMapped().length > 0">

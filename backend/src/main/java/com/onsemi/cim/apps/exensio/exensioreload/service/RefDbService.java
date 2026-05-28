@@ -52,14 +52,23 @@ public class RefDbService {
     private final HikariDataSource ppLogDataSource;
     private final boolean isOracle;
     private final com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService;
+    private final com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties;
+    private final com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties;
+    private final IntegrationStatusService integrationStatusService;
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
     public RefDbService(RefDbProperties properties,
                         PpLogDbProperties ppLogDbProperties,
-                        com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService) {
+                        com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService,
+                        com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties,
+                        com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties,
+                        IntegrationStatusService integrationStatusService) {
         this.properties = properties;
         this.monitorService = monitorService;
+        this.elasticsearchProperties = elasticsearchProperties;
+        this.exensioProperties = exensioProperties;
+        this.integrationStatusService = integrationStatusService;
         this.isOracle = properties.getHost() != null && !properties.getHost().isBlank();
         HikariConfig config = new HikariConfig();
         if (isOracle) {
@@ -793,6 +802,11 @@ public class RefDbService {
         double successRate = total > 0 ? (completed * 100.0 / total) : 0;
         evt.put("successRate", successRate);
         evt.put("sessionStatuses", statuses);
+        if (integrationStatusService != null) {
+            boolean esConfigured = elasticsearchProperties != null && elasticsearchProperties.isConfigured();
+            boolean exensioConfigured = exensioProperties != null && exensioProperties.isConfigured();
+            evt.put("integration", integrationStatusService.snapshot(requestId, esConfigured, exensioConfigured));
+        }
 
         monitorService.sendEvent(requestId, "STATS", evt);
     }

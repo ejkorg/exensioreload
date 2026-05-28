@@ -1,17 +1,16 @@
-import { Injectable, NgZone, computed, signal, inject } from '@angular/core';
+import { computed, inject, Injectable, NgZone, signal } from '@angular/core';
 import { interval, Subscription } from 'rxjs';
-import { filter, distinctUntilChanged, skip } from 'rxjs/operators';
-import {
-  BackendService,
-  CreateSessionRequest,
-  CreateSessionResponse,
-  LotWaferProgress,
-  StageRecordView,
-  StagingSessionDetail
-} from '../../api/backend.service';
-import { ActivityEvent } from '../components/activity-feed.component';
-import { AuthService } from '../../auth/auth.service';
+import { distinctUntilChanged, filter, skip } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import {
+    BackendService,
+    CreateSessionRequest,
+    LotWaferProgress,
+    StageRecordView,
+    StagingSessionDetail
+} from '../../api/backend.service';
+import { AuthService } from '../../auth/auth.service';
+import { ActivityEvent } from '../components/activity-feed.component';
 
 export interface SessionActivityEvent {
   id: string;
@@ -370,7 +369,8 @@ export class StagingSessionService {
             filesEnqueued: stats.enqueued   ?? stats.processing ?? current.filesEnqueued,
             filesDone:     stats.completed  ?? current.filesDone,
             filesFailed:   stats.failed     ?? current.filesFailed,
-            progress:      stats.progress   ?? current.progress
+            progress:      stats.progress   ?? current.progress,
+            integration:   stats.integration ?? current.integration
           });
         } catch {
         }

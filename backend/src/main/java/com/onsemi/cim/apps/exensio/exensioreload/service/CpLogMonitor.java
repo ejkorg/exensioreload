@@ -39,15 +39,18 @@ public class CpLogMonitor {
     private final ElasticsearchLogService elasticsearchLogService;
     private final CpElasticsearchProperties props;
     private final StagePipelineOrchestrator pipelineOrchestrator;
+    private final IntegrationStatusService integrationStatusService;
 
     public CpLogMonitor(RefDbService refDbService,
                         ElasticsearchLogService elasticsearchLogService,
                         CpElasticsearchProperties props,
-                        StagePipelineOrchestrator pipelineOrchestrator) {
+                        StagePipelineOrchestrator pipelineOrchestrator,
+                        IntegrationStatusService integrationStatusService) {
         this.refDbService = refDbService;
         this.elasticsearchLogService = elasticsearchLogService;
         this.props = props;
         this.pipelineOrchestrator = pipelineOrchestrator;
+        this.integrationStatusService = integrationStatusService;
     }
 
     /**
@@ -90,6 +93,7 @@ public class CpLogMonitor {
     private void processRecord(StageRecord record) {
         // Use updatedAt as the lower bound for ES log timestamp matching (Requirement 2.6)
         Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        String requestId = record.requestId();
 
         CpLogResult result;
         try {
@@ -98,6 +102,7 @@ public class CpLogMonitor {
             // Requirement 6.7: ES unreachable — log warning, skip this record, do not mark failed
             log.warn("Elasticsearch query failed for record id={} dataId={} — skipping: {}",
                     record.id(), record.dataId(), e.getMessage());
+            integrationStatusService.updateElasticsearch(requestId, "error", "ES query failed: " + e.getMessage());
             return;
         }
 
@@ -105,6 +110,7 @@ public class CpLogMonitor {
             case CpLogResult.Success success -> {
                 log.info("CP enrichment success for record id={} dataId={}: path={} target={}",
                         record.id(), record.dataId(), success.outputPath(), success.outputTarget());
+                integrationStatusService.updateElasticsearch(requestId, "success", "CP log found in ES");
                 pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
             }
             case CpLogResult.Failure failure -> {
@@ -112,6 +118,7 @@ public class CpLogMonitor {
                 String errorMessage = truncateErrorMessage(failure.errorMessage());
                 log.info("CP enrichment failure for record id={} dataId={}: {}",
                         record.id(), record.dataId(), errorMessage);
+                integrationStatusService.updateElasticsearch(requestId, "failure", errorMessage);
                 refDbService.markFailed(record, errorMessage);
             }
             case CpLogResult.NotFound notFound -> {
@@ -120,10 +127,12 @@ public class CpLogMonitor {
                     String timeoutMessage = "CP enrichment timeout — no log found in Elasticsearch after "
                             + props.getEnrichmentTimeoutMinutes() + " minutes";
                     log.info("CP enrichment timeout for record id={} dataId={}", record.id(), record.dataId());
+                    integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMessage);
                     refDbService.markFailed(record, timeoutMessage);
                 } else {
                     log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
                             record.id(), record.dataId());
+                    integrationStatusService.updateElasticsearch(requestId, "not_found", "No ES log yet — retrying");
                 }
             }
         }
