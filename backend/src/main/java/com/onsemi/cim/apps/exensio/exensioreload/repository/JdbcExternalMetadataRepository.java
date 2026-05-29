@@ -761,11 +761,11 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         params.add(location.trim().toUpperCase(Locale.ROOT));
         // Simple query format as requested: SELECT DISTINCT TEST_PHASE FROM view WHERE TEST_PHASE IS NOT NULL AND location = ? ORDER BY TEST_PHASE
 
-        // Optionally filter by data_type_ext so dropdown honors the selected extension. Allow NULLs to keep
-        // backward-compatible behavior when the column is not populated for some rows.
+        // Optionally filter by data_type_ext (which maps to TEST_PHASE in the legacy views) so dropdown honors the selected extension.
+        // Allow NULLs to keep backward-compatible behavior when the column is not populated for some rows.
         if (dataTypeExt != null && !dataTypeExt.isBlank()) {
             String dte = dataTypeExt.trim().toUpperCase(Locale.ROOT);
-            sb.append(" AND (UPPER(data_type_ext) = ? OR data_type_ext IS NULL)");
+            sb.append(" AND (UPPER(TEST_PHASE) = ? OR TEST_PHASE IS NULL)");
             params.add(dte);
         }
 
@@ -1183,11 +1183,17 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         if (dataTypeExt != null && !dataTypeExt.isBlank() && !"NULL".equalsIgnoreCase(dataTypeExt) && !"NONE".equalsIgnoreCase(dataTypeExt) && !"ANY".equalsIgnoreCase(dataTypeExt)) {
             String dte = dataTypeExt.trim();
             String dteUpper = dte.toUpperCase(Locale.ROOT);
+            // In metadata views, the parameter is called test_phase, but when navigating from modern models
+            // we use dataTypeExt. If the query is against *_metadata_view, data_type_ext column might not exist.
+            // Map it to test_phase if we are dealing with legacy views which all have test_phase instead of data_type_ext
+            boolean isLegacyView = effectiveSelect != null && effectiveSelect.toLowerCase(Locale.ROOT).contains("_metadata_view");
+            String colName = isLegacyView ? "test_phase" : "data_type_ext";
+            
             if (dte.equals(dteUpper)) {
-                result.append(" and data_type_ext = ?");
+                result.append(" and " + colName + " = ?");
                 result.params.add(dteUpper);
             } else {
-                result.append(" and UPPER(data_type_ext) = ?");
+                result.append(" and UPPER(" + colName + ") = ?");
                 result.params.add(dteUpper);
             }
         }
