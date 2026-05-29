@@ -1,15 +1,16 @@
-import { Component, OnInit, OnDestroy, signal, computed, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import * as echarts from 'echarts';
 import { forkJoin } from 'rxjs';
 import {
-  BackendService,
-  SessionAnalyticsResponse,
-  SessionDailyStatusPoint,
-  SessionLotWaferDailyPoint,
-  StageRecordView,
-  StagingSessionDetail,
-  StagingSessionSummary
+    BackendService,
+    SessionAnalyticsResponse,
+    SessionDailyStatusPoint,
+    SessionLotWaferDailyPoint,
+    StageRecordView,
+    StagingSessionDetail,
+    StagingSessionSummary
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
@@ -17,12 +18,11 @@ import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
 import {
-  formatUtcDate,
-  formatUtcDateLabel,
-  parseInstant,
-  toUtcDayKey
+    formatUtcDate,
+    formatUtcDateLabel,
+    parseInstant,
+    toUtcDayKey
 } from '../shared/utils/datetime.util';
-import * as echarts from 'echarts';
 
 @Component({
     selector: 'app-my-sessions',
@@ -1567,7 +1567,12 @@ export class MySessionsComponent implements OnInit, OnDestroy {
             formatter: (params: any) => {
               const nonZero = params.filter((item: any) => item.value > 0);
               if (!nonZero.length) return '';
-              let result = `<div style="padding: 4px 8px; font-weight: 600; border-bottom: 1px solid rgba(167,139,250,0.2); margin-bottom: 4px;">${params[0]?.axisValue}</div>`;
+              const day = String(params[0]?.axisValue || '');
+              const lotWaferLines = this.getTrendTooltipLotWaferLines(day);
+              let result = `<div style="padding: 4px 8px; font-weight: 600; border-bottom: 1px solid rgba(167,139,250,0.2); margin-bottom: 4px;">End Time: ${this.escapeHtml(day)}</div>`;
+              if (lotWaferLines.length > 0) {
+                result += `<div style="padding: 0 8px 4px; color: #cbd5e1; font-size: 11px; line-height: 1.45; border-bottom: 1px solid rgba(167,139,250,0.12); margin-bottom: 4px;">${lotWaferLines.map((line: string) => this.escapeHtml(line)).join('<br/>')}</div>`;
+              }
               nonZero.forEach((item: any) => {
                 result += `<div style="color: ${item.color}; padding: 2px 8px;">${item.seriesName}: <strong>${item.value}</strong> files</div>`;
               });
@@ -1605,6 +1610,43 @@ export class MySessionsComponent implements OnInit, OnDestroy {
 
         const chart = echarts.getInstanceByDom(this.trendChartContainer!.nativeElement) || echarts.init(this.trendChartContainer!.nativeElement, null, { renderer: 'canvas' });
         chart.setOption(option);
+      }
+
+      private getTrendTooltipLotWaferLines(day: string): string[] {
+        const rows = (this.files() || []).filter((file: StageRecordView) => {
+          const fileDay = (file.endTime ? this.toDayKey(file.endTime) : this.toDayKey(file.createdAt)) || '';
+          return fileDay === day;
+        });
+
+        const lines = rows
+          .map((file: StageRecordView) => {
+            const lot = this.normalizeTooltipValue(file.lot);
+            const wafer = this.normalizeTooltipValue(file.wafer);
+            if (!lot && !wafer) return '';
+            if (lot && wafer) return `Lot: ${lot}, Wafer: ${wafer}`;
+            if (lot) return `Lot: ${lot}`;
+            return `Wafer: ${wafer}`;
+          })
+          .filter((line: string) => line.length > 0);
+
+        return Array.from(new Set(lines)).slice(0, 3);
+      }
+
+      private normalizeTooltipValue(value?: string | null): string {
+        const normalized = String(value ?? '').trim();
+        if (!normalized) return '';
+        const upper = normalized.toUpperCase();
+        if (upper === 'NA' || upper === 'N/A' || upper === 'NAN' || normalized === '-') return '';
+        return normalized;
+      }
+
+      private escapeHtml(value: string): string {
+        return value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
       }
 
       private renderStatusChart() {
