@@ -341,7 +341,7 @@ public class ElasticsearchLogService {
                 // Priority 1: ERROR log level → always a failure (Requirements 4.1, 4.3)
                 if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
                     String errorMessage = isNonBlank(message) ? message : "CP processing error";
-                    log.debug("CP failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
+                    log.info("CP failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
                     return new CpLogResult.Failure(errorMessage, timestamp);
                 }
 
@@ -350,13 +350,13 @@ public class ElasticsearchLogService {
 
                 // Priority 2: PRODUCTION in message (Requirement 2.6)
                 if (messageUpper.contains("PRODUCTION")) {
-                    log.debug("CP success (PRODUCTION in message) for dataId={}", dataId);
+                    log.info("CP success (PRODUCTION in message) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "PRODUCTION", timestamp);
                 }
 
                 // Priority 3: SANDBOX in message (Requirement 2.6)
                 if (messageUpper.contains("SANDBOX")) {
-                    log.debug("CP success (SANDBOX in message) for dataId={}", dataId);
+                    log.info("CP success (SANDBOX in message) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "SANDBOX", timestamp);
                 }
 

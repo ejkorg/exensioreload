@@ -94,7 +94,7 @@ Monitors are **background schedulers**; no frontend changes are required.
 - **Failure** (`error.type` / `error.message` in log) → **FAILED**
 - **Not found** within timeout → **FAILED** (default 30 minutes in ENRICHMENT)
 
-If `cp.elasticsearch.url` is **blank**, `CpLogMonitor` is a **no-op** (safe to deploy).
+If `cp.elasticsearch.url` is **blank**, `CpLogMonitor` is a **no-op** (logs DEBUG message "Elasticsearch not configured" and returns immediately). Safe to deploy.
 
 ### 3.2 Configuration
 
@@ -464,6 +464,154 @@ $env:EXENSIO_PASSWORD="..."
 
 3. Run a one-file staging session in the UI (Stepper → Monitor).
 4. Tail `logs/exensioreload.log` for the messages in §6.
+
+---
+
+## 6. Logging Configuration
+
+### Recommended log levels
+
+For **production environments**, use these settings in `application.yml` or environment variable `LOGGING_LEVEL_ROOT`:
+
+```yaml
+logging:
+  level:
+    root: INFO
+    com.onsemi.cim.apps.exensio: INFO
+    # CP Elasticsearch monitor — see all ES query outcomes (success/failure/timeout)
+    com.onsemi.cim.apps.exensio.exensioreload.service.ElasticsearchLogService: INFO
+    com.onsemi.cim.apps.exensio.exensioreload.service.CpLogMonitor: INFO
+    # pp_log fallback (less critical, can be DEBUG)
+    # com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService: DEBUG
+```
+
+### What you'll see in logs
+
+| Log Message | Level | Meaning | Action |
+|---|---|---|---|
+| `CP success (PRODUCTION in message) for dataId=...` | INFO | File enriched, routed to PRODUCTION | None — normal flow |
+| `CP success (SANDBOX in message) for dataId=...` | INFO | File enriched, routed to SANDBOX | None — normal flow |
+| `CP failure (log.level=ERROR) for dataId=...: ...` | INFO | CP reported error during processing | Check error message; record will be marked FAILED |
+| `CP enrichment timeout for record id=... dataId=...` | INFO | No ES log found after 30 min (default) | Increase `enrichment-timeout-minutes` or investigate CP delays |
+| `No CP log yet for record id=... dataId=... — will retry next cycle` | DEBUG | First few poll cycles; normal during enrichment | None — will keep retrying |
+| `ES query payload (dataId=..., idFile=...): url=..., body=...` | INFO | Full ES query being sent (enable via `logRequestPayloads: true`) | Useful for debugging mismatches |
+| `Elasticsearch query failed for dataId=..., lot=...: ...` | WARN | Network/auth/HTTP error talking to ES | Check ES connectivity and credentials |
+
+### Enabling request payload logging (debug only)
+
+Add to `application.yml` to see full ES query JSON (very verbose):
+
+```yaml
+cp:
+  elasticsearch:
+    logRequestPayloads: true  # Set to false in production
+```
+
+---
+
+## 7. ES Status Codes (Monitoring UI)
+
+When monitoring a session in the UI, the **integration status** field shows what happened with Elasticsearch:
+
+| Status | Message | Meaning | Next Step |
+|--------|---------|---------|-----------|
+| `success` | `CP log found in ES` | Elasticsearch query succeeded and found enrichment output | File moves to EXENSIO_LOADING (if enabled) or DONE |
+| `failure` | `<error message from CP log>` | CP reported an error during processing | File marked FAILED; check error details |
+| `timeout` | `CP enrichment timeout — no log found in Elasticsearch after 30 minutes` | ES never received a CP log for this file | Increase timeout or check CP pipeline delays |
+| `not_found` | `No ES log yet — retrying` | First few poll cycles; ES log not available yet | Normal — will retry every 60 seconds |
+| `error` | `ES query failed: <error>` | Network/auth/HTTP error contacting Elasticsearch | Check ES cluster connectivity and credentials |
+| `pending` | `Waiting for first check` | ES polling not started yet | Normal at session start |
+| `not_configured` | `Not configured` | ES URL is blank; monitoring disabled | Enable ES by setting `CP_ES_URL` and restarting |
+
+### How to read the UI monitoring display
+
+In the Stepper → **Monitor** view:
+
+```
+File: ABC123_lot001.dat
+Status: ENRICHMENT
+Elasticsearch: [✓] CP log found in ES
+  └─ Last checked: 2 seconds ago
+```
+
+- ✓ = Success (green)
+- ✗ = Failure (red)
+- ⏱ = Timeout (orange)
+- ⏳ = Pending / not_found (yellow)
+
+---
+
+## 8. Troubleshooting ES Integration
+
+### Issue: Files stuck in "ENRICHMENT" status indefinitely
+
+| Symptom | Likely cause | Solution |
+|---------|--------------|----------|
+| All files stay ENRICHMENT for hours | `CP_ES_URL` is misconfigured (hostname typo, wrong port) | Verify URL format: `https://elasticsearch.company.com:9200` |
+| Files eventually timeout after 30 min | No ES logs being generated for files | Check if CP is actually processing files; verify `cpConfig` filter matches your logs |
+| Only specific files timeout | Mismatched query filters (`idData`, `idFile`, `lot`) | Check SENDER_STAGE columns match ES document fields |
+| All files fail with "error" status | ES authentication failed (API key/password wrong) | Verify `CP_ES_API_KEY` or `CP_ES_USERNAME`/`CP_ES_PASSWORD` are correct |
+| Network timeout errors in logs | ES cluster unreachable | Ping ES from app server; check firewall rules; verify HTTPS cert is trusted |
+
+### Issue: Files fail with wrong error message
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| Error says "CP processing error" but has details | Message field was empty in ES log | CP logs not capturing full error — check CP configuration |
+| Output path shows "UNKNOWN" instead of "PRODUCTION"/"SANDBOX" | Path string doesn't contain those keywords | CP output path format changed; update regex or adjust `detectOutputTarget()` method |
+| pp_log fallback never triggered | Message doesn't contain "executed successfully" | CP logs don't use that phrase — check actual log message text |
+
+### Issue: Some records get pp_log fallback, others don't
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Only some files trigger pp_log queries | ES message has keyword (PRODUCTION/SANDBOX) before "executed successfully" | Priority order: PRODUCTION/SANDBOX match first, so pp_log is skipped; this is correct |
+| pp_log query always returns no rows | `lot` or `idFile` mismatch between SENDER_STAGE and pp_log | Verify column mapping; ensure `metadataId` matches pp_log's `idFile` concept |
+| pp_log queries work some times | Random failures; SQL error in logs | Check pp_log datasource connectivity; ensure `refdb.pp-log-*` properties are set |
+
+### Issue: "No ES hits" after query looks correct
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| Query payload looks right but returns empty | ES index has no documents matching time window | Ensure `@timestamp` range includes time when CP processed file; may be delayed |
+| Query returns hits but result is "NotFound" | Hit message doesn't match success/failure keywords | ES message format doesn't contain "PRODUCTION", "SANDBOX", "executed successfully", or `log.level=ERROR` |
+| `cpConfig` filter mismatch | Value is `*sender*` but docs have `_sender`, `sender`, or custom value | Update `cp.elasticsearch.cp-config-filter` to match your index; e.g., `*_sender*` |
+
+### Debug: Manually test ES query
+
+Use the curl command from §3.4 with your actual values:
+
+```bash
+export CP_ES_URL="https://elasticsearch.company.com:9200"
+export CP_ES_USERNAME="elastic_user"
+export CP_ES_PASSWORD="your_password"
+
+# Replace YOUR_DATA_ID, YOUR_FILE_ID, YOUR_LOT with actual values from SENDER_STAGE
+curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
+  -d '{
+    "size": 2,
+    "_source": ["@timestamp", "cpConfig", "idData", "idFile", "message", "log.level"],
+    "query": {
+      "bool": {
+        "must": [
+          { "wildcard": { "cpConfig": { "value": "*_sender*", "case_insensitive": true } } },
+          { "term": { "idData": "YOUR_DATA_ID" } },
+          { "term": { "idFile": "YOUR_FILE_ID" } },
+          { "term": { "mLot": "YOUR_LOT" } },
+          { "range": { "@timestamp": { "gte": "2025-05-31T16:00:00Z" } } }
+        ]
+      }
+    },
+    "sort": [{ "@timestamp": { "order": "desc" } }]
+  }'
+```
+
+- **0 hits returned** → Adjust time range or filter values
+- **Hits returned but not matching success/failure keywords** → Adjust regex or add missing field matching
+- **Connection refused** → Check ES URL, port, firewall
+- **401 Unauthorized** → Check credentials
 
 ---
 
