@@ -108,7 +108,7 @@ cp:
     username: ${CP_ES_USERNAME:}
     password: ${CP_ES_PASSWORD:}
     index-pattern: logs*dataport*
-    cp-config-filter: "*sender*"
+    cp-config-filter: "*_sender*"
         # Optional: If different sites index the country under different field names,
         # provide a per-location mapping. Keys are the site keys from dbconnections.yml
         # (upper-cased, e.g. EXTERNAL-PROD or EXTERNAL-QA). Values are the ES field
@@ -148,7 +148,7 @@ cp:
 
 | ES field | Match |
 |----------|--------|
-| `cpConfig` | wildcard `*sender*` (configurable) |
+| `cpConfig` | wildcard `*_sender*` (configurable) |
 | `service.country` | optional term filter, for example `PHO` for External logs |
 | `idData` | term = staged `data_id` |
 | `mLot` | term = staged `lot` |
@@ -175,18 +175,26 @@ Replace placeholders and run from a host that can reach ES:
 ```bash
 curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
   -H "Content-Type: application/json" \
-  -X POST "$CP_ES_URL/logs*dataport*/_search" \
+  -X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
   -d '{
-    "size": 5,
+    "size": 2,
+    "_source": ["@timestamp", "cpConfig", "idData", "idFile", "message", "log.level"],
     "query": {
       "bool": {
         "must": [
-          { "wildcard": { "cpConfig": { "value": "*sender*", "case_insensitive": true } } },
-          { "term": { "service.country": "PHO" } },
+          { "wildcard": { "cpConfig": { "value": "*_sender*", "case_insensitive": true } } },
           { "term": { "idData": "YOUR_DATA_ID" } },
+          { "term": { "idFile": "YOUR_FILE_ID" } },
           { "term": { "mLot": "YOUR_LOT" } },
           { "range": { "@timestamp": { "gte": "2025-05-31T16:00:00Z" } } }
-        ]
+        ],
+        "should": [
+          { "wildcard": { "message": { "value": "*output path*PRODUCTION*", "case_insensitive": true, "boost": 4 } } },
+          { "wildcard": { "message": { "value": "*SANDBOX*", "case_insensitive": true, "boost": 3 } } },
+          { "bool": { "must_not": [{ "term": { "log.level": "ERROR" } }], "boost": 3 } },
+          { "term": { "log.level": { "value": "ERROR", "boost": 1 } } }
+        ],
+        "minimum_should_match": 1
       }
     },
     "sort": [{ "@timestamp": { "order": "desc" } }]

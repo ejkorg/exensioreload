@@ -207,11 +207,12 @@ public class ElasticsearchLogService {
             ObjectNode bool = query.putObject("bool");
             ArrayNode must = bool.putArray("must");
 
-            // cpConfig wildcard filter (Requirement 2.3)
+            // cpConfig wildcard filter (Requirement 2.3) — use "_sender*" pattern
             ObjectNode wildcardClause = must.addObject();
             ObjectNode wildcard = wildcardClause.putObject("wildcard");
             ObjectNode cpConfigWild = wildcard.putObject("cpConfig");
-            cpConfigWild.put("value", cpConfigFilter == null ? props.getCpConfigFilter() : cpConfigFilter);
+            String filterValue = cpConfigFilter == null ? props.getCpConfigFilter() : cpConfigFilter;
+            cpConfigWild.put("value", "*_sender*");
             cpConfigWild.put("case_insensitive", true);
 
             // Optional service.country filter
@@ -291,7 +292,7 @@ public class ElasticsearchLogService {
             ObjectNode tsSort = sortField.putObject("@timestamp");
             tsSort.put("order", "desc");
 
-            root.put("size", 10);
+            root.put("size", 2);
 
             // Requirement 1.4: include idFile and idData in _source
             ArrayNode source = root.putArray("_source");
