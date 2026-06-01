@@ -4,6 +4,8 @@
 //Nov-23-2023 : updated to load roughbin as manualclass if manualclass is zero
 //Aug-15-2025 : update DiePitch,add DelSep before reading and AddSep after. This is to resolve the issue on incorrect die_wd and die_ht
 //Mar-17-2026 : updated to add SampleSize in the Program name.
+//Jun-01-2026 : fixed IMAGEINFO/POLARITY parsing crash, Item array overflow, TestSummaryList types,
+//              NotEndOfFile guards, removed dead code. See bk-defect-fmt-changelog.md for details.
  
 SCRIPT klarf_18
 CONST
@@ -119,7 +121,7 @@ VAR
     shift               integer             
     dieCnt              integer             
     j                   integer             
-    Item[30]            string              
+    Item[100]            string              
     ItemNum             integer             
     img_cnt             integer             
     autosem             integer             
@@ -132,12 +134,12 @@ VAR
     multiTiffFiles      boolean
     xPosDir     Char
     cols_cnt            integer
-    haze_reg            integer
-    haze_avg            integer
-    haze_std            integer
-    haze_med            integer
-    haze_peak           integer
-    areapertest         integer
+    haze_reg            real
+    haze_avg            real
+    haze_std            real
+    haze_med            real
+    haze_peak           real
+    areapertest         real
 	
 	// metadata variables
 	vArea string
@@ -835,10 +837,6 @@ BEGIN
               
            
             //Get Defect Info
-            //Goto("TestSummaryList")
-            GoToBOF
-            GoTo("WaferRecord")
-            
             GoTo("DefectList")
             IF (ErrorCode=0)
                 //we will assume the following fields are always there:
@@ -911,7 +909,7 @@ BEGIN
             str = GetWord
             
             
-            While (IsNumber(str)) OR (str = "TiffFileName")
+            While ((IsNumber(str)) OR (str = "TiffFileName")) AND NotEndOfFile
             
                 if (str = "TiffFileName")
                     multiTiffFiles = True
@@ -971,29 +969,27 @@ BEGIN
                         do_review = TRUE
                         review = GetInt
                     Else If Item[j] = "POLARITY"
-                        img_cnt = GetInt
-                        img_list = img_cnt
+                        num = GetInt
+                        If Not do_imagelist
+                            img_cnt = num
+                            img_list = num
+                        End If
                         //print("img_cnt=",img_cnt,'NL')
-                        if do_imagelist
-                            print("need to get image list",'NL')
-                             For k = 1 to img_cnt
-                                print("k=",k, 'NL')
-                                str = GetWord 
-                                imgFileArr[k] = str   
-                                print("filename=",str,'NL')
-                                SkipWords(1)
-                                str = GetWord
-                                imgArr[k] = StrToInt(str ) 
-                                //print("str=",str, 'NL')
-                                SkipWords(2)
-                              End For
-                        end if
                     Else If Item[j] = "IMAGEINFO"
                         Str = GetWord
                         if Str = "Images"
                             do_imagelist = TRUE
+                            img_cnt = GetInt
+                            img_list = img_cnt
+                            For k = 1 to img_cnt
+                                str = GetWord
+                                imgFileArr[k] = str
+                                SkipWords(1)
+                                str = GetWord
+                                imgArr[k] = StrToInt(str)
+                                SkipWords(1)
+                            End For
                         End If
-                        //print("Str=",Str,'NL')
                     Else If Item[j] = "AUTOSEMCLASS"
                         do_autosem = TRUE
                         autosem = GetInt
@@ -1006,9 +1002,6 @@ BEGIN
                     Else If Item[j] = "CN_CONFIDENCE"
                         do_cn_conf = True
                         cn_conf = GetReal
-                     Else If Item[j] = "IMAGEINFO"
-                        do_confidence = TRUE
-                        confidence = GetReal
                       Else
                         Str = GetWord
                         //print("else Str=",Str,'NL')
@@ -1127,19 +1120,19 @@ BEGIN
 				IF (ErrorCode=0)
 					SkipWords(1)
 				 
-					While (IsNumber(GetWord) AND NotEndOfFile)
+					While (NotEndOfFile AND IsNumber(GetWord))
 						SkipWords(-1)
 						test_num=GetInt
 						def_cnt=GetInt
 						dd=GetReal
 						insp_die=GetInt
 						def_die=GetInt
-						haze_reg=GetInt
-						haze_avg=GetInt
-						haze_std=GetInt
-						haze_med=GetInt
-						haze_peak=GetInt
-						areapertest=GetInt
+						haze_reg=GetReal
+						haze_avg=GetReal
+						haze_std=GetReal
+						haze_med=GetReal
+						haze_peak=GetReal
+						areapertest=GetReal
 						//print("insp_die=",insp_die,'NL')
 						vDbDefectSummary(test_num,  def_cnt,
 						test_area, dd,
