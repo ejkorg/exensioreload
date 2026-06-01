@@ -1,8 +1,8 @@
 curl -sS -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 -H "Content-Type: application/json" \
--X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
+-X POST "${CP_ES_URL}" \
 -d '{
-  "size": 20,
+  "size": 1,
   "_source": [
     "@timestamp",
     "cpConfig",
@@ -17,7 +17,7 @@ curl -sS -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
         {
           "wildcard": {
             "cpConfig": {
-              "value": "*_sender*",
+              "value": "*sender*",
               "case_insensitive": true
             }
           }

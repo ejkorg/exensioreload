@@ -2,10 +2,10 @@
 
 This guide explains how to **enable, configure, and verify** the two optional completion monitors in ExensioReload:
 
-| Integration | Purpose | Spring property prefix |
-|-------------|---------|------------------------|
-| **CP Elasticsearch** | Confirm CP enrichment succeeded/failed from dataport logs | `cp.elasticsearch.*` |
-| **Exensio Loading API** | Confirm lot/wafer exists in Exensio after CP | `exensio.*` |
+| Integration             | Purpose                                                   | Spring property prefix |
+| ----------------------- | --------------------------------------------------------- | ---------------------- |
+| **CP Elasticsearch**    | Confirm CP enrichment succeeded/failed from dataport logs | `cp.elasticsearch.*`   |
+| **Exensio Loading API** | Confirm lot/wafer exists in Exensio after CP              | `exensio.*`            |
 
 Both are **optional**. The app uses a capability-based router (`StagePipelinePolicy`) so you can deploy any combination without code changes.
 
@@ -28,12 +28,12 @@ flowchart TD
 
 ### Deployment matrix
 
-| `CP_ES_URL` | `EXENSIO_ENABLED` | After CP consumes queue | Final confirmation |
-|-------------|-------------------|-------------------------|-------------------|
-| empty | `false` | **DONE** | None (fastest path) |
-| empty | `true` | **EXENSIO_LOADING** | Exensio `lot-wafer-lookup` |
-| set | `false` | **ENRICHMENT** | ES logs → **DONE** (stores CP paths) |
-| set | `true` | **ENRICHMENT** | ES logs → **EXENSIO_LOADING** → Exensio API → **DONE** |
+| `CP_ES_URL` | `EXENSIO_ENABLED` | After CP consumes queue | Final confirmation                                     |
+| ----------- | ----------------- | ----------------------- | ------------------------------------------------------ |
+| empty       | `false`           | **DONE**                | None (fastest path)                                    |
+| empty       | `true`            | **EXENSIO_LOADING**     | Exensio `lot-wafer-lookup`                             |
+| set         | `false`           | **ENRICHMENT**          | ES logs → **DONE** (stores CP paths)                   |
+| set         | `true`            | **ENRICHMENT**          | ES logs → **EXENSIO_LOADING** → Exensio API → **DONE** |
 
 **Priority:** Elasticsearch wins over Exensio when both are configured (ES verifies CP first).
 
@@ -83,10 +83,10 @@ Monitors are **background schedulers**; no frontend changes are required.
 
 ### 3.1 What it does
 
-| Component | Schedule (default) | Role |
-|-----------|-------------------|------|
-| `SenderQueueMonitor` | every 10s | Detects queue consumption; leaves rows in **ENRICHMENT** when ES is on |
-| `CpLogMonitor` | every 60s | Queries ES for CP log lines matching `data_id` + `lot` |
+| Component            | Schedule (default) | Role                                                                   |
+| -------------------- | ------------------ | ---------------------------------------------------------------------- |
+| `SenderQueueMonitor` | every 10s          | Detects queue consumption; leaves rows in **ENRICHMENT** when ES is on |
+| `CpLogMonitor`       | every 60s          | Queries ES for CP log lines matching `data_id` + `lot`                 |
 
 **Outcomes:**
 
@@ -108,51 +108,52 @@ cp:
     username: ${CP_ES_USERNAME:}
     password: ${CP_ES_PASSWORD:}
     index-pattern: logs*dataport*
-    cp-config-filter: "*_sender*"
-        # Optional: If different sites index the country under different field names,
-        # provide a per-location mapping. Keys are the site keys from dbconnections.yml
-        # (upper-cased, e.g. EXTERNAL-PROD or EXTERNAL-QA). Values are the ES field
-        # name that contains the country (e.g. service.country, service_country).
-        # Prefer adding this mapping to your profile YAML (application-*.yml).
-        # Example:
-        # service-country-field-by-location:
-        #   EXTERNAL-PROD: service.country
-        #   EXTERNAL-QA: service_country
+    cp-config-filter:
+      '*sender*'
+      # Optional: If different sites index the country under different field names,
+      # provide a per-location mapping. Keys are the site keys from dbconnections.yml
+      # (upper-cased, e.g. EXTERNAL-PROD or EXTERNAL-QA). Values are the ES field
+      # name that contains the country (e.g. service.country, service_country).
+      # Prefer adding this mapping to your profile YAML (application-*.yml).
+      # Example:
+      # service-country-field-by-location:
+      #   EXTERNAL-PROD: service.country
+      #   EXTERNAL-QA: service_country
     poll-interval-ms: 60000
     enrichment-timeout-minutes: 30
 ```
 
 #### Environment variables (recommended for production)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `CP_ES_URL` | **Yes** (to enable) | **Base ES URL only**, e.g. `https://elasticsearch.company.com:9200` (do **not** include `/logs*dataport*/_search`; the app appends that automatically) |
-| `CP_ES_API_KEY` | Preferred | Elasticsearch API key (Authorization: `ApiKey …`) |
-| `CP_ES_USERNAME` | If no API key | Basic auth user |
-| `CP_ES_PASSWORD` | If no API key | Basic auth password |
+| Variable         | Required            | Description                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CP_ES_URL`      | **Yes** (to enable) | Full ES search URL **or** base host. The app detects automatically: if the URL already contains `/_search`, it is used as-is; otherwise the app appends `/<index-pattern>/_search`. Examples: `https://elastic-host.com/logs*dataport*/_search` (full) or `https://elasticsearch.company.com:9200` (base host only) |
+| `CP_ES_API_KEY`  | Preferred           | Elasticsearch API key (Authorization: `ApiKey …`)                                                                                                                                                                                                                                                                   |
+| `CP_ES_USERNAME` | If no API key       | Basic auth user                                                                                                                                                                                                                                                                                                     |
+| `CP_ES_PASSWORD` | If no API key       | Basic auth password                                                                                                                                                                                                                                                                                                 |
 
 **Activation rule:** `CpElasticsearchProperties.isConfigured()` → `url` is non-blank.
 
 #### Optional tuning
 
-| Property | Default | Meaning |
-|----------|---------|---------|
-| `index-pattern` | `logs*dataport*` | ES index pattern appended to `/_search` |
-| `cp-config-filter` | `*sender*` | Wildcard on field `cpConfig` |
-| `poll-interval-ms` | `60000` | `CpLogMonitor` interval |
-| `enrichment-timeout-minutes` | `30` | Max wait in ENRICHMENT before FAILED |
+| Property                     | Default          | Meaning                                 |
+| ---------------------------- | ---------------- | --------------------------------------- |
+| `index-pattern`              | `logs*dataport*` | ES index pattern appended to `/_search` |
+| `cp-config-filter`           | `*sender*`       | Wildcard on field `cpConfig`            |
+| `poll-interval-ms`           | `60000`          | `CpLogMonitor` interval                 |
+| `enrichment-timeout-minutes` | `30`             | Max wait in ENRICHMENT before FAILED    |
 
 ### 3.3 Elasticsearch log requirements
 
 `ElasticsearchLogService` issues a `_search` with **must** clauses:
 
-| ES field | Match |
-|----------|--------|
-| `cpConfig` | wildcard `*_sender*` (configurable) |
-| `service.country` | optional term filter, for example `PHO` for External logs |
-| `idData` | term = staged `data_id` |
-| `mLot` | term = staged `lot` |
-| `@timestamp` | `gte` record `updated_at` (set when CP consumes the queue row and the status flips to `ENRICHMENT`) |
+| ES field          | Match                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| `cpConfig`        | wildcard `*sender*` (configurable)                                                                  |
+| `service.country` | optional term filter, for example `PHO` for External logs                                           |
+| `idData`          | term = staged `data_id`                                                                             |
+| `mLot`            | term = staged `lot`                                                                                 |
+| `@timestamp`      | `gte` record `updated_at` (set when CP consumes the queue row and the status flips to `ENRICHMENT`) |
 
 In other words, the ES time window should start at the moment the payload is removed from `DTP_SENDER_QUEUE_ITEM` and the app marks the RefDB row as `ENRICHMENT`.
 
@@ -170,19 +171,27 @@ runtime using the site key from `SENDER_STAGE.site` (the same keys used in `dbco
 
 ### 3.4 Example manual ES test
 
-Replace placeholders and run from a host that can reach ES:
+Replace placeholders and run from a host that can reach ES.
+
+`ES_SEARCH_URL` should be the full `/_search` endpoint. If `CP_ES_URL` already contains `/_search` (e.g. `https://elastic-host.com/logs*dataport*/_search`), use it directly. If it is a base host only, append the index pattern manually for the curl test.
 
 ```bash
+# Set ES_SEARCH_URL to the full search endpoint for this manual test.
+# If CP_ES_URL already ends with /_search, use it as-is:
+ES_SEARCH_URL="$CP_ES_URL"
+# If CP_ES_URL is a base host only (e.g. https://elasticsearch.company.com:9200), append:
+# ES_SEARCH_URL="${CP_ES_URL%/}/logs*dataport*/_search"
+
 curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
   -H "Content-Type: application/json" \
-  -X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
+  -X POST "$ES_SEARCH_URL" \
   -d '{
-    "size": 2,
+    "size": 1,
     "_source": ["@timestamp", "cpConfig", "idData", "idFile", "message", "log.level"],
     "query": {
       "bool": {
         "must": [
-          { "wildcard": { "cpConfig": { "value": "*_sender*", "case_insensitive": true } } },
+          { "wildcard": { "cpConfig": { "value": "*sender*", "case_insensitive": true } } },
           { "term": { "idData": "YOUR_DATA_ID" } },
           { "term": { "idFile": "YOUR_FILE_ID" } },
           { "term": { "mLot": "YOUR_LOT" } },
@@ -204,8 +213,6 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 If your site indexes the country as `service_country`, update the `term` clause accordingly
 or add a per-location mapping in your profile so the application builds the query correctly.
 
-If you are constructing a one-off curl by hand, use the **base ES host** in `CP_ES_URL` and keep the query path as `/<index-pattern>/_search`.
-
 Recommended profile YAML snippet (add to `application-onsemi-oracle.yml` or `application.yml`):
 
 ```yaml
@@ -220,7 +227,9 @@ cp:
 ### 3.5 Verification checklist (ES)
 
 1. Set `CP_ES_URL` (and auth), restart backend.
-  - If your ES cluster mixes regions/services, set `CP_ES_SERVICE_COUNTRY_FILTER=PHO` to isolate External logs.
+
+- If your ES cluster mixes regions/services, set `CP_ES_SERVICE_COUNTRY_FILTER=PHO` to isolate External logs.
+
 2. Stage and dispatch a small session (1–2 files).
 3. In UI, files should stay **ENRICHMENT** / “Enrichment / Translation” after leaving the queue (not immediate DONE).
 4. In logs, look for:
@@ -230,12 +239,12 @@ cp:
 
 ### 3.6 ES troubleshooting
 
-| Symptom | Likely cause | Action |
-|---------|--------------|--------|
-| Immediate **DONE** after queue | `CP_ES_URL` empty | Set URL and restart |
-| Stuck **ENRICHMENT** forever | No matching ES logs / wrong fields | Validate `idData`, `mLot`, `cpConfig`, timestamp |
-| **FAILED** timeout 30m | Logs arrive after timeout | Increase `enrichment-timeout-minutes` or fix CP logging delay |
-| Warn “ES query failed … skipping” | Network/auth/HTTP errors | Fix connectivity; record retried next cycle (not auto-FAILED) |
+| Symptom                           | Likely cause                       | Action                                                        |
+| --------------------------------- | ---------------------------------- | ------------------------------------------------------------- |
+| Immediate **DONE** after queue    | `CP_ES_URL` empty                  | Set URL and restart                                           |
+| Stuck **ENRICHMENT** forever      | No matching ES logs / wrong fields | Validate `idData`, `mLot`, `cpConfig`, timestamp              |
+| **FAILED** timeout 30m            | Logs arrive after timeout          | Increase `enrichment-timeout-minutes` or fix CP logging delay |
+| Warn “ES query failed … skipping” | Network/auth/HTTP errors           | Fix connectivity; record retried next cycle (not auto-FAILED) |
 
 ---
 
@@ -243,11 +252,11 @@ cp:
 
 ### 4.1 What it does
 
-| Component | Schedule (default) | Role |
-|-----------|-------------------|------|
-| `SenderQueueMonitor` | every 10s | If ES off and Exensio on → **EXENSIO_LOADING** when queue row gone |
-| `CpLogMonitor` | every 60s | If ES on and Exensio on → **EXENSIO_LOADING** after ES success |
-| `ExensioLoadMonitor` | every 60s | Polls Exensio for all **EXENSIO_LOADING** rows |
+| Component            | Schedule (default) | Role                                                               |
+| -------------------- | ------------------ | ------------------------------------------------------------------ |
+| `SenderQueueMonitor` | every 10s          | If ES off and Exensio on → **EXENSIO_LOADING** when queue row gone |
+| `CpLogMonitor`       | every 60s          | If ES on and Exensio on → **EXENSIO_LOADING** after ES success     |
+| `ExensioLoadMonitor` | every 60s          | Polls Exensio for all **EXENSIO_LOADING** rows                     |
 
 **Outcomes:**
 
@@ -283,26 +292,26 @@ exensio:
 
 #### Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `EXENSIO_ENABLED` | **Yes** | `true` to activate |
-| `EXENSIO_ENV` | Yes | `QA` or `PROD` — selects `qa-base-url` vs `prod-base-url` |
-| `EXENSIO_QA_URL` | For QA | Base URL, e.g. `https://exensio-qa.company.com` |
-| `EXENSIO_PROD_URL` | For PROD | Production base URL |
-| `EXENSIO_USERNAME` | **Yes** | API user |
-| `EXENSIO_PASSWORD` | **Yes** | API password |
-| `EXENSIO_DBNAME` | Optional | Login body `dbname`; defaults to `EXENSIO_ENV` |
-| `EXENSIO_DBSCHEMA` | Optional | Default `PRODUCTION` |
+| Variable           | Required | Description                                               |
+| ------------------ | -------- | --------------------------------------------------------- |
+| `EXENSIO_ENABLED`  | **Yes**  | `true` to activate                                        |
+| `EXENSIO_ENV`      | Yes      | `QA` or `PROD` — selects `qa-base-url` vs `prod-base-url` |
+| `EXENSIO_QA_URL`   | For QA   | Base URL, e.g. `https://exensio-qa.company.com`           |
+| `EXENSIO_PROD_URL` | For PROD | Production base URL                                       |
+| `EXENSIO_USERNAME` | **Yes**  | API user                                                  |
+| `EXENSIO_PASSWORD` | **Yes**  | API password                                              |
+| `EXENSIO_DBNAME`   | Optional | Login body `dbname`; defaults to `EXENSIO_ENV`            |
+| `EXENSIO_DBSCHEMA` | Optional | Default `PRODUCTION`                                      |
 
 **Activation rule:** `ExensioProperties.isConfigured()` → `enabled=true` **and** resolved base URL non-blank.
 
 ### 4.3 API endpoints used
 
-| Step | Method | Path | Body / headers |
-|------|--------|------|----------------|
-| Login | `POST` | `/v1/session/login` | `{ "username", "password", "dbname", "dbschema" }` → `{ "token": "…" }` |
-| Lookup (batch) | `POST` | `/v1/key/lot-wafer-lookup` | `Authorization: Bearer <token>`, `{ "pgc_key": 1, "lot_ids": [...], "wafer_ids": [...] }` |
-| Logout (shutdown) | `POST` | `/v1/session/logout` | Bearer token |
+| Step              | Method | Path                       | Body / headers                                                                            |
+| ----------------- | ------ | -------------------------- | ----------------------------------------------------------------------------------------- |
+| Login             | `POST` | `/v1/session/login`        | `{ "username", "password", "dbname", "dbschema" }` → `{ "token": "…" }`                   |
+| Lookup (batch)    | `POST` | `/v1/key/lot-wafer-lookup` | `Authorization: Bearer <token>`, `{ "pgc_key": 1, "lot_ids": [...], "wafer_ids": [...] }` |
+| Logout (shutdown) | `POST` | `/v1/session/logout`       | Bearer token                                                                              |
 
 Implemented in `ExensioAuthService` and `ExensioClient`. Token is cached in memory; **401** triggers re-login and one retry.
 
@@ -335,13 +344,13 @@ curl -s -X POST "$EXENSIO_QA_URL/v1/key/lot-wafer-lookup" \
 
 ### 4.6 Exensio troubleshooting
 
-| Symptom | Likely cause | Action |
-|---------|--------------|--------|
-| Stuck **EXENSIO_LOADING** | `EXENSIO_ENABLED=false` or URL empty | Enable and set `EXENSIO_QA_URL` / `EXENSIO_PROD_URL` |
-| **FAILED** “Missing lot or wafer” | Staged metadata incomplete | Fix discovery filters / metadata source |
-| **FAILED** timeout 60m | Wafer not in Exensio yet | Confirm CP actually loaded; adjust `timeout-minutes` |
-| Circuit breaker OPEN in logs | Repeated API failures | Fix Exensio service; wait `circuit-breaker-reset-ms` |
-| Auth errors on startup | Bad credentials / dbname | Test login curl above |
+| Symptom                           | Likely cause                         | Action                                               |
+| --------------------------------- | ------------------------------------ | ---------------------------------------------------- |
+| Stuck **EXENSIO_LOADING**         | `EXENSIO_ENABLED=false` or URL empty | Enable and set `EXENSIO_QA_URL` / `EXENSIO_PROD_URL` |
+| **FAILED** “Missing lot or wafer” | Staged metadata incomplete           | Fix discovery filters / metadata source              |
+| **FAILED** timeout 60m            | Wafer not in Exensio yet             | Confirm CP actually loaded; adjust `timeout-minutes` |
+| Circuit breaker OPEN in logs      | Repeated API failures                | Fix Exensio service; wait `circuit-breaker-reset-ms` |
+| Auth errors on startup            | Bad credentials / dbname             | Test login curl above                                |
 
 ---
 
@@ -375,7 +384,7 @@ Expected: queue consumption → **EXENSIO_LOADING** → Exensio poll → **DONE*
 ### Phase C — Elasticsearch only (no Exensio)
 
 ```bash
-CP_ES_URL=https://your-es-host:9200
+CP_ES_URL=https://elastic-mosdata-prod-uswest2.es.privatelink.westus2.azure.elastic-cloud.com/logs*dataport*/_search
 CP_ES_API_KEY=...   # or USERNAME/PASSWORD
 EXENSIO_ENABLED=false
 ```
@@ -392,22 +401,22 @@ Set both. Expected: **ENRICHMENT** → ES success → **EXENSIO_LOADING** → Ex
 
 ### Status values in `SENDER_STAGE`
 
-| Status | Meaning |
-|--------|---------|
-| `NEW` | Staged, not yet dispatched |
-| `ENRICHMENT` | In sender queue and/or awaiting ES verification |
+| Status            | Meaning                                            |
+| ----------------- | -------------------------------------------------- |
+| `NEW`             | Staged, not yet dispatched                         |
+| `ENRICHMENT`      | In sender queue and/or awaiting ES verification    |
 | `EXENSIO_LOADING` | CP step done (or ES success); awaiting Exensio API |
-| `DONE` | Terminal success |
-| `FAILED` | Terminal error (see `error_message`) |
+| `DONE`            | Terminal success                                   |
+| `FAILED`          | Terminal error (see `error_message`)               |
 
 ### Background task intervals
 
-| Task | Property | Default |
-|------|----------|---------|
-| Queue inspection | `refdb.dispatch.monitor-interval-ms` | 10000 ms |
-| ES poll | `cp.elasticsearch.poll-interval-ms` | 60000 ms |
-| Exensio poll | `exensio.poll-interval-ms` | 60000 ms |
-| Dispatch to queue | `refdb.dispatch.interval-ms` | 60000 ms |
+| Task              | Property                             | Default  |
+| ----------------- | ------------------------------------ | -------- |
+| Queue inspection  | `refdb.dispatch.monitor-interval-ms` | 10000 ms |
+| ES poll           | `cp.elasticsearch.poll-interval-ms`  | 60000 ms |
+| Exensio poll      | `exensio.poll-interval-ms`           | 60000 ms |
+| Dispatch to queue | `refdb.dispatch.interval-ms`         | 60000 ms |
 
 ### Log messages to search
 
@@ -430,12 +439,12 @@ Circuit breaker is OPEN
 
 ### Database columns (audit trail)
 
-| Column | Set by |
-|--------|--------|
-| `cp_output_path`, `cp_output_target` | ES success (`CpLogMonitor`) |
+| Column                                | Set by                                 |
+| ------------------------------------- | -------------------------------------- |
+| `cp_output_path`, `cp_output_target`  | ES success (`CpLogMonitor`)            |
 | `exensio_wafer_key`, `exensio_pg_key` | Exensio success (`ExensioLoadMonitor`) |
-| `processed_at` | **DONE** transition |
-| `error_message` | **FAILED** (max ~500 chars) |
+| `processed_at`                        | **DONE** transition                    |
+| `error_message`                       | **FAILED** (max ~500 chars)            |
 
 ---
 
@@ -487,15 +496,15 @@ logging:
 
 ### What you'll see in logs
 
-| Log Message | Level | Meaning | Action |
-|---|---|---|---|
-| `CP success (PRODUCTION in message) for dataId=...` | INFO | File enriched, routed to PRODUCTION | None — normal flow |
-| `CP success (SANDBOX in message) for dataId=...` | INFO | File enriched, routed to SANDBOX | None — normal flow |
-| `CP failure (log.level=ERROR) for dataId=...: ...` | INFO | CP reported error during processing | Check error message; record will be marked FAILED |
-| `CP enrichment timeout for record id=... dataId=...` | INFO | No ES log found after 30 min (default) | Increase `enrichment-timeout-minutes` or investigate CP delays |
-| `No CP log yet for record id=... dataId=... — will retry next cycle` | DEBUG | First few poll cycles; normal during enrichment | None — will keep retrying |
-| `ES query payload (dataId=..., idFile=...): url=..., body=...` | INFO | Full ES query being sent (enable via `logRequestPayloads: true`) | Useful for debugging mismatches |
-| `Elasticsearch query failed for dataId=..., lot=...: ...` | WARN | Network/auth/HTTP error talking to ES | Check ES connectivity and credentials |
+| Log Message                                                          | Level | Meaning                                                          | Action                                                         |
+| -------------------------------------------------------------------- | ----- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `CP success (PRODUCTION in message) for dataId=...`                  | INFO  | File enriched, routed to PRODUCTION                              | None — normal flow                                             |
+| `CP success (SANDBOX in message) for dataId=...`                     | INFO  | File enriched, routed to SANDBOX                                 | None — normal flow                                             |
+| `CP failure (log.level=ERROR) for dataId=...: ...`                   | INFO  | CP reported error during processing                              | Check error message; record will be marked FAILED              |
+| `CP enrichment timeout for record id=... dataId=...`                 | INFO  | No ES log found after 30 min (default)                           | Increase `enrichment-timeout-minutes` or investigate CP delays |
+| `No CP log yet for record id=... dataId=... — will retry next cycle` | DEBUG | First few poll cycles; normal during enrichment                  | None — will keep retrying                                      |
+| `ES query payload (dataId=..., idFile=...): url=..., body=...`       | INFO  | Full ES query being sent (enable via `logRequestPayloads: true`) | Useful for debugging mismatches                                |
+| `Elasticsearch query failed for dataId=..., lot=...: ...`            | WARN  | Network/auth/HTTP error talking to ES                            | Check ES connectivity and credentials                          |
 
 ### Enabling request payload logging (debug only)
 
@@ -504,7 +513,7 @@ Add to `application.yml` to see full ES query JSON (very verbose):
 ```yaml
 cp:
   elasticsearch:
-    logRequestPayloads: true  # Set to false in production
+    logRequestPayloads: true # Set to false in production
 ```
 
 ---
@@ -513,15 +522,15 @@ cp:
 
 When monitoring a session in the UI, the **integration status** field shows what happened with Elasticsearch:
 
-| Status | Message | Meaning | Next Step |
-|--------|---------|---------|-----------|
-| `success` | `CP log found in ES` | Elasticsearch query succeeded and found enrichment output | File moves to EXENSIO_LOADING (if enabled) or DONE |
-| `failure` | `<error message from CP log>` | CP reported an error during processing | File marked FAILED; check error details |
-| `timeout` | `CP enrichment timeout — no log found in Elasticsearch after 30 minutes` | ES never received a CP log for this file | Increase timeout or check CP pipeline delays |
-| `not_found` | `No ES log yet — retrying` | First few poll cycles; ES log not available yet | Normal — will retry every 60 seconds |
-| `error` | `ES query failed: <error>` | Network/auth/HTTP error contacting Elasticsearch | Check ES cluster connectivity and credentials |
-| `pending` | `Waiting for first check` | ES polling not started yet | Normal at session start |
-| `not_configured` | `Not configured` | ES URL is blank; monitoring disabled | Enable ES by setting `CP_ES_URL` and restarting |
+| Status           | Message                                                                  | Meaning                                                   | Next Step                                          |
+| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------- |
+| `success`        | `CP log found in ES`                                                     | Elasticsearch query succeeded and found enrichment output | File moves to EXENSIO_LOADING (if enabled) or DONE |
+| `failure`        | `<error message from CP log>`                                            | CP reported an error during processing                    | File marked FAILED; check error details            |
+| `timeout`        | `CP enrichment timeout — no log found in Elasticsearch after 30 minutes` | ES never received a CP log for this file                  | Increase timeout or check CP pipeline delays       |
+| `not_found`      | `No ES log yet — retrying`                                               | First few poll cycles; ES log not available yet           | Normal — will retry every 60 seconds               |
+| `error`          | `ES query failed: <error>`                                               | Network/auth/HTTP error contacting Elasticsearch          | Check ES cluster connectivity and credentials      |
+| `pending`        | `Waiting for first check`                                                | ES polling not started yet                                | Normal at session start                            |
+| `not_configured` | `Not configured`                                                         | ES URL is blank; monitoring disabled                      | Enable ES by setting `CP_ES_URL` and restarting    |
 
 ### How to read the UI monitoring display
 
@@ -545,58 +554,61 @@ Elasticsearch: [✓] CP log found in ES
 
 ### Issue: Files stuck in "ENRICHMENT" status indefinitely
 
-| Symptom | Likely cause | Solution |
-|---------|--------------|----------|
-| All files stay ENRICHMENT for hours | `CP_ES_URL` is misconfigured (hostname typo, wrong port) | Verify URL format: `https://elasticsearch.company.com:9200` |
-| Files eventually timeout after 30 min | No ES logs being generated for files | Check if CP is actually processing files; verify `cpConfig` filter matches your logs |
-| Only specific files timeout | Mismatched query filters (`idData`, `idFile`, `lot`) | Check SENDER_STAGE columns match ES document fields |
-| All files fail with "error" status | ES authentication failed (API key/password wrong) | Verify `CP_ES_API_KEY` or `CP_ES_USERNAME`/`CP_ES_PASSWORD` are correct |
-| Network timeout errors in logs | ES cluster unreachable | Ping ES from app server; check firewall rules; verify HTTPS cert is trusted |
+| Symptom                               | Likely cause                                             | Solution                                                                                         |
+| ------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| All files stay ENRICHMENT for hours   | `CP_ES_URL` is misconfigured (hostname typo, wrong path) | Verify the URL resolves correctly; if it includes `/_search`, confirm the full path is reachable |
+| Files eventually timeout after 30 min | No ES logs being generated for files                     | Check if CP is actually processing files; verify `cpConfig` filter matches your logs             |
+| Only specific files timeout           | Mismatched query filters (`idData`, `idFile`, `lot`)     | Check SENDER_STAGE columns match ES document fields                                              |
+| All files fail with "error" status    | ES authentication failed (API key/password wrong)        | Verify `CP_ES_API_KEY` or `CP_ES_USERNAME`/`CP_ES_PASSWORD` are correct                          |
+| Network timeout errors in logs        | ES cluster unreachable                                   | Ping ES from app server; check firewall rules; verify HTTPS cert is trusted                      |
 
 ### Issue: Files fail with wrong error message
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| Error says "CP processing error" but has details | Message field was empty in ES log | CP logs not capturing full error — check CP configuration |
-| Output path shows "UNKNOWN" instead of "PRODUCTION"/"SANDBOX" | Path string doesn't contain those keywords | CP output path format changed; update regex or adjust `detectOutputTarget()` method |
-| pp_log fallback never triggered | Message doesn't contain "executed successfully" | CP logs don't use that phrase — check actual log message text |
+| Symptom                                                       | Cause                                           | Solution                                                                            |
+| ------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Error says "CP processing error" but has details              | Message field was empty in ES log               | CP logs not capturing full error — check CP configuration                           |
+| Output path shows "UNKNOWN" instead of "PRODUCTION"/"SANDBOX" | Path string doesn't contain those keywords      | CP output path format changed; update regex or adjust `detectOutputTarget()` method |
+| pp_log fallback never triggered                               | Message doesn't contain "executed successfully" | CP logs don't use that phrase — check actual log message text                       |
 
 ### Issue: Some records get pp_log fallback, others don't
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
+| Symptom                                | Cause                                                                      | Fix                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Only some files trigger pp_log queries | ES message has keyword (PRODUCTION/SANDBOX) before "executed successfully" | Priority order: PRODUCTION/SANDBOX match first, so pp_log is skipped; this is correct |
-| pp_log query always returns no rows | `lot` or `idFile` mismatch between SENDER_STAGE and pp_log | Verify column mapping; ensure `metadataId` matches pp_log's `idFile` concept |
-| pp_log queries work some times | Random failures; SQL error in logs | Check pp_log datasource connectivity; ensure `refdb.pp-log-*` properties are set |
+| pp_log query always returns no rows    | `lot` or `idFile` mismatch between SENDER_STAGE and pp_log                 | Verify column mapping; ensure `metadataId` matches pp_log's `idFile` concept          |
+| pp_log queries work some times         | Random failures; SQL error in logs                                         | Check pp_log datasource connectivity; ensure `refdb.pp-log-*` properties are set      |
 
 ### Issue: "No ES hits" after query looks correct
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| Query payload looks right but returns empty | ES index has no documents matching time window | Ensure `@timestamp` range includes time when CP processed file; may be delayed |
-| Query returns hits but result is "NotFound" | Hit message doesn't match success/failure keywords | ES message format doesn't contain "PRODUCTION", "SANDBOX", "executed successfully", or `log.level=ERROR` |
-| `cpConfig` filter mismatch | Value is `*sender*` but docs have `_sender`, `sender`, or custom value | Update `cp.elasticsearch.cp-config-filter` to match your index; e.g., `*_sender*` |
+| Symptom                                     | Cause                                                          | Solution                                                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Query payload looks right but returns empty | ES index has no documents matching time window                 | Ensure `@timestamp` range includes time when CP processed file; may be delayed                           |
+| Query returns hits but result is "NotFound" | Hit message doesn't match success/failure keywords             | ES message format doesn't contain "PRODUCTION", "SANDBOX", "executed successfully", or `log.level=ERROR` |
+| `cpConfig` filter mismatch                  | Configured value doesn't match your ES `cpConfig` field values | Update `cp.elasticsearch.cp-config-filter` to match your index; default is `*sender*`                    |
 
 ### Debug: Manually test ES query
 
 Use the curl command from §3.4 with your actual values:
 
 ```bash
-export CP_ES_URL="https://elasticsearch.company.com:9200"
+# Use your actual CP_ES_URL value. If it already contains /_search, use it directly.
+# If it is a base host only, append the index pattern:
+# export CP_ES_URL="https://elasticsearch.company.com:9200/logs*dataport*/_search"
+export CP_ES_URL="https://elastic-mosdata-prod-uswest2.es.privatelink.westus2.azure.elastic-cloud.com/logs*dataport*/_search"
 export CP_ES_USERNAME="elastic_user"
 export CP_ES_PASSWORD="your_password"
 
 # Replace YOUR_DATA_ID, YOUR_FILE_ID, YOUR_LOT with actual values from SENDER_STAGE
 curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
   -H "Content-Type: application/json" \
-  -X POST "${CP_ES_URL%/}/logs*dataport*/_search" \
+  -X POST "$CP_ES_URL" \
   -d '{
-    "size": 2,
+    "size": 1,
     "_source": ["@timestamp", "cpConfig", "idData", "idFile", "message", "log.level"],
     "query": {
       "bool": {
         "must": [
-          { "wildcard": { "cpConfig": { "value": "*_sender*", "case_insensitive": true } } },
+          { "wildcard": { "cpConfig": { "value": "*sender*", "case_insensitive": true } } },
           { "term": { "idData": "YOUR_DATA_ID" } },
           { "term": { "idFile": "YOUR_FILE_ID" } },
           { "term": { "mLot": "YOUR_LOT" } },
@@ -624,4 +636,4 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 
 ---
 
-*Last updated for capability-based routing (`StagePipelinePolicy`). If behaviour differs from this doc, the Java policy/orchestrator classes are the source of truth.*
+_Last updated for capability-based routing (`StagePipelinePolicy`). If behaviour differs from this doc, the Java policy/orchestrator classes are the source of truth._

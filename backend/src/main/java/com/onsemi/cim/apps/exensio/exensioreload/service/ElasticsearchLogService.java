@@ -207,12 +207,12 @@ public class ElasticsearchLogService {
             ObjectNode bool = query.putObject("bool");
             ArrayNode must = bool.putArray("must");
 
-            // cpConfig wildcard filter (Requirement 2.3) — use "_sender*" pattern
+            // cpConfig wildcard filter — value driven by cp.elasticsearch.cp-config-filter (default: *sender*)
             ObjectNode wildcardClause = must.addObject();
             ObjectNode wildcard = wildcardClause.putObject("wildcard");
             ObjectNode cpConfigWild = wildcard.putObject("cpConfig");
             String filterValue = cpConfigFilter == null ? props.getCpConfigFilter() : cpConfigFilter;
-            cpConfigWild.put("value", "*_sender*");
+            cpConfigWild.put("value", filterValue);
             cpConfigWild.put("case_insensitive", true);
 
             // Optional service.country filter

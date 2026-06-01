@@ -36,8 +36,8 @@ spring:
       validation-timeout: 5000
       leak-detection-threshold: 30000
   mail:
-    host: mailhost.onsemi.com      # your SMTP host (e.g. smtp.sendgrid.net)
-    port: 25                      # internal SMTP relay, no auth/STARTTLS
+    host: mailhost.onsemi.com # your SMTP host (e.g. smtp.sendgrid.net)
+    port: 25 # internal SMTP relay, no auth/STARTTLS
     username: ""
     password: ""
     properties:
@@ -121,7 +121,6 @@ exensioreload:
 # per-dataType views (probe/ft/...). Set to `false` to allow optimized
 # per-dataType views.
 
-
 security:
   ldap:
     enabled: false
@@ -180,4 +179,9 @@ cp:
     # Default country filter value can be set by env var CP_ES_SERVICE_COUNTRY_FILTER
     service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
     poll-interval-ms: 60000
+    enrichment-timeout-minutes: 30
+    logRequestPayloads: false # Suppress verbose ES query logging in production
 
+# Exensio API — production overrides
+exensio:
+  logRequestPayloads: false # Suppress verbose Exensio request logging in production

@@ -92,15 +92,16 @@ cp:
     # Optional: set to PHO to isolate the External log source when ES contains mixed regions/services.
     service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
     # Optional: per-location ES field name overrides when different sites index the country
-    # Example:
+    # under a different field name. Keys are site keys from dbconnections.yml (upper-cased).
+    # NOTE: this is a Map<String,String> and cannot be set via a single env var.
+    # Configure it in your profile YAML (e.g. application-onsemi-oracle.yml). Example:
     # service-country-field-by-location:
     #   EXTERNAL-PROD: service.country
     #   EXTERNAL-QA: service_country
     #   PHM-TARLAC-PROD: service.country
-    service-country-field-by-location: ${CP_ES_SERVICE_COUNTRY_FIELD_BY_LOCATION:}
     poll-interval-ms: 60000
-    enrichment-timeout-minutes: 30
-    logRequestPayloads: true
+    enrichment-timeout-minutes: 30 # Max wait in ENRICHMENT before FAILED (minutes)
+    logRequestPayloads: true # Set to false in production profiles
 
 reloader:
   refresh:
@@ -154,7 +155,3 @@ exensio:
 etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}
-
-
-
-
