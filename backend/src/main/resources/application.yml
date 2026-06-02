@@ -150,6 +150,11 @@ exensio:
   circuit-breaker-threshold: ${EXENSIO_CIRCUIT_BREAKER_THRESHOLD:5}
   circuit-breaker-reset-ms: ${EXENSIO_CIRCUIT_BREAKER_RESET_MS:60000}
 
+  # Raw SQL priority lookup (preferred before lot-wafer-lookup)
+  prefer-raw-sql: ${EXENSIO_PREFER_RAW_SQL:true}
+  raw-sql-timeout-seconds: ${EXENSIO_RAW_SQL_TIMEOUT_SECONDS:20}
+  raw-sql-row-limit: ${EXENSIO_RAW_SQL_ROW_LIMIT:200}
+
 # ETL SSH Trigger — optional SSH + remote crontab (see docs/ETL_SSH_TRIGGER.md)
 # Requires classpath:etlservers.yml. Independent of refdb.dispatch (queue) path.
 etl:

@@ -96,6 +96,21 @@ public class ExensioProperties {
      */
     private long circuitBreakerResetMs = 60_000L;
 
+    /**
+     * Prefer Exensio raw SQL endpoint before standard lot/wafer lookup.
+     */
+    private boolean preferRawSql = true;
+
+    /**
+     * Timeout in seconds for raw SQL endpoint calls.
+     */
+    private int rawSqlTimeoutSeconds = 20;
+
+    /**
+     * Upper bound on rows returned by generated raw SQL queries.
+     */
+    private int rawSqlRowLimit = 200;
+
     // --- constructor ---
 
     public ExensioProperties(CpElasticsearchProperties esProps) {
@@ -120,6 +135,12 @@ public class ExensioProperties {
         }
         if (circuitBreakerResetMs < 10_000 || circuitBreakerResetMs > 300_000) {
             throw new IllegalArgumentException("exensio.circuitBreakerResetMs must be between 10000 and 300000");
+        }
+        if (rawSqlTimeoutSeconds < 5 || rawSqlTimeoutSeconds > 120) {
+            throw new IllegalArgumentException("exensio.rawSqlTimeoutSeconds must be between 5 and 120");
+        }
+        if (rawSqlRowLimit < 10 || rawSqlRowLimit > 5000) {
+            throw new IllegalArgumentException("exensio.rawSqlRowLimit must be between 10 and 5000");
         }
     }
 
@@ -233,4 +254,13 @@ public class ExensioProperties {
 
     public long getCircuitBreakerResetMs() { return circuitBreakerResetMs; }
     public void setCircuitBreakerResetMs(long circuitBreakerResetMs) { this.circuitBreakerResetMs = circuitBreakerResetMs; }
+
+    public boolean isPreferRawSql() { return preferRawSql; }
+    public void setPreferRawSql(boolean preferRawSql) { this.preferRawSql = preferRawSql; }
+
+    public int getRawSqlTimeoutSeconds() { return rawSqlTimeoutSeconds; }
+    public void setRawSqlTimeoutSeconds(int rawSqlTimeoutSeconds) { this.rawSqlTimeoutSeconds = rawSqlTimeoutSeconds; }
+
+    public int getRawSqlRowLimit() { return rawSqlRowLimit; }
+    public void setRawSqlRowLimit(int rawSqlRowLimit) { this.rawSqlRowLimit = rawSqlRowLimit; }
 }

@@ -404,7 +404,14 @@ public class ExensioLoadMonitor {
                 // uses the same program-group class as the batch path.
                 // Requirements: 5.1–5.5 — pass testPhase so PPID suffix validation is applied.
                 ExensioLotWaferResult result = exensioClient.lotWaferLookup(
-                        record.lot(), record.wafer(), record.endTime(), pgcKey, record.testPhase());
+                    record.lot(),
+                    record.wafer(),
+                    record.endTime(),
+                    pgcKey,
+                    record.testPhase(),
+                    record.filename(),
+                    record.metadataId(),
+                    record.dataId());
 
                 switch (result) {
                     case ExensioLotWaferResult.Found found -> {
