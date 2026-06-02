@@ -6,11 +6,12 @@ import { ThemeService } from './core/theme.service';
 import { ToastContainerComponent } from './shared/components/toast-container.component';
 import { GlassButtonComponent } from './shared/components/glass-button.component';
 import { GlassIconComponent } from './shared/components/glass-icon.component';
+import { AiChatComponent } from './ai/ai-chat.component';
 
 @Component({
     selector: 'app-root',
     standalone: true,
-    imports: [CommonModule, RouterModule, ToastContainerComponent, GlassButtonComponent, GlassIconComponent],
+    imports: [CommonModule, RouterModule, ToastContainerComponent, GlassButtonComponent, GlassIconComponent, AiChatComponent],
     templateUrl: './app.html',
     styleUrls: ['./app.scss']
 })

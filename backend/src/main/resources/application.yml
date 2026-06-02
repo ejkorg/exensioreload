@@ -80,7 +80,7 @@ app:
 #  auth-bootstrap-enabled: true
 #  bootstrap-admins: "fg8n8x,fg8h8x,zbqc3f,zbjzyv,fg8z8x"
 
-# SSO (OIDC / Azure AD) configuration — all secrets via environment variables
+# SSO (OIDC / Azure AD) configuration - all secrets via environment variables
 cp:
   elasticsearch:
     url: ${CP_ES_URL:}
@@ -108,7 +108,7 @@ reloader:
     cookie-secure: false
     cookie-sameSite: Lax
     # Max-Age in seconds for the refresh_token cookie. 0 = session cookie (deleted on browser close).
-    # 604800 = 7 days — matches the refresh token DB expiry.
+    # 604800 = 7 days - matches the refresh token DB expiry.
     cookie-max-age: 604800
   sso:
     enabled: ${ONSEMI_SSO_ENABLED:false}
@@ -120,7 +120,7 @@ reloader:
       onsemi-exensioreload-admins: ADMIN
       onsemi-exensioreload-superadmins: SUPER_ADMIN
 
-# Exensio Loading API integration — see docs/INTEGRATION_ES_EXENSIO.md
+# Exensio Loading API integration - see docs/INTEGRATION_ES_EXENSIO.md
 # EXENSIO_ENABLED=true + base URL activates ExensioLoadMonitor (StagePipelinePolicy).
 # When disabled, post-CP routing uses ES or immediate DONE per cp.elasticsearch.url.
 exensio:
@@ -135,27 +135,43 @@ exensio:
   poll-interval-ms: 60000
   timeout-minutes: 60
   logRequestPayloads: true
-
   # Batch & Parallel Processing Optimization
-  # batch-size: Number of lot/wafer combinations per batch API request (1-100, default: 50)
-  # thread-pool-size: Number of threads for concurrent batch processing (1-20, default: 5)
-  # max-concurrent-requests: Maximum concurrent API requests to Exensio (1-50, default: 10)
-  # enable-circuit-breaker: Enable circuit breaker pattern (true/false, default: true)
-  # circuit-breaker-threshold: Failures before opening circuit (1-100, default: 5)
-  # circuit-breaker-reset-ms: Time to wait before attempting to close circuit (10000-300000, default: 60000)
   batch-size: ${EXENSIO_BATCH_SIZE:50}
   thread-pool-size: ${EXENSIO_THREAD_POOL_SIZE:5}
   max-concurrent-requests: ${EXENSIO_MAX_CONCURRENT_REQUESTS:10}
   enable-circuit-breaker: ${EXENSIO_ENABLE_CIRCUIT_BREAKER:true}
   circuit-breaker-threshold: ${EXENSIO_CIRCUIT_BREAKER_THRESHOLD:5}
   circuit-breaker-reset-ms: ${EXENSIO_CIRCUIT_BREAKER_RESET_MS:60000}
-
   # Raw SQL priority lookup (preferred before lot-wafer-lookup)
   prefer-raw-sql: ${EXENSIO_PREFER_RAW_SQL:true}
   raw-sql-timeout-seconds: ${EXENSIO_RAW_SQL_TIMEOUT_SECONDS:20}
   raw-sql-row-limit: ${EXENSIO_RAW_SQL_ROW_LIMIT:200}
 
-# ETL SSH Trigger — optional SSH + remote crontab (see docs/ETL_SSH_TRIGGER.md)
+# AI Integration Configuration
+# Quick setup: Use preset + API key
+# Presets: "anthropic" (default), "groq" (free tier, fast), "ollama" (local, free), "gemini" (free tier)
+# Usage examples:
+#   Groq (FREE):    AI_ENABLED=true AI_PRESET=groq AI_API_KEY=gsk_xxx
+#   Anthropic:     AI_ENABLED=true AI_PRESET=anthropic AI_API_KEY=sk-ant-xxx
+#   Ollama (local): AI_ENABLED=true AI_PRESET=ollama (no API key needed)
+#   Gemini (FREE):  AI_ENABLED=true AI_PRESET=gemini AI_API_KEY=xxx
+ai:
+  enabled: ${AI_ENABLED:false}
+  preset: ${AI_PRESET:anthropic}
+  provider: ${AI_PROVIDER:}
+  api-key: ${AI_API_KEY:}
+  model: ${AI_MODEL:}
+  base-url: ${AI_BASE_URL:}
+  max-tokens: 1024
+  temperature: 0.7
+  timeout-ms: 30000
+  max-retries: 3
+  rate-limit-per-minute: 20
+  rate-limit-per-hour: 200
+  cache-enabled: true
+  cache-ttl-minutes: 15
+
+# ETL SSH Trigger - optional SSH + remote crontab (see docs/ETL_SSH_TRIGGER.md)
 # Requires classpath:etlservers.yml. Independent of refdb.dispatch (queue) path.
 etl:
   trigger:

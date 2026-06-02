@@ -1,0 +1,189 @@
+<!-- AI Chat Panel - Expandable floating chat interface -->
+
+<!-- Floating Toggle Button -->
+@if (!isOpen()) {
+  <button 
+    class="chat-toggle-btn"
+    (click)="toggleChat()"
+    [class.disabled]="!isEnabled()"
+    [matTooltip]="isEnabled() ? 'Open AI Assistant' : 'AI not available'">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" 
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 10C8.5 8.5 10 7 12 7C14 7 15.5 8.5 16 10" 
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="9" cy="11.5" r="1" fill="currentColor"/>
+      <circle cx="15" cy="11.5" r="1" fill="currentColor"/>
+      <path d="M9 15H15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </button>
+}
+
+<!-- Chat Panel -->
+@if (isOpen()) {
+  <div class="chat-panel">
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="header-content">
+        <svg class="ai-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" 
+                stroke="currentColor" stroke-width="2"/>
+          <path d="M8 10C8.5 8.5 10 7 12 7C14 7 15.5 8.5 16 10" 
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="9" cy="11.5" r="1" fill="currentColor"/>
+          <circle cx="15" cy="11.5" r="1" fill="currentColor"/>
+          <path d="M9 15H15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="header-title">AI Assistant</span>
+      </div>
+      <div class="header-actions">
+        @if (messages().length > 0) {
+          <button 
+            class="icon-btn" 
+            (click)="clearConversation()"
+            matTooltip="Clear conversation"
+            title="Clear conversation">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" 
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        }
+        <button class="icon-btn" (click)="closeChat()" matTooltip="Minimize" title="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages Container -->
+    <div class="chat-messages" #messageContainer>
+      @if (messages().length === 0) {
+        <!-- Welcome State -->
+        <div class="welcome-state">
+          <div class="welcome-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" 
+                    stroke="currentColor" stroke-width="1.5"/>
+              <path d="M8 10C8.5 8.5 10 7 12 7C14 7 15.5 8.5 16 10" 
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="9" cy="11.5" r="1" fill="currentColor"/>
+              <circle cx="15" cy="11.5" r="1" fill="currentColor"/>
+              <path d="M9 15H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p class="welcome-text">Ask me anything about your manufacturing data</p>
+          <div class="example-prompts">
+            @for (prompt of aiService.examplePrompts; track prompt) {
+              <button 
+                class="example-prompt"
+                (click)="insertExamplePrompt(prompt)">
+                {{ prompt }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @for (message of messages(); track trackByMessage($index, message)) {
+        <div [class]="getMessageClass(message.role)">
+          @if (message.role === 'assistant') {
+            <div class="message-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" 
+                      stroke="currentColor" stroke-width="2"/>
+                <path d="M8 10C8.5 8.5 10 7 12 7C14 7 15.5 8.5 16 10" 
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          }
+          <div class="message-content">
+            <div class="message-text">{{ message.content }}</div>
+            @if (message.suggestedActions && message.suggestedActions.length > 0) {
+              <div class="suggested-actions">
+                @for (action of message.suggestedActions; track action.label) {
+                  <button 
+                    class="action-btn"
+                    (click)="executeAction(action)">
+                    {{ action.label }}
+                  </button>
+                }
+              </div>
+            }
+            @if (message.confidence !== undefined) {
+              <div class="message-meta">
+                <span class="confidence" [class.low]="message.confidence < 0.6">
+                  {{ (message.confidence * 100).toFixed(0) }}% confidence
+                </span>
+                <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (isLoading()) {
+        <div class="assistant-message loading">
+          <div class="message-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" 
+                    stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </div>
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Error Message -->
+    @if (error()) {
+      <div class="error-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 8V12M12 16H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        {{ error() }}
+      </div>
+    }
+
+    <!-- Input Area -->
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea 
+          #messageInput
+          class="message-input"
+          [(ngModel)]="inputMessage"
+          (keydown)="onKeyDown($event)"
+          placeholder="Ask about lots, senders, sessions..."
+          rows="1"
+          [disabled]="isLoading()">
+        </textarea>
+        <button 
+          class="send-btn"
+          (click)="sendMessage()"
+          [disabled]="!inputMessage().trim() || isLoading()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" 
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint">
+        Press Enter to send, Shift+Enter for new line
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Not Available Banner -->
+@if (isOpen() && !isAvailable() && isEnabled()) {
+  <div class="not-available-banner">
+    AI service is initializing...
+  </div>
+}
