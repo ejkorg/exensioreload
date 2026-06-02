@@ -108,7 +108,7 @@ public class ExensioAuthService {
         }
     }
     
-    private String loginWithSchema(String schema) {
+    String loginWithSchema(String schema) {
         try {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/session/login";
 

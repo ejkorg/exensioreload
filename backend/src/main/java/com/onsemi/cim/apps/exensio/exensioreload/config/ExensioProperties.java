@@ -180,23 +180,21 @@ public class ExensioProperties {
         return "PRODUCTION";
     }
 
-    /** Returns the fallback schema to try if primary schema fails. Always provided except when both ES and Exensio use environment-based detection. */
+    /** Returns the fallback schema to try if primary schema fails. */
     public String resolvedDbschemaFallback() {
-        boolean esConfigured = esProps.isConfigured();
         boolean exensioConfigured = isConfigured();
-        
-        // No fallback when Exensio is not configured
+
         if (!exensioConfigured) {
             return null;
         }
-        
-        // No fallback when both ES and Exensio are configured (environment determines single schema)
-        if (esConfigured && exensioConfigured) {
-            return null;
+
+        // Prefer PRODUCTION first; if it misses, retry SANDBOX.
+        String primarySchema = resolvedDbschema();
+        if ("PRODUCTION".equalsIgnoreCase(primarySchema)) {
+            return "SANDBOX";
         }
-        
-        // In all other cases where Exensio is configured, provide SANDBOX fallback
-        return "SANDBOX";
+
+        return null;
     }
 
     // --- getters / setters ---

@@ -389,6 +389,13 @@ public class ExensioClient {
             String sql = buildSingleRawSql(lot, wafer, pgcKey, identifiers);
             JsonNode rows = executeRawSql(sql, token);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
+                String fallbackSchema = props.resolvedDbschemaFallback();
+                if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                    String fallbackToken = authService.loginWithSchema(fallbackSchema);
+                    rows = executeRawSql(sql, fallbackToken);
+                }
+            }
+            if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 return new ExensioLotWaferResult.NotFound();
             }
 
@@ -418,6 +425,7 @@ public class ExensioClient {
     private BatchLookupResult doRawSqlLookupBatch(List<StageRecord> records, String token) {
         try {
             List<String> clauses = new ArrayList<>();
+            List<StageRecord> indexedRecords = new ArrayList<>();
             for (StageRecord record : records) {
                 Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
                 if (identifiers.isEmpty() || record.lot() == null || record.lot().isBlank()) {
@@ -439,6 +447,7 @@ public class ExensioClient {
                 }
                 clause.append(" AND ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
                 clauses.add(clause.toString());
+                indexedRecords.add(record);
             }
 
             if (clauses.isEmpty()) {
@@ -447,6 +456,13 @@ public class ExensioClient {
 
             String sql = buildBatchRawSql(clauses);
             JsonNode rows = executeRawSql(sql, token);
+            if (rows == null || !rows.isArray() || rows.isEmpty()) {
+                String fallbackSchema = props.resolvedDbschemaFallback();
+                if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                    String fallbackToken = authService.loginWithSchema(fallbackSchema);
+                    rows = executeRawSql(sql, fallbackToken);
+                }
+            }
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 return new BatchLookupResult(Collections.emptyList());
             }
