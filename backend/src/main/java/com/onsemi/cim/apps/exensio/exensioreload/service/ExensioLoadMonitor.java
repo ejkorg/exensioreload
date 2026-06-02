@@ -261,7 +261,7 @@ public class ExensioLoadMonitor {
                 log.warn("Record id={} missing lot — marking FAILED", record.id());
                 invalidUpdates.add(new BatchResult.RecordUpdate(
                         record.id(), BatchResult.UpdateType.FAILED, null, null,
-                        "Missing lot for Exensio lookup"));
+                        "Missing lot for Exensio lookup", null, null, null));
             } else {
                 validRecords.add(record);
             }
@@ -283,7 +283,7 @@ public class ExensioLoadMonitor {
             // Mark all as error so they retry next cycle
             for (StageRecord r : validRecords) {
                 updates.add(new BatchResult.RecordUpdate(
-                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted"));
+                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted", null, null, null));
             }
             return buildBatchResult(updates, batchStart);
         }
@@ -312,7 +312,7 @@ public class ExensioLoadMonitor {
                             updates.add(new BatchResult.RecordUpdate(
                                     update.recordId(), BatchResult.UpdateType.FAILED, null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes"));
+                                            + props.getTimeoutMinutes() + " minutes", null, null, null));
                         } else {
                             // Still within timeout — keep as NOT_FOUND (skip, retry next cycle)
                             updates.add(update);
@@ -377,7 +377,14 @@ public class ExensioLoadMonitor {
             }
             String requestId = record.requestId();
             switch (update.type()) {
-                case DONE -> integrationStatusService.updateExensio(requestId, "success", "Exensio wafer confirmed");
+                case DONE -> {
+                    String msg = String.format("Exensio wafer confirmed: lot=%s, wafer=%s, file=%s",
+                            update.lotId() != null ? update.lotId() : "N/A",
+                            update.waferId() != null ? update.waferId() : "N/A",
+                            update.fileName() != null ? update.fileName() : "N/A");
+                    log.info("Record {} DONE - {}", record.id(), msg);
+                    integrationStatusService.updateExensio(requestId, "success", msg);
+                }
                 case NOT_FOUND -> integrationStatusService.updateExensio(requestId, "not_found", "Exensio wafer not found yet — retrying");
                 case FAILED -> integrationStatusService.updateExensio(requestId, "failure", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed");
                 case ERROR -> integrationStatusService.updateExensio(requestId, "error", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error");
@@ -419,31 +426,31 @@ public class ExensioLoadMonitor {
                                 record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
                         updates.add(new BatchResult.RecordUpdate(
                                 record.id(), BatchResult.UpdateType.DONE,
-                                found.waferKey(), found.pgKey(), null));
+                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName()));
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
                         if (isTimedOut(record)) {
                             updates.add(new BatchResult.RecordUpdate(
                                     record.id(), BatchResult.UpdateType.FAILED, null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes"));
+                                            + props.getTimeoutMinutes() + " minutes", null, null, null));
                         } else {
                             // Still within timeout — skip (retry next cycle)
                             updates.add(new BatchResult.RecordUpdate(
-                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null));
+                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null, null, null, null));
                         }
                     }
                     case ExensioLotWaferResult.Error error -> {
                         log.warn("Individual retry error for id={}: {}", record.id(), error.message());
                         // Leave as ERROR — no status change, retry next cycle
                         updates.add(new BatchResult.RecordUpdate(
-                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message()));
+                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message(), null, null, null));
                     }
                 }
             } catch (Exception e) {
                 log.warn("Individual retry exception for id={}: {}", record.id(), e.getMessage());
                 updates.add(new BatchResult.RecordUpdate(
-                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage()));
+                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), null, null, null));
             }
         }
 

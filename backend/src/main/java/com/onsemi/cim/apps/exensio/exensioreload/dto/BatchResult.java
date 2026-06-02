@@ -30,7 +30,10 @@ public record BatchResult(
             UpdateType type,
             Long waferKey,
             Long pgKey,
-            String errorMessage
+            String errorMessage,
+            String lotId,
+            String waferId,
+            String fileName
     ) {}
 
     /**

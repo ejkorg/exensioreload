@@ -148,13 +148,11 @@ public class ExensioClient {
             // Use the explicit pgcKey when provided; otherwise fall back to wafer-presence logic.
             int resolvedPgcKey = (pgcKey != null) ? pgcKey : (waferBlank ? 2 : 1);
 
-            if (props.isPreferRawSql()) {
-                ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
-                        lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
-                        filename, metadataId, dataId, token);
-                if (rawSqlResult instanceof ExensioLotWaferResult.Found) {
-                    return rawSqlResult;
-                }
+            ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
+                    lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
+                    filename, metadataId, dataId, token);
+            if (rawSqlResult instanceof ExensioLotWaferResult.Found) {
+                return rawSqlResult;
             }
 
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
@@ -238,6 +236,8 @@ public class ExensioClient {
         return result;
     }
 
+
+
     /**
      * Batch lot-wafer lookup for multiple records (internal implementation).
      *
@@ -258,18 +258,16 @@ public class ExensioClient {
         List<BatchLookupResult.LotResult> mergedLots = new ArrayList<>();
         Set<Long> resolvedRecordIds = new HashSet<>();
 
-        if (props.isPreferRawSql()) {
-            BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token);
-            if (rawSqlResult.isSuccess()) {
-                mergedLots.addAll(rawSqlResult.getLots());
-                for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records)) {
-                    if (update.type() == BatchResult.UpdateType.DONE) {
-                        resolvedRecordIds.add(update.recordId());
-                    }
+        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token);
+        if (rawSqlResult.isSuccess()) {
+            mergedLots.addAll(rawSqlResult.getLots());
+            for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records)) {
+                if (update.type() == BatchResult.UpdateType.DONE) {
+                    resolvedRecordIds.add(update.recordId());
                 }
-            } else {
-                log.warn("Raw SQL batch lookup failed, falling back to lot-wafer endpoint: {}", rawSqlResult.getErrorMessage());
             }
+        } else {
+            log.warn("Raw SQL batch lookup failed, falling back to lot-wafer endpoint: {}", rawSqlResult.getErrorMessage());
         }
 
         List<StageRecord> unresolvedRecords = records.stream()
@@ -409,12 +407,14 @@ public class ExensioClient {
             long pgKey = getLong(best, "PG_KEY");
             String ppid = getText(best, "PPID");
             String waferId = getText(best, "WAFER_ID");
+            String lotIdStr = getText(best, "LOT_ID");
+            String fileNameStr = getText(best, "FILE_NAME");
 
             if (waferKey <= 0) {
                 return new ExensioLotWaferResult.NotFound();
             }
 
-            ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+            ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr);
             return applyPpidCheck(candidate, ppid, testPhase, lot, waferId);
         } catch (Exception e) {
             log.warn("Raw SQL lookup failed for lot={} wafer={}: {}", lot, wafer, e.getMessage());
@@ -547,6 +547,8 @@ public class ExensioClient {
                 " ORDER BY ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
+
+
 
     private JsonNode executeRawSql(String sql, String token) throws Exception {
         String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/raw-sql";
@@ -736,10 +738,12 @@ public class ExensioClient {
 
             JsonNode bestWaferNode = null;
             long bestLotKey = 0;
+            String bestLotId = null;
             long bestDeltaSeconds = Long.MAX_VALUE;
 
             for (JsonNode lotNode : lots) {
                 long lotKey = lotNode.path("lot_key").asLong(0);
+                String lotIdStr = lotNode.path("lot_id").asText(null);
                 JsonNode wafers = lotNode.path("wafers");
                 if (!wafers.isArray()) continue;
 
@@ -757,7 +761,7 @@ public class ExensioClient {
                         String ppid = waferNode.path("ppid").asText(null);
                         if (waferKey > 0) {
                             ExensioLotWaferResult candidate =
-                                    new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid);
+                                    new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, null);
                             return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, waferId);
                         }
                         continue;
@@ -768,6 +772,7 @@ public class ExensioClient {
                     if (bestWaferNode == null || delta < bestDeltaSeconds) {
                         bestWaferNode = waferNode;
                         bestLotKey = lotKey;
+                        bestLotId = lotIdStr;
                         bestDeltaSeconds = delta;
                     }
                 }
@@ -778,10 +783,10 @@ public class ExensioClient {
                 long pgKey = bestWaferNode.path("pg_key").asLong(0);
                 String ppid = bestWaferNode.path("ppid").asText(null);
                 if (waferKey > 0) {
+                    String finalWaferId = bestWaferNode.path("wafer_id").asText(null);
                     ExensioLotWaferResult candidate =
-                            new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid);
-                    return applyPpidCheck(candidate, ppid, testPhase, targetWaferId,
-                            bestWaferNode.path("wafer_id").asText(null));
+                            new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid, bestLotId, finalWaferId, null);
+                    return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, finalWaferId);
                 }
             }
 

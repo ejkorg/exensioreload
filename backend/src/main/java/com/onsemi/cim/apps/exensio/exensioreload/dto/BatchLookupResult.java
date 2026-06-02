@@ -47,7 +47,7 @@ public class BatchLookupResult {
      * Represents a single lot result with its wafers.
      */
     public record LotResult(String lotId, long lotKey, List<WaferResult> wafers) {
-        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid, Instant endTime) {}
+        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid, Instant endTime, String fileName) {}
     }
 
     /**
@@ -120,7 +120,10 @@ public class BatchLookupResult {
                         BatchResult.UpdateType.ERROR,
                         null,
                         null,
-                        errorMessage
+                        errorMessage,
+                        null,
+                        null,
+                        null
                 ));
             }
             return updates;
@@ -166,13 +169,19 @@ public class BatchLookupResult {
                         BatchResult.UpdateType.DONE,
                         waferResult.waferKey(),
                         waferResult.pgKey(),
-                        null
+                        null,
+                        record.lot(),
+                        waferResult.waferId(),
+                        waferResult.fileName()
                 ));
             } else {
                 // Wafer not found in Exensio response
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(),
                         BatchResult.UpdateType.NOT_FOUND,
+                        null,
+                        null,
+                        null,
                         null,
                         null,
                         null
@@ -255,9 +264,10 @@ public class BatchLookupResult {
                     long pgKey = waferNode.path("pg_key").asLong(0);
                     String ppid = waferNode.path("ppid").asText(null);
                     Instant endTime = parseInstantSafe(waferNode.path("end_time").asText(null));
+                    String fileName = waferNode.path("file_name").asText(null);
 
                     if (waferId != null && waferKey > 0) {
-                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime));
+                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName));
                     }
                 }
 
