@@ -519,11 +519,12 @@ public class ExensioClient {
         return "SELECT * FROM (" +
                 " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
-                " NVL(ol.pg_key,0) AS pg_key, NVL(ol.ppid,'') AS ppid," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
                 " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
                 " LEFT JOIN wafer w ON w.wf_key = ol.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE " + where +
@@ -536,11 +537,12 @@ public class ExensioClient {
         return "SELECT * FROM (" +
                 " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
-                " NVL(ol.pg_key,0) AS pg_key, NVL(ol.ppid,'') AS ppid," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
                 " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
                 " LEFT JOIN wafer w ON w.wf_key = ol.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
