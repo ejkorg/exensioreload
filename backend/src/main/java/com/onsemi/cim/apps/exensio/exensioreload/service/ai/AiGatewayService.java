@@ -319,7 +319,8 @@ public class AiGatewayService {
     }
 
     private String generateCacheKey(String message, Map<String, Object> context) {
-        StringBuilder key = new StringBuilder(message.hashCode());
+        StringBuilder key = new StringBuilder();
+        key.append(message.hashCode());
         if (context != null) {
             key.append("-").append(context.hashCode());
         }
