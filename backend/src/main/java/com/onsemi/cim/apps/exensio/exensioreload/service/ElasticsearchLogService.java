@@ -75,6 +75,7 @@ public class ElasticsearchLogService {
      *   <li>{@code idFile: <idFile>} — file-level key match (when non-blank)</li>
      *   <li>{@code idData: <dataId>} — data-level key match</li>
      *   <li>{@code mLot: <lot>} — disambiguation when idData is ambiguous</li>
+     *   <li>{@code filename: <filename>} — optional filename match for additional accuracy</li>
      *   <li>{@code @timestamp >= since} — only logs after enrichment started</li>
      * </ul>
      *
@@ -95,12 +96,27 @@ public class ElasticsearchLogService {
      * @return the enrichment outcome
      */
     public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site) {
+        return findCpLog(idFile, dataId, lot, since, site, null);
+    }
+
+    /**
+     * Searches the CP Elasticsearch index with optional filename filter.
+     *
+     * @param idFile the metadata_id of the SENDER_STAGE record (may be null/blank)
+     * @param dataId the data_id of the SENDER_STAGE record
+     * @param lot    the lot of the SENDER_STAGE record
+     * @param since  the instant the record entered ENRICHMENT status
+     * @param site   the site identifier
+     * @param filename the optional filename to filter by (may be null/blank)
+     * @return the enrichment outcome
+     */
+    public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site, String filename) {
         String initialFilter = props.getCpConfigFilter();
         String url = props.resolveSearchUrl();
 
         try {
             // First attempt using configured cpConfig filter
-            String queryJson = buildQuery(idFile, dataId, lot, since, site, initialFilter);
+            String queryJson = buildQuery(idFile, dataId, lot, since, site, filename, initialFilter);
             CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot);
 
             // If no hit found and the configured filter is different from the broad fallback,
@@ -109,7 +125,7 @@ public class ElasticsearchLogService {
                     && initialFilter != null
                     && !initialFilter.equalsIgnoreCase("*sender*")) {
                 log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={}", initialFilter, dataId);
-                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, "*sender*");
+                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*sender*");
                 return executeSearch(url, fallbackQuery, idFile, dataId, lot);
             }
 
@@ -204,7 +220,7 @@ public class ElasticsearchLogService {
      * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
     String buildQuery(String idFile, String dataId, String lot, Instant since, String site) {
-        return buildQuery(idFile, dataId, lot, since, site, props.getCpConfigFilter());
+        return buildQuery(idFile, dataId, lot, since, site, null, props.getCpConfigFilter());
     }
 
     /**
@@ -212,6 +228,14 @@ public class ElasticsearchLogService {
      * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
     String buildQuery(String idFile, String dataId, String lot, Instant since, String site, String cpConfigFilter) {
+        return buildQuery(idFile, dataId, lot, since, site, null, cpConfigFilter);
+    }
+
+    /**
+     * Builds the ES query JSON with optional filename filter.
+     * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
+     */
+    String buildQuery(String idFile, String dataId, String lot, Instant since, String site, String filename, String cpConfigFilter) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode query = root.putObject("query");
@@ -246,6 +270,15 @@ public class ElasticsearchLogService {
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
+            // Optional filename wildcard match for discovered file
+            if (filename != null && !filename.isBlank()) {
+                ObjectNode wildcardFilename = must.addObject();
+                ObjectNode wildcardFilenameInner = wildcardFilename.putObject("wildcard");
+                ObjectNode filenameWildcard = wildcardFilenameInner.putObject("filename");
+                filenameWildcard.put("value", "*" + filename + "*");
+                filenameWildcard.put("case_insensitive", true);
+            }
+
             // mLot term match — only add when requireLot is true AND lot is provided
             if (props.isRequireLot() && lot != null && !lot.isBlank()) {
                 ObjectNode termLot = must.addObject();
@@ -258,6 +291,35 @@ public class ElasticsearchLogService {
             ObjectNode range = rangeClause.putObject("range");
             ObjectNode tsRange = range.putObject("@timestamp");
             tsRange.put("gte", since.toString());
+
+            // Match messages with success indicators using full-text search (more reliable than wildcard)
+            ObjectNode successMessageClause = must.addObject();
+            ObjectNode boolMessage = successMessageClause.putObject("bool");
+            ArrayNode shouldMessages = boolMessage.putArray("should");
+            
+            ObjectNode msgFlow = shouldMessages.addObject();
+            msgFlow.putObject("match").putObject("message")
+                .put("query", "Commands flow executed successfully");
+            
+            ObjectNode msgPath = shouldMessages.addObject();
+            msgPath.putObject("match").putObject("message")
+                .put("query", "output path");
+            
+            ObjectNode msgProd = shouldMessages.addObject();
+            msgProd.putObject("match").putObject("message")
+                .put("query", "PRODUCTION");
+            
+            ObjectNode msgSand = shouldMessages.addObject();
+            msgSand.putObject("match").putObject("message")
+                .put("query", "SANDBOX");
+            
+            boolMessage.put("minimum_should_match", 1);
+
+            // Exclude ERROR log levels to avoid false positives
+            ArrayNode mustNot = bool.putArray("must_not");
+            ObjectNode excludeError = mustNot.addObject();
+            ObjectNode termError = excludeError.putObject("term");
+            termError.putObject("log.level").put("value", "ERROR");
 
             // should clauses for scoring (Requirements 2.1–2.4)
             ArrayNode should = bool.putArray("should");
@@ -297,13 +359,13 @@ public class ElasticsearchLogService {
             // Requirement 2.5: at least one should clause must match
             bool.put("minimum_should_match", 1);
 
-            // Sort by @timestamp desc, fetch up to 10 hits
+            // Sort by @timestamp desc, fetch only the most recent hit
             ArrayNode sort = root.putArray("sort");
             ObjectNode sortField = sort.addObject();
             ObjectNode tsSort = sortField.putObject("@timestamp");
             tsSort.put("order", "desc");
 
-            root.put("size", 2);
+            root.put("size", 1);
 
             // Requirement 1.4: include idFile and idData in _source
             ArrayNode source = root.putArray("_source");
@@ -344,6 +406,7 @@ public class ElasticsearchLogService {
 
             log.debug("ES query: {} hits found for dataId={}", hits.size(), dataId);
 
+            // First pass: look for success patterns (ignoring ERROR logs)
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
                 if (source.isMissingNode()) continue;
@@ -352,33 +415,59 @@ public class ElasticsearchLogService {
                 String message = source.path("message").asText(null);
                 Instant timestamp = parseTimestamp(source);
 
-                // Priority 1: ERROR log level → always a failure (Requirements 4.1, 4.3)
+                // Skip ERROR logs in first pass
                 if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
-                    String errorMessage = isNonBlank(message) ? message : "CP processing error";
-                    log.info("ES query RESULT: Failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
-                    return new CpLogResult.Failure(errorMessage, timestamp);
+                    continue;
                 }
 
                 if (message == null) continue;
                 String messageUpper = message.toUpperCase();
 
-                // Priority 2: PRODUCTION in message (Requirement 2.6)
+                // Priority 2: "Commands flow executed successfully" (primary CP success indicator)
+                if (messageUpper.contains("COMMANDS FLOW EXECUTED SUCCESSFULLY")) {
+                    log.info("ES query RESULT: Success (Commands flow executed successfully) for dataId={}", dataId);
+                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
+                }
+
+                // Priority 3: "output path = " in message (actual CP success indicator)
+                if (messageUpper.contains("OUTPUT PATH = ")) {
+                    log.info("ES query RESULT: Success (output path found) for dataId={}", dataId);
+                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
+                }
+
+                // Priority 4: PRODUCTION in message (Requirement 2.6)
                 if (messageUpper.contains("PRODUCTION")) {
                     log.info("ES query RESULT: Success (PRODUCTION) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "PRODUCTION", timestamp);
                 }
 
-                // Priority 3: SANDBOX in message (Requirement 2.6)
+                // Priority 5: SANDBOX in message (Requirement 2.6)
                 if (messageUpper.contains("SANDBOX")) {
                     log.info("ES query RESULT: Success (SANDBOX) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "SANDBOX", timestamp);
                 }
 
-                // Priority 4: "executed successfully" or "Command Processor successfully" → pp_log fallback (Requirements 3.1–3.8)
+                // Priority 6: "executed successfully" or "Command Processor successfully" → pp_log fallback (Requirements 3.1–3.8)
                 String messageLower = message.toLowerCase();
                 if (messageLower.contains("executed successfully") || messageLower.contains("command processor successfully")) {
                     log.debug("ES query: success indicator hit for dataId={} — querying pp_log fallback", dataId);
                     return queryPpLogFallback(idFile, lot, timestamp);
+                }
+            }
+
+            // Second pass: if no success found, check for ERROR logs to return Failure
+            for (JsonNode hit : hits) {
+                JsonNode source = hit.path("_source");
+                if (source.isMissingNode()) continue;
+
+                String logLevel = source.path("log.level").asText(null);
+                String message = source.path("message").asText(null);
+                Instant timestamp = parseTimestamp(source);
+
+                if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
+                    String errorMessage = isNonBlank(message) ? message : "CP processing error";
+                    log.info("ES query RESULT: Failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
+                    return new CpLogResult.Failure(errorMessage, timestamp);
                 }
             }
 
