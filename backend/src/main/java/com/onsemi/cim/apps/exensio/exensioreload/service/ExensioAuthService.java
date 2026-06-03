@@ -122,7 +122,6 @@ public class ExensioAuthService {
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
                     .header("Content-Type", "application/json")
-                    .header("Connection", "Close")
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                     .build();
 
@@ -159,7 +158,6 @@ public class ExensioAuthService {
                     .timeout(Duration.ofSeconds(5))
                     .header("Authorization", "Bearer " + cachedToken)
                     .header("Content-Type", "application/json")
-                    .header("Connection", "Close")
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build();
             httpClient.send(request, HttpResponse.BodyHandlers.discarding());
