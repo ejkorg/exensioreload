@@ -282,44 +282,6 @@ public class ElasticsearchLogService {
             ObjectNode tsRange = range.putObject("@timestamp");
             tsRange.put("gte", since.toString());
 
-            // Match messages with success indicators using full-text search
-            // Uses wildcard for all patterns to match the working curl query format
-            ObjectNode successMessageClause = must.addObject();
-            ObjectNode boolMessage = successMessageClause.putObject("bool");
-            ArrayNode shouldMessages = boolMessage.putArray("should");
-            
-            // Primary success indicator - exact match for "Commands flow executed successfully"
-            ObjectNode msgFlow = shouldMessages.addObject();
-            msgFlow.putObject("wildcard").putObject("message")
-                .put("value", "*Commands flow executed successfully*")
-                .put("case_insensitive", true);
-            
-            // Output path indicator (covers both "output path" and "outputFilesFolder =")
-            ObjectNode msgPath = shouldMessages.addObject();
-            msgPath.putObject("wildcard").putObject("message")
-                .put("value", "*output path*")
-                .put("case_insensitive", true);
-            
-            // PRODUCTION indicator
-            ObjectNode msgProd = shouldMessages.addObject();
-            msgProd.putObject("wildcard").putObject("message")
-                .put("value", "*PRODUCTION*")
-                .put("case_insensitive", true);
-            
-            // SANDBOX indicator
-            ObjectNode msgSand = shouldMessages.addObject();
-            msgSand.putObject("wildcard").putObject("message")
-                .put("value", "*SANDBOX*")
-                .put("case_insensitive", true);
-            
-            boolMessage.put("minimum_should_match", 1);
-
-            // Exclude ERROR log levels to avoid false positives
-            ArrayNode mustNot = bool.putArray("must_not");
-            ObjectNode excludeError = mustNot.addObject();
-            ObjectNode excludeErrorTerm = excludeError.putObject("term");
-            excludeErrorTerm.putObject("log.level").put("value", "ERROR");
-
             // should clauses for scoring (Requirements 2.1–2.4)
             ArrayNode should = bool.putArray("should");
 
@@ -364,7 +326,7 @@ public class ElasticsearchLogService {
             ObjectNode tsSort = sortField.putObject("@timestamp");
             tsSort.put("order", "desc");
 
-            root.put("size", 1);
+            root.put("size", 100);
 
             // _source fields
             ArrayNode source = root.putArray("_source");
