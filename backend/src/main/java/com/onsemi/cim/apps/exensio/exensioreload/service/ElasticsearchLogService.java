@@ -145,10 +145,8 @@ public class ElasticsearchLogService {
     private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot) throws Exception {
         long startTime = System.currentTimeMillis();
         
-        log.info("Elasticsearch query START: url={}, dataId={}, idFile={}, lot={}", url, dataId, idFile, lot);
-        if (props.isLogRequestPayloads()) {
-            log.info("ES query payload:\n{}", queryJson);
-        }
+        log.info("Elasticsearch query START: url={}, dataId={}, lot={}", url, dataId, lot);
+        log.info("ES query payload:\n{}", queryJson);
         
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -170,9 +168,7 @@ public class ElasticsearchLogService {
         }
 
         log.info("ES query HTTP RESPONSE ({}ms): HTTP {}, dataId={}", elapsed, response.statusCode(), dataId);
-        if (props.isLogRequestPayloads()) {
-            log.info("ES query response body:\n{}", response.body());
-        }
+        log.info("ES query response body:\n{}", response.body());
 
         return parseResponse(response.body(), idFile, dataId, lot);
     }
