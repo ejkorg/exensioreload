@@ -318,8 +318,8 @@ public class ElasticsearchLogService {
             // Exclude ERROR log levels to avoid false positives
             ArrayNode mustNot = bool.putArray("must_not");
             ObjectNode excludeError = mustNot.addObject();
-            ObjectNode termError = excludeError.putObject("term");
-            termError.putObject("log.level").put("value", "ERROR");
+            ObjectNode excludeErrorTerm = excludeError.putObject("term");
+            excludeErrorTerm.putObject("log.level").put("value", "ERROR");
 
             // should clauses for scoring (Requirements 2.1–2.4)
             ArrayNode should = bool.putArray("should");
