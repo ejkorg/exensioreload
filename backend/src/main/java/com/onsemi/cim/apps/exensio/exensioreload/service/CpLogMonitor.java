@@ -92,12 +92,14 @@ public class CpLogMonitor {
      */
     private void processRecord(StageRecord record) {
         // Use updatedAt as the lower bound for ES log timestamp matching (Requirement 2.6)
+        // Subtract 1 hour buffer to catch logs that happened before enrichment status update
         Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant esLookbackTime = enrichmentStartedAt.minus(1, java.time.temporal.ChronoUnit.HOURS);
         String requestId = record.requestId();
 
         CpLogResult result;
         try {
-            result = elasticsearchLogService.findCpLog(record.metadataId(), record.dataId(), record.lot(), enrichmentStartedAt, record.site(), record.filename());
+            result = elasticsearchLogService.findCpLog(record.metadataId(), record.dataId(), record.lot(), esLookbackTime, record.site(), record.filename());
         } catch (ElasticsearchLogService.ElasticsearchQueryException e) {
             // Requirement 6.7: ES unreachable — log warning, skip this record, do not mark failed
             log.warn("Elasticsearch query failed for record id={} dataId={} — skipping: {}",
