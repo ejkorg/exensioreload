@@ -1,79 +1,79 @@
-import { inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, catchError, of } from 'rxjs';
+import { inject, Injectable, signal } from '@angular/core';
+import { catchError, Observable, of, tap } from 'rxjs';
 import {
   AiChatRequest,
   AiChatResponse,
+  AiStatus,
   AiSummarizeRequest,
   AiSummarizeResponse,
-  AiStatus,
-  ChatMessage,
-  NaturalLanguageSearchRequest,
-  NaturalLanguageSearchResponse,
   AlertTriageRequest,
   AlertTriageResponse,
-  SessionRecommendationRequest,
-  SessionRecommendationResponse,
   AnomalyDetectionRequest,
   AnomalyDetectionResponse,
-  RootCauseAnalysisRequest,
-  RootCauseAnalysisResponse,
+  AutoIncidentReportRequest,
+  AutoIncidentReportResponse,
+  ChatMessage,
+  CostAnalysisRequest,
+  CostAnalysisResponse,
+  CrossSiteComparisonRequest,
+  CrossSiteComparisonResponse,
   DailySummaryRequest,
   DailySummaryResponse,
-  PredictiveFailureRequest,
-  PredictiveFailureResponse,
   DataQualityScoreRequest,
   DataQualityScoreResponse,
+  ExportRequest,
+  ExportResponse,
+  FavoriteQuery,
+  FavoriteQueryRequest,
+  FavoriteQueryResponse,
   IntelligentRoutingRequest,
   IntelligentRoutingResponse,
+  KnowledgeBaseSearchRequest,
+  KnowledgeBaseSearchResponse,
+  NaturalLanguageSearchRequest,
+  NaturalLanguageSearchResponse,
+  NotificationRequest,
+  NotificationResponse,
+  OptimalBatchSizingRequest,
+  OptimalBatchSizingResponse,
+  PredictiveFailureRequest,
+  PredictiveFailureResponse,
+  PredictiveMaintenanceRequest,
+  PredictiveMaintenanceResponse,
+  ReportSchedule,
+  RootCauseAnalysisRequest,
+  RootCauseAnalysisResponse,
+  ScheduledReportRequest,
+  ScheduledReportResponse,
+  SessionRecommendationRequest,
+  SessionRecommendationResponse,
   // New AI feature types
   ShiftHandoffRequest,
   ShiftHandoffSummary,
-  PredictiveMaintenanceRequest,
-  PredictiveMaintenanceResponse,
-  CrossSiteComparisonRequest,
-  CrossSiteComparisonResponse,
   TrendForecastingRequest,
   TrendForecastingResponse,
-  AutoIncidentReportRequest,
-  AutoIncidentReportResponse,
-  OptimalBatchSizingRequest,
-  OptimalBatchSizingResponse,
-  CostAnalysisRequest,
-  CostAnalysisResponse,
-  KnowledgeBaseSearchRequest,
-  KnowledgeBaseSearchResponse,
-  NotificationRequest,
-  NotificationResponse,
-  ScheduledReportRequest,
-  ScheduledReportResponse,
-  ReportSchedule,
-  ExportRequest,
-  ExportResponse,
-  FavoriteQueryRequest,
-  FavoriteQueryResponse,
-  FavoriteQuery,
   VoiceCommandRequest,
-  VoiceCommandResponse
+  VoiceCommandResponse,
 } from './ai.types';
 
 @Injectable({ providedIn: 'root' })
 export class AiService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = '/api/ai';
-  
+  private readonly apiUrl = `${environment.apiUrl}/ai`;
+
   // State management
   isAvailable = signal(false);
   isEnabled = signal(false);
   conversationId = signal<string | null>(null);
   messages = signal<ChatMessage[]>([]);
-  
+
   // Example prompts for quick start
   examplePrompts = [
     'Show me lots that failed in the last 24 hours',
     'What alerts do we have right now?',
     'Help me understand this session status',
-    'What sender has the most errors today?'
+    'What sender has the most errors today?',
   ];
 
   constructor() {
@@ -87,7 +87,7 @@ export class AiService {
    */
   checkStatus(): Observable<AiStatus> {
     return this.http.get<AiStatus>(`${this.apiUrl}/status`).pipe(
-      tap(status => {
+      tap((status) => {
         this.isAvailable.set(status.chatAvailable);
         this.isEnabled.set(status.enabled);
       }),
@@ -95,7 +95,7 @@ export class AiService {
         this.isAvailable.set(false);
         this.isEnabled.set(false);
         return of(this.createDefaultStatus());
-      })
+      }),
     );
   }
 
@@ -115,24 +115,24 @@ export class AiService {
     const request: AiChatRequest = {
       message,
       context,
-      conversationId: this.conversationId() || undefined
+      conversationId: this.conversationId() || undefined,
     };
 
     return this.http.post<AiChatResponse>(`${this.apiUrl}/chat`, request).pipe(
-      tap(response => {
+      tap((response) => {
         if (response.conversationId && !this.conversationId()) {
           this.conversationId.set(response.conversationId);
         }
-        
+
         this.addMessage({
           id: this.generateId(),
           role: 'assistant',
           content: response.reply,
           timestamp: new Date(),
           confidence: response.confidence,
-          suggestedActions: response.suggestedActions
+          suggestedActions: response.suggestedActions,
         });
-      })
+      }),
     );
   }
 
@@ -144,7 +144,7 @@ export class AiService {
       id: this.generateId(),
       role: 'user',
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -152,7 +152,7 @@ export class AiService {
    * Add a message to local history.
    */
   addMessage(message: ChatMessage): void {
-    this.messages.update(msgs => [...msgs, message]);
+    this.messages.update((msgs) => [...msgs, message]);
   }
 
   /**
@@ -182,7 +182,7 @@ export class AiService {
   summarizeAlerts(alerts: AiSummarizeRequest['alerts']): Observable<AiSummarizeResponse> {
     const request: AiSummarizeRequest = {
       alerts,
-      summaryType: 'alerts'
+      summaryType: 'alerts',
     };
 
     return this.http.post<AiSummarizeResponse>(`${this.apiUrl}/summarize/alerts`, request);
@@ -197,7 +197,7 @@ export class AiService {
     const request: NaturalLanguageSearchRequest = {
       query,
       sites,
-      limit: limit || 100
+      limit: limit || 100,
     };
 
     return this.http.post<NaturalLanguageSearchResponse>(`${this.apiUrl}/search`, request);
@@ -222,7 +222,7 @@ export class AiService {
     const request: SessionRecommendationRequest = {
       site,
       senderId,
-      userId: undefined
+      userId: undefined,
     };
     return this.http.post<SessionRecommendationResponse>(`${this.apiUrl}/recommendations/session`, request);
   }
@@ -236,7 +236,7 @@ export class AiService {
     const request: AnomalyDetectionRequest = {
       site,
       timeRange: timeRange || '24h',
-      baselinePeriod: '7d'
+      baselinePeriod: '7d',
     };
     return this.http.post<AnomalyDetectionResponse>(`${this.apiUrl}/anomaly/detect`, request);
   }
@@ -251,7 +251,7 @@ export class AiService {
       errorCode,
       errorMessage,
       site,
-      timeRange: '7d'
+      timeRange: '7d',
     };
     return this.http.post<RootCauseAnalysisResponse>(`${this.apiUrl}/analysis/root-cause`, request);
   }
@@ -264,7 +264,7 @@ export class AiService {
   getDailySummary(date?: string, sites?: string[]): Observable<DailySummaryResponse> {
     const request: DailySummaryRequest = {
       date: date || new Date().toISOString().split('T')[0],
-      sites
+      sites,
     };
     return this.http.post<DailySummaryResponse>(`${this.apiUrl}/summary/daily`, request);
   }
@@ -278,7 +278,7 @@ export class AiService {
     const request: PredictiveFailureRequest = {
       site,
       lotIds,
-      timeWindow: '4h'
+      timeWindow: '4h',
     };
     return this.http.post<PredictiveFailureResponse>(`${this.apiUrl}/predict/failure`, request);
   }
@@ -292,7 +292,7 @@ export class AiService {
     const request: DataQualityScoreRequest = {
       records,
       site,
-      includeDetails: true
+      includeDetails: true,
     };
     return this.http.post<DataQualityScoreResponse>(`${this.apiUrl}/quality/score`, request);
   }
@@ -302,11 +302,15 @@ export class AiService {
   /**
    * Get optimal routing recommendation.
    */
-  getOptimalRoute(site: string, senderId: string, recordData?: Record<string, unknown>): Observable<IntelligentRoutingResponse> {
+  getOptimalRoute(
+    site: string,
+    senderId: string,
+    recordData?: Record<string, unknown>,
+  ): Observable<IntelligentRoutingResponse> {
     const request: IntelligentRoutingRequest = {
       site,
       senderId,
-      recordData
+      recordData,
     };
     return this.http.post<IntelligentRoutingResponse>(`${this.apiUrl}/routing/optimal`, request);
   }
@@ -316,7 +320,11 @@ export class AiService {
   /**
    * Get shift handoff summary.
    */
-  getShiftHandoffSummary(site: string, shift: 'DAY' | 'NIGHT' | 'SWING', date?: string): Observable<ShiftHandoffSummary> {
+  getShiftHandoffSummary(
+    site: string,
+    shift: 'DAY' | 'NIGHT' | 'SWING',
+    date?: string,
+  ): Observable<ShiftHandoffSummary> {
     const request: ShiftHandoffRequest = { site, shift, date };
     return this.http.post<ShiftHandoffSummary>(`${this.apiUrl}/handoff/summary`, request);
   }
@@ -350,7 +358,7 @@ export class AiService {
     const request: TrendForecastingRequest = {
       site,
       forecastDays: forecastDays || 7,
-      timeRange: '30d'
+      timeRange: '30d',
     };
     return this.http.post<TrendForecastingResponse>(`${this.apiUrl}/trends/forecast`, request);
   }
@@ -520,7 +528,7 @@ export class AiService {
       scheduledReportsAvailable: false,
       exportAvailable: false,
       favoriteQueriesAvailable: false,
-      voiceCommandsAvailable: false
+      voiceCommandsAvailable: false,
     };
   }
 }
