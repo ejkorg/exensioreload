@@ -482,6 +482,7 @@ public class ExensioClient {
                 String ppid = getText(row, "PPID");
                 Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
                 long lotKey = getLong(row, "LOT_KEY");
+                String fileName = getText(row, "FILE_NAME");
 
                 byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
                         .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName));
