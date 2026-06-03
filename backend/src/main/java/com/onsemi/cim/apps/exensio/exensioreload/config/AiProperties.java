@@ -125,7 +125,7 @@ public class AiProperties {
         ),
         "gemini", new PresetConfig(
             "openai",  // Gemini uses OpenAI-compatible API via proxy
-            "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             "gemini-1.5-flash"
         )
     );
