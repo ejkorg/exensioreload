@@ -156,7 +156,7 @@ exensio:
 #   Anthropic:     AI_ENABLED=true AI_PRESET=anthropic AI_API_KEY=sk-ant-xxx
 #   Ollama (local): AI_ENABLED=true AI_PRESET=ollama (no API key needed)
 ai:
-  enabled: ${AI_ENABLED:false}
+  enabled: ${AI_ENABLED:true}
   preset: ${AI_PRESET:gemini}
   provider: ${AI_PROVIDER:}
   api-key: ${AI_API_KEY:}
