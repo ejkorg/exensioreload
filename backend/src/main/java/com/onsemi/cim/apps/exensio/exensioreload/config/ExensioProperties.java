@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "exensio")
 public class ExensioProperties {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExensioProperties.class);
+
     private final CpElasticsearchProperties esProps;
 
     /** Master switch. Set EXENSIO_ENABLED=true to activate the monitor. */
@@ -121,6 +123,10 @@ public class ExensioProperties {
 
     @jakarta.annotation.PostConstruct
     public void validate() {
+        log.info("Exensio Configuration: enabled={}, env={}, qaUrl={}, prodUrl={}, username={}", 
+            enabled, env, (!qaBaseUrl.isBlank() ? "set" : "empty"), 
+            (!prodBaseUrl.isBlank() ? "set" : "empty"), username);
+        
         if (batchSize < 1 || batchSize > 100) {
             throw new IllegalArgumentException("exensio.batchSize must be between 1 and 100");
         }
@@ -148,7 +154,11 @@ public class ExensioProperties {
 
     /** Returns true when the integration is enabled and a base URL is configured. */
     public boolean isConfigured() {
-        return enabled && resolvedBaseUrl() != null && !resolvedBaseUrl().isBlank();
+        String resolvedUrl = resolvedBaseUrl();
+        boolean configured = enabled && resolvedUrl != null && !resolvedUrl.isBlank();
+        log.debug("Exensio isConfigured(): enabled={}, resolvedUrl={}, result={}", 
+            enabled, (resolvedUrl != null && !resolvedUrl.isBlank() ? "set" : "empty"), configured);
+        return configured;
     }
 
     /** Returns the base URL for the active environment. */

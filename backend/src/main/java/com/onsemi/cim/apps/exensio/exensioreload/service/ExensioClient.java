@@ -557,10 +557,10 @@ public class ExensioClient {
         String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/raw-sql";
         ObjectNode body = objectMapper.createObjectNode();
         body.put("sql", sql);
+        long startTime = System.currentTimeMillis();
 
-        if (props.isLogRequestPayloads()) {
-            log.info("Exensio raw-sql request: url={}, sql={}", url, sql);
-        }
+        log.info("Exensio raw-sql START: url={}", url);
+        log.info("Exensio raw-sql SQL:\n{}", sql);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -571,20 +571,34 @@ public class ExensioClient {
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        long elapsed = System.currentTimeMillis() - startTime;
+        
         if (response.statusCode() == 401) {
+            log.warn("Exensio raw-sql FAILED (HTTP 401): elapsed={}ms", elapsed);
             throw new IllegalStateException("HTTP 401");
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            log.warn("Exensio raw-sql FAILED (HTTP {}): elapsed={}ms, response={}", 
+                response.statusCode(), elapsed, response.body());
             throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+
+        log.info("Exensio raw-sql SUCCESS (HTTP {} in {}ms)", response.statusCode(), elapsed);
+        if (props.isLogRequestPayloads()) {
+            log.info("Exensio raw-sql response:\n{}", response.body());
         }
 
         JsonNode root = objectMapper.readTree(response.body());
         if (root.isArray()) {
+            log.info("Exensio raw-sql result: {} rows returned", root.size());
             return root;
         }
         if (root.has("rows") && root.get("rows").isArray()) {
-            return root.get("rows");
+            JsonNode rows = root.get("rows");
+            log.info("Exensio raw-sql result: {} rows returned", rows.size());
+            return rows;
         }
+        log.info("Exensio raw-sql result: empty response");
         return objectMapper.createArrayNode();
     }
 

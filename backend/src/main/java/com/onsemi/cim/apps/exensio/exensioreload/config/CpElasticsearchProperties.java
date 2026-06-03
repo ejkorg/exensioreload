@@ -17,6 +17,8 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "cp.elasticsearch")
 public class CpElasticsearchProperties {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CpElasticsearchProperties.class);
+
     /** Base URL of the Elasticsearch cluster (e.g. https://elasticsearch:9200). */
     private String url = "";
 
@@ -114,9 +116,17 @@ public class CpElasticsearchProperties {
     public boolean isRequireLot() { return requireLot; }
     public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }
 
+    @jakarta.annotation.PostConstruct
+    public void logConfiguration() {
+        log.info("Elasticsearch Configuration: url={}, username={}, apiKey present={}", 
+            url, username, (apiKey != null && !apiKey.isBlank()));
+    }
+
     /** Returns true if Elasticsearch is configured (url is non-blank). */
     public boolean isConfigured() {
-        return url != null && !url.isBlank();
+        boolean configured = url != null && !url.isBlank();
+        log.debug("Elasticsearch isConfigured() = {}", configured);
+        return configured;
     }
 
     /**

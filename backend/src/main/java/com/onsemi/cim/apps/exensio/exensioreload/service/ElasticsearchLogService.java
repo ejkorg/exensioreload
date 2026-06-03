@@ -127,9 +127,13 @@ public class ElasticsearchLogService {
      * Execute the HTTP request and parse the response into a {@link CpLogResult}.
      */
     private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot) throws Exception {
+        long startTime = System.currentTimeMillis();
+        
+        log.info("Elasticsearch query START: url={}, dataId={}, idFile={}, lot={}", url, dataId, idFile, lot);
         if (props.isLogRequestPayloads()) {
-            log.info("ES query payload (dataId={}, idFile={}): url={}, body={}", dataId, idFile, url, queryJson);
+            log.info("ES query payload:\n{}", queryJson);
         }
+        
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
@@ -141,10 +145,17 @@ public class ElasticsearchLogService {
         }
 
         HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+        long elapsed = System.currentTimeMillis() - startTime;
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("ES query returned HTTP {} for dataId={}", response.statusCode(), dataId);
+            log.warn("ES query FAILED (HTTP {}): dataId={}, elapsed={}ms, response={}", 
+                response.statusCode(), dataId, elapsed, response.body());
             throw new ElasticsearchQueryException("ES returned HTTP " + response.statusCode());
+        }
+
+        log.info("ES query HTTP RESPONSE ({}ms): HTTP {}, dataId={}", elapsed, response.statusCode(), dataId);
+        if (props.isLogRequestPayloads()) {
+            log.info("ES query response body:\n{}", response.body());
         }
 
         return parseResponse(response.body(), idFile, dataId, lot);
@@ -327,8 +338,11 @@ public class ElasticsearchLogService {
             JsonNode hits = root.path("hits").path("hits");
 
             if (!hits.isArray() || hits.isEmpty()) {
+                log.info("ES query RESULT: NotFound for dataId={} (no hits)", dataId);
                 return new CpLogResult.NotFound();
             }
+
+            log.debug("ES query: {} hits found for dataId={}", hits.size(), dataId);
 
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
@@ -341,7 +355,7 @@ public class ElasticsearchLogService {
                 // Priority 1: ERROR log level → always a failure (Requirements 4.1, 4.3)
                 if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
                     String errorMessage = isNonBlank(message) ? message : "CP processing error";
-                    log.info("CP failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
+                    log.info("ES query RESULT: Failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
                     return new CpLogResult.Failure(errorMessage, timestamp);
                 }
 
@@ -350,23 +364,24 @@ public class ElasticsearchLogService {
 
                 // Priority 2: PRODUCTION in message (Requirement 2.6)
                 if (messageUpper.contains("PRODUCTION")) {
-                    log.info("CP success (PRODUCTION in message) for dataId={}", dataId);
+                    log.info("ES query RESULT: Success (PRODUCTION) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "PRODUCTION", timestamp);
                 }
 
                 // Priority 3: SANDBOX in message (Requirement 2.6)
                 if (messageUpper.contains("SANDBOX")) {
-                    log.info("CP success (SANDBOX in message) for dataId={}", dataId);
+                    log.info("ES query RESULT: Success (SANDBOX) for dataId={}", dataId);
                     return new CpLogResult.Success(message, "SANDBOX", timestamp);
                 }
 
                 // Priority 4: "executed successfully" → pp_log fallback (Requirements 3.1–3.8)
                 if (message.toLowerCase().contains("executed successfully")) {
-                    log.debug("CP 'executed successfully' hit for dataId={} — querying pp_log", dataId);
+                    log.debug("ES query: 'executed successfully' hit for dataId={} — querying pp_log", dataId);
                     return queryPpLogFallback(idFile, lot, timestamp);
                 }
             }
 
+            log.info("ES query RESULT: NotFound for dataId={} (no matching criteria)", dataId);
             return new CpLogResult.NotFound();
 
         } catch (Exception e) {
