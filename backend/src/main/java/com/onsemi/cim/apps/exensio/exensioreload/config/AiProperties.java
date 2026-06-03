@@ -231,6 +231,11 @@ public class AiProperties {
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
 
+    /**
+     * Get the resolved base URL (alias for getBaseUrl for test compatibility).
+     */
+    public String getResolvedBaseUrl() { return baseUrl; }
+
     public int getMaxTokens() { return maxTokens; }
     public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
 
