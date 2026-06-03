@@ -62,7 +62,7 @@ public class AiController {
             PredictiveFailureService predictiveService,
             DataQualityScoreService qualityService,
             IntelligentRoutingService routingService,
-            ShiftHandoffSummaryService shiftHandoffService,
+            ShiftHandoffService shiftHandoffService,
             PredictiveMaintenanceService predictiveMaintenanceService,
             CrossSiteComparisonService crossSiteService,
             TrendForecastingService trendForecastingService,
