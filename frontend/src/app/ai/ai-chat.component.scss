@@ -1,6 +1,9 @@
 // AI Chat Component Styles
 // Floating chat panel with glassmorphism design
 
+// Color module for color manipulation
+@use 'color' as color;
+
 // Variables
 $panel-width: 380px;
 $panel-height: 520px;
