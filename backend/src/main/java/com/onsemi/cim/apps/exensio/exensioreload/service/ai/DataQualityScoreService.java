@@ -46,7 +46,6 @@ public class DataQualityScoreService {
             if (records == null || records.isEmpty()) {
                 response.setOverallScore(0.0);
                 response.setGrade("N/A");
-                response.setSummary("No records to score");
                 return response;
             }
 

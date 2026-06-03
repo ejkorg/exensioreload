@@ -21,7 +21,7 @@ public class VoiceCommandService {
     private final AiProperties aiProperties;
 
     // Command patterns
-    private static final Map<String, String> COMMAND_PATTERNS = Map.of(
+    private static final Map<String, List<String>> COMMAND_PATTERNS = Map.of(
         "show", List.of("show", "display", "view", "open", "load"),
         "generate", List.of("generate", "create", "make", "build"),
         "export", List.of("export", "download", "save", "export to"),
@@ -131,13 +131,18 @@ public class VoiceCommandService {
             intent.setIntentType("unknown");
         }
 
+        // Initialize parameters map if null
+        if (intent.getParameters() == null) {
+            intent.setParameters(new HashMap<>());
+        }
+
         // Extract parameters
         if (command.contains("site") || command.contains("location")) {
-            intent.setParameter("site", extractSite(command));
+            intent.getParameters().put("site", extractSite(command));
         }
 
         if (command.contains("today") || command.contains("this week") || command.contains("yesterday")) {
-            intent.setParameter("timeRange", extractTimeRange(command));
+            intent.getParameters().put("timeRange", extractTimeRange(command));
         }
 
         return intent;

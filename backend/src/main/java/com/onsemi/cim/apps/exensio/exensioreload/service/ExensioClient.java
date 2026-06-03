@@ -484,7 +484,7 @@ public class ExensioClient {
                 long lotKey = getLong(row, "LOT_KEY");
 
                 byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
-                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime));
+                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName));
                 if (lotKey > 0) {
                     lotKeys.putIfAbsent(lotId, lotKey);
                 }

@@ -115,8 +115,8 @@ public class KnowledgeBaseSearchService {
             }
         }
 
-        // Sort by relevance
-        results.sort((a, b) -> Integer.compare(b.getRelevanceScore(), a.getRelevanceScore()));
+        // Sort by relevance (cast double to int for comparison)
+        results.sort((a, b) -> Double.compare(b.getRelevanceScore(), a.getRelevanceScore()));
 
         return results;
     }

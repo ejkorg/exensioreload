@@ -718,7 +718,12 @@ public class AiController {
     public ResponseEntity<Map<String, Object>> configureNotifications(@RequestBody Map<String, Object> config) {
         log.info("Notification configuration request");
         
-        return ResponseEntity.ok(notificationService.configureChannels(config));
+        NotificationResponse response = notificationService.configureChannels(config);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", response.isSuccess());
+        result.put("channelsConfigured", response.getChannelsConfigured());
+        result.put("messagePreview", response.getMessagePreview());
+        return ResponseEntity.ok(result);
     }
 
     // ==================== Scheduled Reports ====================
@@ -730,7 +735,17 @@ public class AiController {
     public ResponseEntity<Map<String, Object>> scheduleReport(@RequestBody ScheduledReportRequest request) {
         log.info("Scheduled report creation: {}", request.getReportName());
         
-        return ResponseEntity.ok(scheduledReportService.createSchedule(request));
+        ScheduledReportResponse response = scheduledReportService.createSchedule(request);
+        Map<String, Object> result = new HashMap<>();
+        result.put("scheduleId", response.getScheduleId());
+        if (response.getSchedule() != null) {
+            result.put("reportName", response.getSchedule().getReportName());
+            result.put("cronExpression", response.getSchedule().getFrequency() + " " + response.getSchedule().getTime());
+            result.put("nextRunTime", response.getSchedule().getNextRun());
+            result.put("enabled", response.getSchedule().isEnabled());
+        }
+        result.put("createdAt", new Date().toString());
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -753,7 +768,14 @@ public class AiController {
     public ResponseEntity<Map<String, Object>> generateReportNow(@PathVariable String scheduleId) {
         log.info("Generate report now: {}", scheduleId);
         
-        return ResponseEntity.ok(scheduledReportService.generateNow(scheduleId));
+        ScheduledReportResponse response = scheduledReportService.generateNow(scheduleId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("scheduleId", response.getScheduleId());
+        result.put("reportName", response.getSchedule() != null ? response.getSchedule().getReportName() : "Unknown");
+        result.put("generatedAt", new Date().toString());
+        result.put("generatedContent", response.getGeneratedContent());
+        result.put("deliveredTo", response.getDeliveredTo());
+        return ResponseEntity.ok(result);
     }
 
     // ==================== Export ====================
@@ -786,7 +808,14 @@ public class AiController {
     public ResponseEntity<Map<String, Object>> saveFavorite(@RequestBody FavoriteQueryRequest request) {
         log.info("Save favorite query: {}", request.getName());
         
-        return ResponseEntity.ok(favoriteQueryService.saveFavorite(request));
+        FavoriteQueryResponse response = favoriteQueryService.saveFavorite(request);
+        Map<String, Object> result = new HashMap<>();
+        result.put("queryId", response.getId());
+        result.put("name", request.getName());
+        result.put("query", request.getQuery());
+        result.put("createdAt", new Date().toString());
+        result.put("success", response.isSuccess());
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -824,7 +853,22 @@ public class AiController {
     public ResponseEntity<Map<String, Object>> processVoiceCommand(@RequestBody VoiceCommandRequest request) {
         log.info("Voice command: {}", truncate(request.getCommand(), 50));
         
-        return ResponseEntity.ok(voiceCommandService.processCommand(request));
+        VoiceCommandResponse response = voiceCommandService.processCommand(request);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", response.isSuccess());
+        result.put("responseMessage", response.getResponseMessage());
+        if (response.getIntent() != null) {
+            Map<String, Object> intentMap = new HashMap<>();
+            intentMap.put("action", response.getIntent().getAction());
+            intentMap.put("target", response.getIntent().getTarget());
+            intentMap.put("intentType", response.getIntent().getIntentType());
+            intentMap.put("parameters", response.getIntent().getParameters());
+            result.put("intent", intentMap);
+        }
+        result.put("entities", response.getEntities());
+        result.put("actionUrl", response.getActionUrl());
+        result.put("actionConfirmation", response.getActionConfirmation());
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -832,7 +876,11 @@ public class AiController {
      */
     @GetMapping("/voice/help")
     public ResponseEntity<Map<String, Object>> getVoiceHelp() {
-        return ResponseEntity.ok(voiceCommandService.getHelp());
+        VoiceCommandResponse response = voiceCommandService.getHelp();
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", response.isSuccess());
+        result.put("responseMessage", response.getResponseMessage());
+        return ResponseEntity.ok(result);
     }
 
     // ==================== Status & Health ====================
