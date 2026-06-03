@@ -374,9 +374,10 @@ public class ElasticsearchLogService {
                     return new CpLogResult.Success(message, "SANDBOX", timestamp);
                 }
 
-                // Priority 4: "executed successfully" → pp_log fallback (Requirements 3.1–3.8)
-                if (message.toLowerCase().contains("executed successfully")) {
-                    log.debug("ES query: 'executed successfully' hit for dataId={} — querying pp_log", dataId);
+                // Priority 4: "executed successfully" or "Command Processor successfully" → pp_log fallback (Requirements 3.1–3.8)
+                String messageLower = message.toLowerCase();
+                if (messageLower.contains("executed successfully") || messageLower.contains("command processor successfully")) {
+                    log.debug("ES query: success indicator hit for dataId={} — querying pp_log fallback", dataId);
                     return queryPpLogFallback(idFile, lot, timestamp);
                 }
             }
