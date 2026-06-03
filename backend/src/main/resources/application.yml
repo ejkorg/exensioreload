@@ -149,7 +149,7 @@ exensio:
 
 # AI Integration Configuration
 # Quick setup: Use preset + API key
-# Presets: "anthropic" (default), "groq" (free tier, fast), "ollama" (local, free), "gemini" (free tier)
+# Presets: "groq" (free tier, fast, default), "anthropic", "ollama" (local, free), "gemini" (free tier)
 # Usage examples:
 #   Groq (FREE):    AI_ENABLED=true AI_PRESET=groq AI_API_KEY=gsk_xxx
 #   Anthropic:     AI_ENABLED=true AI_PRESET=anthropic AI_API_KEY=sk-ant-xxx
@@ -157,7 +157,7 @@ exensio:
 #   Gemini (FREE):  AI_ENABLED=true AI_PRESET=gemini AI_API_KEY=xxx
 ai:
   enabled: ${AI_ENABLED:false}
-  preset: ${AI_PRESET:anthropic}
+  preset: ${AI_PRESET:groq}
   provider: ${AI_PROVIDER:}
   api-key: ${AI_API_KEY:}
   model: ${AI_MODEL:}
