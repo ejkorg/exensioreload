@@ -126,7 +126,7 @@ public class AiProperties {
         "gemini", new PresetConfig(
             "openai",  // Gemini uses OpenAI-compatible API via proxy
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            "gemini-1.5-flash"
+            "gemini-2.0-flash"
         )
     );
 
@@ -174,10 +174,13 @@ public class AiProperties {
         if (config != null) {
             this.provider = config.provider;
             this.baseUrl = config.baseUrl;
-            // Only override model if it's still the default
+            // Only override model if it's still a known preset default (not user-specified via AI_MODEL)
             if (this.model == null || this.model.isBlank() || 
                 this.model.equals("claude-sonnet-4-20250514") ||
-                this.model.equals("gpt-4o-mini")) {
+                this.model.equals("gpt-4o-mini") ||
+                this.model.equals("gemini-1.5-flash") ||
+                this.model.equals("llama-3.3-70b-versatile") ||
+                this.model.equals("llama3")) {
                 this.model = config.defaultModel;
             }
             log.info("Applied AI preset: {} -> provider={}, model={}", presetName, this.provider, this.model);
