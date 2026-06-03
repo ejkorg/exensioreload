@@ -258,13 +258,6 @@ public class ElasticsearchLogService {
                 termServiceCountryInner.put(fieldName, props.getServiceCountryFilter().trim());
             }
 
-            // idFile term match — only when non-blank (Requirements 1.1, 1.3, 7.1)
-            if (idFile != null && !idFile.isBlank()) {
-                ObjectNode termIdFile = must.addObject();
-                ObjectNode termIdFileInner = termIdFile.putObject("term");
-                termIdFileInner.put("idFile", idFile);
-            }
-
             // idData term match (Requirement 1.2)
             ObjectNode termIdData = must.addObject();
             ObjectNode termIdDataInner = termIdData.putObject("term");
@@ -294,15 +287,16 @@ public class ElasticsearchLogService {
             tsRange.put("gte", since.toString());
 
             // Match messages with success indicators using full-text search
-            // Uses match query for "Commands flow executed successfully" and wildcard for others
+            // Uses wildcard for all patterns to match the working curl query format
             ObjectNode successMessageClause = must.addObject();
             ObjectNode boolMessage = successMessageClause.putObject("bool");
             ArrayNode shouldMessages = boolMessage.putArray("should");
             
-            // Primary success indicator - match query for exact phrase
+            // Primary success indicator - exact match for "Commands flow executed successfully"
             ObjectNode msgFlow = shouldMessages.addObject();
-            msgFlow.putObject("match").putObject("message")
-                .put("query", "Commands flow executed successfully");
+            msgFlow.putObject("wildcard").putObject("message")
+                .put("value", "*Commands flow executed successfully*")
+                .put("case_insensitive", true);
             
             // Output path indicator (covers both "output path" and "outputFilesFolder =")
             ObjectNode msgPath = shouldMessages.addObject();
@@ -376,12 +370,12 @@ public class ElasticsearchLogService {
 
             root.put("size", 1);
 
-            // Requirement 1.4: include idFile and idData in _source
+            // _source fields
             ArrayNode source = root.putArray("_source");
             source.add("@timestamp");
             source.add("cpConfig");
             source.add("idData");
-            source.add("idFile");
+            source.add("inputFileName");
             source.add("message");
             source.add("log.level");
 
