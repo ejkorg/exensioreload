@@ -270,11 +270,12 @@ public class ElasticsearchLogService {
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
-            // Optional filename wildcard match for discovered file
+            // Optional inputFileName wildcard match for discovered file
+            // Uses inputFileName field to match against the actual CP log field name
             if (filename != null && !filename.isBlank()) {
                 ObjectNode wildcardFilename = must.addObject();
                 ObjectNode wildcardFilenameInner = wildcardFilename.putObject("wildcard");
-                ObjectNode filenameWildcard = wildcardFilenameInner.putObject("filename");
+                ObjectNode filenameWildcard = wildcardFilenameInner.putObject("inputFileName");
                 filenameWildcard.put("value", "*" + filename + "*");
                 filenameWildcard.put("case_insensitive", true);
             }
@@ -292,26 +293,34 @@ public class ElasticsearchLogService {
             ObjectNode tsRange = range.putObject("@timestamp");
             tsRange.put("gte", since.toString());
 
-            // Match messages with success indicators using full-text search (more reliable than wildcard)
+            // Match messages with success indicators using full-text search
+            // Uses match query for "Commands flow executed successfully" and wildcard for others
             ObjectNode successMessageClause = must.addObject();
             ObjectNode boolMessage = successMessageClause.putObject("bool");
             ArrayNode shouldMessages = boolMessage.putArray("should");
             
+            // Primary success indicator - match query for exact phrase
             ObjectNode msgFlow = shouldMessages.addObject();
             msgFlow.putObject("match").putObject("message")
                 .put("query", "Commands flow executed successfully");
             
+            // Output path indicator (covers both "output path" and "outputFilesFolder =")
             ObjectNode msgPath = shouldMessages.addObject();
-            msgPath.putObject("match").putObject("message")
-                .put("query", "output path");
+            msgPath.putObject("wildcard").putObject("message")
+                .put("value", "*output path*")
+                .put("case_insensitive", true);
             
+            // PRODUCTION indicator
             ObjectNode msgProd = shouldMessages.addObject();
-            msgProd.putObject("match").putObject("message")
-                .put("query", "PRODUCTION");
+            msgProd.putObject("wildcard").putObject("message")
+                .put("value", "*PRODUCTION*")
+                .put("case_insensitive", true);
             
+            // SANDBOX indicator
             ObjectNode msgSand = shouldMessages.addObject();
-            msgSand.putObject("match").putObject("message")
-                .put("query", "SANDBOX");
+            msgSand.putObject("wildcard").putObject("message")
+                .put("value", "*SANDBOX*")
+                .put("case_insensitive", true);
             
             boolMessage.put("minimum_should_match", 1);
 
