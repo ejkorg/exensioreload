@@ -91,10 +91,9 @@ public class CpLogMonitor {
      * status transition.
      */
     private void processRecord(StageRecord record) {
-        // Use updatedAt as the lower bound for ES log timestamp matching (Requirement 2.6)
-        // Subtract 1 hour buffer to catch logs that happened before enrichment status update
-        Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
-        Instant esLookbackTime = enrichmentStartedAt.minus(1, java.time.temporal.ChronoUnit.HOURS);
+        // Use createdAt as the lower bound for ES log timestamp matching
+        // createdAt is when the record was first staged, which is before CP processes it
+        Instant esLookbackTime = record.createdAt();
         String requestId = record.requestId();
 
         CpLogResult result;
