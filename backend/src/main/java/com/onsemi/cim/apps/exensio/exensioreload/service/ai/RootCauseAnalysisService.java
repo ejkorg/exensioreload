@@ -22,13 +22,13 @@ public class RootCauseAnalysisService {
 
     // Known error patterns and their typical causes
     private static final Map<String, RootCauseInfo> KNOWN_PATTERNS = Map.of(
-        "timeout", new RootCauseInfo("Network latency", "15-30 min", List.of("Check network", "Increase timeout"))),
-        "connection refused", new RootCauseInfo("Service unavailable", "5-10 min", List.of("Check service status", "Restart endpoint"))),
-        "auth", new RootCauseInfo("Authentication failure", "5-10 min", List.of("Update credentials", "Check token expiry"))),
-        "schema", new RootCauseInfo("Data format mismatch", "30-60 min", List.of("Validate data schema", "Update mapping"))),
-        "duplicate", new RootCauseInfo("Record already exists", "10-20 min", List.of("Enable deduplication", "Clean existing records"))),
-        "exensio", new RootCauseInfo("Exensio API error", "Varies", List.of("Check Exensio status", "Review API limits"))),
-        "lot not found", new RootCauseInfo("Master data missing", "15-30 min", List.of("Add lot to Exensio", "Verify lot ID")))
+        "timeout", new RootCauseInfo("Network latency", "15-30 min", List.of("Check network", "Increase timeout")),
+        "connection refused", new RootCauseInfo("Service unavailable", "5-10 min", List.of("Check service status", "Restart endpoint")),
+        "auth", new RootCauseInfo("Authentication failure", "5-10 min", List.of("Update credentials", "Check token expiry")),
+        "schema", new RootCauseInfo("Data format mismatch", "30-60 min", List.of("Validate data schema", "Update mapping")),
+        "duplicate", new RootCauseInfo("Record already exists", "10-20 min", List.of("Enable deduplication", "Clean existing records")),
+        "exensio", new RootCauseInfo("Exensio API error", "Varies", List.of("Check Exensio status", "Review API limits")),
+        "lot not found", new RootCauseInfo("Master data missing", "15-30 min", List.of("Add lot to Exensio", "Verify lot ID"))
     );
 
     public RootCauseAnalysisService(AiGatewayService gatewayService, AiProperties aiProperties) {

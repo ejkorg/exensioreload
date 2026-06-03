@@ -1,22 +1,22 @@
-import { 
-  Component, 
-  OnInit, 
-  OnDestroy, 
-  signal, 
-  computed,
-  ChangeDetectionStrategy,
-  ElementRef,
-  ViewChild,
-  inject
-} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { AiService } from './ai.service';
 import { ChatMessage, SuggestedAction } from './ai.types';
 
@@ -31,36 +31,36 @@ import { ChatMessage, SuggestedAction } from './ai.types';
     MatInputModule,
     MatFormFieldModule,
     MatTooltipModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
   ],
   templateUrl: './ai-chat.component.html',
   styleUrls: ['./ai-chat.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AiChatComponent implements OnInit, OnDestroy {
-  private readonly aiService = inject(AiService);
-  
+  readonly aiService = inject(AiService);
+
   @ViewChild('messageContainer') messageContainer!: ElementRef;
   @ViewChild('messageInput') messageInput!: ElementRef;
-  
+
   // State signals
   isOpen = signal(false);
   isLoading = signal(false);
   inputMessage = signal('');
   error = signal<string | null>(null);
-  
+
   // Computed values
   messages = computed(() => this.aiService.messages());
   isAvailable = computed(() => this.aiService.isAvailable());
   isEnabled = computed(() => this.aiService.isEnabled());
-  
+
   private destroy$?: () => void;
 
   ngOnInit(): void {
     // Subscribe to service state changes
     this.aiService.checkStatus().subscribe({
       next: () => {},
-      error: () => this.error.set('Failed to connect to AI service')
+      error: () => this.error.set('Failed to connect to AI service'),
     });
   }
 
@@ -72,7 +72,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
    * Toggle chat panel visibility.
    */
   toggleChat(): void {
-    this.isOpen.update(open => !open);
+    this.isOpen.update((open) => !open);
     if (this.isOpen()) {
       setTimeout(() => this.messageInput?.nativeElement?.focus(), 100);
     }
@@ -110,7 +110,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
         this.error.set('Failed to get response. Please try again.');
         console.error('AI chat error:', err);
-      }
+      },
     });
   }
 

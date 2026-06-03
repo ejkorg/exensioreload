@@ -31,7 +31,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, $primary-color, darken($primary-color, 15%));
+  background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -15%));
   border: none;
   color: white;
   cursor: pointer;
@@ -40,21 +40,21 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   justify-content: center;
   box-shadow: 0 4px 20px rgba($primary-color, 0.4);
   transition: all $transition-speed ease;
-  
+
   &:hover {
     transform: scale(1.05);
     box-shadow: 0 6px 28px rgba($primary-color, 0.5);
   }
-  
+
   &:active {
     transform: scale(0.98);
   }
-  
+
   &.disabled {
     background: $text-muted;
     cursor: not-allowed;
     box-shadow: none;
-    
+
     &:hover {
       transform: none;
     }
@@ -99,23 +99,23 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   padding: 16px;
   background: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid $border-color;
-  
+
   .header-content {
     display: flex;
     align-items: center;
     gap: 10px;
-    
+
     .ai-icon {
       color: $primary-color;
     }
-    
+
     .header-title {
       font-size: 16px;
       font-weight: 600;
       color: $text-primary;
     }
   }
-  
+
   .header-actions {
     display: flex;
     gap: 8px;
@@ -134,7 +134,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  
+
   &:hover {
     background: rgba(255, 255, 255, 0.1);
     color: $text-primary;
@@ -149,19 +149,19 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   gap: 12px;
-  
+
   &::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: $border-color;
     border-radius: 3px;
-    
+
     &:hover {
       background: rgba(255, 255, 255, 0.2);
     }
@@ -177,25 +177,25 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   height: 100%;
   text-align: center;
   padding: 20px;
-  
+
   .welcome-icon {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: linear-gradient(135deg, $primary-color, darken($primary-color, 20%));
+    background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -20%));
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
     color: white;
   }
-  
+
   .welcome-text {
     color: $text-secondary;
     font-size: 14px;
     margin-bottom: 20px;
   }
-  
+
   .example-prompts {
     display: flex;
     flex-direction: column;
@@ -214,7 +214,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   cursor: pointer;
   text-align: left;
   transition: all 0.2s ease;
-  
+
   &:hover {
     background: rgba($primary-color, 0.2);
     border-color: rgba($primary-color, 0.4);
@@ -228,28 +228,28 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   display: flex;
   gap: 10px;
   max-width: 85%;
-  
+
   &.user-message {
     align-self: flex-end;
     flex-direction: row-reverse;
-    
+
     .message-content {
       background: $primary-color;
       color: white;
       border-radius: 16px 16px 4px 16px;
     }
   }
-  
+
   &.assistant-message {
     align-self: flex-start;
-    
+
     .message-content {
       background: $bg-glass-light;
       border-radius: 16px 16px 16px 4px;
       color: $text-primary;
     }
   }
-  
+
   &.loading {
     .message-content {
       display: flex;
@@ -264,7 +264,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   height: 28px;
   min-width: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, $primary-color, darken($primary-color, 15%));
+  background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -15%));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +274,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 
 .message-content {
   padding: 12px 16px;
-  
+
   .message-text {
     font-size: 14px;
     line-height: 1.5;
@@ -299,7 +299,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
     background: rgba(255, 255, 255, 0.25);
     border-color: rgba(255, 255, 255, 0.3);
@@ -313,19 +313,19 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   margin-top: 6px;
   font-size: 11px;
   color: $text-muted;
-  
+
   .confidence {
     padding: 2px 6px;
     background: rgba(16, 185, 129, 0.2);
     color: #10b981;
     border-radius: 4px;
-    
+
     &.low {
       background: rgba(245, 158, 11, 0.2);
       color: #f59e0b;
     }
   }
-  
+
   .timestamp {
     opacity: 0.7;
   }
@@ -335,18 +335,18 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 .typing-indicator {
   display: flex;
   gap: 4px;
-  
+
   span {
     width: 8px;
     height: 8px;
     background: $text-muted;
     border-radius: 50%;
     animation: typingBounce 1.4s ease-in-out infinite;
-    
+
     &:nth-child(2) {
       animation-delay: 0.2s;
     }
-    
+
     &:nth-child(3) {
       animation-delay: 0.4s;
     }
@@ -354,7 +354,9 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 }
 
 @keyframes typingBounce {
-  0%, 60%, 100% {
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
   }
   30% {
@@ -379,7 +381,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   padding: 12px 16px;
   background: rgba(0, 0, 0, 0.2);
   border-top: 1px solid $border-color;
-  
+
   .input-wrapper {
     display: flex;
     align-items: flex-end;
@@ -389,7 +391,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     border-radius: 12px;
     padding: 4px;
   }
-  
+
   .message-input {
     flex: 1;
     background: transparent;
@@ -400,16 +402,16 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     resize: none;
     max-height: 100px;
     outline: none;
-    
+
     &::placeholder {
       color: $text-muted;
     }
-    
+
     &:disabled {
       opacity: 0.5;
     }
   }
-  
+
   .send-btn {
     width: 36px;
     height: 36px;
@@ -422,18 +424,18 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    
+
     &:hover:not(:disabled) {
       background: $primary-hover;
     }
-    
+
     &:disabled {
       background: $text-muted;
       cursor: not-allowed;
       opacity: 0.5;
     }
   }
-  
+
   .input-hint {
     font-size: 11px;
     color: $text-muted;
@@ -464,7 +466,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     bottom: 16px;
     right: 16px;
   }
-  
+
   .chat-panel {
     width: calc(100vw - 32px);
     height: calc(100vh - 120px);
