@@ -1,6 +1,6 @@
 package com.onsemi.cim.apps.exensio.exensioreload.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -16,7 +16,7 @@ import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames;
  * when SSO is disabled (which would fail with no tenant ID configured).
  */
 @Configuration
-@ConditionalOnProperty(name = "reloader.sso.enabled", havingValue = "true")
+@Conditional(SsoEnabledCondition.class)
 public class OAuth2ClientConfig {
 
     private final SsoProperties ssoProperties;
