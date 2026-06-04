@@ -74,7 +74,7 @@ public class SsoController {
         storeReturnUrl(request, safeReturnUrl);
 
         logger.debug("SSO initiate: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);
-        response.sendRedirect("/oauth2/authorization/onsemi");
+        response.sendRedirect(request.getContextPath() + "/oauth2/authorization/onsemi");
     }
 
     /**
@@ -107,7 +107,7 @@ public class SsoController {
         session.setAttribute(SESSION_SILENT_FLAG, Boolean.TRUE);
 
         logger.debug("SSO silent: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);
-        response.sendRedirect("/oauth2/authorization/onsemi");
+        response.sendRedirect(request.getContextPath() + "/oauth2/authorization/onsemi");
     }
 
     // --- helpers ---

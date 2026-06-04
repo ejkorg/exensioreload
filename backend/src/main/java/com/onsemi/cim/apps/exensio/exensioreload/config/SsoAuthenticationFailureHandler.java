@@ -52,11 +52,11 @@ public class SsoAuthenticationFailureHandler implements AuthenticationFailureHan
         if (errorCode != null && SILENT_FALLBACK_ERRORS.contains(errorCode)) {
             // Silent SSO fallback — no active Azure AD session; show login page without error
             logger.debug("SSO silent check: no active session (error={}); redirecting to /login", errorCode);
-            response.sendRedirect("/login");
+            response.sendRedirect(request.getContextPath() + "/login");
         } else {
             // Genuine failure — log it and surface an error on the login page
             logger.warn("SSO authentication failed (error={}): {}", errorCode, exception.getMessage());
-            response.sendRedirect("/login?reason=sso-error");
+            response.sendRedirect(request.getContextPath() + "/login?reason=sso-error");
         }
     }
 

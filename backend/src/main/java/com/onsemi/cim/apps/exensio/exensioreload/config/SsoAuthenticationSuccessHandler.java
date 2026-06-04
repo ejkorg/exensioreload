@@ -123,14 +123,14 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
             // 8. Redirect to /sso-callback (Requirement 2.5)
             String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
             String encodedReturn = URLEncoder.encode(safeReturnUrl, StandardCharsets.UTF_8);
-            String redirectUrl = "/sso-callback?token=" + encodedToken + "&returnUrl=" + encodedReturn;
+            String redirectUrl = request.getContextPath() + "/sso-callback?token=" + encodedToken + "&returnUrl=" + encodedReturn;
 
             logger.info("SSO callback success: user='{}' redirecting to sso-callback", user.getUsername());
             response.sendRedirect(redirectUrl);
 
         } catch (Exception e) {
             logger.error("SSO callback: provisioning or token issuance failed", e);
-            response.sendRedirect("/login?reason=sso-error");
+            response.sendRedirect(request.getContextPath() + "/login?reason=sso-error");
         }
     }
 
