@@ -366,8 +366,8 @@ export class AuthService {
         )
         .subscribe((config: AuthConfig) => {
           this._ssoEnabled = config?.ssoEnabled ?? false;
-          // Step 3: silent SSO only if still not authenticated
-          if (this._ssoEnabled && !this.isAuthenticated() && !this.isOnSsoCallbackRoute()) {
+          // Step 3: silent SSO only if still not authenticated and not on any SSO route
+          if (this._ssoEnabled && !this.isAuthenticated() && !this.isOnSsoCallbackRoute() && !this.isOnOAuth2Route()) {
             const returnUrl = window.location.pathname + window.location.search;
             this.trySilentSso(returnUrl);
           }
@@ -382,7 +382,7 @@ export class AuthService {
    * Requirements: 8.1, 8.4
    */
   trySilentSso(returnUrl: string): void {
-    if (!this._ssoEnabled || this.isAuthenticated()) {
+    if (!this._ssoEnabled || this.isAuthenticated() || this.isOnOAuth2Route()) {
       return;
     }
     const encoded = encodeURIComponent(returnUrl);
