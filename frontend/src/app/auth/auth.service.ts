@@ -58,6 +58,11 @@ export class AuthService {
   private refreshInFlight: Observable<boolean> | null = null;
 
   constructor() {
+    // Don't initialize SSO flow if we're currently in an OAuth2 callback
+    if (this.isOnOAuth2Route()) {
+      return;
+    }
+
     // Wire up the refresh callback so SessionExpiryService can trigger a silent
     // token refresh when activity dismisses the warning modal (avoids circular import).
     this.sessionExpiryService.setRefreshCallback(() => {
@@ -409,5 +414,15 @@ export class AuthService {
    */
   private isOnSsoCallbackRoute(): boolean {
     return window.location.pathname.startsWith('/sso-callback');
+  }
+
+  /**
+   * Checks if we're currently in an OAuth2 authorization flow.
+   * Returns true if the current URL contains OAuth2 endpoints to prevent
+   * token refresh attempts during the OAuth2 callback sequence.
+   */
+  private isOnOAuth2Route(): boolean {
+    const path = window.location.pathname;
+    return path.includes('/oauth2/authorization/') || path.includes('/login/oauth2/code/');
   }
 }

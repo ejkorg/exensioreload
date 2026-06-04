@@ -51,8 +51,10 @@ spring:
 logging:
   level:
     root: INFO
-    com.onsemi.cim.apps.exensio: INFO
-    org.springframework: WARN
+    com.onsemi.cim.apps.exensio: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.web: DEBUG
     org.hibernate: WARN
   file:
     name: logs/exensioreload.log
