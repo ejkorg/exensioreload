@@ -282,11 +282,20 @@ public class ElasticsearchLogService {
             ObjectNode tsRange = range.putObject("@timestamp");
             tsRange.put("gte", since.toString());
 
-            // should clauses for scoring (Requirements 2.1–2.4)
-            ArrayNode should = bool.putArray("should");
+            // Nested bool with message matching conditions (inner should)
+            ObjectNode messageBool = must.addObject();
+            ObjectNode innerBool = messageBool.putObject("bool");
+            ArrayNode innerShould = innerBool.putArray("should");
+
+            // Boost 5: exact match for "Commands flow executed successfully"
+            ObjectNode shouldCmdSuccess = innerShould.addObject();
+            ObjectNode matchCmdSuccess = shouldCmdSuccess.putObject("match");
+            ObjectNode matchCmdSuccessMsg = matchCmdSuccess.putObject("message");
+            matchCmdSuccessMsg.put("query", "Commands flow executed successfully");
+            matchCmdSuccessMsg.put("boost", 5);
 
             // Boost 4: PRODUCTION output path in message
-            ObjectNode shouldProd = should.addObject();
+            ObjectNode shouldProd = innerShould.addObject();
             ObjectNode wildcardProd = shouldProd.putObject("wildcard");
             ObjectNode wildcardProdMsg = wildcardProd.putObject("message");
             wildcardProdMsg.put("value", "*output path*PRODUCTION*");
@@ -294,15 +303,21 @@ public class ElasticsearchLogService {
             wildcardProdMsg.put("boost", 4);
 
             // Boost 3: SANDBOX in message
-            ObjectNode shouldSbx = should.addObject();
+            ObjectNode shouldSbx = innerShould.addObject();
             ObjectNode wildcardSbx = shouldSbx.putObject("wildcard");
             ObjectNode wildcardSbxMsg = wildcardSbx.putObject("message");
             wildcardSbxMsg.put("value", "*SANDBOX*");
             wildcardSbxMsg.put("case_insensitive", true);
             wildcardSbxMsg.put("boost", 3);
 
+            // Requirement: at least one inner should clause must match
+            innerBool.put("minimum_should_match", 1);
+
+            // Outer should clauses for scoring ( Requirements 2.1–2.4)
+            ArrayNode outerShould = bool.putArray("should");
+
             // Boost 3: non-ERROR log level
-            ObjectNode shouldNonError = should.addObject();
+            ObjectNode shouldNonError = outerShould.addObject();
             ObjectNode boolNonError = shouldNonError.putObject("bool");
             boolNonError.put("boost", 3);
             ArrayNode mustNotArr = boolNonError.putArray("must_not");
@@ -311,13 +326,13 @@ public class ElasticsearchLogService {
             mustNotTermInner.put("log.level", "ERROR");
 
             // Boost 1: ERROR log level
-            ObjectNode shouldError = should.addObject();
+            ObjectNode shouldError = outerShould.addObject();
             ObjectNode termError = shouldError.putObject("term");
             ObjectNode termErrorInner = termError.putObject("log.level");
             termErrorInner.put("value", "ERROR");
             termErrorInner.put("boost", 1);
 
-            // Requirement 2.5: at least one should clause must match
+            // Requirement 2.5: at least one outer should clause must match
             bool.put("minimum_should_match", 1);
 
             // Sort by @timestamp desc, fetch only the most recent hit
