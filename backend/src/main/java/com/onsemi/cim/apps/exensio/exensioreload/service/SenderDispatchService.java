@@ -129,15 +129,19 @@ public class SenderDispatchService {
                             success.add(record.id());
                         } else {
                             log.error("Failed pushing record {}", record, ex);
-                            refDbService.markFailed(record.id(), ex.getMessage());
+                            String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database push failed";
+                            String contextMessage = "[Preprocessing Failure] " + errorMsg;
+                            refDbService.markFailed(record.id(), contextMessage);
                         }
                     }
                 }
             }
         } catch (SQLException ex) {
             log.error("Connection failure pushing site {} sender {}", site, senderId, ex);
+            String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database connection failed";
+            String contextMessage = "[Preprocessing Failure] " + errorMsg;
             for (StageRecord record : records) {
-                refDbService.markFailed(record.id(), ex.getMessage());
+                refDbService.markFailed(record.id(), contextMessage);
             }
             return;
         }

@@ -14,6 +14,8 @@ public record FileUpdateEvent(
         String status,
         String displayStatus,
         String message,
-        String updatedAt
+        String updatedAt,
+        String failureReason,
+        String failureSource
 ) {}
 

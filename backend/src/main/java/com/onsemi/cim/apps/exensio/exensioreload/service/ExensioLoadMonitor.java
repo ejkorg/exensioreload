@@ -401,6 +401,9 @@ public class ExensioLoadMonitor {
                     log.info("Record {} FAILED - {}", record.id(), errorMsg);
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "failure", errorMsg);
+                    // Add Exensio-specific failure context for UI display
+                    String contextMessage = "[Exensio Failure] " + errorMsg;
+                    refDbService.markFailed(record, contextMessage);
                 }
                 case ERROR -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error";

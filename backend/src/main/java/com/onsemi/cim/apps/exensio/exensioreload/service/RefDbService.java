@@ -514,14 +514,99 @@ public class RefDbService {
         if (record == null) return;
         markFailed(record.id(), message);
         if (monitorService != null && record.requestId() != null) {
+            // Determine failure reason and source from message content
+            String failureReason = determineFailureReason(message);
+            String failureSource = determineFailureSource(record, message);
+            
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
             evt.put("status", "FAILED");
             evt.put("message", message);
             evt.put("msg", "Failed: " + truncate(message, 30));
+            evt.put("failureReason", failureReason);
+            evt.put("failureSource", failureSource);
+            evt.put("updatedAt", record.updatedAt() != null ? record.updatedAt().toString() : null);
+            evt.put("metadataId", record.metadataId());
+            evt.put("dataId", record.dataId());
+            evt.put("lot", record.lot());
+            evt.put("wafer", record.wafer());
+            evt.put("filename", record.filename());
+            evt.put("displayStatus", StatusMapper.getDisplayStatus("FAILED", false));
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             broadcastStats(record.requestId());
         }
+    }
+
+    /**
+     * Determine the failure reason based on message content.
+     */
+    private String determineFailureReason(String message) {
+        if (message == null || message.isBlank()) {
+            return "unknown";
+        }
+        String msgLower = message.toLowerCase();
+        
+        if (msgLower.contains("timeout")) {
+            return "timeout";
+        }
+        if (msgLower.contains("connection") || msgLower.contains("network")) {
+            return "connection_error";
+        }
+        if (msgLower.contains("cp") && (msgLower.contains("error") || msgLower.contains("failed"))) {
+            return "cp_failure";
+        }
+        if (msgLower.contains("exensio") || msgLower.contains("api")) {
+            return "exensio_failure";
+        }
+        if (msgLower.contains("not found") || msgLower.contains("missing")) {
+            return "not_found";
+        }
+        if (msgLower.contains("timeout")) {
+            return "timeout";
+        }
+        
+        return "other";
+    }
+
+    /**
+     * Determine the failure source based on record status and message.
+     */
+    private String determineFailureSource(StageRecord record, String message) {
+        if (record == null) {
+            return "unknown";
+        }
+        
+        String recordStatus = record.status() != null ? record.status().toUpperCase() : "";
+        String msgLower = message != null ? message.toLowerCase() : "";
+        
+        // Check for CP-related failures
+        if (msgLower.contains("cp") && !msgLower.contains("exensio")) {
+            return "cp";
+        }
+        if (recordStatus.contains("ENRICHMENT") || recordStatus.contains("EXENSIO")) {
+            // Check if failure is from ES query
+            if (msgLower.contains("es ") || msgLower.contains("elasticsearch") || msgLower.contains("query")) {
+                return "cp";
+            }
+            // Check if failure is from pp_log
+            if (msgLower.contains("pp_log") || msgLower.contains("pp log")) {
+                return "cp";
+            }
+        }
+        
+        // Check for Exensio-related failures
+        if (recordStatus.contains("EXENSIO") || msgLower.contains("exensio") || msgLower.contains("api")) {
+            return "exensio";
+        }
+        
+        // Check for preprocessing failures (before enrichment)
+        if (recordStatus.contains("NEW") || recordStatus.contains("STAGED")) {
+            if (msgLower.contains("push") || msgLower.contains("database") || msgLower.contains("sql")) {
+                return "preprocessing";
+            }
+        }
+        
+        return "unknown";
     }
 
     public void markCompleted(List<Long> ids) {

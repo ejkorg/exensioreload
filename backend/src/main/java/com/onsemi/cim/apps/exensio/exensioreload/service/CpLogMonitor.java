@@ -125,11 +125,14 @@ public class CpLogMonitor {
             case CpLogResult.Failure failure -> {
                 // Requirement 4.2, 4.3, 4.5: transition to FAILED with truncated error message
                 String errorMessage = truncateErrorMessage(failure.errorMessage());
+                String failureReason = failure.errorMessage().toLowerCase().contains("error") ? "cp_error" : "cp_failure";
                 log.info("CP enrichment failure for record id={} dataId={}: {}",
                         record.id(), record.dataId(), errorMessage);
                 // Update per-record status
                 integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", errorMessage);
-                refDbService.markFailed(record, errorMessage);
+                // Add failure context to the message for better UI display
+                String contextMessage = "[CP Failure] " + errorMessage;
+                refDbService.markFailed(record, contextMessage);
             }
             case CpLogResult.NotFound notFound -> {
                 // ES returned NotFound - the enrichment may have happened externally (not through CP),
@@ -153,7 +156,8 @@ public class CpLogMonitor {
                         log.info("CP enrichment failed in pp_log for record id={} dataId={}: {}",
                                 record.id(), record.dataId(), ppLogError);
                         integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", ppLogError);
-                        refDbService.markFailed(record, ppLogError);
+                        String contextMessage = "[CP pp_log Failure] " + ppLogError;
+                        refDbService.markFailed(record, contextMessage);
                     } else {
                         // No pp_log entry found - still waiting, retry next cycle
                         // Check timeout
@@ -162,7 +166,8 @@ public class CpLogMonitor {
                                     + props.getEnrichmentTimeoutMinutes() + " minutes";
                             log.info("CP enrichment timeout for record id={} dataId={}", record.id(), record.dataId());
                             integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMessage);
-                            refDbService.markFailed(record, timeoutMessage);
+                            String contextMessage = "[CP Timeout] " + timeoutMessage;
+                            refDbService.markFailed(record, contextMessage);
                         } else {
                             log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
                                     record.id(), record.dataId());
