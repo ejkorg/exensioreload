@@ -182,6 +182,8 @@ export class AuthService {
     if (token) {
       sessionStorage.setItem('accessToken', token);
       localStorage.setItem('auth_token', token);
+      // Clear silent SSO attempt flag so future sessions can try again
+      sessionStorage.removeItem('sso_silent_attempted');
       this.tokenSubject.next(token); // Emit token change
       this.scheduleRefreshForToken(token);
       this.sessionExpiryService.startIdleTracking();
@@ -385,6 +387,12 @@ export class AuthService {
     if (!this._ssoEnabled || this.isAuthenticated() || this.isOnOAuth2Route()) {
       return;
     }
+    // Only attempt silent SSO once per browser session to prevent loops
+    // when Azure AD has no active session (returns login_required).
+    if (sessionStorage.getItem('sso_silent_attempted')) {
+      return;
+    }
+    sessionStorage.setItem('sso_silent_attempted', '1');
     const encoded = encodeURIComponent(returnUrl);
     window.location.href = `${environment.apiUrl}/auth/sso/silent?returnUrl=${encoded}`;
   }
