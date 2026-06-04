@@ -3,6 +3,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { environment } from '../../environments/environment';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { AuthService } from './auth.service';
 
