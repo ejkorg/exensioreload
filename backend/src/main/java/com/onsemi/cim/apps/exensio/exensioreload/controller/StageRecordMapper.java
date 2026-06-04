@@ -2,12 +2,27 @@ package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.service.IntegrationStatusService;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
 @Component
 public class StageRecordMapper {
+
+    private final IntegrationStatusService integrationStatusService;
+    private final CpElasticsearchProperties cpProps;
+    private final ExensioProperties exensioProps;
+
+    public StageRecordMapper(IntegrationStatusService integrationStatusService,
+                             CpElasticsearchProperties cpProps,
+                             ExensioProperties exensioProps) {
+        this.integrationStatusService = integrationStatusService;
+        this.cpProps = cpProps;
+        this.exensioProps = exensioProps;
+    }
 
     public StageRecordView toView(StageRecord record) {
         if (record == null) {
@@ -33,12 +48,44 @@ public class StageRecordMapper {
                     null,
                     null,
                     null,
+                    null,
+                    null,
+                    null,
+                    null,
                     null
             );
         }
         String lot = normalizeDisplayValue(record.lot(), "-");
         String wafer = normalizeDisplayValue(record.wafer(), "-");
         String filename = resolveFilename(record);
+
+        // Look up integration status from IntegrationStatusService
+        var cpStatus = integrationStatusService.getCpStatusForRecord(record.id());
+        var exensioStatus = integrationStatusService.getExensioStatusForRecord(record.id());
+
+        // Determine default CP status
+        String cpIntegrationStatus;
+        if (cpStatus != null) {
+            cpIntegrationStatus = cpStatus.status();
+        } else if (record.status() != null && record.status().equals("ENRICHMENT") && cpProps.isConfigured()) {
+            cpIntegrationStatus = "pending";
+        } else if (!cpProps.isConfigured()) {
+            cpIntegrationStatus = "not_configured";
+        } else {
+            cpIntegrationStatus = "not_configured";
+        }
+
+        // Determine default Exensio status
+        String exensioIntegrationStatus;
+        if (exensioStatus != null) {
+            exensioIntegrationStatus = exensioStatus.status();
+        } else if (record.status() != null && record.status().equals("EXENSIO_LOADING") && exensioProps.isConfigured()) {
+            exensioIntegrationStatus = "pending";
+        } else if (!exensioProps.isConfigured()) {
+            exensioIntegrationStatus = "not_configured";
+        } else {
+            exensioIntegrationStatus = "not_configured";
+        }
 
         return new StageRecordView(
                 record.id(),
@@ -62,7 +109,11 @@ public class StageRecordMapper {
                 record.cpOutputPath(),
                 record.cpOutputTarget(),
                 record.exensioWaferKey(),
-                record.exensioPgKey()
+                record.exensioPgKey(),
+                cpIntegrationStatus,
+                cpStatus != null ? cpStatus.message() : null,
+                exensioIntegrationStatus,
+                exensioStatus != null ? exensioStatus.message() : null
         );
     }
 

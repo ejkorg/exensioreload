@@ -22,5 +22,9 @@ public record StageRecordView(
         String cpOutputPath,
         String cpOutputTarget,
         Long exensioWaferKey,
-        Long exensioPgKey
+        Long exensioPgKey,
+        String cpIntegrationStatus,
+        String cpIntegrationMessage,
+        String exensioIntegrationStatus,
+        String exensioIntegrationMessage
 ) {}

@@ -66,6 +66,7 @@ public class ExensioLoadMonitor {
     private final ExensioClient exensioClient;
     private final RefDbService refDbService;
     private final IntegrationStatusService integrationStatusService;
+    private final StageMonitorService stageMonitorService;
 
     // Thread pool and parallel processing
     private ExecutorService executorService;
@@ -83,11 +84,13 @@ public class ExensioLoadMonitor {
     public ExensioLoadMonitor(ExensioProperties props,
                               ExensioClient exensioClient,
                               RefDbService refDbService,
-                              IntegrationStatusService integrationStatusService) {
+                              IntegrationStatusService integrationStatusService,
+                              StageMonitorService stageMonitorService) {
         this.props = props;
         this.exensioClient = exensioClient;
         this.refDbService = refDbService;
         this.integrationStatusService = integrationStatusService;
+        this.stageMonitorService = stageMonitorService;
     }
 
     /**
@@ -375,6 +378,7 @@ public class ExensioLoadMonitor {
             if (record == null) {
                 continue;
             }
+            long stageRecordId = record.id();
             String requestId = record.requestId();
             switch (update.type()) {
                 case DONE -> {
@@ -383,13 +387,79 @@ public class ExensioLoadMonitor {
                             update.waferId() != null ? update.waferId() : "N/A",
                             update.fileName() != null ? update.fileName() : "N/A");
                     log.info("Record {} DONE - {}", record.id(), msg);
-                    integrationStatusService.updateExensio(requestId, "success", msg);
+                    // Update per-record status
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "success", msg);
                 }
-                case NOT_FOUND -> integrationStatusService.updateExensio(requestId, "not_found", "Exensio wafer not found yet — retrying");
-                case FAILED -> integrationStatusService.updateExensio(requestId, "failure", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed");
-                case ERROR -> integrationStatusService.updateExensio(requestId, "error", update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error");
+                case NOT_FOUND -> {
+                    // Update per-record status
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", "Exensio wafer not found yet — retrying");
+                }
+                case FAILED -> {
+                    String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed";
+                    log.info("Record {} FAILED - {}", record.id(), errorMsg);
+                    // Update per-record status
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "failure", errorMsg);
+                }
+                case ERROR -> {
+                    String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error";
+                    log.warn("Record {} ERROR - {}", record.id(), errorMsg);
+                    // Update per-record status
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", errorMsg);
+                }
             }
+            // Emit ROW_UPDATE SSE event with per-record integration status
+            emitRowUpdateSse(record, requestId);
         }
+    }
+
+    /**
+     * Emits a ROW_UPDATE SSE event with per-record integration status.
+     * Best-effort: silently skips if no SSE emitter exists for the record.
+     * Requirements: 4.3
+     */
+    private void emitRowUpdateSse(StageRecord record, String requestId) {
+        // Get per-file integration status from IntegrationStatusService
+        var cpStatus = integrationStatusService.getCpStatusForRecord(record.id());
+        var exensioStatus = integrationStatusService.getExensioStatusForRecord(record.id());
+
+        Map<String, Object> evt = new java.util.HashMap<>();
+        evt.put("id", record.id());
+        evt.put("site", record.site());
+        evt.put("senderId", record.senderId());
+        evt.put("senderName", record.senderName());
+        evt.put("metadataId", record.metadataId());
+        evt.put("dataId", record.dataId());
+        evt.put("lot", record.lot());
+        evt.put("wafer", record.wafer());
+        evt.put("filename", record.filename());
+        evt.put("endTime", record.endTime() != null ? record.endTime().toString() : null);
+        evt.put("status", record.status());
+        evt.put("errorMessage", record.errorMessage());
+        evt.put("createdAt", record.createdAt() != null ? record.createdAt().toString() : null);
+        evt.put("updatedAt", record.updatedAt() != null ? record.updatedAt().toString() : null);
+        evt.put("processedAt", record.processedAt() != null ? record.processedAt().toString() : null);
+        evt.put("stagedBy", record.stagedBy());
+        evt.put("lastRequestedBy", record.lastRequestedBy());
+        evt.put("lastRequestedAt", record.lastRequestedAt() != null ? record.lastRequestedAt().toString() : null);
+        evt.put("requestId", record.requestId());
+        evt.put("cpOutputPath", record.cpOutputPath());
+        evt.put("cpOutputTarget", record.cpOutputTarget());
+        evt.put("exensioWaferKey", record.exensioWaferKey());
+        evt.put("exensioPgKey", record.exensioPgKey());
+        evt.put("dataType", record.dataType());
+        evt.put("testPhase", record.testPhase());
+
+        // Add per-file integration status fields
+        if (cpStatus != null) {
+            evt.put("cpIntegrationStatus", cpStatus.status());
+            evt.put("cpIntegrationMessage", cpStatus.message());
+        }
+        if (exensioStatus != null) {
+            evt.put("exensioIntegrationStatus", exensioStatus.status());
+            evt.put("exensioIntegrationMessage", exensioStatus.message());
+        }
+
+        stageMonitorService.sendEvent(requestId, "ROW_UPDATE", evt);
     }
 
     // -------------------------------------------------------------------------

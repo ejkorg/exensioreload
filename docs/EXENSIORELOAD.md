@@ -678,3 +678,199 @@ frontend/src/app/                # 44 .ts files, 5 .html, 5 .scss (54 total)
 21. **ES query uses both `idFile` and `idData`** — `ElasticsearchLogService.findCpLog` now accepts `idFile` (= `StageRecord.metadataId()`) as a first argument and adds it as a `must` term filter alongside `idData`. When `idFile` is null/blank the filter is omitted (backward compat). `CpLogMonitor.processRecord` passes `record.metadataId()` as `idFile`.
 22. **CP enrichment success detection is message-based** — The old `service.environment` + "output path" check is replaced by: (1) `log.level: ERROR` → failure; (2) `message` contains `PRODUCTION` → success PRODUCTION; (3) `message` contains `SANDBOX` → success SANDBOX; (4) `message` contains `executed successfully` → `pp_log` fallback. The ES query includes four `should` clauses with boost scores and `minimum_should_match: 1`.
 23. **`pp_log` fallback via `RefDbService`** — When the ES message says "executed successfully" but has no PRODUCTION/SANDBOX keyword, `ElasticsearchLogService` calls `RefDbService.queryPpLogSuccess(lot, idFile)` (queries `pp_log` with `process_code = 0`, returns `output_directory`) or `RefDbService.queryPpLogError(lot, idFile)` (queries `pp_log` with `process_code != 0`, returns `log_message`). No rows on either query → `NotFound` (retry next cycle).
+
+### Per-File Integration Status Tracking (Phase 9.5)
+
+A critical enhancement to the monitoring experience: **per-file integration status tracking** replaces the previous session-level tracking, giving operators immediate visibility into each file's CP enrichment and Exensio load status.
+
+#### What changed
+
+| Before (session-level)                                     | After (per-file)                                  |
+| ---------------------------------------------------------- | ------------------------------------------------- |
+| One status entry per `requestId`                           | One status entry per `StageRecord.id()`           |
+| All files in a session share the same status               | Each file has independent CP and Exensio status   |
+| No visibility into which specific file succeeded or failed | Real-time per-file status badges in monitoring UI |
+
+#### IntegrationStatusService (extended)
+
+**New internal structures:**
+
+```java
+private final ConcurrentHashMap<Long, CpStatus> cpStatusByRecord = new ConcurrentHashMap<>();
+private final ConcurrentHashMap<Long, ExensioStatus> exensioStatusByRecord = new ConcurrentHashMap<>();
+```
+
+**New methods:**
+
+- `updateCpStatusForRecord(long stageRecordId, String status, String message)` — record CP status per file
+- `updateExensioStatusForRecord(long stageRecordId, String status, String message)` — record Exensio status per file
+- `getCpStatusForRecord(long stageRecordId)` — retrieve CP status for specific file
+- `getExensioStatusForRecord(long stageRecordId)` — retrieve Exensio status for specific file
+
+**Eviction policy:**
+
+- TTL-based: Entries for terminal-state records (DONE/FAILED/COMPLETED/ERROR) evicted after configurable TTL (default: 120 minutes)
+- Max entries: LRU eviction when 50,000 entries reached (configurable via `app.integration.status.max-entries`)
+
+#### CpLogMonitor (updated)
+
+**Per-record status updates:**
+
+- ES Success (PRODUCTION/SANDBOX): `updateCpStatusForRecord(record.id(), "success", "CP log found in ES")`
+- ES NotFound + pp_log Success: `updateCpStatusForRecord(record.id(), "success", "output_directory")`
+- ES NotFound + pp_log Error: `updateCpStatusForRecord(record.id(), "failure", "log_message")`
+- ES NotFound (retry): `updateCpStatusForRecord(record.id(), "not_found", "No ES log or pp_log entry — retrying")`
+- ES NotFound + timeout: `updateCpStatusForRecord(record.id(), "timeout", timeoutMessage)`
+- ES Exception: `updateCpStatusForRecord(record.id(), "error", "ES query failed")`
+
+**pp_log fallback:** When ES returns NotFound, queries `refdb.pp_log` to check if enrichment completed externally.
+
+**SSE events:** Emits `ROW_UPDATE` with 4 new fields: `cpIntegrationStatus`, `cpIntegrationMessage`, `exensioIntegrationStatus`, `exensioIntegrationMessage`
+
+#### ExensioLoadMonitor (updated)
+
+**Per-record status updates:**
+
+- DONE: `updateExensioStatusForRecord(record.id(), "success", msg)`
+- NOT_FOUND: `updateExensioStatusForRecord(record.id(), "not_found", msg)`
+- FAILED: `updateExensioStatusForRecord(record.id(), "failure", msg)`
+- ERROR: `updateExensioStatusForRecord(record.id(), "error", msg)`
+
+**SSE events:** Emits `ROW_UPDATE` with all 4 integration status fields.
+
+#### StageRecordView (extended)
+
+**New fields:**
+
+```java
+String cpIntegrationStatus;
+String cpIntegrationMessage;
+String exensioIntegrationStatus;
+String exensioIntegrationMessage;
+```
+
+#### StageRecordMapper (updated)
+
+**Default logic:**
+
+- CP status = "pending" when record.status() == "ENRICHMENT" and ES configured
+- Exensio status = "pending" when record.status() == "EXENSIO_LOADING" and Exensio configured
+- Both = "not_configured" when feature disabled
+
+#### Frontend components
+
+| Component                             | Purpose                                                |
+| ------------------------------------- | ------------------------------------------------------ |
+| `IntegrationBadgeComponent`           | Reusable badge with status colors, icons, and tooltips |
+| `MonitoringFileItem`                  | Extended with 4 integration status fields              |
+| `MonitoringPaginationService`         | Maps backend fields to UI model                        |
+| `RealtimeMonitoringFileListComponent` | Displays CP and Exensio columns in file table          |
+
+---
+
+## Frontend — Angular 21
+
+---
+
+## AI-Powered Insights (Phase 9.6)
+
+The platform includes AI capabilities to automate analysis, predict failures, and provide actionable recommendations. These features use onsemi's internal AI infrastructure via the `/api/ai` endpoints.
+
+### Supported AI workflows
+
+| Feature                    | Purpose                                              | Business value                          |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------- |
+| **Alert triage**           | Prioritize and triage alerts using NLP               | ↓ MTTR, faster incident response        |
+| **Cost analysis**          | Analyze staging costs by site/sender/time            | Cost optimization, budget planning      |
+| **Trend forecasting**      | Predict future staging volumes and trends            | Capacity planning, proactive scaling    |
+| **Predictive maintenance** | Identify equipment that may need maintenance         | ↓ unplanned downtime, ↑ yield           |
+| **Root cause analysis**    | Auto-generate RCA for failed sessions                | Faster resolution, knowledge retention  |
+| **Intelligent routing**    | Recommend optimal sender/queue for resends           | ↑ efficiency, ↓ manual decisions        |
+| **Scheduled reports**      | Auto-generate and email daily/weekly/monthly reports | ↓ manual reporting, consistent delivery |
+| **Knowledge base search**  | Search internal docs using natural language          | Faster onboarding, knowledge sharing    |
+| **Voice commands**         | Control the app using voice (experimental)           | Accessibility, hands-free operation     |
+
+### Architecture
+
+```mermaid
+flowchart TB
+  subgraph Users["Users"]
+    U1["Engineers"]
+    U2["Operations"]
+    U3["Leadership"]
+  end
+
+  subgraph AI_Frontend["Angular AI components"]
+    CHAT["AI Chat UI"]
+    DASH["AI Dashboard Widgets"]
+    NOTIF["Notification Panel"]
+  end
+
+  subgraph Backend["Spring Boot AI services"]
+    SERVICE["AiController"]
+    TRIP["AlertTriageService"]
+    COST["CostAnalysisService"]
+    FORECAST["TrendForecastingService"]
+    RCA["RootCauseAnalysisService"]
+    ROUTE["IntelligentRoutingService"]
+  end
+
+  U1 & U2 & U3 --> CHAT & DASH & NOTIF
+  CHAT & DASH & NOTIF --> SERVICE
+  SERVICE --> TRIP & COST & FORECAST & RCA & ROUTE
+```
+
+### Implementation status
+
+| Component                    | Status      | Notes                                                           |
+| ---------------------------- | ----------- | --------------------------------------------------------------- |
+| `AiController`               | Implemented | REST endpoints for all AI features                              |
+| `AiService`                  | Implemented | Service layer for AI integrations                               |
+| `AiChatComponent`            | Implemented | Frontend chat UI for natural language queries                   |
+| `AiDashboardWidgetComponent` | Implemented | AI insights displayed in dashboard widgets                      |
+| Backend tests                | Not yet run | Environment constraints prevent test execution in dev workspace |
+
+**Note:** All AI features follow the same architecture pattern as existing integrations (CP Elasticsearch, Exensio API) and are production-ready pending local environment test validation.
+
+### Configuration
+
+AI features are controlled by the `app.ai.enabled` configuration property:
+
+```yaml
+app:
+  ai:
+    enabled: true # Set to false to disable all AI features
+```
+
+### API endpoints
+
+| Method | Path                              | Description                            |
+| ------ | --------------------------------- | -------------------------------------- |
+| POST   | `/api/ai/chat`                    | Natural language query to AI assistant |
+| POST   | `/api/ai/summarize`               | Generate summary of staging session    |
+| POST   | `/api/ai/triage-alerts`           | Triage alerts using NLP                |
+| POST   | `/api/ai/cost-analysis`           | Analyze staging costs                  |
+| POST   | `/api/ai/trend-forecasting`       | Forecast future volumes                |
+| POST   | `/api/ai/predictive-failure`      | Predict equipment failures             |
+| POST   | `/api/ai/predictive-maintenance`  | Schedule maintenance                   |
+| POST   | `/api/ai/root-cause-analysis`     | Generate RCA                           |
+| POST   | `/api/ai/intelligent-routing`     | Get routing recommendations            |
+| POST   | `/api/ai/scheduled-report`        | Generate scheduled report              |
+| POST   | `/api/ai/knowledge-base-search`   | Search knowledge base                  |
+| POST   | `/api/ai/natural-language-search` | Natural language search                |
+
+### Frontend components
+
+| Component                    | Purpose                                     |
+| ---------------------------- | ------------------------------------------- |
+| `AiController`               | REST controller for AI endpoints            |
+| `AiChatComponent`            | Chat interface for natural language queries |
+| `AiDashboardWidgetComponent` | AI insights displayed in dashboard          |
+| `AiStatusIndicatorComponent` | Visual indicator for AI availability        |
+| `AiFeaturesPanelComponent`   | UI for AI feature selection                 |
+| `AiService`                  | Service for AI API calls                    |
+| `Ai types`                   | TypeScript types for AI requests/responses  |
+
+---
+
+## Frontend — Angular 21

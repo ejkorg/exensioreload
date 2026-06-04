@@ -1,13 +1,6 @@
-import {
-  Injectable,
-  signal,
-  computed,
-  effect,
-  inject,
-  OnDestroy
-} from '@angular/core';
-import { StagingSessionService, SessionStreamStatus } from './staging-session.service';
+import { computed, effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { StageRecordView } from '../../api/backend.service';
+import { SessionStreamStatus, StagingSessionService } from './staging-session.service';
 
 export interface PaginatedMonitoringState {
   totalCount: number;
@@ -32,6 +25,11 @@ export interface MonitoringFileItem {
   updatedAt?: string;
   cpOutputPath?: string | null;
   cpOutputTarget?: string | null;
+  // Per-file integration status
+  cpIntegrationStatus?: string | null;
+  cpIntegrationMessage?: string | null;
+  exensioIntegrationStatus?: string | null;
+  exensioIntegrationMessage?: string | null;
   /** Tracks if this file was updated in the current real-time update cycle (for UI indicators) */
   isRecentlyUpdated?: boolean;
 }
@@ -54,7 +52,7 @@ export interface MonitoringFileItem {
  * 5. "Recently updated" badge shows for ~2 seconds after update received
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MonitoringPaginationService implements OnDestroy {
   private stagingSession = inject(StagingSessionService);
@@ -87,7 +85,7 @@ export class MonitoringPaginationService implements OnDestroy {
     items: this.items(),
     isLoading: this.isLoading(),
     hasMore: this.hasMore(),
-    streamStatus: this.streamStatus()
+    streamStatus: this.streamStatus(),
   }));
 
   /** Internal: Track pending updates for files not yet loaded/visible */
@@ -102,7 +100,7 @@ export class MonitoringPaginationService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.recentlyUpdatedCleanupHandles.forEach(handle => clearTimeout(handle));
+    this.recentlyUpdatedCleanupHandles.forEach((handle) => clearTimeout(handle));
   }
 
   /**
@@ -121,7 +119,7 @@ export class MonitoringPaginationService implements OnDestroy {
       const end = start + this.pageSize;
 
       // Simulate network latency (in production, this is actual API call)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const pageFiles = allFiles.slice(start, end).map((file: StageRecordView) => this.mapToMonitoringFile(file));
 
@@ -200,7 +198,7 @@ export class MonitoringPaginationService implements OnDestroy {
     this.items.set([]);
     this.pendingUpdates.clear();
     this.recentlyUpdatedIds.clear();
-    this.recentlyUpdatedCleanupHandles.forEach(h => clearTimeout(h));
+    this.recentlyUpdatedCleanupHandles.forEach((h) => clearTimeout(h));
     this.recentlyUpdatedCleanupHandles.clear();
 
     await this.loadFirstPage();
@@ -270,7 +268,7 @@ export class MonitoringPaginationService implements OnDestroy {
             status: this.mapBackendStatus(updatedSource.status),
             updatedAt: updatedSource.updated,
             errorMessage: updatedSource.errorMessage,
-            isRecentlyUpdated: true
+            isRecentlyUpdated: true,
           };
         }
         return currentFile;
@@ -279,9 +277,11 @@ export class MonitoringPaginationService implements OnDestroy {
       // Check if any items changed
       const hasChanges = updatedCurrentItems.some((item: MonitoringFileItem, idx: number) => {
         const original = currentItems[idx];
-        return item.status !== original.status ||
-               item.updatedAt !== original.updatedAt ||
-               (item.isRecentlyUpdated && !original.isRecentlyUpdated);
+        return (
+          item.status !== original.status ||
+          item.updatedAt !== original.updatedAt ||
+          (item.isRecentlyUpdated && !original.isRecentlyUpdated)
+        );
       });
 
       if (hasChanges) {
@@ -364,7 +364,12 @@ export class MonitoringPaginationService implements OnDestroy {
       updatedAt: file.updated,
       cpOutputPath: file.cpOutputPath,
       cpOutputTarget: file.cpOutputTarget,
-      isRecentlyUpdated: false
+      // Per-file integration status
+      cpIntegrationStatus: file.cpIntegrationStatus,
+      cpIntegrationMessage: file.cpIntegrationMessage,
+      exensioIntegrationStatus: file.exensioIntegrationStatus,
+      exensioIntegrationMessage: file.exensioIntegrationMessage,
+      isRecentlyUpdated: false,
     };
   }
 
@@ -372,7 +377,7 @@ export class MonitoringPaginationService implements OnDestroy {
    * Private: Map backend status string to MonitoringFileItem status enum.
    */
   private mapBackendStatus(
-    status: string
+    status: string,
   ): 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR' {
     const normalized = (status || '').toUpperCase();
     if (normalized === 'DONE' || normalized === 'COMPLETED') return 'COMPLETED';
