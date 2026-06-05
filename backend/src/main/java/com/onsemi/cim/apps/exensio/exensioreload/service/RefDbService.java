@@ -885,7 +885,9 @@ public class RefDbService {
 
         double progress = total > 0 ? ((completed + failed) * 100.0 / total) : 0;
         evt.put("progress", progress);
-        double successRate = total > 0 ? (completed * 100.0 / total) : 0;
+        // Success rate counts only completed out of all terminal (completed + failed)
+        long terminal = completed + failed;
+        double successRate = terminal > 0 ? (completed * 100.0 / terminal) : 100.0;
         evt.put("successRate", successRate);
         evt.put("sessionStatuses", statuses);
         if (integrationStatusService != null) {
