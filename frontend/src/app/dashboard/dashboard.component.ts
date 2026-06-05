@@ -222,8 +222,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     s.sites.forEach((site: DashboardSiteSnapshot) => {
       site.senders.forEach((sender: DashboardSenderSnapshot) => {
         // Calculate success rate: completed / (completed + failed)
-        const total = sender.metrics.completed + (sender.metrics.failed || 0);
-        const successRate = total > 0 ? Math.round((sender.metrics.completed / total) * 100) : 100;
+        // Terminal files are those that have finished processing (either successfully or with failure)
+        const completed = sender.metrics.completed || 0;
+        const failed = sender.metrics.failed || 0;
+        const terminal = completed + failed;
+        const successRate = terminal > 0 ? Math.round((completed / terminal) * 100) : 100;
         senders.push({
           senderId: sender.senderId,
           senderLabel: sender.senderLabel,
