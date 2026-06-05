@@ -4,7 +4,6 @@ import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validator
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
 import { User, UserService } from './user.service';
@@ -23,7 +22,6 @@ export interface UserFormDialogData {
     MatDialogModule,
     MatIconModule,
     MatSlideToggleModule,
-    MatSnackBarModule,
     GlassInputComponent,
     GlassSelectComponent,
   ],
@@ -243,7 +241,7 @@ export class UserFormDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private userService: UserService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     public dialogRef: MatDialogRef<UserFormDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData,
   ) {
@@ -306,14 +304,12 @@ export class UserFormDialogComponent implements OnInit {
       next: () => {
         this.loading.set(false);
         this.dialogRef.close(true);
-        this.snackBar.open(`User ${this.data.mode === 'create' ? 'created' : 'updated'} successfully`, 'Close', {
-          duration: 3000,
-        });
+        this.toast.success(`User ${this.data.mode === 'create' ? 'created' : 'updated'} successfully`, 3000);
       },
       error: (err) => {
         this.loading.set(false);
         const errorMessage = this.extractErrorMessage(err);
-        this.snackBar.open(errorMessage, 'Close', { duration: 7000 });
+        this.toast.error(errorMessage, 7000);
       },
     });
   }

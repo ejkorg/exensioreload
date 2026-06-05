@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
@@ -20,7 +19,6 @@ import { User, UserService, UserStatistics } from './user.service';
     CommonModule,
     ReactiveFormsModule,
     MatDialogModule,
-    MatSnackBarModule,
     GlassSelectComponent,
     GlassIconComponent,
     GlassTooltipDirective,
@@ -32,7 +30,7 @@ import { User, UserService, UserStatistics } from './user.service';
 export class UserListComponent implements OnInit {
   private userService = inject(UserService);
   private dialog = inject(MatDialog);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private router = inject(Router);
 
   dataSource = { data: [] as User[] };
@@ -81,7 +79,7 @@ export class UserListComponent implements OnInit {
         error: (err) => {
           this.loading.set(false);
           const errorMessage = this.extractErrorMessage(err);
-          this.snackBar.open(`Failed to load users: ${errorMessage}`, 'Close', { duration: 7000 });
+          this.toast.error(`Failed to load users: ${errorMessage}`, 7000);
         },
       });
   }
@@ -136,9 +134,6 @@ export class UserListComponent implements OnInit {
       if (res) {
         this.loadUsers();
         this.loadMetadata();
-        this.snackBar.open(`User ${mode === 'create' ? 'created' : 'updated'} successfully`, 'Close', {
-          duration: 3000,
-        });
       }
     });
   }
@@ -159,11 +154,11 @@ export class UserListComponent implements OnInit {
           next: () => {
             this.loadUsers();
             this.loadMetadata();
-            this.snackBar.open('User deleted successfully', 'Close', { duration: 3000 });
+            this.toast.success('User deleted successfully', 3000);
           },
           error: (err) => {
             const errorMessage = this.extractErrorMessage(err);
-            this.snackBar.open(`Failed to delete user: ${errorMessage}`, 'Close', { duration: 7000 });
+            this.toast.error(`Failed to delete user: ${errorMessage}`, 7000);
           },
         });
       }
@@ -175,11 +170,11 @@ export class UserListComponent implements OnInit {
       next: () => {
         this.loadUsers();
         this.loadMetadata();
-        this.snackBar.open(`User ${user.enabled ? 'disabled' : 'enabled'} successfully`, 'Close', { duration: 3000 });
+        this.toast.success(`User ${user.enabled ? 'disabled' : 'enabled'} successfully`, 3000);
       },
       error: (err) => {
         const errorMessage = this.extractErrorMessage(err);
-        this.snackBar.open(`Failed to update user status: ${errorMessage}`, 'Close', { duration: 7000 });
+        this.toast.error(`Failed to update user status: ${errorMessage}`, 7000);
       },
     });
   }

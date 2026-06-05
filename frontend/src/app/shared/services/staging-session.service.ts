@@ -3,11 +3,11 @@ import { interval, Subscription } from 'rxjs';
 import { distinctUntilChanged, filter, skip } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
-    BackendService,
-    CreateSessionRequest,
-    LotWaferProgress,
-    StageRecordView,
-    StagingSessionDetail
+  BackendService,
+  CreateSessionRequest,
+  LotWaferProgress,
+  StageRecordView,
+  StagingSessionDetail,
 } from '../../api/backend.service';
 import { AuthService } from '../../auth/auth.service';
 import { ActivityEvent } from '../components/activity-feed.component';
@@ -53,6 +53,7 @@ export class StagingSessionService {
   private rowUpdateRefreshHandle?: ReturnType<typeof setTimeout>;
   private tokenSubscription?: Subscription;
   private authService = inject(AuthService);
+  private toast = inject(ToastService);
   private readonly debugLogsEnabled = false;
   private limitsResolved = false;
   private monitorPageSize = environment.monitoring.monitorPageSize;
@@ -60,18 +61,21 @@ export class StagingSessionService {
   private fullFilesHydrationInFlight = false;
   private hydratedSessionId: string | null = null;
 
-  constructor(private backend: BackendService, private zone: NgZone) {
+  constructor(
+    private backend: BackendService,
+    private zone: NgZone,
+  ) {
     this.subscribeToTokenChanges();
     this.backend.getLimits().subscribe({
-      next: limits => {
+      next: (limits) => {
         this.monitorPageSize = limits.stagePageSizeCap;
-        this.monitorMaxRows  = limits.stageMaxRowsCap;
-        this.limitsResolved  = true;
+        this.monitorMaxRows = limits.stageMaxRowsCap;
+        this.limitsResolved = true;
       },
       error: () => {
         console.warn('[StagingSession] Failed to resolve backend limits; using environment fallback values.');
         this.limitsResolved = true;
-      }
+      },
     });
   }
 
@@ -164,7 +168,7 @@ export class StagingSessionService {
       next: (detail: StagingSessionDetail) => {
         this.currentSession.set(detail);
         this.pushActivity('session', `Session refreshed (${detail.status})`, 'refresh', 'primary');
-      }
+      },
     });
   }
 
@@ -181,7 +185,7 @@ export class StagingSessionService {
           this.currentSession.set({ ...current, status: 'CANCELLED' });
         }
         this.pushActivity('session', 'Session cancelled', 'cancel', 'warning');
-      }
+      },
     });
   }
 
@@ -234,13 +238,14 @@ export class StagingSessionService {
         if (current && (current.totalFiles || 0) === 0 && items.length > 0) {
           this.currentSession.set({
             ...current,
-            totalFiles: items.length
+            totalFiles: items.length,
           });
         }
       },
       error: (err: unknown) => {
         console.error('[StagingSession] Failed to load files:', err);
-      }
+        this.toast.error('Failed to load session files. Retrying automatically...', 7000);
+      },
     });
   }
 
@@ -253,7 +258,8 @@ export class StagingSessionService {
       },
       error: (err: unknown) => {
         console.error('[StagingSession] Failed to load lot progress:', err);
-      }
+        this.toast.error('Failed to load lot progress data', 7000);
+      },
     });
   }
 
@@ -266,7 +272,8 @@ export class StagingSessionService {
       },
       error: (err: unknown) => {
         console.error('[StagingSession] Failed to load snapshot:', err);
-      }
+        this.toast.error('Failed to refresh session status', 7000);
+      },
     });
   }
 
@@ -298,6 +305,7 @@ export class StagingSessionService {
       this.debugLog('[StagingSession] EventSource created, initial readyState:', this.eventSource.readyState);
     } catch (error) {
       console.error('[StagingSession] Failed to create EventSource:', error);
+      this.toast.error('Failed to establish live session stream. Will use polling updates.', 7000);
       this.streamStatus.set('error');
       return;
     }
@@ -307,7 +315,12 @@ export class StagingSessionService {
         console.warn('[StagingSession] SSE connection timeout, falling back to polling');
         console.warn('[StagingSession] Final EventSource readyState:', this.eventSource?.readyState);
         this.streamStatus.set('polling');
-        this.pushActivity('session', 'Live stream unavailable. Falling back to polling updates.', 'wifi_off', 'warning');
+        this.pushActivity(
+          'session',
+          'Live stream unavailable. Falling back to polling updates.',
+          'wifi_off',
+          'warning',
+        );
       }
     }, this.sseConnectTimeoutMs);
 
@@ -363,17 +376,16 @@ export class StagingSessionService {
           }
           this.currentSession.set({
             ...current,
-            totalFiles:    stats.total      ?? current.totalFiles,
-            filesStaged:   stats.ready      ?? current.filesStaged,
+            totalFiles: stats.total ?? current.totalFiles,
+            filesStaged: stats.ready ?? current.filesStaged,
             // backend sends enqueued as "processing" — accept both field names
-            filesEnqueued: stats.enqueued   ?? stats.processing ?? current.filesEnqueued,
-            filesDone:     stats.completed  ?? current.filesDone,
-            filesFailed:   stats.failed     ?? current.filesFailed,
-            progress:      stats.progress   ?? current.progress,
-            integration:   stats.integration ?? current.integration
+            filesEnqueued: stats.enqueued ?? stats.processing ?? current.filesEnqueued,
+            filesDone: stats.completed ?? current.filesDone,
+            filesFailed: stats.failed ?? current.filesFailed,
+            progress: stats.progress ?? current.progress,
+            integration: stats.integration ?? current.integration,
           });
-        } catch {
-        }
+        } catch {}
       });
     });
 
@@ -383,9 +395,13 @@ export class StagingSessionService {
         try {
           const fileUpdate = JSON.parse(event.data);
           this.updateFileInList(fileUpdate);
-          this.pushActivity('file', fileUpdate.msg || fileUpdate.message || `File ${fileUpdate.displayStatus || fileUpdate.status}`, 'description', 'primary');
-        } catch {
-        }
+          this.pushActivity(
+            'file',
+            fileUpdate.msg || fileUpdate.message || `File ${fileUpdate.displayStatus || fileUpdate.status}`,
+            'description',
+            'primary',
+          );
+        } catch {}
       });
     });
 
@@ -397,11 +413,15 @@ export class StagingSessionService {
           if (Array.isArray(updates)) {
             const appliedUpdates = this.updateFilesInListBatch(updates);
             if (appliedUpdates > 0) {
-              this.pushActivity('file', `${appliedUpdates} file${appliedUpdates === 1 ? '' : 's'} updated`, 'description', 'primary');
+              this.pushActivity(
+                'file',
+                `${appliedUpdates} file${appliedUpdates === 1 ? '' : 's'} updated`,
+                'description',
+                'primary',
+              );
             }
           }
-        } catch {
-        }
+        } catch {}
       });
     });
 
@@ -412,9 +432,13 @@ export class StagingSessionService {
           const lotUpdate = JSON.parse(event.data);
           this.updateLotProgress(lotUpdate);
           const isLotDone = lotUpdate.progress >= 100;
-          this.pushActivity('lot', `Lot ${lotUpdate.lot}: ${lotUpdate.progress.toFixed(1)}% complete`, isLotDone ? 'check_circle' : 'layers', isLotDone ? 'success' : 'warning');
-        } catch {
-        }
+          this.pushActivity(
+            'lot',
+            `Lot ${lotUpdate.lot}: ${lotUpdate.progress.toFixed(1)}% complete`,
+            isLotDone ? 'check_circle' : 'layers',
+            isLotDone ? 'success' : 'warning',
+          );
+        } catch {}
       });
     });
 
@@ -428,8 +452,7 @@ export class StagingSessionService {
             this.currentSession.set({ ...current, status: statusUpdate.status });
           }
           this.pushActivity('session', statusUpdate.message || `Session ${statusUpdate.status}`, 'info', 'success');
-        } catch {
-        }
+        } catch {}
       });
     });
 
@@ -444,8 +467,7 @@ export class StagingSessionService {
           }
           // Schedule a debounced snapshot + files refresh to sync any other changes.
           this.scheduleRowUpdateRefresh(sessionId, payload?.msg);
-        } catch {
-        }
+        } catch {}
       });
     });
 
@@ -490,11 +512,11 @@ export class StagingSessionService {
     const updatedFiles = [...currentFiles];
     updatedFiles[fileIndex] = {
       ...updatedFiles[fileIndex],
-      status:        fileUpdate.status        ?? updatedFiles[fileIndex].status,
-      updated:       fileUpdate.updatedAt ?? fileUpdate.updated ?? updatedFiles[fileIndex].updated,
-      updatedAt:     fileUpdate.updatedAt ?? fileUpdate.updated ?? updatedFiles[fileIndex].updatedAt,
-      errorMessage:  fileUpdate.errorMessage  ?? fileUpdate.message ?? updatedFiles[fileIndex].errorMessage,
-      cpOutputPath:  fileUpdate.cpOutputPath  ?? updatedFiles[fileIndex].cpOutputPath,
+      status: fileUpdate.status ?? updatedFiles[fileIndex].status,
+      updated: fileUpdate.updatedAt ?? fileUpdate.updated ?? updatedFiles[fileIndex].updated,
+      updatedAt: fileUpdate.updatedAt ?? fileUpdate.updated ?? updatedFiles[fileIndex].updatedAt,
+      errorMessage: fileUpdate.errorMessage ?? fileUpdate.message ?? updatedFiles[fileIndex].errorMessage,
+      cpOutputPath: fileUpdate.cpOutputPath ?? updatedFiles[fileIndex].cpOutputPath,
       cpOutputTarget: fileUpdate.cpOutputTarget ?? updatedFiles[fileIndex].cpOutputTarget,
     };
 
@@ -532,11 +554,11 @@ export class StagingSessionService {
 
       return {
         ...file,
-        status:         update.status         ?? file.status,
-        updated:        update.updatedAt ?? update.updated ?? file.updated,
-        updatedAt:      update.updatedAt ?? update.updated ?? file.updatedAt,
-        errorMessage:   update.errorMessage   ?? update.message ?? file.errorMessage,
-        cpOutputPath:   update.cpOutputPath   ?? file.cpOutputPath,
+        status: update.status ?? file.status,
+        updated: update.updatedAt ?? update.updated ?? file.updated,
+        updatedAt: update.updatedAt ?? update.updated ?? file.updatedAt,
+        errorMessage: update.errorMessage ?? update.message ?? file.errorMessage,
+        cpOutputPath: update.cpOutputPath ?? file.cpOutputPath,
         cpOutputTarget: update.cpOutputTarget ?? file.cpOutputTarget,
       };
     });
@@ -557,48 +579,58 @@ export class StagingSessionService {
         ...updated[index],
         totalFiles: lotUpdate.totalWafers || lotUpdate.totalFiles,
         doneFiles: lotUpdate.completedWafers || lotUpdate.doneFiles,
-        failedFiles: lotUpdate.failedWafers || lotUpdate.failedFiles
+        failedFiles: lotUpdate.failedWafers || lotUpdate.failedFiles,
       };
       this.lotProgress.set(updated);
     } else {
       // Add new lot if not found
-      this.lotProgress.set([...lots, {
-        lot: lotUpdate.lot,
-        wafer: '',
-        totalFiles: lotUpdate.totalWafers || lotUpdate.totalFiles || 0,
-        doneFiles: lotUpdate.completedWafers || lotUpdate.doneFiles || 0,
-        failedFiles: lotUpdate.failedWafers || lotUpdate.failedFiles || 0,
-        status: 'ENRICHMENT'
-      }]);
+      this.lotProgress.set([
+        ...lots,
+        {
+          lot: lotUpdate.lot,
+          wafer: '',
+          totalFiles: lotUpdate.totalWafers || lotUpdate.totalFiles || 0,
+          doneFiles: lotUpdate.completedWafers || lotUpdate.doneFiles || 0,
+          failedFiles: lotUpdate.failedWafers || lotUpdate.failedFiles || 0,
+          status: 'ENRICHMENT',
+        },
+      ]);
     }
   }
 
-  private pushActivity(type: ActivityEvent['type'], message: string, icon: string, color: ActivityEvent['color']): void {
+  private pushActivity(
+    type: ActivityEvent['type'],
+    message: string,
+    icon: string,
+    color: ActivityEvent['color'],
+  ): void {
     const next: SessionActivityEvent = {
       id: `${Date.now()}-${Math.random()}`,
       timestamp: new Date(),
       type,
       message,
       icon,
-      color
+      color,
     };
     this.activities.set([next, ...this.activities()].slice(0, 100));
   }
 
   private subscribeToTokenChanges(): void {
     // Listen to token changes from AuthService
-    this.tokenSubscription = this.authService.token$.pipe(
-      skip(1), // Skip initial value
-      filter((token: string | null) => token !== null), // Only react to new tokens (not logout)
-      distinctUntilChanged() // Only when token actually changes
-    ).subscribe(() => {
-      // If we have an active monitoring session, reconnect SSE with fresh token
-      if (this.currentSessionId) {
-        this.debugLog('[StagingSession] Token refreshed, reconnecting SSE...');
-        this.streamStatus.set('connecting');
-        this.connectSse(this.currentSessionId);
-      }
-    });
+    this.tokenSubscription = this.authService.token$
+      .pipe(
+        skip(1), // Skip initial value
+        filter((token: string | null) => token !== null), // Only react to new tokens (not logout)
+        distinctUntilChanged(), // Only when token actually changes
+      )
+      .subscribe(() => {
+        // If we have an active monitoring session, reconnect SSE with fresh token
+        if (this.currentSessionId) {
+          this.debugLog('[StagingSession] Token refreshed, reconnecting SSE...');
+          this.streamStatus.set('connecting');
+          this.connectSse(this.currentSessionId);
+        }
+      });
   }
 
   private tryReconnectSse(sessionId: string): void {
@@ -694,8 +726,9 @@ export class StagingSessionService {
         },
         error: (err: unknown) => {
           console.error('[StagingSession] Failed to hydrate full file list:', err);
+          this.toast.error('Failed to load complete file list. Partial data may be available.', 7000);
           this.fullFilesHydrationInFlight = false;
-        }
+        },
       });
     };
 
@@ -710,13 +743,8 @@ export class StagingSessionService {
     const wafer = this.valueOrNull(raw?.wafer);
 
     const filename = this.valueOrFallback(
-      raw?.filename
-        ?? raw?.fileName
-        ?? raw?.originalFileName
-        ?? raw?.originalFilename
-        ?? dataId
-        ?? metadataId,
-      'unknown'
+      raw?.filename ?? raw?.fileName ?? raw?.originalFileName ?? raw?.originalFilename ?? dataId ?? metadataId,
+      'unknown',
     );
 
     const updatedAt = this.valueOrNull(raw?.updatedAt ?? raw?.updated_at ?? raw?.updated);
@@ -730,7 +758,7 @@ export class StagingSessionService {
       filename,
       updatedAt,
       updated: updatedAt,
-      status: this.valueOrFallback(raw?.status, 'NEW')
+      status: this.valueOrFallback(raw?.status, 'NEW'),
     } as StageRecordView;
   }
 

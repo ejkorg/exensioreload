@@ -249,6 +249,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
+    private toast: ToastService,
   ) {}
 
   ngOnInit() {
@@ -425,6 +426,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
           maxRetries: this.maxRetries,
           timestamp: new Date(),
         });
+
+        // Show toast notification to user
+        this.toast.error(parsed.message, 7000);
 
         if (this.retryAttempts < this.maxRetries) {
           this.startRetryCountdown(Math.ceil(delayMs / 1000));
@@ -701,11 +705,46 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   dispatchSender(sender: SenderPerformance): void {
     this.backend.dispatch({ site: sender.site, senderId: sender.senderId }).subscribe({
-      next: () => {},
+      next: () => {
+        this.toast.success(`Dispatch initiated for ${sender.senderLabel}`, 3000);
+      },
       error: (err: unknown) => {
         console.error('Dispatch failed for sender', sender.senderId, err);
+        const errorMsg = this.extractErrorMessage(err);
+        this.toast.error(`Dispatch failed: ${errorMsg}`, 7000);
       },
     });
+  }
+
+  private extractErrorMessage(err: any): string {
+    if (err?.error?.message) {
+      return err.error.message;
+    }
+    if (err?.error?.detail) {
+      return err.error.detail;
+    }
+    if (err?.error?.error) {
+      return err.error.error;
+    }
+    if (err?.statusText) {
+      return err.statusText;
+    }
+    if (err?.message) {
+      return err.message;
+    }
+    if (err?.status === 409) {
+      return 'Conflict: Dispatch already in progress';
+    }
+    if (err?.status === 400) {
+      return 'Invalid request data';
+    }
+    if (err?.status === 403) {
+      return 'You do not have permission to dispatch';
+    }
+    if (err?.status === 500) {
+      return 'Server error occurred';
+    }
+    return 'Failed to dispatch sender';
   }
 
   getBacklogCapacity(_sender: SenderPerformance): number {
