@@ -34,7 +34,7 @@ public class OAuth2ClientConfig {
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .redirectUri("{baseUrl}/login/oauth2/code/onsemi")
-                .scope("openid", "profile", "email", "GroupMember.Read.All")
+                .scope("openid", "profile", "email")
                 .authorizationUri("https://login.microsoftonline.com/" + ssoProperties.getTenantId() + "/oauth2/v2.0/authorize")
                 .tokenUri("https://login.microsoftonline.com/" + ssoProperties.getTenantId() + "/oauth2/v2.0/token")
                 .jwkSetUri("https://login.microsoftonline.com/" + ssoProperties.getTenantId() + "/discovery/v2.0/keys")
