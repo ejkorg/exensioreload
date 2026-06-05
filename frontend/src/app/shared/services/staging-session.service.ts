@@ -11,6 +11,7 @@ import {
 } from '../../api/backend.service';
 import { AuthService } from '../../auth/auth.service';
 import { ActivityEvent } from '../components/activity-feed.component';
+import { ToastService } from './toast.service';
 
 export interface SessionActivityEvent {
   id: string;
