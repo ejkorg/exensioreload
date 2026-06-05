@@ -251,7 +251,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
   ) {
-    this.toast = inject(ToastService);
+    this.toast = inject(ToastService) as ToastService;
   }
 
   private toast: ToastService;

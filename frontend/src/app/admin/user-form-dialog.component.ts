@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, OnInit, signal } from '@angular/core';
+import { Component, Inject, inject, OnInit, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -246,7 +246,7 @@ export class UserFormDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<UserFormDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData,
   ) {
-    this.toast = inject(ToastService);
+    this.toast = inject(ToastService) as ToastService;
     this.userForm = this.fb.group(
       {
         username: ['', [Validators.required, Validators.minLength(3)]],

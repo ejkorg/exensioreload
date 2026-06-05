@@ -53,7 +53,7 @@ export class StagingSessionService {
   private rowUpdateRefreshHandle?: ReturnType<typeof setTimeout>;
   private tokenSubscription?: Subscription;
   private authService = inject(AuthService);
-  private toast = inject(ToastService);
+  private toast = inject(ToastService) as ToastService;
   private readonly debugLogsEnabled = false;
   private limitsResolved = false;
   private monitorPageSize = environment.monitoring.monitorPageSize;
