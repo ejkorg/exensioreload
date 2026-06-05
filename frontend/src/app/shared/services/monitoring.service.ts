@@ -1,6 +1,6 @@
 import { Injectable, NgZone, signal } from '@angular/core';
 import { Observable, Subject, interval } from 'rxjs';
-import { takeWhile, switchMap } from 'rxjs/operators';
+import { switchMap, takeWhile } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 export interface MonitoringStats {
@@ -34,6 +34,11 @@ export interface MonitoringFile {
   updatedAt?: string;
   cpOutputPath?: string | null;
   cpOutputTarget?: string | null;
+  // Integration status fields for detail line display
+  cpIntegrationStatus?: string; // "success" | "pending" | "failure" | "timeout" | "not_found" | "error" | "not_configured"
+  cpIntegrationMessage?: string;
+  exensioIntegrationStatus?: string; // "success" | "pending" | "failure" | "not_found" | "error" | "not_configured"
+  exensioIntegrationMessage?: string;
 }
 
 export interface ActivityEvent {
@@ -50,7 +55,7 @@ export interface MonitorEvent {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MonitoringService {
   private eventSource: EventSource | null = null;
@@ -69,7 +74,7 @@ export class MonitoringService {
     eta: 'Calculating...',
     successRate: 100,
     startTime: null,
-    elapsedTime: '0s'
+    elapsedTime: '0s',
   });
 
   files = signal<MonitoringFile[]>([]);
@@ -86,7 +91,7 @@ export class MonitoringService {
    * Connect to SSE endpoint for real-time monitoring
    */
   connectSSE(requestId: string, token: string): Observable<MonitorEvent> {
-    return new Observable<MonitorEvent>(observer => {
+    return new Observable<MonitorEvent>((observer) => {
       const url = `${environment.apiUrl}/stage/monitor?requestId=${requestId}`;
 
       this.eventSource = new EventSource(url);
@@ -164,27 +169,25 @@ export class MonitoringService {
   /**
    * Start polling-based monitoring (fallback if SSE not available)
    */
-  startPolling(
-    getStats: () => Observable<any>,
-    getFiles: () => Observable<any>,
-    intervalMs: number = 3000
-  ) {
-    this.pollingSubscription = interval(intervalMs).pipe(
-      takeWhile(() => !this.isComplete()),
-      switchMap(() => getStats())
-    ).subscribe({
-      next: (stats) => {
-        this.updateStats(stats);
-        this.lastUpdate.set(new Date());
-      },
-      error: (err) => {
-        console.error('Polling error:', err);
-      }
-    });
+  startPolling(getStats: () => Observable<any>, getFiles: () => Observable<any>, intervalMs: number = 3000) {
+    this.pollingSubscription = interval(intervalMs)
+      .pipe(
+        takeWhile(() => !this.isComplete()),
+        switchMap(() => getStats()),
+      )
+      .subscribe({
+        next: (stats) => {
+          this.updateStats(stats);
+          this.lastUpdate.set(new Date());
+        },
+        error: (err) => {
+          console.error('Polling error:', err);
+        },
+      });
 
     // Initial fetch
-    getStats().subscribe(stats => this.updateStats(stats));
-    getFiles().subscribe(files => this.updateFiles(files));
+    getStats().subscribe((stats) => this.updateStats(stats));
+    getFiles().subscribe((files) => this.updateFiles(files));
   }
 
   /**
@@ -227,9 +230,12 @@ export class MonitoringService {
     const throughput = elapsedMinutes > 0 ? Math.round(processed / elapsedMinutes) : 0;
 
     const remaining = total - processed;
-    const eta = throughput > 0 && remaining > 0
-      ? this.formatETA(remaining / throughput)
-      : (remaining > 0 ? 'Calculating...' : 'Complete');
+    const eta =
+      throughput > 0 && remaining > 0
+        ? this.formatETA(remaining / throughput)
+        : remaining > 0
+          ? 'Calculating...'
+          : 'Complete';
 
     const elapsedTime = this.formatDuration(elapsedMs);
 
@@ -245,7 +251,7 @@ export class MonitoringService {
       eta,
       successRate,
       startTime,
-      elapsedTime
+      elapsedTime,
     });
   }
 
@@ -264,7 +270,18 @@ export class MonitoringService {
     const files = this.files() || [];
     if (!files || files.length === 0) return false;
 
-    const headers = ['id', 'metadataId', 'dataId', 'filename', 'lot', 'wafer', 'status', 'errorMessage', 'updatedAt', 'requestedBy'];
+    const headers = [
+      'id',
+      'metadataId',
+      'dataId',
+      'filename',
+      'lot',
+      'wafer',
+      'status',
+      'errorMessage',
+      'updatedAt',
+      'requestedBy',
+    ];
     const rows: string[][] = files.map((f: MonitoringFile) => [
       String(f.id ?? ''),
       String(f.metadataId ?? ''),
@@ -275,12 +292,12 @@ export class MonitoringService {
       String(f.status ?? ''),
       String((f.errorMessage || '').replace(/\r?\n|,/g, ' ')),
       String(f.updatedAt ?? ''),
-      String(requestedBy ?? '')
+      String(requestedBy ?? ''),
     ]);
 
     const csv = [
       headers.join(','),
-      ...rows.map((r: string[]) => r.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(','))
+      ...rows.map((r: string[]) => r.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -300,7 +317,7 @@ export class MonitoringService {
    */
   updateFile(file: MonitoringFile) {
     const currentFiles = this.files();
-    const index = currentFiles.findIndex(f => f.id === file.id || f.metadataId === file.metadataId);
+    const index = currentFiles.findIndex((f) => f.id === file.id || f.metadataId === file.metadataId);
 
     if (index >= 0) {
       const updated = [...currentFiles];
@@ -313,7 +330,7 @@ export class MonitoringService {
         type: this.getActivityType(file.status),
         filename: file.filename,
         message: this.getActivityMessage(file),
-        details: file
+        details: file,
       });
     }
   }
@@ -333,7 +350,7 @@ export class MonitoringService {
    */
   isComplete(): boolean {
     const stats = this.stats();
-    return stats.total > 0 && (stats.completed + stats.failed) >= stats.total;
+    return stats.total > 0 && stats.completed + stats.failed >= stats.total;
   }
 
   /**
@@ -352,7 +369,7 @@ export class MonitoringService {
       eta: 'Calculating...',
       successRate: 100,
       startTime: null,
-      elapsedTime: '0s'
+      elapsedTime: '0s',
     });
     this.files.set([]);
     this.activities.set([]);
@@ -390,10 +407,14 @@ export class MonitoringService {
   private getActivityType(status: string): ActivityEvent['type'] {
     switch (status) {
       case 'ENRICHMENT':
-      case 'EXENSIO_LOADING': return 'FILE_STARTED';
-      case 'COMPLETED': return 'FILE_COMPLETED';
-      case 'ERROR': return 'FILE_FAILED';
-      default: return 'STATUS_CHANGE';
+      case 'EXENSIO_LOADING':
+        return 'FILE_STARTED';
+      case 'COMPLETED':
+        return 'FILE_COMPLETED';
+      case 'ERROR':
+        return 'FILE_FAILED';
+      default:
+        return 'STATUS_CHANGE';
     }
   }
 
@@ -402,13 +423,20 @@ export class MonitoringService {
    */
   private getActivityMessage(file: MonitoringFile): string {
     switch (file.status) {
-      case 'READY': return `File staged: ${file.filename}`;
-      case 'ENQUEUED': return `In Queue (pending CP): ${file.filename}`;
-      case 'ENRICHMENT': return `Enrichment / Translation: ${file.filename}`;
-      case 'EXENSIO_LOADING': return `Exensio Loading: ${file.filename}`;
-      case 'COMPLETED': return `Completed: ${file.filename}`;
-      case 'ERROR': return `Failed: ${file.filename} - ${file.errorMessage || 'Unknown error'}`;
-      default: return `Status changed: ${file.filename}`;
+      case 'READY':
+        return `File staged: ${file.filename}`;
+      case 'ENQUEUED':
+        return `In Queue (pending CP): ${file.filename}`;
+      case 'ENRICHMENT':
+        return `Enrichment / Translation: ${file.filename}`;
+      case 'EXENSIO_LOADING':
+        return `Exensio Loading: ${file.filename}`;
+      case 'COMPLETED':
+        return `Completed: ${file.filename}`;
+      case 'ERROR':
+        return `Failed: ${file.filename} - ${file.errorMessage || 'Unknown error'}`;
+      default:
+        return `Status changed: ${file.filename}`;
     }
   }
 }

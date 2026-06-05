@@ -519,9 +519,23 @@ export class StagingSessionService {
       errorMessage: fileUpdate.errorMessage ?? fileUpdate.message ?? updatedFiles[fileIndex].errorMessage,
       cpOutputPath: fileUpdate.cpOutputPath ?? updatedFiles[fileIndex].cpOutputPath,
       cpOutputTarget: fileUpdate.cpOutputTarget ?? updatedFiles[fileIndex].cpOutputTarget,
+      cpIntegrationStatus: fileUpdate.cpIntegrationStatus ?? updatedFiles[fileIndex].cpIntegrationStatus,
+      cpIntegrationMessage: fileUpdate.cpIntegrationMessage ?? updatedFiles[fileIndex].cpIntegrationMessage,
+      exensioIntegrationStatus: fileUpdate.exensioIntegrationStatus ?? updatedFiles[fileIndex].exensioIntegrationStatus,
+      exensioIntegrationMessage:
+        fileUpdate.exensioIntegrationMessage ?? updatedFiles[fileIndex].exensioIntegrationMessage,
     };
 
     this.sessionFiles.set(updatedFiles);
+
+    // Push activity message for terminal files (COMPLETED or ERROR)
+    const oldFile = currentFiles[fileIndex];
+    const newFile = updatedFiles[fileIndex];
+    if (newFile.status === 'COMPLETED' && oldFile.status !== 'COMPLETED') {
+      this.buildAndPushTerminalActivityMessage(newFile);
+    } else if (newFile.status === 'ERROR' && oldFile.status !== 'ERROR') {
+      this.buildAndPushTerminalActivityMessage(newFile);
+    }
   }
 
   private updateFilesInListBatch(updates: any[]): number {
@@ -544,6 +558,9 @@ export class StagingSessionService {
     let appliedCount = 0;
     let hasChanges = false;
 
+    // Track files that transitioned to terminal states for activity messages
+    const terminalFilesToNotify: StageRecordView[] = [];
+
     const updatedFiles = currentFiles.map((file: StageRecordView) => {
       const update = updatesById.get(file.id);
       if (!update) {
@@ -553,7 +570,7 @@ export class StagingSessionService {
       appliedCount += 1;
       hasChanges = true;
 
-      return {
+      const newFile = {
         ...file,
         status: update.status ?? file.status,
         updated: update.updatedAt ?? update.updated ?? file.updated,
@@ -561,12 +578,30 @@ export class StagingSessionService {
         errorMessage: update.errorMessage ?? update.message ?? file.errorMessage,
         cpOutputPath: update.cpOutputPath ?? file.cpOutputPath,
         cpOutputTarget: update.cpOutputTarget ?? file.cpOutputTarget,
+        cpIntegrationStatus: update.cpIntegrationStatus ?? file.cpIntegrationStatus,
+        cpIntegrationMessage: update.cpIntegrationMessage ?? file.cpIntegrationMessage,
+        exensioIntegrationStatus: update.exensioIntegrationStatus ?? file.exensioIntegrationStatus,
+        exensioIntegrationMessage: update.exensioIntegrationMessage ?? file.exensioIntegrationMessage,
       };
+
+      // Check if file transitioned to COMPLETED or ERROR
+      if (newFile.status === 'COMPLETED' && file.status !== 'COMPLETED') {
+        terminalFilesToNotify.push(newFile);
+      } else if (newFile.status === 'ERROR' && file.status !== 'ERROR') {
+        terminalFilesToNotify.push(newFile);
+      }
+
+      return newFile;
     });
 
     if (hasChanges) {
       this.sessionFiles.set(updatedFiles);
     }
+
+    // Push activity messages for all terminal files
+    terminalFilesToNotify.forEach((file) => {
+      this.buildAndPushTerminalActivityMessage(file);
+    });
 
     return appliedCount;
   }
@@ -597,6 +632,86 @@ export class StagingSessionService {
         },
       ]);
     }
+  }
+
+  /**
+   * Builds and pushes an activity event for a file that has reached a terminal state (COMPLETED or ERROR).
+   * The activity message includes a pipeline summary:
+   * - For COMPLETED: "[filename] — Enrichment: Done · Exensio: Loaded · [target]"
+   * - For ERROR: "[filename] — Failed: [error message truncated to 80 chars]"
+   */
+  private buildAndPushTerminalActivityMessage(file: StageRecordView): void {
+    const filename = file.filename || 'unknown file';
+    let message = '';
+
+    if (file.status === 'COMPLETED') {
+      // Build pipeline summary for completed file
+      const enrichmentStatus = file.cpIntegrationStatus;
+      const exensioStatus = file.exensioIntegrationStatus;
+      const outputTarget = file.cpOutputTarget;
+
+      let enrichmentPart = '';
+      if (enrichmentStatus === 'not_configured' || enrichmentStatus == null) {
+        enrichmentPart = '';
+      } else if (enrichmentStatus === 'success') {
+        enrichmentPart = 'Enrichment: Done';
+      }
+
+      let exensioPart = '';
+      if (exensioStatus === 'not_configured' || exensioStatus == null) {
+        exensioPart = '';
+      } else if (exensioStatus === 'success') {
+        exensioPart = 'Exensio: Loaded';
+      }
+
+      let targetPart = '';
+      if (outputTarget === 'PRODUCTION') {
+        targetPart = 'PRODUCTION';
+      } else if (outputTarget === 'SANDBOX') {
+        targetPart = 'SANDBOX';
+      } else if (outputTarget === 'UNKNOWN') {
+        targetPart = 'UNKNOWN';
+      }
+
+      // Build the message with proper formatting
+      const parts: string[] = [];
+      if (enrichmentPart) {
+        parts.push(enrichmentPart);
+      }
+      if (exensioPart) {
+        parts.push(exensioPart);
+      }
+      if (targetPart) {
+        parts.push(targetPart);
+      }
+
+      if (parts.length === 0) {
+        message = `${filename} — Completed`;
+      } else {
+        message = `${filename} — ${parts.join(' · ')}`;
+      }
+    } else if (file.status === 'ERROR') {
+      // Get the error message, prioritizing errorMessage > cpIntegrationMessage > exensioIntegrationMessage
+      let errorMessage = file.errorMessage || '';
+      if (!errorMessage && file.cpIntegrationStatus === 'failure') {
+        errorMessage = file.cpIntegrationMessage || '';
+      }
+      if (!errorMessage && (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error')) {
+        errorMessage = file.exensioIntegrationMessage || '';
+      }
+
+      // Truncate to 80 chars with ellipsis if longer
+      const truncatedError = errorMessage.length > 80 ? errorMessage.substring(0, 80) + '...' : errorMessage;
+
+      message = truncatedError ? `${filename} — Failed: ${truncatedError}` : `${filename} — Failed`;
+    }
+
+    this.pushActivity(
+      'file',
+      message,
+      file.status === 'COMPLETED' ? 'check_circle' : 'error',
+      file.status === 'COMPLETED' ? 'success' : 'error',
+    );
   }
 
   private pushActivity(
