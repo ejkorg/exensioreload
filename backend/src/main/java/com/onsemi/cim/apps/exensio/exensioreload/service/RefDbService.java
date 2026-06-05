@@ -9,6 +9,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StatusMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.annotation.PostConstruct;
