@@ -1,13 +1,13 @@
-import { Component, Inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, AbstractControl } from '@angular/forms';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { Component, Inject, OnInit, signal } from '@angular/core';
+import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { UserService, User } from './user.service';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
+import { User, UserService } from './user.service';
 
 export interface UserFormDialogData {
   mode: 'create' | 'edit';
@@ -25,7 +25,7 @@ export interface UserFormDialogData {
     MatSlideToggleModule,
     MatSnackBarModule,
     GlassInputComponent,
-    GlassSelectComponent
+    GlassSelectComponent,
   ],
   template: `
     <div class="form-dialog glass-panel">
@@ -107,7 +107,12 @@ export interface UserFormDialogData {
 
       <div class="dialog-footer">
         <button class="cancel-btn" (click)="onCancel()">Cancel</button>
-        <button class="save-btn" [disabled]="userForm.invalid || loading()" (click)="onSubmit()" [class.is-loading]="loading()">
+        <button
+          class="save-btn"
+          [disabled]="userForm.invalid || loading()"
+          (click)="onSubmit()"
+          [class.is-loading]="loading()"
+        >
           <span *ngIf="!loading()">{{ data.mode === 'create' ? 'Create User' : 'Save Changes' }}</span>
           <span *ngIf="loading()">Saving...</span>
           <mat-icon *ngIf="!loading()">{{ data.mode === 'create' ? 'add' : 'check' }}</mat-icon>
@@ -115,93 +120,118 @@ export interface UserFormDialogData {
       </div>
     </div>
   `,
-  styles: [`
-    .form-dialog {
-      padding: 0;
-      border-radius: 20px;
-      overflow: hidden;
-      width: 100%;
-      max-width: 650px;
-    }
+  styles: [
+    `
+      .form-dialog {
+        padding: 0;
+        border-radius: 20px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 650px;
+      }
 
-    .dialog-header {
-      padding: 2rem;
-      background: rgba(255, 255, 255, 0.02);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    .header-icon { font-size: 2.5rem; width: 2.5rem; height: 2.5rem; color: var(--accent-color); }
-    .dialog-header h2 { margin: 0; font-size: 1.5rem; color: white; }
+      .dialog-header {
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .header-icon {
+        font-size: 2.5rem;
+        width: 2.5rem;
+        height: 2.5rem;
+        color: var(--accent-color);
+      }
+      .dialog-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: white;
+      }
 
-    .dialog-body {
-      padding: 2rem;
-      max-height: 60vh;
-      overflow-y: auto;
-    }
+      .dialog-body {
+        padding: 2rem;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
 
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-    }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+      }
 
-    .options-row {
-      margin-top: 2rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
+      .options-row {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
 
-    .toggle-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-    .toggle-help { font-size: 0.8rem; color: var(--text-muted); }
+      .toggle-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .toggle-help {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+      }
 
-    .dialog-footer {
-      padding: 1.5rem 2rem;
-      background: rgba(255, 255, 255, 0.02);
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      display: flex;
-      justify-content: flex-end;
-      gap: 1rem;
-    }
+      .dialog-footer {
+        padding: 1.5rem 2rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+      }
 
-    .cancel-btn {
-      padding: 0.75rem 1.5rem;
-      background: transparent;
-      color: var(--text-muted);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      &:hover { background: rgba(255, 255, 255, 0.05); color: white; }
-    }
+      .cancel-btn {
+        padding: 0.75rem 1.5rem;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        &:hover {
+          background: rgba(255, 255, 255, 0.05);
+          color: white;
+        }
+      }
 
-    .save-btn {
-      padding: 0.75rem 1.75rem;
-      background: var(--accent-color);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(129, 140, 248, 0.2);
-      &:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(129, 140, 248, 0.3); }
-      &:disabled { opacity: 0.6; cursor: not-allowed; }
-    }
+      .save-btn {
+        padding: 0.75rem 1.75rem;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(129, 140, 248, 0.2);
+        &:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(129, 140, 248, 0.3);
+        }
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+      }
 
-    @media (max-width: 600px) {
-      .form-grid { grid-template-columns: 1fr; }
-    }
-  `]
+      @media (max-width: 600px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    `,
+  ],
 })
 export class UserFormDialogComponent implements OnInit {
   userForm: FormGroup;
@@ -215,21 +245,24 @@ export class UserFormDialogComponent implements OnInit {
     private userService: UserService,
     private snackBar: MatSnackBar,
     public dialogRef: MatDialogRef<UserFormDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData
+    @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData,
   ) {
-    this.userForm = this.fb.group({
-      username: ['', [Validators.required, Validators.minLength(3)]],
-      email: ['', [Validators.email]],
-      password: [''],
-      confirmPassword: [''],
-      roles: [[], [Validators.required]],
-      enabled: [true],
-      status: ['ACTIVE', [Validators.required]]
-    }, { validators: this.passwordMatchValidator });
+    this.userForm = this.fb.group(
+      {
+        username: ['', [Validators.required, Validators.minLength(3)]],
+        email: ['', [Validators.email]],
+        password: [''],
+        confirmPassword: [''],
+        roles: [[], [Validators.required]],
+        enabled: [true],
+        status: ['ACTIVE', [Validators.required]],
+      },
+      { validators: this.passwordMatchValidator },
+    );
   }
 
   ngOnInit(): void {
-    this.userService.getAvailableRoles().subscribe(roles => this.availableRoles.set(roles));
+    this.userService.getAvailableRoles().subscribe((roles) => this.availableRoles.set(roles));
 
     if (this.data.mode === 'edit' && this.data.user) {
       this.userForm.patchValue(this.data.user);
@@ -264,21 +297,58 @@ export class UserFormDialogComponent implements OnInit {
   onSubmit(): void {
     if (this.userForm.invalid) return;
     this.loading.set(true);
-    const obs = this.data.mode === 'create'
-      ? this.userService.createUser(this.userForm.value)
-      : this.userService.updateUser(this.data.user!.id, this.userForm.value);
+    const obs =
+      this.data.mode === 'create'
+        ? this.userService.createUser(this.userForm.value)
+        : this.userService.updateUser(this.data.user!.id, this.userForm.value);
 
     obs.subscribe({
       next: () => {
         this.loading.set(false);
         this.dialogRef.close(true);
-        this.snackBar.open(`User ${this.data.mode === 'create' ? 'created' : 'updated'} successfully`, 'Close', { duration: 3000 });
+        this.snackBar.open(`User ${this.data.mode === 'create' ? 'created' : 'updated'} successfully`, 'Close', {
+          duration: 3000,
+        });
       },
       error: (err) => {
         this.loading.set(false);
-        this.snackBar.open(err.error?.message || 'Action failed', 'Close', { duration: 5000 });
-      }
+        const errorMessage = this.extractErrorMessage(err);
+        this.snackBar.open(errorMessage, 'Close', { duration: 7000 });
+      },
     });
+  }
+
+  private extractErrorMessage(err: any): string {
+    // Try multiple error message sources in priority order
+    if (err?.error?.message) {
+      return err.error.message;
+    }
+    if (err?.error?.detail) {
+      return err.error.detail;
+    }
+    if (err?.error?.error) {
+      return err.error.error;
+    }
+    if (err?.statusText) {
+      return `${err.statusText}${err.status ? ` (${err.status})` : ''}`;
+    }
+    if (err?.message) {
+      return err.message;
+    }
+    // Generic fallback based on HTTP status
+    if (err?.status === 409) {
+      return 'User already exists with this username or email';
+    }
+    if (err?.status === 400) {
+      return 'Invalid input data. Please check your entries.';
+    }
+    if (err?.status === 403) {
+      return 'You do not have permission to perform this action';
+    }
+    if (err?.status === 500) {
+      return 'Server error. Please try again later.';
+    }
+    return 'Failed to complete user operation';
   }
 
   onCancel(): void {
