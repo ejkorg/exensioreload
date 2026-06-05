@@ -9,6 +9,7 @@ import { GlassPaginationComponent, PaginationEvent } from '../shared/components/
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog.component';
 import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.directive';
+import { ToastService } from '../shared/services/toast.service';
 import { UserFormDialogComponent } from './user-form-dialog.component';
 import { User, UserService, UserStatistics } from './user.service';
 

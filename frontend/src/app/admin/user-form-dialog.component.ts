@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
+import { ToastService } from '../shared/services/toast.service';
 import { User, UserService } from './user.service';
 
 export interface UserFormDialogData {
@@ -237,14 +238,15 @@ export class UserFormDialogComponent implements OnInit {
   hidePassword = signal(true);
   hideConfirmPassword = signal(true);
   availableRoles = signal<string[]>(['SUPER_ADMIN', 'ADMIN', 'REGULAR_USER']);
+  private toast: ToastService;
 
   constructor(
     private fb: FormBuilder,
     private userService: UserService,
-    private toast: ToastService,
     public dialogRef: MatDialogRef<UserFormDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData,
   ) {
+    this.toast = inject(ToastService);
     this.userForm = this.fb.group(
       {
         username: ['', [Validators.required, Validators.minLength(3)]],

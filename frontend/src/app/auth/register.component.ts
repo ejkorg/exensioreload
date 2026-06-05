@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { Router, RouterModule } from '@angular/router';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
+import { ToastService } from '../shared/services/toast.service';
 import { AuthService } from './auth.service';
 
 @Component({

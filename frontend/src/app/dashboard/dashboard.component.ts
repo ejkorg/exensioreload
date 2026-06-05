@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, OnDestroy, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -19,6 +19,7 @@ import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.comp
 import { SparklineComponent } from '../shared/components/sparkline.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
+import { ToastService } from '../shared/services/toast.service';
 import { BulkActionsComponent, SelectableItem } from './bulk-actions.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
 import { SiteDetailModalComponent } from './site-detail-modal.component';
@@ -249,8 +250,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
-    private toast: ToastService,
-  ) {}
+  ) {
+    this.toast = inject(ToastService);
+  }
+
+  private toast: ToastService;
 
   ngOnInit() {
     this.backend.getLimits().subscribe({
