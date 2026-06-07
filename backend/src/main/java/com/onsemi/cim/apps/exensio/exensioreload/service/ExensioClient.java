@@ -27,6 +27,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+
+    @FunctionalInterface
+    private interface RetryableOperation<T> {
+        T execute() throws Exception;
+    }
 
 /**
  * HTTP client for the Exensio API.
@@ -104,34 +110,88 @@ public class ExensioClient {
     }
 
     /**
+     * Helper to execute an operation with exponential backoff for transient failures.
+     */
+    private <T> T executeWithRetry(String opName, String traceId, RetryableOperation<T> op) throws Exception {
+        int maxAttempts = props.getRetryMaxAttempts();
+        long baseDelay = props.getRetryBaseDelayMs();
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                T result = op.execute();
+
+                // Check if result is a "transient" error result (e.g. HTTP 429 or 5xx)
+                if (result instanceof ExensioLotWaferResult.Error err && isTransientError(err.message())) {
+                    throw new Exception(err.message());
+                }
+                if (result instanceof BatchLookupResult blr && !blr.isSuccess() && isTransientError(blr.getErrorMessage())) {
+                    throw new Exception(blr.getErrorMessage());
+                }
+
+                return result;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < maxAttempts && isTransient(e)) {
+                    long delay = baseDelay * (long) Math.pow(2, attempt - 1);
+                    log.warn("{} failed (attempt {}/{}, traceId={}): {}. Retrying in {}ms...",
+                             opName, attempt, maxAttempts, traceId, e.getMessage(), delay);
+                    Thread.sleep(delay);
+                } else {
+                    break;
+                }
+            }
+        }
+        throw (lastException != null) ? lastException : new Exception("Operation failed after " + maxAttempts + " attempts");
+    }
+
+    private boolean isTransient(Exception e) {
+        if (e instanceof java.io.IOException) return true;
+        if (e.getMessage() != null && isTransientError(e.getMessage())) return true;
+        return false;
+    }
+
+    private boolean isTransientError(String msg) {
+        if (msg == null) return false;
+        return msg.contains("HTTP 429") || msg.contains("HTTP 500") || msg.contains("HTTP 502") ||
+               msg.contains("HTTP 503") || msg.contains("HTTP 504") || msg.contains("Timeout");
+    }
+
+    /**
      * Single-record lookup with optional filename/metadata identifiers used by raw-SQL matching.
      */
     public ExensioLotWaferResult lotWaferLookup(String lot, String wafer, Instant targetEndTime,
                                                  Integer pgcKey, String testPhase,
                                                  String filename, String metadataId, String dataId) {
+        // Generate trace ID for this request
+        String traceId = UUID.randomUUID().toString();
+        log.info("Exensio lookup START: traceId={}, lot={}, wafer={}", traceId, lot, wafer);
+
         String token;
         try {
             token = authService.getToken();
         } catch (ExensioAuthService.ExensioAuthException e) {
+            log.error("Exensio auth failed (traceId={}): {}", traceId, e.getMessage());
             return new ExensioLotWaferResult.Error("Auth failed: " + e.getMessage());
         }
 
         ExensioLotWaferResult result = doLotWaferLookup(
                 lot, wafer, targetEndTime, pgcKey, testPhase,
-                filename, metadataId, dataId, token);
+                filename, metadataId, dataId, token, traceId);
 
         // Retry once on 401 with a fresh token
         if (result instanceof ExensioLotWaferResult.Error err && err.message().contains("HTTP 401")) {
-            log.debug("Exensio 401 — invalidating token and retrying");
+            log.debug("Exensio 401 — invalidating token and retrying (traceId={})", traceId);
             authService.invalidateToken();
             try {
                 token = authService.login();
             } catch (ExensioAuthService.ExensioAuthException e) {
+                log.error("Exensio re-auth failed (traceId={}): {}", traceId, e.getMessage());
                 return new ExensioLotWaferResult.Error("Re-auth failed: " + e.getMessage());
             }
             result = doLotWaferLookup(
                     lot, wafer, targetEndTime, pgcKey, testPhase,
-                    filename, metadataId, dataId, token);
+                    filename, metadataId, dataId, token, traceId);
         }
 
         return result;
@@ -142,7 +202,7 @@ public class ExensioClient {
     private ExensioLotWaferResult doLotWaferLookup(String lot, String wafer, Instant targetEndTime,
                                                     Integer pgcKey, String testPhase,
                                                     String filename, String metadataId, String dataId,
-                                                    String token) {
+                                                    String token, String traceId) {
         try {
             boolean waferBlank = wafer == null || wafer.isBlank();
             // Use the explicit pgcKey when provided; otherwise fall back to wafer-presence logic.
@@ -150,7 +210,7 @@ public class ExensioClient {
 
             ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
                     lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
-                    filename, metadataId, dataId, token);
+                    filename, metadataId, dataId, token, traceId);
             if (rawSqlResult instanceof ExensioLotWaferResult.Found) {
                 return rawSqlResult;
             }
@@ -167,7 +227,7 @@ public class ExensioClient {
             }
 
             if (props.isLogRequestPayloads()) {
-                log.info("Exensio lot-wafer-lookup request: url={}, body={}", url, body.toString());
+                log.info("Exensio lot-wafer-lookup request (traceId={}): url={}, body={}", traceId, url, body.toString());
             }
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -184,19 +244,20 @@ public class ExensioClient {
                 return new ExensioLotWaferResult.Error("HTTP 401");
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Exensio API returned error (traceId={}): HTTP {}", traceId, response.statusCode());
                 return new ExensioLotWaferResult.Error("HTTP " + response.statusCode());
             }
 
             return parseResponse(response.body(), wafer, targetEndTime, testPhase);
 
         } catch (Exception e) {
-            log.warn("Exensio lot-wafer-lookup failed for lot={} wafer={}: {}", lot, wafer, e.getMessage());
+            log.warn("Exensio lot-wafer-lookup failed (traceId={}) for lot={} wafer={}: {}", traceId, lot, wafer, e.getMessage());
             return new ExensioLotWaferResult.Error(e.getMessage());
         }
     }
 
     /**
-     * Batch lot-wafer lookup for multiple records.
+     * Batch lot-wafer lookup for multiple records with retry and exponential backoff for transient failures.
      *
      * <p>Request body:
      * <pre>{ "pgc_key": 1, "lot_ids": ["&lt;lot1&gt;", "&lt;lot2&gt;", ...], "wafer_ids": ["&lt;wafer1&gt;", "&lt;wafer2&gt;", ...] }</pre>
@@ -211,28 +272,64 @@ public class ExensioClient {
      * @return BatchLookupResult with parsed response or error message
      */
     public BatchLookupResult lotWaferLookupBatch(List<StageRecord> records) {
-        String token;
-        try {
-            token = authService.getToken();
-        } catch (ExensioAuthService.ExensioAuthException e) {
-            return new BatchLookupResult("Auth failed: " + e.getMessage());
-        }
+        int maxAttempts = props.getRetryMaxAttempts();
+        long baseDelay = props.getRetryBaseDelayMs();
+        String token = null;
+        boolean needToRefreshToken = true;
+        BatchLookupResult lastResult = null;
 
-        BatchLookupResult result = doLotWaferLookupBatch(records, token);
-
-        // Retry once on 401 with a fresh token
-        if (!result.isSuccess() && result.getErrorMessage().contains("HTTP 401")) {
-            log.debug("Exensio 401 on batch lookup — invalidating token and retrying");
-            authService.invalidateToken();
-            try {
-                token = authService.login();
-            } catch (ExensioAuthService.ExensioAuthException e) {
-                return new BatchLookupResult("Re-auth failed: " + e.getMessage());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (needToRefreshToken) {
+                try {
+                    token = authService.getToken();
+                } catch (ExensioAuthService.ExensioAuthException e) {
+                    // If we can't get a token, we break and return auth error.
+                    return new BatchLookupResult("Auth failed: " + e.getMessage());
+                }
+                needToRefreshToken = false;
             }
-            result = doLotWaferLookupBatch(records, token);
+
+            BatchLookupResult result = doLotWaferLookupBatch(records, token);
+            lastResult = result;
+
+            if (result.isSuccess()) {
+                return result;
+            }
+
+            String errorMsg = result.getErrorMessage();
+            if (errorMsg.contains("HTTP 401")) {
+                needToRefreshToken = true; // So we get a new token next time
+                // If we have more attempts, we continue immediately (without delay) to try again with new token.
+                if (attempt < maxAttempts) {
+                    log.debug("Batch lookup attempt {} got 401, refreshing token and retrying...", attempt);
+                    continue;
+                } else {
+                    return result; // Return the 401 error after last attempt
+                }
+            } else if (isTransientError(errorMsg)) {
+                if (attempt < maxAttempts) {
+                    long delay = baseDelay * (long) Math.pow(2, attempt - 1);
+                    log.warn("Batch lookup attempt {} failed with transient error: {}. Retrying in {}ms...",
+                             attempt, errorMsg, delay);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return new BatchLookupResult("Interrupted: " + e.getMessage());
+                    }
+                    // Note: we do not refresh token on transient error unless it's 401 (which we handled above)
+                    continue;
+                } else {
+                    return result; // Return the transient error after last attempt
+                }
+            } else {
+                // Non-transient error, return immediately
+                return result;
+            }
         }
 
-        return result;
+        // If we exit the loop, return the last result (which should be an error)
+        return lastResult;
     }
 
 
@@ -375,7 +472,8 @@ public class ExensioClient {
                                                        String filename,
                                                        String metadataId,
                                                        String dataId,
-                                                       String token) {
+                                                       String token,
+                                                       String traceId) {
         try {
             Set<String> identifiers = buildIdentifierTokens(filename, metadataId, dataId);
             if (identifiers.isEmpty()) {
@@ -383,12 +481,12 @@ public class ExensioClient {
             }
 
             String sql = buildSingleRawSql(lot, wafer, pgcKey, identifiers);
-            JsonNode rows = executeRawSql(sql, token);
+            JsonNode rows = executeRawSql(sql, token, traceId);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.loginWithSchema(fallbackSchema);
-                    rows = executeRawSql(sql, fallbackToken);
+                    rows = executeRawSql(sql, fallbackToken, traceId);
                 }
             }
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
@@ -415,12 +513,12 @@ public class ExensioClient {
             ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr);
             return applyPpidCheck(candidate, ppid, testPhase, lot, waferId);
         } catch (Exception e) {
-            log.warn("Raw SQL lookup failed for lot={} wafer={}: {}", lot, wafer, e.getMessage());
+            log.warn("Raw SQL lookup failed (traceId={}) for lot={} wafer={}: {}", traceId, lot, wafer, e.getMessage());
             return new ExensioLotWaferResult.Error("Raw SQL error: " + e.getMessage());
         }
     }
 
-    private BatchLookupResult doRawSqlLookupBatch(List<StageRecord> records, String token) {
+    private BatchLookupResult doRawSqlLookupBatch(List<StageRecord> records, String token, String traceId) {
         try {
             List<String> clauses = new ArrayList<>();
             List<StageRecord> indexedRecords = new ArrayList<>();
@@ -453,12 +551,12 @@ public class ExensioClient {
             }
 
             String sql = buildBatchRawSql(clauses);
-            JsonNode rows = executeRawSql(sql, token);
+            JsonNode rows = executeRawSql(sql, token, traceId);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.loginWithSchema(fallbackSchema);
-                    rows = executeRawSql(sql, fallbackToken);
+                    rows = executeRawSql(sql, fallbackToken, traceId);
                 }
             }
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
@@ -551,14 +649,14 @@ public class ExensioClient {
 
 
 
-    private JsonNode executeRawSql(String sql, String token) throws Exception {
+    private JsonNode executeRawSql(String sql, String token, String traceId) throws Exception {
         String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/raw-sql";
         ObjectNode body = objectMapper.createObjectNode();
         body.put("sql", sql);
         long startTime = System.currentTimeMillis();
 
-        log.info("Exensio raw-sql START: url={}", url);
-        log.info("Exensio raw-sql SQL:\n{}", sql);
+        log.info("Exensio raw-sql START: url={}, traceId={}", url, traceId);
+        log.info("Exensio raw-sql SQL (traceId={}):\n{}", traceId, sql);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -570,33 +668,33 @@ public class ExensioClient {
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         long elapsed = System.currentTimeMillis() - startTime;
-        
+
         if (response.statusCode() == 401) {
-            log.warn("Exensio raw-sql FAILED (HTTP 401): elapsed={}ms", elapsed);
+            log.warn("Exensio raw-sql FAILED (HTTP 401): elapsed={}ms, traceId={}", elapsed, traceId);
             throw new IllegalStateException("HTTP 401");
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("Exensio raw-sql FAILED (HTTP {}): elapsed={}ms, response={}", 
-                response.statusCode(), elapsed, response.body());
+            log.warn("Exensio raw-sql FAILED (HTTP {}): elapsed={}ms, traceId={}, response={}",
+                response.statusCode(), elapsed, traceId, response.body());
             throw new IllegalStateException("HTTP " + response.statusCode());
         }
 
-        log.info("Exensio raw-sql SUCCESS (HTTP {} in {}ms)", response.statusCode(), elapsed);
+        log.info("Exensio raw-sql SUCCESS (HTTP {} in {}ms, traceId={})", response.statusCode(), elapsed, traceId);
         if (props.isLogRequestPayloads()) {
-            log.info("Exensio raw-sql response:\n{}", response.body());
+            log.info("Exensio raw-sql response (traceId={}):\n{}", traceId, response.body());
         }
 
         JsonNode root = objectMapper.readTree(response.body());
         if (root.isArray()) {
-            log.info("Exensio raw-sql result: {} rows returned", root.size());
+            log.info("Exensio raw-sql result: {} rows returned (traceId={})", root.size(), traceId);
             return root;
         }
         if (root.has("rows") && root.get("rows").isArray()) {
             JsonNode rows = root.get("rows");
-            log.info("Exensio raw-sql result: {} rows returned", rows.size());
+            log.info("Exensio raw-sql result: {} rows returned (traceId={})", rows.size(), traceId);
             return rows;
         }
-        log.info("Exensio raw-sql result: empty response");
+        log.info("Exensio raw-sql result: empty response (traceId={})", traceId);
         return objectMapper.createArrayNode();
     }
 

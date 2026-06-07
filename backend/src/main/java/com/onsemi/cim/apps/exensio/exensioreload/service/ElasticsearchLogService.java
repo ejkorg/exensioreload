@@ -16,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,9 +38,17 @@ public class ElasticsearchLogService {
     private final HttpClient httpClient;
     private final String authHeader;
     private final CpElasticsearchProperties props;
-    private final ObjectMapper objectMapper;
     /** May be null in test environments where RefDB is not configured. Requirements: 6.3, 6.4 */
     private final RefDbService refDbService;
+    private final ObjectMapper objectMapper;
+
+    // Circuit breaker state
+    private enum State { CLOSED, OPEN, HALF_OPEN }
+    private State state = State.CLOSED;
+    private int failureCount = 0;
+    private static final int FAILURE_THRESHOLD = 5;
+    private long lastFailureTime = 0;
+    private static final long TIMEOUT_DURATION = 60_000; // 1 minute
 
     public ElasticsearchLogService(HttpClient elasticsearchHttpClient,
                                    CpElasticsearchProperties props,
@@ -111,30 +120,42 @@ public class ElasticsearchLogService {
      * @return the enrichment outcome
      */
     public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site, String filename) {
+        // Generate trace ID for this request
+        String traceId = UUID.randomUUID().toString();
+        log.info("Starting ES query with traceId={} for dataId={}, lot={}", traceId, dataId, lot);
+
+        // Check circuit breaker
+        if (!allowRequest()) {
+            log.warn("Circuit breaker is OPEN for ES query (traceId={}, dataId={}, lot={})", traceId, dataId, lot);
+            throw new ElasticsearchQueryException("Circuit breaker is OPEN");
+        }
+
         String initialFilter = props.getCpConfigFilter();
         String url = props.resolveSearchUrl();
 
         try {
             // First attempt using configured cpConfig filter
             String queryJson = buildQuery(idFile, dataId, lot, since, site, filename, initialFilter);
-            CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot);
+            CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot, traceId);
 
             // If no hit found and the configured filter is different from the broad fallback,
             // retry once with fallback "*sender*" (case-insensitive) to improve recall.
             if (result instanceof CpLogResult.NotFound
                     && initialFilter != null
                     && !initialFilter.equalsIgnoreCase("*sender*")) {
-                log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={}", initialFilter, dataId);
+                log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={} (traceId={})", initialFilter, dataId, traceId);
                 String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*sender*");
-                return executeSearch(url, fallbackQuery, idFile, dataId, lot);
+                return executeSearch(url, fallbackQuery, idFile, dataId, lot, traceId);
             }
 
             return result;
 
         } catch (ElasticsearchQueryException e) {
+            recordFailure();
             throw e;
         } catch (Exception e) {
-            log.warn("Elasticsearch query failed for dataId={}, lot={}: {}", dataId, lot, e.getMessage());
+            recordFailure();
+            log.warn("Elasticsearch query failed for dataId={}, lot={}: {} (traceId={})", dataId, lot, e.getMessage(), traceId);
             throw new ElasticsearchQueryException("ES query failed for dataId=" + dataId, e);
         }
     }
@@ -142,12 +163,12 @@ public class ElasticsearchLogService {
     /**
      * Execute the HTTP request and parse the response into a {@link CpLogResult}.
      */
-    private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot) throws Exception {
+    private CpLogResult executeSearch(String url, String queryJson, String idFile, String dataId, String lot, String traceId) throws Exception {
         long startTime = System.currentTimeMillis();
-        
-        log.info("Elasticsearch query START: url={}, dataId={}, lot={}", url, dataId, lot);
+
+        log.info("Elasticsearch query START: url={}, dataId={}, lot={}, traceId={}", url, dataId, lot, traceId);
         log.info("ES query payload:\n{}", queryJson);
-        
+
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
@@ -162,15 +183,21 @@ public class ElasticsearchLogService {
         long elapsed = System.currentTimeMillis() - startTime;
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("ES query FAILED (HTTP {}): dataId={}, elapsed={}ms, response={}", 
-                response.statusCode(), dataId, elapsed, response.body());
+            log.warn("ES query FAILED (HTTP {}): dataId={}, elapsed={}ms, traceId={}, response={}",
+                    response.statusCode(), dataId, elapsed, traceId, response.body());
             throw new ElasticsearchQueryException("ES returned HTTP " + response.statusCode());
         }
 
-        log.info("ES query HTTP RESPONSE ({}ms): HTTP {}, dataId={}", elapsed, response.statusCode(), dataId);
+        log.info("ES query HTTP RESPONSE ({}ms): HTTP {}, dataId={}, traceId={}", elapsed, response.statusCode(), dataId, traceId);
         log.info("ES query response body:\n{}", response.body());
 
-        return parseResponse(response.body(), idFile, dataId, lot);
+        CpLogResult result = parseResponse(response.body(), idFile, dataId, lot);
+        if (result instanceof CpLogResult.Success || result instanceof CpLogResult.Failure) {
+            recordSuccess();
+        } else {
+            // NotFound is not a failure for the circuit breaker
+        }
+        return result;
     }
 
     /**
@@ -210,6 +237,29 @@ public class ElasticsearchLogService {
     }
 
     // ── private helpers ──────────────────────────────────────────────────────
+    private boolean allowRequest() {
+        if (state == State.OPEN) {
+            if (System.currentTimeMillis() - lastFailureTime > TIMEOUT_DURATION) {
+                state = State.HALF_OPEN;
+                return true;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private void recordSuccess() {
+        failureCount = 0;
+        state = State.CLOSED;
+    }
+
+    private void recordFailure() {
+        failureCount++;
+        if (failureCount >= FAILURE_THRESHOLD) {
+            state = State.OPEN;
+            lastFailureTime = System.currentTimeMillis();
+        }
+    }
 
     /**
      * Builds the ES query JSON using the default cpConfig filter.
@@ -366,18 +416,18 @@ public class ElasticsearchLogService {
      *   <li>{@code log.level == ERROR} → {@link CpLogResult.Failure}</li>
      *   <li>message contains PRODUCTION → {@link CpLogResult.Success}</li>
      *   <li>message contains SANDBOX → {@link CpLogResult.Success}</li>
-     *   <li>message contains "executed successfully" → pp_log fallback via RefDbService</li>
+     *   <li>message contains "executed successfully" → pp_log fallback (Requirements 3.1–3.8)</li>
      *   <li>no match → continue to next hit</li>
      * </ol>
      */
-    private CpLogResult parseResponse(String body, String idFile, String dataId, String lot) {
+    private CpLogResult parseResponse(String body, String idFile, String dataId, String lot, String traceId) {
         try {
             JsonNode root = objectMapper.readTree(body);
             JsonNode hits = root.path("hits").path("hits");
 
             if (!hits.isArray() || hits.isEmpty()) {
-                log.info("ES query RESULT: NotFound for dataId={} (no hits)", dataId);
-                return new CpLogResult.NotFound();
+                log.info("ES query RESULT: NotFound for dataId={} (no hits) (traceId={})", dataId, traceId);
+                return new CpLogResult.NotFound(traceId);
             }
 
             log.debug("ES query: {} hits found for dataId={}", hits.size(), dataId);
@@ -402,32 +452,32 @@ public class ElasticsearchLogService {
                 // Priority 2: "Commands flow executed successfully" (primary CP success indicator)
                 if (messageUpper.contains("COMMANDS FLOW EXECUTED SUCCESSFULLY")) {
                     log.info("ES query RESULT: Success (Commands flow executed successfully) for dataId={}", dataId);
-                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
+                    return new CpLogResult.Success(traceId, message, "PRODUCTION", timestamp);
                 }
 
                 // Priority 3: "output path = " in message (actual CP success indicator)
                 if (messageUpper.contains("OUTPUT PATH = ")) {
                     log.info("ES query RESULT: Success (output path found) for dataId={}", dataId);
-                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
+                    return new CpLogResult.Success(traceId, message, "PRODUCTION", timestamp);
                 }
 
                 // Priority 4: PRODUCTION in message (Requirement 2.6)
                 if (messageUpper.contains("PRODUCTION")) {
                     log.info("ES query RESULT: Success (PRODUCTION) for dataId={}", dataId);
-                    return new CpLogResult.Success(message, "PRODUCTION", timestamp);
+                    return new CpLogResult.Success(traceId, message, "PRODUCTION", timestamp);
                 }
 
                 // Priority 5: SANDBOX in message (Requirement 2.6)
                 if (messageUpper.contains("SANDBOX")) {
                     log.info("ES query RESULT: Success (SANDBOX) for dataId={}", dataId);
-                    return new CpLogResult.Success(message, "SANDBOX", timestamp);
+                    return new CpLogResult.Success(traceId, message, "SANDBOX", timestamp);
                 }
 
                 // Priority 6: "executed successfully" or "Command Processor successfully" → pp_log fallback (Requirements 3.1–3.8)
                 String messageLower = message.toLowerCase();
                 if (messageLower.contains("executed successfully") || messageLower.contains("command processor successfully")) {
                     log.debug("ES query: success indicator hit for dataId={} — querying pp_log fallback", dataId);
-                    return queryPpLogFallback(idFile, lot, timestamp);
+                    return queryPpLogFallback(idFile, lot, timestamp, traceId);
                 }
             }
 
@@ -443,12 +493,12 @@ public class ElasticsearchLogService {
                 if (logLevel != null && logLevel.equalsIgnoreCase("ERROR")) {
                     String errorMessage = isNonBlank(message) ? message : "CP processing error";
                     log.info("ES query RESULT: Failure (log.level=ERROR) for dataId={}: {}", dataId, errorMessage);
-                    return new CpLogResult.Failure(errorMessage, timestamp);
+                    return new CpLogResult.Failure(traceId, errorMessage, timestamp);
                 }
             }
 
             log.info("ES query RESULT: NotFound for dataId={} (no matching criteria)", dataId);
-            return new CpLogResult.NotFound();
+            return new CpLogResult.NotFound(traceId);
 
         } catch (Exception e) {
             log.warn("Failed to parse ES response for dataId={}: {}", dataId, e.getMessage());
@@ -460,11 +510,11 @@ public class ElasticsearchLogService {
      * Delegates to RefDbService to query pp_log for the output directory or error message.
      * Requirements: 3.2–3.8, 6.3, 6.4
      */
-    private CpLogResult queryPpLogFallback(String idFile, String lot, Instant timestamp) {
+    private CpLogResult queryPpLogFallback(String idFile, String lot, Instant timestamp, String traceId) {
         // Requirement 6.4: guard against RefDbService being unavailable
         if (refDbService == null || idFile == null || idFile.isBlank()) {
             log.debug("pp_log fallback skipped — refDbService={} idFile={}", refDbService, idFile);
-            return new CpLogResult.NotFound();
+            return new CpLogResult.NotFound(traceId);
         }
         try {
             // Requirement 3.2–3.4: query for success row
@@ -472,21 +522,21 @@ public class ElasticsearchLogService {
             if (outputDirectory != null) {
                 String target = detectOutputTarget(outputDirectory);
                 log.debug("pp_log success for idFile={} lot={}: dir={} target={}", idFile, lot, outputDirectory, target);
-                return new CpLogResult.Success(outputDirectory, target, timestamp);
+                return new CpLogResult.Success(traceId, outputDirectory, target, timestamp);
             }
             // Requirement 3.5–3.6: query for error row
             String logMessage = refDbService.queryPpLogError(lot, idFile);
             if (logMessage != null) {
                 log.debug("pp_log error for idFile={} lot={}: {}", idFile, lot, logMessage);
-                return new CpLogResult.Failure(logMessage, timestamp);
+                return new CpLogResult.Failure(traceId, logMessage, timestamp);
             }
             // Requirement 3.7: no rows in either query → retry next cycle
             log.debug("pp_log returned no rows for idFile={} lot={}", idFile, lot);
-            return new CpLogResult.NotFound();
+            return new CpLogResult.NotFound(traceId);
         } catch (Exception ex) {
             // Requirement 3.8: SQLException or other error → log warning, retry next cycle
             log.warn("pp_log fallback failed for idFile={} lot={}: {}", idFile, lot, ex.getMessage());
-            return new CpLogResult.NotFound();
+            return new CpLogResult.NotFound(traceId);
         }
     }
 

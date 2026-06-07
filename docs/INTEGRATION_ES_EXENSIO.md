@@ -288,6 +288,27 @@ exensio:
   enable-circuit-breaker: true
   circuit-breaker-threshold: 5
   circuit-breaker-reset-ms: 60000
+  # --- Caching ---
+  cache-enabled: true
+  cache-maximum-size: 10000
+  cache-expire-after-write-minutes: 60
+  # --- Adaptive Polling (stretch goal) ---
+  adaptive-polling-enabled: false
+  min-poll-interval-ms: 30000
+  max-poll-interval-ms: 300000
+  # --- Retry & Dead Letter Queue ---
+  retry-max-attempts: 3
+  retry-base-delay-ms: 1000
+  dead-letter-queue-threshold: 5
+  # --- Connection & Performance Optimization ---
+  connection-timeout-ms: 10000
+  socket-timeout-ms: 30000
+  max-connections: 20
+  max-connections-per-route: 10
+  # --- Raw SQL Endpoint ---
+  prefer-raw-sql: true
+  raw-sql-timeout-seconds: 20
+  raw-sql-row-limit: 200
 ```
 
 #### Environment variables

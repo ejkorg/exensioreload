@@ -6,7 +6,9 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+import org.springframework.jmx.export.annotation.ManagedAttribute;
+import org.springframework.jmx.export.annotation.ManagedResource;
+import java.util.concurrent.atomic.AtomicLong;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +32,10 @@ import java.util.Map;
  * cycles are skipped without affecting any records (Requirement 6.7).</p>
  */
 @Component
+@ManagedResource(
+        objectName = "com.onsemi.exensio:type=CpLogMonitor",
+        description = "CP Elasticsearch Log Monitor metrics"
+)
 public class CpLogMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(CpLogMonitor.class);
@@ -43,6 +49,11 @@ public class CpLogMonitor {
     private final StagePipelineOrchestrator pipelineOrchestrator;
     private final IntegrationStatusService integrationStatusService;
     private final StageMonitorService stageMonitorService;
+
+    private final AtomicLong totalRecordsProcessed = new AtomicLong(0);
+    private final AtomicLong successCount = new AtomicLong(0);
+    private final AtomicLong failureCount = new AtomicLong(0);
+    private final AtomicLong timeoutCount = new AtomicLong(0);
 
     public CpLogMonitor(RefDbService refDbService,
                         ElasticsearchLogService elasticsearchLogService,
@@ -87,6 +98,7 @@ public class CpLogMonitor {
         log.debug("Polling Elasticsearch for {} ENRICHMENT record(s)", enrichmentRecords.size());
 
         for (StageRecord record : enrichmentRecords) {
+            totalRecordsProcessed.incrementAndGet();
             processRecord(record);
         }
     }
@@ -116,47 +128,58 @@ public class CpLogMonitor {
 
         switch (result) {
             case CpLogResult.Success success -> {
-                log.info("CP enrichment success for record id={} dataId={}: path={} target={}",
-                        record.id(), record.dataId(), success.outputPath(), success.outputTarget());
-                // Update per-record status
-                integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", "CP log found in ES");
+                log.info("CP enrichment success for record id={} dataId={}: path={} target={} traceId={}",
+                        record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
+                // Update per-record status with traceId
+                String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
+                        success.outputPath(), success.outputTarget(), success.traceId());
+                integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+                successCount.incrementAndGet();
                 pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
             }
             case CpLogResult.Failure failure -> {
                 // Requirement 4.2, 4.3, 4.5: transition to FAILED with truncated error message
                 String errorMessage = truncateErrorMessage(failure.errorMessage());
-                String failureReason = failure.errorMessage().toLowerCase().contains("error") ? "cp_error" : "cp_failure";
-                log.info("CP enrichment failure for record id={} dataId={}: {}",
-                        record.id(), record.dataId(), errorMessage);
-                // Update per-record status
-                integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", errorMessage);
+                log.info("CP enrichment failure for record id={} dataId={}: {} (traceId={})",
+                        record.id(), record.dataId(), errorMessage, failure.traceId());
+                // Update per-record status with traceId
+                String statusMsg = String.format("CP enrichment failure: %s (traceId=%s)",
+                        errorMessage, failure.traceId());
+                integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+                failureCount.incrementAndGet();
                 // Add failure context to the message for better UI display
-                String contextMessage = "[CP Failure] " + errorMessage;
+                String contextMessage = "[CP Failure] " + statusMsg;
                 refDbService.markFailed(record, contextMessage);
             }
             case CpLogResult.NotFound notFound -> {
                 // ES returned NotFound - the enrichment may have happened externally (not through CP),
-                // so fall back to pp_log to check if enrichment completed
-                log.debug("No CP log found in ES for record id={} dataId={} - checking pp_log fallback",
-                        record.id(), record.dataId());
+                // so fall back to pp_log to check if enrichment completed externally
+                log.debug("No CP log found in ES for record id={} dataId={} (traceId={}) - checking pp_log fallback",
+                        record.id(), record.dataId(), notFound.traceId());
                 
                 // Query pp_log to check if enrichment completed externally
                 String ppLogOutputDir = refDbService.queryPpLogSuccess(record.lot(), record.filename());
                 if (ppLogOutputDir != null) {
                     // pp_log shows success (process_code = 0)
-                    log.info("CP enrichment completed externally via pp_log for record id={} dataId={} - output={}",
-                            record.id(), record.dataId(), ppLogOutputDir);
-                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", ppLogOutputDir);
+                    log.info("CP enrichment completed externally via pp_log for record id={} dataId={} - output={} (traceId={})",
+                            record.id(), record.dataId(), ppLogOutputDir, notFound.traceId());
+                    String statusMsg = String.format("CP enrichment completed via pp_log: %s (traceId=%s)",
+                            ppLogOutputDir, notFound.traceId());
+                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+                    successCount.incrementAndGet();
                     pipelineOrchestrator.onCpEnrichmentSuccess(record, ppLogOutputDir, "PP_LOG");
                 } else {
                     // Check pp_log for failure (process_code != 0)
                     String ppLogError = refDbService.queryPpLogError(record.lot(), record.filename());
                     if (ppLogError != null) {
                         // pp_log shows failure
-                        log.info("CP enrichment failed in pp_log for record id={} dataId={}: {}",
-                                record.id(), record.dataId(), ppLogError);
-                        integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", ppLogError);
-                        String contextMessage = "[CP pp_log Failure] " + ppLogError;
+                        log.info("CP enrichment failed in pp_log for record id={} dataId={}: {} (traceId={})",
+                                record.id(), record.dataId(), ppLogError, notFound.traceId());
+                        String statusMsg = String.format("CP enrichment failed in pp_log: %s (traceId=%s)",
+                                ppLogError, notFound.traceId());
+                        integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+                        failureCount.incrementAndGet();
+                        String contextMessage = "[CP pp_log Failure] " + statusMsg;
                         refDbService.markFailed(record, contextMessage);
                     } else {
                         // No pp_log entry found - still waiting, retry next cycle
@@ -164,14 +187,18 @@ public class CpLogMonitor {
                         if (isTimedOut(record)) {
                             String timeoutMessage = "CP enrichment timeout — no log found in ES or pp_log after "
                                     + props.getEnrichmentTimeoutMinutes() + " minutes";
-                            log.info("CP enrichment timeout for record id={} dataId={}", record.id(), record.dataId());
-                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMessage);
-                            String contextMessage = "[CP Timeout] " + timeoutMessage;
+                            log.info("CP enrichment timeout for record id={} dataId={} (traceId={})",
+                                    record.id(), record.dataId(), notFound.traceId());
+                            String statusMsg = String.format("%s (traceId=%s)", timeoutMessage, notFound.traceId());
+                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", statusMsg);
+                            timeoutCount.incrementAndGet();
+                            String contextMessage = "[CP Timeout] " + statusMsg;
                             refDbService.markFailed(record, contextMessage);
                         } else {
-                            log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
-                                    record.id(), record.dataId());
-                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found", "No ES log or pp_log entry — retrying");
+                            log.debug("No CP log yet for record id={} dataId={} (traceId={}) — will retry next cycle",
+                                    record.id(), record.dataId(), notFound.traceId());
+                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found",
+                                    String.format("No ES log or pp_log entry — retrying (traceId=%s)", notFound.traceId()));
                         }
                     }
                 }
@@ -249,12 +276,21 @@ public class CpLogMonitor {
      * Truncates an error message to {@value MAX_ERROR_MESSAGE_LENGTH} characters.
      * Requirement 4.5
      */
-    private String truncateErrorMessage(String message) {
-        if (message == null) {
-            return "Unknown error";
-        }
-        return message.length() > MAX_ERROR_MESSAGE_LENGTH
-                ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH)
-                : message;
+    @ManagedAttribute(description = "Total number of records processed across all poll cycles")
+    public long getTotalRecordsProcessed() { return totalRecordsProcessed.get(); }
+
+    @ManagedAttribute(description = "Total number of records successfully resolved")
+    public long getSuccessCount() { return successCount.get(); }
+
+    @ManagedAttribute(description = "Total number of records that failed")
+    public long getFailureCount() { return failureCount.get(); }
+
+    @ManagedAttribute(description = "Total number of records that timed out")
+    public long getTimeoutCount() { return timeoutCount.get(); }
+
+    @ManagedAttribute(description = "Success rate as a fraction (0.0 - 1.0)")
+    public double getSuccessRate() {
+        long total = totalRecordsProcessed.get();
+        return total > 0 ? (double) successCount.get() / total : 0.0;
     }
 }

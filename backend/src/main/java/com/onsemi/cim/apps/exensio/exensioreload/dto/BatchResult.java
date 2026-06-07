@@ -33,7 +33,8 @@ public record BatchResult(
             String errorMessage,
             String lotId,
             String waferId,
-            String fileName
+            String fileName,
+            String traceId
     ) {}
 
     /**

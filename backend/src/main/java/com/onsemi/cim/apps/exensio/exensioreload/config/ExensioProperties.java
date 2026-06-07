@@ -51,6 +51,20 @@ public class ExensioProperties {
     /** Whether to log Exensio API request URLs and payloads. */
     private boolean logRequestPayloads = false;
 
+    // --- Connection & Performance Optimization ---
+
+    /** Connection timeout in milliseconds. Default: 10 000 ms. */
+    private long connectionTimeoutMs = 10_000L;
+
+    /** Socket timeout in milliseconds. Default: 30 000 ms. */
+    private long socketTimeoutMs = 30_000L;
+
+    /** Maximum number of connections in the pool. Default: 20. */
+    private int maxConnections = 20;
+
+    /** Maximum connections per route. Default: 10. */
+    private int maxConnectionsPerRoute = 10;
+
     /**
      * Minutes a record may stay in EXENSIO_LOADING before being marked FAILED.
      * Starts counting from when the record entered EXENSIO_LOADING (updatedAt).
@@ -60,11 +74,66 @@ public class ExensioProperties {
     // --- Batch & Parallel Processing Optimization Properties ---
 
     /**
+     * Enable caching for recent successful lot-wafer lookups.
+     * Default: true.
+     */
+    private boolean cacheEnabled = true;
+
+    /**
+     * Maximum number of entries to keep in the lookup cache.
+     * Default: 10 000.
+     */
+    private int cacheMaximumSize = 10_000;
+
+    /**
+     * Time in minutes that a cache entry remains valid after being written.
+     * Default: 60 minutes.
+     */
+    private int cacheExpireAfterWriteMinutes = 60;
+
+    /**
+     * Adaptive polling enabled (stretch goal).
+     * Default: false.
+     */
+    private boolean adaptivePollingEnabled = false;
+
+    /**
+     * Minimum poll interval in milliseconds (stretch goal).
+     * Default: 30 000 ms.
+     */
+    private long minPollIntervalMs = 30_000L;
+
+    /**
+     * Maximum poll interval in milliseconds (stretch goal).
+     * Default: 300 000 ms.
+     */
+    private long maxPollIntervalMs = 300_000L;
+
+    /**
      * Number of lot/wafer combinations to include in a single batch API request.
      * Range: 1-100. Default: 50.
      * When set to 1, records are processed individually (backward compatible).
      */
     private int batchSize = 50;
+
+    /**
+     * Maximum number of retry attempts for transient API failures.
+     * Default: 3.
+     */
+    private int retryMaxAttempts = 3;
+
+    /**
+     * Base delay for exponential backoff in milliseconds.
+     * Default: 1000 ms.
+     */
+    private long retryBaseDelayMs = 1000L;
+
+    /**
+     * Maximum number of consecutive failures before a record is moved to dead letter queue.
+     * When exceeded, the record is marked as FAILED and no longer retried.
+     * Default: 5.
+     */
+    private int deadLetterQueueThreshold = 5;
 
     /**
      * Number of threads in the thread pool for concurrent batch processing.
@@ -147,6 +216,40 @@ public class ExensioProperties {
         }
         if (rawSqlRowLimit < 10 || rawSqlRowLimit > 5000) {
             throw new IllegalArgumentException("exensio.rawSqlRowLimit must be between 10 and 5000");
+        }
+
+        // Validate cache settings
+        if (cacheMaximumSize <= 0) {
+            throw new IllegalArgumentException("exensio.cacheMaximumSize must be positive");
+        }
+        if (cacheExpireAfterWriteMinutes <= 0) {
+            throw new IllegalArgumentException("exensio.cacheExpireAfterWriteMinutes must be positive");
+        }
+
+        // Validate adaptive polling settings
+        if (adaptivePollingEnabled) {
+            if (minPollIntervalMs <= 0) {
+                throw new IllegalArgumentException("exensio.minPollIntervalMs must be positive when adaptive polling is enabled");
+            }
+            if (maxPollIntervalMs <= 0) {
+                throw new IllegalArgumentException("exensio.maxPollIntervalMs must be positive when adaptive polling is enabled");
+            }
+            if (minPollIntervalMs > maxPollIntervalMs) {
+                throw new IllegalArgumentException("exensio.minPollIntervalMs must be less than or equal to exensio.maxPollIntervalMs");
+            }
+        }
+
+        // Validate retry settings
+        if (retryMaxAttempts < 0) {
+            throw new IllegalArgumentException("exensio.retryMaxAttempts must be non-negative");
+        }
+        if (retryBaseDelayMs <= 0) {
+            throw new IllegalArgumentException("exensio.retryBaseDelayMs must be positive");
+        }
+
+        // Validate dead letter queue threshold
+        if (deadLetterQueueThreshold < 0) {
+            throw new IllegalArgumentException("exensio.deadLetterQueueThreshold must be non-negative");
         }
     }
 
@@ -242,11 +345,29 @@ public class ExensioProperties {
     public boolean isLogRequestPayloads() { return logRequestPayloads; }
     public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
 
+    public long getConnectionTimeoutMs() { return connectionTimeoutMs; }
+    public void setConnectionTimeoutMs(long connectionTimeoutMs) { this.connectionTimeoutMs = connectionTimeoutMs; }
+
+    public long getSocketTimeoutMs() { return socketTimeoutMs; }
+    public void setSocketTimeoutMs(long socketTimeoutMs) { this.socketTimeoutMs = socketTimeoutMs; }
+
+    public int getMaxConnections() { return maxConnections; }
+    public void setMaxConnections(int maxConnections) { this.maxConnections = maxConnections; }
+
+    public int getMaxConnectionsPerRoute() { return maxConnectionsPerRoute; }
+    public void setMaxConnectionsPerRoute(int maxConnectionsPerRoute) { this.maxConnectionsPerRoute = maxConnectionsPerRoute; }
+
     public int getTimeoutMinutes() { return timeoutMinutes; }
     public void setTimeoutMinutes(int timeoutMinutes) { this.timeoutMinutes = timeoutMinutes; }
 
     public int getBatchSize() { return batchSize; }
     public void setBatchSize(int batchSize) { this.batchSize = batchSize; }
+
+    public int getRetryMaxAttempts() { return retryMaxAttempts; }
+    public void setRetryMaxAttempts(int retryMaxAttempts) { this.retryMaxAttempts = retryMaxAttempts; }
+
+    public long getRetryBaseDelayMs() { return retryBaseDelayMs; }
+    public void setRetryBaseDelayMs(long retryBaseDelayMs) { this.retryBaseDelayMs = retryBaseDelayMs; }
 
     public int getThreadPoolSize() { return threadPoolSize; }
     public void setThreadPoolSize(int threadPoolSize) { this.threadPoolSize = threadPoolSize; }

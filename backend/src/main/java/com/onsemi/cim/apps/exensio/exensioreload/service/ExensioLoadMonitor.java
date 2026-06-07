@@ -25,8 +25,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * Scheduled monitor that polls the Exensio API for records in {@code EXENSIO_LOADING}
@@ -83,6 +88,14 @@ public class ExensioLoadMonitor {
     // Circuit breaker
     private CircuitBreaker circuitBreaker;
 
+    // Caching
+    private Cache<String, ExensioCacheValue> lookupCache;
+
+    private record ExensioCacheValue(String waferKey, int pgKey) {}
+
+    // Track failure counts per record for dead letter queue
+    private final Map<Long, AtomicInteger> failureCounts = new ConcurrentHashMap<>();
+
     public ExensioLoadMonitor(ExensioProperties props,
                               ExensioClient exensioClient,
                               RefDbService refDbService,
@@ -121,6 +134,17 @@ public class ExensioLoadMonitor {
                     props.getCircuitBreakerThreshold(), props.getCircuitBreakerResetMs());
         } else {
             log.info("Circuit breaker disabled");
+        }
+
+        if (props.isCacheEnabled()) {
+            this.lookupCache = Caffeine.newBuilder()
+                    .maximumSize(props.getCacheMaximumSize())
+                    .expireAfterWrite(props.getCacheExpireAfterWriteMinutes(), TimeUnit.MINUTES)
+                    .build();
+            log.info("Exensio lookup cache enabled: maxSize={}, expireAfterWrite={}m",
+                    props.getCacheMaximumSize(), props.getCacheExpireAfterWriteMinutes());
+        } else {
+            log.info("Exensio lookup cache disabled");
         }
 
         log.info("ExensioLoadMonitor initialized: threadPoolSize={}, maxConcurrentRequests={}, batchSize={}",
@@ -258,95 +282,124 @@ public class ExensioLoadMonitor {
      * handle errors with individual retry fallback, release permit.
      */
     private BatchResult processBatch(List<StageRecord> batch) {
+        // Generate trace ID for this batch
+        String traceId = java.util.UUID.randomUUID().toString();
+        log.info("Processing Exensio batch (traceId={}), size={}", traceId, batch.size());
+
         // Filter out records with missing lot/wafer before hitting the API
         List<StageRecord> validRecords = new ArrayList<>();
-        List<BatchResult.RecordUpdate> invalidUpdates = new ArrayList<>();
+        List<BatchResult.RecordUpdate> updates = new ArrayList<>();
         for (StageRecord record : batch) {
             if (record.lot() == null || record.lot().isBlank()) {
-                log.warn("Record id={} missing lot — marking FAILED", record.id());
-                invalidUpdates.add(new BatchResult.RecordUpdate(
+                log.warn("Record id={} missing lot — marking FAILED (traceId={})", record.id(), traceId);
+                updates.add(new BatchResult.RecordUpdate(
                         record.id(), BatchResult.UpdateType.FAILED, null, null,
-                        "Missing lot for Exensio lookup", null, null, null));
+                        "Missing lot for Exensio lookup", null, null, null, traceId));
             } else {
                 validRecords.add(record);
             }
         }
 
         if (validRecords.isEmpty()) {
-            return new BatchResult(invalidUpdates, 0, invalidUpdates.size(), 0, 0);
+            return buildBatchResult(updates, Instant.now());
         }
 
         Instant batchStart = Instant.now();
-        List<BatchResult.RecordUpdate> updates = new ArrayList<>(invalidUpdates);
+        List<StageRecord> apiRecords = new ArrayList<>();
+
+        // 1. Cache Lookup
+        if (lookupCache != null) {
+            for (StageRecord record : validRecords) {
+                String key = getCacheKey(record);
+                ExensioCacheValue cached = lookupCache.getIfPresent(key);
+                if (cached != null) {
+                    log.debug("Cache hit for record id={} (traceId={})", record.id(), traceId);
+                    updates.add(new BatchResult.RecordUpdate(
+                            record.id(), BatchResult.UpdateType.DONE,
+                            cached.waferKey(), cached.pgKey(), null,
+                            record.lot(), record.wafer(), record.filename(), traceId));
+                } else {
+                    apiRecords.add(record);
+                }
+            }
+        } else {
+            apiRecords.addAll(validRecords);
+        }
+
+        if (apiRecords.isEmpty()) {
+            log.debug("All records in batch {} were cached (traceId={})", traceId, traceId);
+            return buildBatchResult(updates, batchStart);
+        }
 
         try {
             // Acquire concurrency permit
             concurrencyLimiter.acquire();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("Batch processing interrupted while acquiring permit for {} records", validRecords.size());
-            // Mark all as error so they retry next cycle
-            for (StageRecord r : validRecords) {
+            log.warn("Batch processing interrupted while acquiring permit (traceId={}) for {} records", traceId, apiRecords.size());
+            for (StageRecord r : apiRecords) {
                 updates.add(new BatchResult.RecordUpdate(
-                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted", null, null, null));
+                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted", null, null, null, traceId));
             }
             return buildBatchResult(updates, batchStart);
         }
 
         try {
-            // 6.4 Log API call start
-            log.debug("Batch API call: {} records ({} unique lots, {} unique wafers)",
-                    validRecords.size(),
-                    validRecords.stream().map(StageRecord::lot).distinct().count(),
-                    validRecords.stream().map(StageRecord::wafer).distinct().count());
+            log.debug("Batch API call (traceId={}): {} records ({} unique lots, {} unique wafers)",
+                    traceId,
+                    apiRecords.size(),
+                    apiRecords.stream().map(StageRecord::lot).distinct().count(),
+                    apiRecords.stream().map(StageRecord::wafer).distinct().count());
 
-            BatchLookupResult lookupResult = exensioClient.lotWaferLookupBatch(validRecords);
+            BatchLookupResult lookupResult = exensioClient.lotWaferLookupBatch(apiRecords, traceId);
 
             long apiElapsedMs = Duration.between(batchStart, Instant.now()).toMillis();
-            log.debug("Batch API response: success={}, timeMs={}", lookupResult.isSuccess(), apiElapsedMs);
+            log.debug("Batch API response (traceId={}): success={}, timeMs={}", traceId, lookupResult.isSuccess(), apiElapsedMs);
 
             if (lookupResult.isSuccess()) {
-                // Map batch response to individual record updates
-                List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(validRecords);
+                List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(apiRecords);
 
-                // Apply timeout logic: NOT_FOUND records that have timed out become FAILED
                 for (BatchResult.RecordUpdate update : batchUpdates) {
                     if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
-                        StageRecord record = findRecord(validRecords, update.recordId());
+                        StageRecord record = findRecord(apiRecords, update.recordId());
                         if (record != null && isTimedOut(record)) {
                             updates.add(new BatchResult.RecordUpdate(
                                     update.recordId(), BatchResult.UpdateType.FAILED, null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes", null, null, null));
+                                            + props.getTimeoutMinutes() + " minutes", null, null, null, traceId));
                         } else {
-                            // Still within timeout — keep as NOT_FOUND (skip, retry next cycle)
                             updates.add(update);
                         }
+                    } else if (update.type() == BatchResult.UpdateType.DONE) {
+                        // Cache the successful result
+                        StageRecord record = findRecord(apiRecords, update.recordId());
+                        if (record != null && lookupCache != null) {
+                            lookupCache.put(getCacheKey(record), new ExensioCacheValue(update.waferKey(), update.pgKey()));
+                        }
+                        updates.add(update);
                     } else {
                         updates.add(update);
                     }
                 }
 
-                // Record circuit breaker success
                 if (circuitBreaker != null) {
                     circuitBreaker.recordSuccess();
                 }
 
             } else {
-                // Batch API call failed — check error type and retry individually
                 String errorMsg = lookupResult.getErrorMessage();
-                log.warn("Batch API call failed ({}), retrying {} records individually", errorMsg, validRecords.size());
+                log.warn("Batch API call failed (traceId={}) ({}), retrying {} records individually", traceId, errorMsg, apiRecords.size());
 
                 if (circuitBreaker != null) {
                     circuitBreaker.recordFailure();
-                    log.warn("Circuit breaker failure recorded: {}/{}, state={}",
+                    log.warn("Circuit breaker failure recorded (traceId={}): {}/{}, state={}",
+                            traceId,
                             circuitBreaker.getConsecutiveFailures(),
                             circuitBreaker.getFailureThreshold(),
                             circuitBreaker.getState());
                 }
 
-                // 7.3 Individual record retry
-                List<BatchResult.RecordUpdate> retryUpdates = retryIndividualRecords(validRecords);
+                List<BatchResult.RecordUpdate> retryUpdates = retryIndividualRecords(apiRecords, traceId);
                 updates.addAll(retryUpdates);
             }
 
@@ -359,7 +412,8 @@ public class ExensioLoadMonitor {
         recordBatchIntegrationStatus(batch, result);
 
         // 6.2 Log batch metrics
-        log.debug("Batch done: records={}, done={}, failed={}, notFound={}, timeMs={}",
+        log.debug("Batch done (traceId={}): records={}, done={}, failed={}, notFound={}, timeMs={}",
+                traceId,
                 batch.size(), result.successCount(), result.failureCount(),
                 result.notFoundCount(), result.processingTimeMs());
 
@@ -380,36 +434,50 @@ public class ExensioLoadMonitor {
             if (record == null) {
                 continue;
             }
+            // Apply dead letter queue logic to the update
+            BatchResult.RecordUpdate processedUpdate = processUpdateWithDLQ(record, update);
             long stageRecordId = record.id();
             String requestId = record.requestId();
-            switch (update.type()) {
+            switch (processedUpdate.type()) {
                 case DONE -> {
-                    String msg = String.format("Exensio wafer confirmed: lot=%s, wafer=%s, file=%s",
+                    String msg = String.format("Exensio wafer confirmed: lot=%s, wafer=%s, file=%s, traceId=%s",
                             update.lotId() != null ? update.lotId() : "N/A",
                             update.waferId() != null ? update.waferId() : "N/A",
-                            update.fileName() != null ? update.fileName() : "N/A");
+                            update.fileName() != null ? update.fileName() : "N/A",
+                            update.traceId() != null ? update.traceId() : "N/A");
                     log.info("Record {} DONE - {}", record.id(), msg);
-                    // Update per-record status
-                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "success", msg);
+                    // Update per-record status with traceId for UI display
+                    String statusMsg = String.format("Exensio wafer confirmed: lot=%s, wafer=%s, traceId=%s",
+                            update.lotId() != null ? update.lotId() : "N/A",
+                            update.waferId() != null ? update.waferId() : "N/A",
+                            update.traceId() != null ? update.traceId() : "N/A");
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "success", statusMsg);
                 }
                 case NOT_FOUND -> {
+                    String msg = String.format("Exensio wafer not found yet — retrying (traceId=%s)",
+                            update.traceId() != null ? update.traceId() : "N/A");
+                    log.debug("Record {} NOT_FOUND - {}", record.id(), msg);
                     // Update per-record status
-                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", "Exensio wafer not found yet — retrying");
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", msg);
                 }
                 case FAILED -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed";
-                    log.info("Record {} FAILED - {}", record.id(), errorMsg);
+                    String traceMsg = String.format("%s (traceId=%s)", errorMsg,
+                            update.traceId() != null ? update.traceId() : "N/A");
+                    log.info("Record {} FAILED - {}", record.id(), traceMsg);
                     // Update per-record status
-                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "failure", errorMsg);
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "failure", traceMsg);
                     // Add Exensio-specific failure context for UI display
-                    String contextMessage = "[Exensio Failure] " + errorMsg;
+                    String contextMessage = "[Exensio Failure] " + traceMsg;
                     refDbService.markFailed(record, contextMessage);
                 }
                 case ERROR -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error";
-                    log.warn("Record {} ERROR - {}", record.id(), errorMsg);
+                    String traceMsg = String.format("%s (traceId=%s)", errorMsg,
+                            update.traceId() != null ? update.traceId() : "N/A");
+                    log.warn("Record {} ERROR - {}", record.id(), traceMsg);
                     // Update per-record status
-                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", errorMsg);
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", traceMsg);
                 }
             }
             // Emit ROW_UPDATE SSE event with per-record integration status
@@ -475,7 +543,7 @@ public class ExensioLoadMonitor {
      * Retry individual records when a batch API call fails.
      * Uses the existing single-record {@link ExensioClient#lotWaferLookup} method.
      */
-    private List<BatchResult.RecordUpdate> retryIndividualRecords(List<StageRecord> records) {
+    private List<BatchResult.RecordUpdate> retryIndividualRecords(List<StageRecord> records, String traceId) {
         List<BatchResult.RecordUpdate> updates = new ArrayList<>();
 
         for (StageRecord record : records) {
@@ -501,31 +569,31 @@ public class ExensioLoadMonitor {
                                 record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
                         updates.add(new BatchResult.RecordUpdate(
                                 record.id(), BatchResult.UpdateType.DONE,
-                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName()));
+                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId));
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
                         if (isTimedOut(record)) {
                             updates.add(new BatchResult.RecordUpdate(
                                     record.id(), BatchResult.UpdateType.FAILED, null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes", null, null, null));
+                                            + props.getTimeoutMinutes() + " minutes", null, null, traceId));
                         } else {
                             // Still within timeout — skip (retry next cycle)
                             updates.add(new BatchResult.RecordUpdate(
-                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null, null, null, null));
+                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null, null, null, null, traceId));
                         }
                     }
                     case ExensioLotWaferResult.Error error -> {
                         log.warn("Individual retry error for id={}: {}", record.id(), error.message());
                         // Leave as ERROR — no status change, retry next cycle
                         updates.add(new BatchResult.RecordUpdate(
-                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message(), null, null, null));
+                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message(), null, null, null, traceId));
                     }
                 }
             } catch (Exception e) {
                 log.warn("Individual retry exception for id={}: {}", record.id(), e.getMessage());
                 updates.add(new BatchResult.RecordUpdate(
-                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), null, null, null));
+                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), null, null, null, traceId));
             }
         }
 
@@ -575,9 +643,9 @@ public class ExensioLoadMonitor {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+    private String getCacheKey(StageRecord record) {
+        return record.lot() + "|" + (record.wafer() == null ? "" : record.wafer());
+    }
 
     /**
      * Partition a list of records into batches of specified size.
@@ -632,6 +700,51 @@ public class ExensioLoadMonitor {
         Instant startedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
         if (startedAt == null) return false;
         return startedAt.plus(Duration.ofMinutes(props.getTimeoutMinutes())).isBefore(Instant.now());
+    }
+
+    /**
+     * Processes an update record for dead letter queue logic.
+     * If the update is not DONE, increments the failure count for the record.
+     * If the failure count reaches the threshold, the update is changed to FAILED with a DLQ message
+     * and the failure count is reset.
+     *
+     * @param record the stage record
+     * @param update the original update from processing
+     * @return the update to apply (possibly modified for DLQ)
+     */
+    private BatchResult.RecordUpdate processUpdateWithDLQ(StageRecord record, BatchResult.RecordUpdate update) {
+        long recordId = record.id();
+        if (update.type() == BatchResult.UpdateType.DONE) {
+            resetFailureCount(recordId);
+            return update;
+        }
+
+        // For NOT_FOUND, ERROR, and FAILED (we treat all non-DONE as failure for counting)
+        AtomicInteger failureCount = failureCounts.computeIfAbsent(recordId, k -> new AtomicInteger(0));
+        int currentCount = failureCount.incrementAndGet();
+
+        if (currentCount >= props.getDeadLetterQueueThreshold()) {
+            // We have reached the threshold: mark as FAILED and reset the count.
+            failureCount.set(0);
+            String dlqMessage = "Exensio load failed after " + props.getDeadLetterQueueThreshold() +
+                                " consecutive failures — moved to dead letter queue";
+            return new BatchResult.RecordUpdate(
+                    recordId,
+                    BatchResult.UpdateType.FAILED,
+                    null, null,
+                    dlqMessage,
+                    null, null, null,
+                    update.traceId());
+        }
+
+        return update;
+    }
+
+    /**
+     * Resets the failure count for a record to zero.
+     */
+    private void resetFailureCount(long recordId) {
+        failureCounts.computeIfAbsent(recordId, k -> new AtomicInteger(0)).set(0);
     }
 
     // -------------------------------------------------------------------------

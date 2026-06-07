@@ -120,19 +120,23 @@ public class IntegrationStatusService {
 
     /**
      * Evicts entries from a map if they are older than TTL.
-     * Only evicts entries whose corresponding record is in a terminal state.
+     *
+     * logic updated:
+     * - If the status is NOT terminal (e.g. 'not_found', 'pending', 'error'),
+     *   evict it after the standard TTL to clean up records that disappeared.
+     * - If the status IS terminal ('DONE', 'FAILED'), we preserve it much longer
+     *   (10x TTL) so the user can see the final result after the session ends.
      */
     private void evictExpiredFromMap(ConcurrentHashMap<Long, IntegrationStatus> map, long ttlMillis, long now) {
         map.entrySet().removeIf(entry -> {
             long entryTime = entry.getValue().at().toEpochMilli();
-            if (now - entryTime >= ttlMillis) {
-                // Entry has expired, check if record is in terminal state
-                // Note: We don't have access to the actual StageRecord here,
-                // so we'll evict based on status stored in the IntegrationStatus
-                String status = entry.getValue().status();
-                return TERMINAL_STATES.contains(status);
-            }
-            return false;
+            String status = entry.getValue().status();
+            boolean isTerminal = TERMINAL_STATES.contains(status);
+
+            // Terminal states are preserved 10x longer than transient states
+            long effectiveTtl = isTerminal ? ttlMillis * 10 : ttlMillis;
+
+            return (now - entryTime >= effectiveTtl);
         });
     }
 

@@ -58,11 +58,61 @@ public class CpElasticsearchProperties {
     /** Whether to log Elasticsearch request payloads (query JSON). */
     private boolean logRequestPayloads = false;
 
+    // --- Connection & Performance Optimization ---
+
+    /** Connection timeout in milliseconds. Default: 10 000 ms. */
+    private long connectionTimeoutMs = 10_000L;
+
+    /** Socket timeout in milliseconds. Default: 30 000 ms. */
+    private long socketTimeoutMs = 30_000L;
+
+    /** Maximum number of connections in the pool. Default: 20. */
+    private int maxConnections = 20;
+
+    /** Maximum connections per route. Default: 10. */
+    private int maxConnectionsPerRoute = 10;
+
+    /** Connection time-to-live in seconds. Default: 60s. */
+    private long connectionTimeToLiveSeconds = 60L;
+
+    /** Enable circuit breaker pattern for ES queries. Default: true. */
+    private boolean enableCircuitBreaker = true;
+
+    /** Number of consecutive failures before opening the circuit breaker. Default: 5. */
+    private int circuitBreakerThreshold = 5;
+
+    /** Time in milliseconds to wait before attempting to close the circuit breaker. Default: 60 000 ms. */
+    private long circuitBreakerResetMs = 60_000L;
+
     public String getUrl() { return url; }
     public void setUrl(String url) { this.url = url == null ? "" : url; }
 
     public boolean isLogRequestPayloads() { return logRequestPayloads; }
     public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
+
+    public long getConnectionTimeoutMs() { return connectionTimeoutMs; }
+    public void setConnectionTimeoutMs(long connectionTimeoutMs) { this.connectionTimeoutMs = connectionTimeoutMs; }
+
+    public long getSocketTimeoutMs() { return socketTimeoutMs; }
+    public void setSocketTimeoutMs(long socketTimeoutMs) { this.socketTimeoutMs = socketTimeoutMs; }
+
+    public int getMaxConnections() { return maxConnections; }
+    public void setMaxConnections(int maxConnections) { this.maxConnections = maxConnections; }
+
+    public int getMaxConnectionsPerRoute() { return maxConnectionsPerRoute; }
+    public void setMaxConnectionsPerRoute(int maxConnectionsPerRoute) { this.maxConnectionsPerRoute = maxConnectionsPerRoute; }
+
+    public long getConnectionTimeToLiveSeconds() { return connectionTimeToLiveSeconds; }
+    public void setConnectionTimeToLiveSeconds(long connectionTimeToLiveSeconds) { this.connectionTimeToLiveSeconds = connectionTimeToLiveSeconds; }
+
+    public boolean isEnableCircuitBreaker() { return enableCircuitBreaker; }
+    public void setEnableCircuitBreaker(boolean enableCircuitBreaker) { this.enableCircuitBreaker = enableCircuitBreaker; }
+
+    public int getCircuitBreakerThreshold() { return circuitBreakerThreshold; }
+    public void setCircuitBreakerThreshold(int circuitBreakerThreshold) { this.circuitBreakerThreshold = circuitBreakerThreshold; }
+
+    public long getCircuitBreakerResetMs() { return circuitBreakerResetMs; }
+    public void setCircuitBreakerResetMs(long circuitBreakerResetMs) { this.circuitBreakerResetMs = circuitBreakerResetMs; }
 
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey == null ? "" : apiKey; }
@@ -117,9 +167,21 @@ public class CpElasticsearchProperties {
     public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }
 
     @jakarta.annotation.PostConstruct
-    public void logConfiguration() {
-        log.info("Elasticsearch Configuration: url={}, username={}, apiKey present={}", 
+    public void validate() {
+        log.info("Elasticsearch Configuration: url={}, username={}, apiKey present={}",
             url, username, (apiKey != null && !apiKey.isBlank()));
+
+        if (isConfigured()) {
+            if (connectionTimeoutMs < 0 || socketTimeoutMs < 0) {
+                throw new IllegalArgumentException("ES timeouts must be non-negative");
+            }
+            if (maxConnections < 1 || maxConnectionsPerRoute < 1) {
+                throw new IllegalArgumentException("ES connection pool sizes must be at least 1");
+            }
+            if (circuitBreakerThreshold < 1) {
+                throw new IllegalArgumentException("ES circuit breaker threshold must be at least 1");
+            }
+        }
     }
 
     /** Returns true if Elasticsearch is configured (url is non-blank). */
