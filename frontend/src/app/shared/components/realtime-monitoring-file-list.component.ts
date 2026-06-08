@@ -147,7 +147,9 @@ import { GlassInputComponent } from './glass-input.component';
               <div class="error-details" *ngIf="file.errorMessage">
                 <app-glass-icon name="error" [size]="16" color="error"></app-glass-icon>
                 <div class="error-content">
-                  <span class="error-label">Error:</span>
+                  <span class="error-source-badge" *ngIf="detectErrorSourceForDisplay(file) as src"
+                        [class.source-cp]="src === 'CP'"
+                        [class.source-exensio]="src === 'Exensio'">{{ src }}</span>
                   <span class="error-message">{{ file.errorMessage }}</span>
                 </div>
               </div>
@@ -436,6 +438,32 @@ import { GlassInputComponent } from './glass-input.component';
         font-size: 0.8125rem;
         color: var(--text-main);
         line-height: 1.4;
+      }
+
+      .error-source-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        margin-right: 0.375rem;
+        vertical-align: middle;
+      }
+
+      .error-source-badge.source-cp {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+      }
+
+      .error-source-badge.source-exensio {
+        background: rgba(129, 140, 248, 0.15);
+        color: var(--accent-color);
+        border: 1px solid rgba(129, 140, 248, 0.3);
       }
 
       .cp-output-details {
@@ -1070,52 +1098,94 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get error summary truncated to 120 chars.
+   * Get error summary with source label, truncated to 140 chars.
+   * Sources: "CP" for Elasticsearch/Enrichment errors, "Exensio" for Exensio API errors.
    * Requirements 5.1-5.4
    */
   getErrorSummary(file: MonitoringFileItem): string | null {
     let errorText: string | null = null;
+    let source = '';
 
-    // Requirement 5.4: Priority order
+    // Requirement 5.4: Priority order — determine source and error text
     if (file.errorMessage) {
       errorText = file.errorMessage;
+      source = this.detectErrorSource(file.errorMessage, file);
     } else if (file.cpIntegrationStatus === 'failure' && file.cpIntegrationMessage) {
       errorText = file.cpIntegrationMessage;
+      source = 'CP';
     } else if (
       (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') &&
       file.exensioIntegrationMessage
     ) {
       errorText = file.exensioIntegrationMessage;
+      source = 'Exensio';
     }
 
-    // Requirement 5.1: Truncate to 120 chars
-    if (errorText) {
-      return errorText.length > 120 ? errorText.substring(0, 120) + '…' : errorText;
+    if (!errorText) {
+      return null;
     }
 
-    return null;
+    // Build prefixed summary
+    const prefix = source ? `${source} — ` : '';
+    const maxLen = 140;
+    const available = maxLen - prefix.length;
+    const truncated = errorText.length > available ? errorText.substring(0, available) + '…' : errorText;
+    return `${prefix}${truncated}`;
   }
 
   /**
-   * Get the full untruncated error message for tooltip.
+   * Detect the error source from the error message content or integration status fields.
+   * Returns "CP" for Elasticsearch/enrichment errors, "Exensio" for Exensio API errors, "" if unknown.
+   */
+  private detectErrorSource(errorMessage: string, file: MonitoringFileItem): string {
+    const msg = errorMessage.toLowerCase();
+
+    // Check backend-prefixed error messages
+    if (msg.startsWith('[cp ') || msg.includes('cp enrichment') || msg.includes('cp failure') ||
+        msg.includes('cp timeout') || msg.includes('cp pp_log')) {
+      return 'CP';
+    }
+    if (msg.startsWith('[exensio ') || msg.includes('exensio load') || msg.includes('exensio failure') ||
+        msg.includes('exensio api') || msg.includes('dead letter queue')) {
+      return 'Exensio';
+    }
+
+    // Fall back to integration status fields
+    if (file.cpIntegrationStatus === 'failure' || file.cpIntegrationStatus === 'timeout' ||
+        file.cpIntegrationStatus === 'error') {
+      return 'CP';
+    }
+    if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {
+      return 'Exensio';
+    }
+
+    return '';
+  }
+
+  /**
+   * Get the full untruncated error message with source prefix for tooltip.
    * Requirements 5.5
    */
   getFullErrorMessage(file: MonitoringFileItem): string {
     let errorText: string | null = null;
+    let source = '';
 
-    // Same priority as getErrorSummary
     if (file.errorMessage) {
       errorText = file.errorMessage;
+      source = this.detectErrorSource(file.errorMessage, file);
     } else if (file.cpIntegrationStatus === 'failure' && file.cpIntegrationMessage) {
       errorText = file.cpIntegrationMessage;
+      source = 'CP';
     } else if (
       (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') &&
       file.exensioIntegrationMessage
     ) {
       errorText = file.exensioIntegrationMessage;
+      source = 'Exensio';
     }
 
-    return errorText || '';
+    if (!errorText) return '';
+    return source ? `${source} — ${errorText}` : errorText;
   }
 
   /**
@@ -1190,5 +1260,14 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
     // Default fallback
     return 'muted';
+  }
+
+  /**
+   * Detect error source for display in the expanded row badge.
+   * Returns "CP", "Exensio", or "" if unknown.
+   */
+  detectErrorSourceForDisplay(file: MonitoringFileItem): string {
+    if (!file.errorMessage) return '';
+    return this.detectErrorSource(file.errorMessage, file);
   }
 }

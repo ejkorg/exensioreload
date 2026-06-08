@@ -691,19 +691,28 @@ export class StagingSessionService {
         message = `${filename} — ${parts.join(' · ')}`;
       }
     } else if (file.status === 'ERROR') {
-      // Get the error message, prioritizing errorMessage > cpIntegrationMessage > exensioIntegrationMessage
-      let errorMessage = file.errorMessage || '';
-      if (!errorMessage && file.cpIntegrationStatus === 'failure') {
+      // Get the error message and detect source, prioritizing errorMessage > cpIntegrationMessage > exensioIntegrationMessage
+      let errorMessage = '';
+      let source = '';
+
+      if (file.errorMessage) {
+        errorMessage = file.errorMessage;
+        source = this.detectActivityErrorSource(file.errorMessage, file);
+      } else if (file.cpIntegrationStatus === 'failure') {
         errorMessage = file.cpIntegrationMessage || '';
-      }
-      if (!errorMessage && (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error')) {
+        source = 'CP';
+      } else if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {
         errorMessage = file.exensioIntegrationMessage || '';
+        source = 'Exensio';
       }
 
-      // Truncate to 80 chars with ellipsis if longer
-      const truncatedError = errorMessage.length > 80 ? errorMessage.substring(0, 80) + '...' : errorMessage;
+      // Build prefixed error label
+      const prefix = source ? `${source} — ` : 'ERROR — ';
+      const maxLen = 80;
+      const available = maxLen - prefix.length;
+      const truncatedError = errorMessage.length > available ? errorMessage.substring(0, available) + '...' : errorMessage;
 
-      message = truncatedError ? `${filename} — Failed: ${truncatedError}` : `${filename} — Failed`;
+      message = truncatedError ? `${filename} — Failed: ${prefix}${truncatedError}` : `${filename} — Failed`;
     }
 
     this.pushActivity(
@@ -712,6 +721,33 @@ export class StagingSessionService {
       file.status === 'COMPLETED' ? 'check_circle' : 'error',
       file.status === 'COMPLETED' ? 'success' : 'error',
     );
+  }
+
+  /**
+   * Detect the error source from the error message content or integration status fields.
+   * Returns "CP" for Elasticsearch/enrichment errors, "Exensio" for Exensio API errors, "" if unknown.
+   */
+  private detectActivityErrorSource(errorMessage: string, file: StageRecordView): string {
+    const msg = errorMessage.toLowerCase();
+
+    if (msg.startsWith('[cp ') || msg.includes('cp enrichment') || msg.includes('cp failure') ||
+        msg.includes('cp timeout') || msg.includes('cp pp_log')) {
+      return 'CP';
+    }
+    if (msg.startsWith('[exensio ') || msg.includes('exensio load') || msg.includes('exensio failure') ||
+        msg.includes('exensio api') || msg.includes('dead letter queue')) {
+      return 'Exensio';
+    }
+
+    if (file.cpIntegrationStatus === 'failure' || file.cpIntegrationStatus === 'timeout' ||
+        file.cpIntegrationStatus === 'error') {
+      return 'CP';
+    }
+    if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {
+      return 'Exensio';
+    }
+
+    return '';
   }
 
   private pushActivity(
