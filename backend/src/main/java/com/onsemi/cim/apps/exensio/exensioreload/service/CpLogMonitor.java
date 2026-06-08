@@ -6,6 +6,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
 import org.springframework.jmx.export.annotation.ManagedResource;
 import java.util.concurrent.atomic.AtomicLong;
@@ -276,6 +277,15 @@ public class CpLogMonitor {
      * Truncates an error message to {@value MAX_ERROR_MESSAGE_LENGTH} characters.
      * Requirement 4.5
      */
+    private String truncateErrorMessage(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() <= MAX_ERROR_MESSAGE_LENGTH
+                ? message
+                : message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "...";
+    }
+
     @ManagedAttribute(description = "Total number of records processed across all poll cycles")
     public long getTotalRecordsProcessed() { return totalRecordsProcessed.get(); }
 

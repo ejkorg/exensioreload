@@ -29,11 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-    @FunctionalInterface
-    private interface RetryableOperation<T> {
-        T execute() throws Exception;
-    }
-
 /**
  * HTTP client for the Exensio API.
  *
@@ -49,6 +44,11 @@ public class ExensioClient {
     private final ExensioAuthService authService;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+
+    @FunctionalInterface
+    private interface RetryableOperation<T> {
+        T execute() throws Exception;
+    }
 
     public ExensioClient(ExensioProperties props,
                          ExensioAuthService authService,
@@ -272,6 +272,10 @@ public class ExensioClient {
      * @return BatchLookupResult with parsed response or error message
      */
     public BatchLookupResult lotWaferLookupBatch(List<StageRecord> records) {
+        return lotWaferLookupBatch(records, null);
+    }
+
+    public BatchLookupResult lotWaferLookupBatch(List<StageRecord> records, String traceId) {
         int maxAttempts = props.getRetryMaxAttempts();
         long baseDelay = props.getRetryBaseDelayMs();
         String token = null;
@@ -354,7 +358,7 @@ public class ExensioClient {
         List<BatchLookupResult.LotResult> mergedLots = new ArrayList<>();
         Set<Long> resolvedRecordIds = new HashSet<>();
 
-        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token);
+        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, null);
         if (rawSqlResult.isSuccess()) {
             mergedLots.addAll(rawSqlResult.getLots());
             for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records)) {

@@ -41,7 +41,7 @@ public class ElasticsearchHealthIndicator implements HealthIndicator {
         }
 
         try {
-            String url = props.resolvedSearchUrl();
+            String url = props.resolveSearchUrl();
             // Replace the index pattern and _search with just _cluster/health for a lightweight check
             String healthCheckUrl = url.replaceFirst("/[^/]+/_search$", "/_cluster/health");
             // If the above replacement didn't work (e.g., URL doesn't end with _search), try appending

@@ -91,7 +91,7 @@ public class ExensioLoadMonitor {
     // Caching
     private Cache<String, ExensioCacheValue> lookupCache;
 
-    private record ExensioCacheValue(String waferKey, int pgKey) {}
+    private record ExensioCacheValue(Long waferKey, Long pgKey) {}
 
     // Track failure counts per record for dead letter queue
     private final Map<Long, AtomicInteger> failureCounts = new ConcurrentHashMap<>();
@@ -577,7 +577,7 @@ public class ExensioLoadMonitor {
                             updates.add(new BatchResult.RecordUpdate(
                                     record.id(), BatchResult.UpdateType.FAILED, null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes", null, null, traceId));
+                                            + props.getTimeoutMinutes() + " minutes", null, null, null, traceId));
                         } else {
                             // Still within timeout — skip (retry next cycle)
                             updates.add(new BatchResult.RecordUpdate(

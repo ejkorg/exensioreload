@@ -392,4 +392,25 @@ public class ExensioProperties {
 
     public int getRawSqlRowLimit() { return rawSqlRowLimit; }
     public void setRawSqlRowLimit(int rawSqlRowLimit) { this.rawSqlRowLimit = rawSqlRowLimit; }
+
+    public boolean isCacheEnabled() { return cacheEnabled; }
+    public void setCacheEnabled(boolean cacheEnabled) { this.cacheEnabled = cacheEnabled; }
+
+    public int getCacheMaximumSize() { return cacheMaximumSize; }
+    public void setCacheMaximumSize(int cacheMaximumSize) { this.cacheMaximumSize = cacheMaximumSize; }
+
+    public int getCacheExpireAfterWriteMinutes() { return cacheExpireAfterWriteMinutes; }
+    public void setCacheExpireAfterWriteMinutes(int cacheExpireAfterWriteMinutes) { this.cacheExpireAfterWriteMinutes = cacheExpireAfterWriteMinutes; }
+
+    public boolean isAdaptivePollingEnabled() { return adaptivePollingEnabled; }
+    public void setAdaptivePollingEnabled(boolean adaptivePollingEnabled) { this.adaptivePollingEnabled = adaptivePollingEnabled; }
+
+    public long getMinPollIntervalMs() { return minPollIntervalMs; }
+    public void setMinPollIntervalMs(long minPollIntervalMs) { this.minPollIntervalMs = minPollIntervalMs; }
+
+    public long getMaxPollIntervalMs() { return maxPollIntervalMs; }
+    public void setMaxPollIntervalMs(long maxPollIntervalMs) { this.maxPollIntervalMs = maxPollIntervalMs; }
+
+    public int getDeadLetterQueueThreshold() { return deadLetterQueueThreshold; }
+    public void setDeadLetterQueueThreshold(int deadLetterQueueThreshold) { this.deadLetterQueueThreshold = deadLetterQueueThreshold; }
 }

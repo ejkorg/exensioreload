@@ -123,6 +123,7 @@ public class BatchLookupResult {
                         errorMessage,
                         null,
                         null,
+                        null,
                         null
                 ));
             }
@@ -172,13 +173,15 @@ public class BatchLookupResult {
                         null,
                         record.lot(),
                         waferResult.waferId(),
-                        waferResult.fileName()
+                        waferResult.fileName(),
+                        null
                 ));
             } else {
                 // Wafer not found in Exensio response
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(),
                         BatchResult.UpdateType.NOT_FOUND,
+                        null,
                         null,
                         null,
                         null,
