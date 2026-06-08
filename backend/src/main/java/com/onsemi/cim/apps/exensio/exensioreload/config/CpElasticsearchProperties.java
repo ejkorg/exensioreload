@@ -168,20 +168,69 @@ public class CpElasticsearchProperties {
 
     @jakarta.annotation.PostConstruct
     public void validate() {
-        log.info("Elasticsearch Configuration: url={}, username={}, apiKey present={}",
-            url, username, (apiKey != null && !apiKey.isBlank()));
+        log.info("Elasticsearch Configuration: url={}, username={}, apiKey present={}, logRequestPayloads={}",
+            url, username, (apiKey != null && !apiKey.isBlank()), logRequestPayloads);
 
-        if (isConfigured()) {
-            if (connectionTimeoutMs < 0 || socketTimeoutMs < 0) {
-                throw new IllegalArgumentException("ES timeouts must be non-negative");
-            }
-            if (maxConnections < 1 || maxConnectionsPerRoute < 1) {
-                throw new IllegalArgumentException("ES connection pool sizes must be at least 1");
-            }
+        if (!isConfigured()) {
+            return;
+        }
+
+        // Validate URL format
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw new IllegalArgumentException("ES URL must start with http:// or https://");
+        }
+
+        // Validate auth is provided
+        boolean hasApiKey = apiKey != null && !apiKey.isBlank();
+        boolean hasBasicAuth = username != null && !username.isBlank() && password != null && !password.isBlank();
+        if (!hasApiKey && !hasBasicAuth) {
+            log.warn("ES is configured but no authentication provided (API key or username/password). Queries may fail.");
+        }
+
+        // Validate index pattern
+        if (indexPattern == null || indexPattern.isBlank()) {
+            throw new IllegalArgumentException("ES index-pattern must not be blank when ES is configured");
+        }
+
+        // Validate polling and timeout values
+        if (pollIntervalMs < 1) {
+            throw new IllegalArgumentException("ES poll-interval-ms must be at least 1");
+        }
+        if (enrichmentTimeoutMinutes < 1) {
+            throw new IllegalArgumentException("ES enrichment-timeout-minutes must be at least 1");
+        }
+
+        // Validate connection pool settings
+        if (connectionTimeoutMs < 0) {
+            throw new IllegalArgumentException("ES connection-timeout-ms must be non-negative");
+        }
+        if (socketTimeoutMs < 0) {
+            throw new IllegalArgumentException("ES socket-timeout-ms must be non-negative");
+        }
+        if (maxConnections < 1) {
+            throw new IllegalArgumentException("ES max-connections must be at least 1");
+        }
+        if (maxConnectionsPerRoute < 1) {
+            throw new IllegalArgumentException("ES max-connections-per-route must be at least 1");
+        }
+        if (maxConnectionsPerRoute > maxConnections) {
+            throw new IllegalArgumentException("ES max-connections-per-route must not exceed max-connections");
+        }
+        if (connectionTimeToLiveSeconds < 0) {
+            throw new IllegalArgumentException("ES connection-time-to-live-seconds must be non-negative");
+        }
+
+        // Validate circuit breaker settings
+        if (enableCircuitBreaker) {
             if (circuitBreakerThreshold < 1) {
-                throw new IllegalArgumentException("ES circuit breaker threshold must be at least 1");
+                throw new IllegalArgumentException("ES circuit-breaker-threshold must be at least 1");
+            }
+            if (circuitBreakerResetMs < 1) {
+                throw new IllegalArgumentException("ES circuit-breaker-reset-ms must be at least 1");
             }
         }
+
+        log.info("Elasticsearch configuration validated successfully");
     }
 
     /** Returns true if Elasticsearch is configured (url is non-blank). */

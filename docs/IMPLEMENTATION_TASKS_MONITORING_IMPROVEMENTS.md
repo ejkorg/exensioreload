@@ -8,7 +8,7 @@ This document lists the specific tasks required to implement the monitoring impr
 - [x] Add connection pooling configuration (max connections, timeouts) to `ElasticsearchLogService`.
 - [x] Implement request tracing ID generation and inclusion in ES queries.
 - [x] Add circuit breaker pattern around ES search operations.
-- [ ] Ensure `logRequestPayloads` defaults to false in production profiles.
+- [x] Ensure `logRequestPayloads` defaults to false in production profiles.
 - [ ] Add unit tests for new functionality (connection pooling, tracing, circuit breaker).
 - [x] Update `application.yml` documentation for new ES properties.
 
@@ -19,7 +19,7 @@ This document lists the specific tasks required to implement the monitoring impr
 - [x] Add traceId to all status messages emitted to IntegrationStatusService for UI display.
 
 ### 1.3 Configuration and Validation
-- [ ] Add new ES configuration properties to `CpElasticsearchProperties`:
+- [x] Add new ES configuration properties to `CpElasticsearchProperties`:
     - connection-timeout-ms
     - socket-timeout-ms
     - max-connections
@@ -28,8 +28,8 @@ This document lists the specific tasks required to implement the monitoring impr
     - enable-circuit-breaker
     - circuit-breaker-threshold
     - circuit-breaker-reset-ms
-- [ ] Add validation in `@PostConstruct` to check ES URL when enabled.
-- [ ] Update documentation in `docs/INTEGRATION_ES_EXENSIO.md` for new properties.
+- [x] Add validation in `@PostConstruct` to check ES URL when enabled.
+- [x] Update documentation in `docs/INTEGRATION_ES_EXENSIO.md` for new properties.
 
 ## 2. Exensio Monitoring Improvements
 
@@ -86,9 +86,9 @@ This document lists the specific tasks required to implement the monitoring impr
 - [x] Ensure no resource leaks in error paths (try-with-resources or finally blocks).
 
 ### 3.3 Documentation and Runbooks
-- [ ] Update `docs/INTEGRATION_ES_EXENSIO.md` with new configuration properties and their descriptions.
-- [ ] Create a troubleshooting section for common issues (circuit breaker open, connection pool exhaustion, etc.).
-- [ ] Add a runbook for monitoring and alerting on the new health endpoints and metrics.
+- [x] Update `docs/INTEGRATION_ES_EXENSIO.md` with new configuration properties and their descriptions.
+- [x] Create a troubleshooting section for common issues (circuit breaker open, connection pool exhaustion, etc.).
+- [x] Add a runbook for monitoring and alerting on the new health endpoints and metrics.
 
 ## 4. Testing
 - [ ] Write unit tests for all new and modified classes (aim for >80% coverage).

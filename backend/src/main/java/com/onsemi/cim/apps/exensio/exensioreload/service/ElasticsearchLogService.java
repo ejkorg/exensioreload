@@ -17,6 +17,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,12 +45,12 @@ public class ElasticsearchLogService {
     private final RefDbService refDbService;
     private final ObjectMapper objectMapper;
 
-    // Circuit breaker state
+    // Circuit breaker state (thread-safe for singleton access from @Scheduled threads)
     private enum State { CLOSED, OPEN, HALF_OPEN }
-    private State state = State.CLOSED;
-    private int failureCount = 0;
+    private final AtomicReference<State> state = new AtomicReference<>(State.CLOSED);
+    private final AtomicInteger failureCount = new AtomicInteger(0);
     private static final int FAILURE_THRESHOLD = 5;
-    private long lastFailureTime = 0;
+    private final AtomicLong lastFailureTime = new AtomicLong(0);
     private static final long TIMEOUT_DURATION = 60_000; // 1 minute
 
     public ElasticsearchLogService(HttpClient elasticsearchHttpClient,
@@ -167,7 +170,9 @@ public class ElasticsearchLogService {
         long startTime = System.currentTimeMillis();
 
         log.info("Elasticsearch query START: url={}, dataId={}, lot={}, traceId={}", url, dataId, lot, traceId);
-        log.info("ES query payload:\n{}", queryJson);
+        if (props.isLogRequestPayloads()) {
+            log.info("ES query payload:\n{}", queryJson);
+        }
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -189,9 +194,11 @@ public class ElasticsearchLogService {
         }
 
         log.info("ES query HTTP RESPONSE ({}ms): HTTP {}, dataId={}, traceId={}", elapsed, response.statusCode(), dataId, traceId);
-        log.info("ES query response body:\n{}", response.body());
+        if (props.isLogRequestPayloads()) {
+            log.info("ES query response body:\n{}", response.body());
+        }
 
-        CpLogResult result = parseResponse(response.body(), idFile, dataId, lot);
+        CpLogResult result = parseResponse(response.body(), idFile, dataId, lot, traceId);
         if (result instanceof CpLogResult.Success || result instanceof CpLogResult.Failure) {
             recordSuccess();
         } else {
@@ -238,9 +245,9 @@ public class ElasticsearchLogService {
 
     // ── private helpers ──────────────────────────────────────────────────────
     private boolean allowRequest() {
-        if (state == State.OPEN) {
-            if (System.currentTimeMillis() - lastFailureTime > TIMEOUT_DURATION) {
-                state = State.HALF_OPEN;
+        if (state.get() == State.OPEN) {
+            if (System.currentTimeMillis() - lastFailureTime.get() > TIMEOUT_DURATION) {
+                state.set(State.HALF_OPEN);
                 return true;
             }
             return false;
@@ -249,15 +256,15 @@ public class ElasticsearchLogService {
     }
 
     private void recordSuccess() {
-        failureCount = 0;
-        state = State.CLOSED;
+        failureCount.set(0);
+        state.set(State.CLOSED);
     }
 
     private void recordFailure() {
-        failureCount++;
-        if (failureCount >= FAILURE_THRESHOLD) {
-            state = State.OPEN;
-            lastFailureTime = System.currentTimeMillis();
+        int count = failureCount.incrementAndGet();
+        if (count >= FAILURE_THRESHOLD) {
+            state.set(State.OPEN);
+            lastFailureTime.set(System.currentTimeMillis());
         }
     }
 

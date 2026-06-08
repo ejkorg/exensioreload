@@ -140,6 +140,7 @@ public class ExensioLoadMonitor {
             this.lookupCache = Caffeine.newBuilder()
                     .maximumSize(props.getCacheMaximumSize())
                     .expireAfterWrite(props.getCacheExpireAfterWriteMinutes(), TimeUnit.MINUTES)
+                    .recordStats()
                     .build();
             log.info("Exensio lookup cache enabled: maxSize={}, expireAfterWrite={}m",
                     props.getCacheMaximumSize(), props.getCacheExpireAfterWriteMinutes());
@@ -786,6 +787,9 @@ public class ExensioLoadMonitor {
         if (executorService instanceof ThreadPoolExecutor tp) return tp.getCompletedTaskCount();
         return 0;
     }
+
+    // Cache access for metrics binding
+    public Cache<String, ExensioCacheValue> getLookupCache() { return lookupCache; }
 
     // Circuit breaker metrics
     @ManagedAttribute(description = "Current circuit breaker state (CLOSED, OPEN, HALF_OPEN)")

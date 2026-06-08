@@ -565,6 +565,16 @@ public class MetadataImporterService {
     }
 
     /**
+     * Returns the preview cache for metrics binding.
+     */
+    public Cache<String, DiscoveryPreviewResponse> getPreviewCache() { return previewCache; }
+
+    /**
+     * Returns the discovery results cache for metrics binding.
+     */
+    public Cache<String, List<DiscoveryPreviewRow>> getDiscoveryResultsCache() { return discoveryResultsCache; }
+
+    /**
      * Cache a full discovery result set and return a token to retrieve it later.
      */
     public String cacheDiscoveryResults(List<DiscoveryPreviewRow> rows) {

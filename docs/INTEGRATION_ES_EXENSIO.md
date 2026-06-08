@@ -648,7 +648,88 @@ curl -s -u "$CP_ES_USERNAME:$CP_ES_PASSWORD" \
 
 ---
 
-## 9. Related documentation
+## 9. Monitoring, Troubleshooting & Runbook
+
+### Health endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /actuator/health/elasticsearch` | ES connectivity — reports UP/DOWN with details (URL, circuit breaker state) |
+| `GET /actuator/health/exensio` | Exensio API connectivity — reports UP/DOWN with details (env, circuit breaker state) |
+| `GET /actuator/health` | Aggregated health (includes both above) |
+| `GET /actuator/metrics` | All Micrometer metrics |
+
+### Key metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `elasticsearch.query.duration` | Timer | ES query latency (p50, p95, p99) |
+| `elasticsearch.query.success` | Counter | Successful ES queries |
+| `elasticsearch.query.failure` | Counter | Failed ES queries (network, auth, HTTP errors) |
+| `elasticsearch.circuitbreaker.state` | Gauge | Current circuit breaker state (0=closed, 1=open, 2=half-open) |
+| `exensio.lookup.duration` | Timer | Exensio API call latency |
+| `exensio.lookup.success` | Counter | Successful Exensio lookups |
+| `exensio.lookup.failure` | Counter | Failed Exensio lookups |
+| `exensio.cache.hit` | Counter | Cache hits (skipped API call) |
+| `exensio.cache.miss` | Counter | Cache misses (API call made) |
+
+### Circuit breaker troubleshooting
+
+| Log message | Meaning | Action |
+|-------------|---------|--------|
+| `Circuit breaker is OPEN` | 5+ consecutive failures; queries blocked for 60s | Fix root cause (network/auth/service), then wait for auto-reset |
+| `Circuit breaker transitioned to HALF_OPEN` | Reset timer expired; next query is a probe | Monitor — if it fails, circuit re-opens |
+| `Circuit breaker closed` | Probe succeeded; normal operation resumed | None — system recovered |
+
+**Configuration:**
+
+```yaml
+cp:
+  elasticsearch:
+    enable-circuit-breaker: true       # disable to bypass entirely
+    circuit-breaker-threshold: 5       # failures before open
+    circuit-breaker-reset-ms: 60000    # ms before half-open probe
+```
+
+### Connection pool exhaustion
+
+**Symptoms:**
+- Requests hang or time out despite ES being healthy
+- Log: `Connection pool exhausted` or `Timeout waiting for connection`
+
+**Configuration:**
+
+```yaml
+cp:
+  elasticsearch:
+    max-connections: 20                # total pool size
+    max-connections-per-route: 10      # per-host limit
+    connection-timeout-ms: 10000       # ms to acquire connection
+    socket-timeout-ms: 30000           # ms to wait for response
+    connection-time-to-live-seconds: 60 # max age of pooled connection
+```
+
+**Runbook:**
+1. Check `/actuator/metrics/http.client.connections` (if exposed) or thread dumps for blocked threads.
+2. Increase `max-connections` if CPU and ES can handle more concurrent queries.
+3. Lower `connection-time-to-live-seconds` to recycle stale connections faster.
+4. If ES is slow, investigate ES-side latency before increasing client timeouts.
+
+### Verifying production defaults
+
+The `onsemi-oracle` production profile sets safe defaults:
+
+| Property | Dev default | Production | Why |
+|----------|-------------|------------|-----|
+| `logRequestPayloads` (ES) | `true` | `false` | Suppresses verbose query/response JSON |
+| `logRequestPayloads` (Exensio) | `true` | `false` | Suppresses verbose API request/response bodies |
+| `enable-circuit-breaker` | `true` | `true` | Protects against cascading failures |
+| `poll-interval-ms` (ES) | `60000` | `60000` | 1-minute poll cycle |
+| `enrichment-timeout-minutes` | `30` | `30` | Max wait before FAILED |
+
+---
+
+## 10. Related documentation
 
 - [EXENSIORELOAD.md](EXENSIORELOAD.md) — architecture, API list, data flow
 - [EXECUTIVE_PRESENTATION.md](EXECUTIVE_PRESENTATION.md) — high-level pipeline diagram
