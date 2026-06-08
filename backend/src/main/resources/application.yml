@@ -17,6 +17,8 @@ logging:
     com.onsemi.cim.apps.exensio.controller: DEBUG
     com.onsemi.cim.apps.exensio.service.UserManagementService: DEBUG
     com.onsemi.cim.apps.exensio.service.AuditService: DEBUG
+    # Suppress Spring Security FilterChainProxy noisy "Secured" logs
+    org.springframework.security.web.FilterChainProxy: WARN
     # Reduce Hibernate SQL noise
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql.BasicBinder: WARN
@@ -61,6 +63,8 @@ app:
     page-size-cap: 20000
     max-rows-cap: 100000
     default-max-rows: 20000
+    # Set to true to log session file field-coverage diagnostics on each page fetch
+    debug-session-files: false
   mail:
     from: "no-reply@onsemi.com"
     # default reset URL for local development; override in production
@@ -176,3 +180,4 @@ ai:
 etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}
+:false}

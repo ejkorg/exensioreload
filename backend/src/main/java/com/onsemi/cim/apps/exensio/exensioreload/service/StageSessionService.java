@@ -18,6 +18,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -56,13 +57,15 @@ public class StageSessionService {
     private final CpElasticsearchProperties elasticsearchProperties;
     private final ExensioProperties exensioProperties;
     private final IntegrationStatusService integrationStatusService;
+    private final boolean debugSessionFiles;
 
     public StageSessionService(RefDbService refDbService, ExternalDbConfig externalDbConfig,
                                StagePipelineOrchestrator pipelineOrchestrator,
                                EtlSshTriggerService etlSshTriggerService,
                                CpElasticsearchProperties elasticsearchProperties,
                                ExensioProperties exensioProperties,
-                               IntegrationStatusService integrationStatusService) {
+                               IntegrationStatusService integrationStatusService,
+                               @Value("${app.stage.debug-session-files:false}") boolean debugSessionFiles) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.dataSource = refDbService.getDataSource();
@@ -71,6 +74,7 @@ public class StageSessionService {
         this.elasticsearchProperties = elasticsearchProperties;
         this.exensioProperties = exensioProperties;
         this.integrationStatusService = integrationStatusService;
+        this.debugSessionFiles = debugSessionFiles;
     }
 
     @PostConstruct
@@ -366,7 +370,9 @@ public class StageSessionService {
 
         long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId);
         List<StageRecordView> views = rows.stream().map(mapper::toView).toList();
-        tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
+        if (debugSessionFiles) {
+            tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
+        }
         return new StageRecordPage(views, total, resolvedPage, resolvedSize);
     }
 
@@ -392,13 +398,15 @@ public class StageSessionService {
 
         long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId);
         List<StageRecordView> views = rows.stream().map(mapper::toView).toList();
-        tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
+        if (debugSessionFiles) {
+            tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
+        }
         return new StageRecordPage(views, total, resolvedPage, resolvedSize);
     }
 
     /**
      * TEMP DEBUG: Helps verify where lot/wafer/filename values are lost for monitoring APIs.
-     * Remove after Stage-All monitoring field investigation is complete.
+     * Controlled by {@code app.stage.debug-session-files} (default: false).
      */
     private void tempDebugSessionFileFieldCoverage(String sessionId,
                                                    String site,

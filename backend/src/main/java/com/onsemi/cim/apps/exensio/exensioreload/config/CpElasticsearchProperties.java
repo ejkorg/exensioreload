@@ -58,6 +58,9 @@ public class CpElasticsearchProperties {
     /** Whether to log Elasticsearch request payloads (query JSON). */
     private boolean logRequestPayloads = false;
 
+    /** Whether to log isConfigured() checks on every call. Default: false. */
+    private boolean debugConfigCheck = false;
+
     // --- Connection & Performance Optimization ---
 
     /** Connection timeout in milliseconds. Default: 10 000 ms. */
@@ -89,6 +92,9 @@ public class CpElasticsearchProperties {
 
     public boolean isLogRequestPayloads() { return logRequestPayloads; }
     public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
+
+    public boolean isDebugConfigCheck() { return debugConfigCheck; }
+    public void setDebugConfigCheck(boolean debugConfigCheck) { this.debugConfigCheck = debugConfigCheck; }
 
     public long getConnectionTimeoutMs() { return connectionTimeoutMs; }
     public void setConnectionTimeoutMs(long connectionTimeoutMs) { this.connectionTimeoutMs = connectionTimeoutMs; }
@@ -236,7 +242,9 @@ public class CpElasticsearchProperties {
     /** Returns true if Elasticsearch is configured (url is non-blank). */
     public boolean isConfigured() {
         boolean configured = url != null && !url.isBlank();
-        log.debug("Elasticsearch isConfigured() = {}", configured);
+        if (debugConfigCheck) {
+            log.debug("Elasticsearch isConfigured() = {}", configured);
+        }
         return configured;
     }
 

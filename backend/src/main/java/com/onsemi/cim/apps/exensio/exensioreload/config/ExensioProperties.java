@@ -51,6 +51,9 @@ public class ExensioProperties {
     /** Whether to log Exensio API request URLs and payloads. */
     private boolean logRequestPayloads = false;
 
+    /** Whether to log isConfigured() checks on every call. Default: false. */
+    private boolean debugConfigCheck = false;
+
     // --- Connection & Performance Optimization ---
 
     /** Connection timeout in milliseconds. Default: 10 000 ms. */
@@ -259,8 +262,10 @@ public class ExensioProperties {
     public boolean isConfigured() {
         String resolvedUrl = resolvedBaseUrl();
         boolean configured = enabled && resolvedUrl != null && !resolvedUrl.isBlank();
-        log.debug("Exensio isConfigured(): enabled={}, resolvedUrl={}, result={}", 
-            enabled, (resolvedUrl != null && !resolvedUrl.isBlank() ? "set" : "empty"), configured);
+        if (debugConfigCheck) {
+            log.debug("Exensio isConfigured(): enabled={}, resolvedUrl={}, result={}",
+                enabled, (resolvedUrl != null && !resolvedUrl.isBlank() ? "set" : "empty"), configured);
+        }
         return configured;
     }
 
@@ -344,6 +349,9 @@ public class ExensioProperties {
 
     public boolean isLogRequestPayloads() { return logRequestPayloads; }
     public void setLogRequestPayloads(boolean logRequestPayloads) { this.logRequestPayloads = logRequestPayloads; }
+
+    public boolean isDebugConfigCheck() { return debugConfigCheck; }
+    public void setDebugConfigCheck(boolean debugConfigCheck) { this.debugConfigCheck = debugConfigCheck; }
 
     public long getConnectionTimeoutMs() { return connectionTimeoutMs; }
     public void setConnectionTimeoutMs(long connectionTimeoutMs) { this.connectionTimeoutMs = connectionTimeoutMs; }
