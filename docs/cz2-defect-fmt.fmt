@@ -2,56 +2,49 @@
 //
 // Purpose: Format file for KLARF 1.8 defect files — CZ2 variant
 //
-// CHANGEOG:
+// Based on: bk-defect-fmt.fmt (klarf_18)
+//
+// CHANGELOG:
 // Nov-23-2023 : updated to load roughbin as manualclass if manualclass is zero
 // Aug-15-2025 : update DiePitch, add DelSep before reading and AddSep after.
 //               This is to resolve the issue on incorrect die_wd and die_ht
-// Jun-01-2026 : REFACTORED — complete rewrite incorporating all bk-defect-fmt.fmt
-//               fixes plus cz2-specific features and multi-wafer support.
+// Mar-17-2026 : (bk only) added SampleSize suffix to program name — NOT used here.
+// Jun-01-2026 : fixed IMAGEINFO/POLARITY parsing crash, Item array overflow,
+//               TestSummaryList types, NotEndOfFile guards, removed dead code.
+//               See bk-defect-fmt-changelog.md for details.
+// Jun-09-2026 : CZ2 programs in DB use no wafer-size suffix (DEF_CZ2_NNN_UNPTRN::K18).
+// Jun-10-2026 : Rebased on bk-defect-fmt.fmt; CZ2-specific deltas applied:
+//               - Script name: cz2_Si_klarf_18
+//               - Metadata: reads "Facility" attribute (not "TestFacility")
+//               - Program name: prefers ProbeProgramName over Product/DeviceID,
+//                 no wafer-size suffix appended
+//               - Date format: %Y/%m/%d %H:%M:%S (ISO) for ResultTime / StartTime
 //
-//   Fixes applied from bk-defect-fmt.fmt:
-//     1. [CRITICAL] IMAGEINFO/POLARITY crash — image list consumption moved into
-//        IMAGEINFO handler; POLARITY reads into temp variable, only sets img_cnt
-//        when do_imagelist is FALSE. SkipWords(1) per image entry (was 2).
-//     2. [HIGH]     Item[30] -> Item[100] — prevents array overflow on wide KLARF.
-//     3. [MEDIUM]   TestSummaryList types — haze_reg/avg/std/med/peak and
-//        areapertest changed from integer to real; GetInt -> GetReal.
-//     4. [MEDIUM]   NotEndOfFile guard added to defect record loop.
-//     5. [LOW]      Dead duplicate IMAGEINFO handler removed.
-//     6. [LOW]      GoToBOF + GoTo("WaferRecord") removed before DefectList;
-//        forward-only GoTo("DefectList") used instead.
-//
-//   Additional fixes in this refactor:
-//     7. [MEDIUM]   Multi-wafer support — all GoToBOF removed from inside the
-//        record loop. Forward-only GoTo("WaferRecord") positions to each record,
-//        then forward-only GoTo for AreaPerTest, SampleCenterLocation, DieOrigin,
-//        DefectList, TestSummaryList (all appear in order within each WaferRecord).
-//     8. [MEDIUM]   DefectRecordSpec parser — else branch no longer does
-//        SkipWords(-1), so unknown column types are consumed harmlessly instead
-//        of being misinterpreted as column names.
-//     9. [LOW]      Added section separator comments for maintainability.
-//
-//   CZ2-specific features preserved:
-//     - ProbeProgramName metadata -> vProgramName (used in program name construction)
-//     - Facility attribute key (not TestFacility) -> vTestFacility
-//     - ISO date format: "%Y/%m/%d %H:%M:%S"
-//     - Program name prefers ProbeProgramName over DeviceID
+// CZ2-specific vs bk:
+//   Attribute "Facility"         -> vTestFacility   (bk uses "TestFacility")
+//   Attribute "ProbeProgramName" -> vProgramName    (bk has no ProbeProgramName)
+//   Program name: prefix + vProgramName (or vProduct or DeviceID) + PTRN + suffix
+//   No "_NNN" wafer-size segment in program name
+//   Date mask: "%Y/%m/%d %H:%M:%S"
 
-SCRIPT klarf_18
+SCRIPT cz2_Si_klarf_18
 CONST
     D = False
-    DEBUG = 0
-    PROGRAM_SUFFIX = "::K18"
+	DEBUG = 0
+	PROGRAM_SUFFIX = "::K18"
 VAR
-    // ===================== Condition/Index/Result Declarations ==================
+    //Conditions
     TestName            string              Cond
     Unit                string              Cond
     TestNum             integer             KeyCond
+
+    //Indexes
     Wafer               string              KeyIndex
     Layer               string              Index
+
+    //Results
     res                 real                Result
 
-    // ===================== General Working Variables ===========================
     wfid                integer
     str                 string
     HowManyRecords      integer
@@ -111,8 +104,6 @@ VAR
     test_area           real
     SrcLotID_Str        string
     IsProgNew           boolean
-
-    // Defect column parsing flags
     do_imagelist        boolean
     do_cluster          boolean
     do_roughbin         boolean
@@ -123,7 +114,6 @@ VAR
     do_confidence       boolean
     do_cn_conf          boolean
 
-    // Limit/bin variables
     LowerLimit          real
     UpperLimit          real
     LowerLimit_Str      string
@@ -132,13 +122,9 @@ VAR
     fld_cols            integer
     row_offset          integer
     col_offset          integer
-
-    // Die map arrays
     diex[10000]         integer
     diey[10000]         integer
     dieType[10000]      char
-
-    // Equipment/program strings
     Tester_Str          string
     TesterType_Str      string
     tech_Str            string
@@ -147,8 +133,6 @@ VAR
     size_type           integer
     DD_Threshold        real
     DC_Threshold        integer
-
-    // Image variables
     img_list            integer
     img_indx            integer
     img_file            string
@@ -158,7 +142,7 @@ VAR
     dieCnt              integer
     j                   integer
     Item[100]           string
-    ItemNum             integer
+    itemNum             integer
     img_cnt             integer
     autosem             integer
     mansem              integer
@@ -170,8 +154,7 @@ VAR
     multiTiffFiles      boolean
     xPosDir             Char
     cols_cnt            integer
-
-    // FIX #3: TestSummaryList fields — changed from integer to real
+    col_idx             integer
     haze_reg            real
     haze_avg            real
     haze_std            real
@@ -179,7 +162,7 @@ VAR
     haze_peak           real
     areapertest         real
 
-    // ===================== Metadata Variables ===================================
+    // metadata variables
     vArea               string
     vDataFileName       string
     vAlternateProduct   string
@@ -203,25 +186,22 @@ VAR
     vWaferNumber        string
     vTestFacility       string
     vTestFloor          string
-    vAttributeValue     String
-    vAttributeSource    String
-    vAttributeName      String
-    vRetestCode         String
-    vSampleSize         String
+    vAttributeValue     string
+    vAttributeSource    string
+    vAttributeName      string
+    vRetestCode         string
+    vSampleSize         string
 
-    // Attribute parsing state
     Attribute_tag       boolean
-    EndOfAttributes     Boolean
+    EndOfAttributes     boolean
     Metadata_tag        boolean
     Basket              string
-
-    // Program name construction
     DpProgram_Str       string
     SourceLot_Str       string
     programPrefix       string
     defectListCount     integer
-    defectListColNameArray[100]   string
-    defectListColValueArray[100]  string
+    defectListColNameArray[100]  string
+    defectListColValueArray[100] string
     PTRN_Str            string
     programSuffix       string
     fabIdFromFile       string
@@ -230,174 +210,172 @@ VAR
     charCounter         integer
     i                   integer
 
+
 BEGIN
 
-    // =========================================================================
-    //                     SECTION 1: METADATA PARSING
-    // =========================================================================
+	// -------------------------> METADATA SECTION <----------------------------
 
-    AddSep(' ')
-    AddSep('=')
-    AddSep('>')
+	AddSep(' ')
+	AddSep('=')
+	AddSep('>')
 
-    programPrefix = Argument
-    programPrefix = StrCat(programPrefix, "_")
-    programSuffix = PROGRAM_SUFFIX
+	programPrefix = Argument
+	programPrefix = StrCat(programPrefix,"_")
+	programSuffix = PROGRAM_SUFFIX
 
-    GoTo("<Metadata")
-    If ErrorCode <> 0
-        ExitScript("Missing METADATA section.")
-    End If
+	GoTo("<Metadata")
+	If ErrorCode <> 0
+	  ExitScript("Missing METADATA section.")
+	End If
 
-    SkipWords(-1)
-    Basket = GetWord
+	SkipWords(-1)
+	Basket = GetWord
 
-    If Basket = "<Metadata"
-        Metadata_tag = True
-        Attribute_tag = False
-    End If
+	If Basket = "<Metadata"
+	  Metadata_tag = True
+	  Attribute_tag = False
+	End If
 
-    While Metadata_tag
-        Basket = GetWord
-        If Basket = "</Metadata"
-            Metadata_tag = False
-        Else If Basket = "<Attribute"
-            Attribute_tag = True
-            vAttributeValue = ""
-            vAttributeSource = ""
-            vAttributeName = ""
-            EndOfAttributes = False
+	While Metadata_tag
+	  Basket = GetWord
+	  If Basket = "</Metadata"
+	   Metadata_tag = False
+	  Else If Basket = "<Attribute"
+		Attribute_tag = True
+		vAttributeValue = ""
+		vAttributeSource = ""
+		vAttributeName = ""
 
-            While Not EndOfAttributes
-                Basket = GetWord
-                If Basket = "Value"
-                    vAttributeValue = GetQuotedWord('"')
-                    If((vAttributeValue = "N/A") OR (vAttributeValue = "") OR (vAttributeValue = "DUMMY_TYPE") OR (vAttributeValue = "NA") OR (vAttributeValue = "Dummy_Type"))
-                        vAttributeValue = "NA"
-                    End If
-                Else If Basket = "Source"
-                    vAttributeSource = GetQuotedWord('"')
-                Else If Basket = "Name"
-                    vAttributeName = GetQuotedWord('"')
-                Else If Basket = "</Attribute"
-                    EndOfAttributes = True
-                Else If Basket = "/"
-                    EndOfAttributes = True
-                End If
-            End While
+		EndOfAttributes = False
 
-            If DEBUG = 8
-                Print("Name=", vAttributeName, " Value=", vAttributeValue, " Source=", vAttributeSource, 'NL')
-            End If
+		While Not EndOfAttributes
+		  Basket = GetWord
+		  If Basket = "Value"
+			vAttributeValue = GetQuotedWord('"')
+			If((vAttributeValue = "N/A") OR (vAttributeValue = "") OR (vAttributeValue = "DUMMY_TYPE") OR (vAttributeValue = "NA") OR (vAttributeValue = "Dummy_Type"))
+				vAttributeValue = "NA"
+			End If
+		  Else If Basket = "Source"
+			vAttributeSource = GetQuotedWord('"')
+		  Else If Basket = "Name"
+			vAttributeName = GetQuotedWord('"')
+		  Else If Basket = "</Attribute"
+			EndOfAttributes = True
+		  Else If Basket = "/"
+			EndOfAttributes = True
+		  End If
+		End While
 
-            If vAttributeName = "ProbeProgramName"
-                vProgramName = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Area"
-                vArea = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "DataFileName"
-                vDataFileName = vAttributeValue
-            End If
-            If vAttributeName = "AlternateProduct"
-                vAlternateProduct = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Fab"
-                vFab = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "LotId"
-                vLotID = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "LotType"
-                vLotType = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Process"
-                vProcess = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Product"
-                vProduct = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Pti2"
-                vPTI2 = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Recipe"
-                vRecipe = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "ResultTime"
-                vResultTime = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Slot"
-                vSlot = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "SourceLot"
-                vSourceLot = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "StartTime"
-                vStartTime = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Step"
-                vStepId = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "Technology"
-                vTechnology = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "TesterId"
-                vTesterId = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "TesterType"
-                vTesterType = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "WaferId"
-                vWaferID = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "WaferNumber"
-                vWaferNumber = ToUpper(vAttributeValue)
-            End If
-            // CZ2-SPECIFIC: "Facility" key (bk uses "TestFacility")
-            If vAttributeName = "Facility"
-                vTestFacility = ToUpper(vAttributeValue)
-            End If
-            If vAttributeName = "TestFloor"
-                vTestFloor = ToUpper(vAttributeValue)
-            End If
+		If DEBUG = 8
+		  Print("Name=", vAttributeName, " Value=", vAttributeValue, " Source=", vAttributeSource, 'NL')
+		End If
 
-        End If
-    End While
+		// CZ2: ProbeProgramName -> vProgramName (used in program name construction)
+		If vAttributeName = "ProbeProgramName"
+		  vProgramName = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Area"
+		  vArea = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "DataFileName"
+		  vDataFileName = vAttributeValue
+		End If
+		If vAttributeName = "AlternateProduct"
+		  vAlternateProduct = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Fab"
+		  vFab = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "LotId"
+		  vLotID = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "LotType"
+		  vLotType = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Process"
+		  vProcess = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Product"
+		  vProduct = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Pti2"
+		  vPTI2 = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Recipe"
+		  vRecipe = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "ResultTime"
+		  vResultTime = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Slot"
+		  vSlot = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "SourceLot"
+		  vSourceLot = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "StartTime"
+		  vStartTime = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Step"
+		  vStepId = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "Technology"
+		  vTechnology = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "TesterId"
+		  vTesterId = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "TesterType"
+		  vTesterType = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "WaferId"
+		  vWaferID = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "WaferNumber"
+		  vWaferNumber = ToUpper(vAttributeValue)
+		End If
+		// CZ2: attribute key is "Facility" (bk uses "TestFacility")
+		If vAttributeName = "Facility"
+		  vTestFacility = ToUpper(vAttributeValue)
+		End If
+		If vAttributeName = "TestFloor"
+		  vTestFloor = ToUpper(vAttributeValue)
+		End If
 
-    // DEBUG METADATA
-    If DEBUG = 10
-        Print("vArea = ", vArea, 'NL')
-        Print("vDataFileName = ", vDataFileName, 'NL')
-        Print("vAlternateProduct = ", vAlternateProduct, 'NL')
-        Print("vFab = ", vFab, 'NL')
-        Print("vLotID = ", vLotID, 'NL')
-        Print("vLotType = ", vLotType, 'NL')
-        Print("vProcess = ", vProcess, 'NL')
-        Print("vProduct = ", vProduct, 'NL')
-        Print("vPTI2 = ", vPTI2, 'NL')
-        Print("vRecipe = ", vRecipe, 'NL')
-        Print("vResultTime = ", vResultTime, 'NL')
-        Print("vSlot = ", vSlot, 'NL')
-        Print("vStepId = ", vStepId, 'NL')
-        Print("vSourceLot = ", vSourceLot, 'NL')
-        Print("vStartTime = ", vStartTime, 'NL')
-        Print("vTechnology = ", vTechnology, 'NL')
-        Print("vTesterId = ", vTesterId, 'NL')
-        Print("vTesterType = ", vTesterType, 'NL')
-        Print("vWaferID = ", vWaferID, 'NL')
-        Print("vWaferNumber = ", vWaferNumber, 'NL')
-        Print("vTestFacility = ", vTestFacility, 'NL')
-        Print("vTestFloor = ", vTestFloor, 'NL')
-    End If
+	  End If
+	End While
 
-    ClearSep
-    // ========================= END METADATA SECTION ============================
+	// DEBUG METADATA
+	If DEBUG = 10
+	print("vArea = ", vArea, 'NL')
+	print("vDataFileName = ", vDataFileName, 'NL')
+	print("vAlternateProduct = ", vAlternateProduct, 'NL')
+	print("vFab = ", vFab, 'NL')
+	print("vLotID = ", vLotID, 'NL')
+	print("vLotType = ", vLotType, 'NL')
+	print("vProcess = ", vProcess, 'NL')
+	print("vProduct = ", vProduct, 'NL')
+	print("vProgramName = ", vProgramName, 'NL')
+	print("vPTI2 = ", vPTI2, 'NL')
+	print("vRecipe = ", vRecipe, 'NL')
+	print("vResultTime = ", vResultTime, 'NL')
+	print("vSlot = ", vSlot, 'NL')
+	print("vStepId = ", vStepId, 'NL')
+	print("vSourceLot = ", vSourceLot, 'NL')
+	print("vStartTime = ", vStartTime, 'NL')
+	print("vTechnology = ", vTechnology, 'NL')
+	print("vTesterId = ", vTesterId, 'NL')
+	print("vTesterType = ", vTesterType, 'NL')
+	print("vWaferID = ", vWaferID, 'NL')
+	print("vWaferNumber = ", vWaferNumber, 'NL')
+	print("vTestFacility = ", vTestFacility, 'NL')
+	print("vTestFloor = ", vTestFloor, 'NL')
+	End If
 
+	ClearSep
+	// -------------------------> END METADATA SECTION <----------------------------
 
-    // =========================================================================
-    //                  SECTION 2: FILE-LEVEL HEADER PARSING
-    // =========================================================================
-
+    //define separators
     AddSep('"')
     AddSep(' ')
     AddSep('{')
@@ -407,253 +385,225 @@ BEGIN
     unitMultiplier = 0
     major_axis = 150
     minor_axis = 150
-    el_orient = 0.0
+    el_orient = 0.0 //always for this version of defectMap
     vDbToleranceDimensions(major_axis, minor_axis, el_orient)
     multiTiffFiles = False
 
-    // --- Get wafer diameter (SampleSize) ---
+	//Get wafer diameter
     GoToBOF
     GoTo("SampleSize")
-    vSampleSize = "NA"
-    IF (ErrorCode = 0)
+    vSampleSize="NA"
+    IF (ErrorCode=0)
         SkipWords(1)
         Str = GetWord
-        Str = StrTrim(Str, ',')
-        charCounter = 0
-        for i = 1 to StrLen(Str)
-            charCounter = charCounter + 1
-        end for
-        If (charCounter > 6)
-            unitDivisor = 1000
-        Else If (charCounter = 6)
-            unitDivisor = 1
-        Else If (charCounter = 3)
-            unitMultiplier = 1000
-        Else
-            Print("counter=", charCounter, 'NL')
-            ExitScript("Unknown Wafer size unit. please check with owner of defect file.")
-        End If
-        wf_size = StrToReal(StrTrim(Str, ','))
-        vSampleSize = Left(Str, 3)
-        If (unitMultiplier <> 0)
-            wf_size = wf_size * unitMultiplier
-        Else
-            wf_size = wf_size / unitDivisor
-        End If
+		Str = StrTrim(Str,',')
+		charCounter = 0
+		for i = 1 to StrLen(Str)
+			charCounter = charCounter + 1
+		end for
+		If(charCounter > 6)
+			unitDivisor = 1000
+		Else If (charCounter = 6)
+			unitDivisor = 1
+		Else If (charCounter = 3)
+			unitMultiplier = 1000
+		Else
+			Print("counter=", charCounter, 'NL')
+			ExitScript("Unknown Wafer size unit. please check with owner of defect file.")
+		End If
+        wf_size = StrToReal(StrTrim(Str,','))
+        vSampleSize = Left(Str,3)
+		If(unitMultiplier <> 0)
+			wf_size = wf_size*unitMultiplier
+		Else
+			wf_size = wf_size/unitDivisor
+		End If
     Else
         ExitScript("ERROR: No wafer diameter provided.")
     End If
 
-    // --- Get Device/Product ID ---
     GoToBOF
     GoTo("DeviceID")
-    ProductID_Str = GetQuotedWord('"')
+	ProductID_Str = GetQuotedWord('"')
 
-    // --- Get Fab ID ---
-    GoToBOF
+	GoToBOF
     GoTo("FabID")
-    fabIdFromFile = GetQuotedWord('"')
+	fabIdFromFile = GetQuotedWord('"')
 
-    // --- Get Die Pitch ---
-    GoToBOF
-    GoTo("DiePitch")
-    DelSep(',')
-    SkipWords(1)
-    Str = Before(GetWord, ',')
+	//Get die pitch
+	GoToBOF
+	GoTo("DiePitch")
+	DelSep(',')
+	SkipWords(1)
+	Str = Before(GetWord,',')
+	IF (ErrorCode = 0)
+		die_wd=StrToReal(Str)
+		die_ht=GetReal
+		die_wd = die_wd/unitDivisor
+		die_ht = die_ht/unitDivisor
+	Else
+		ExitScript("ERROR: No die dimensions provided.")
+	End If
+	AddSep(',')
+	cluster_die_wd = die_wd
+	cluster_die_ht = die_ht
 
-    IF (ErrorCode = 0)
-        die_wd = StrToReal(Str)
-        die_ht = GetReal
-        die_wd = die_wd / unitDivisor
-        die_ht = die_ht / unitDivisor
-    Else
-        ExitScript("ERROR: No die dimensions provided.")
-    End If
-    AddSep(',')
-    cluster_die_wd = die_wd
-    cluster_die_ht = die_ht
+	If(wf_size = cluster_die_wd)
+		PTRN_Str = "_UNPTRN"
+		die_wd = 3000
+		die_ht = 3000
+	Else
+		PTRN_Str = "_PTRN"
+	End If
 
-    // Determine patterned vs unpatterned
-    If (wf_size = cluster_die_wd)
-        PTRN_Str = "_UNPTRN"
-        die_wd = 3000
-        die_ht = 3000
-    Else
-        PTRN_Str = "_PTRN"
-    End If
-
-
-    // =========================================================================
-    //              SECTION 3: PROGRAM NAME CONSTRUCTION
-    // =========================================================================
-
-    Prog_Str = programPrefix
-
-    // CZ2-SPECIFIC: Prefer ProbeProgramName (vProgramName) over Product (vProduct)
-    If ((vProgramName <> "") AND (vProgramName <> "NA"))
-        Prog_Str = StrCat(Prog_Str, vProgramName)
-    Else
-        Prog_Str = StrCat(Prog_Str, ProductID_Str)
-    End If
-
-    // Append patterned/unpatterned indicator
-    Prog_Str = StrCat(Prog_Str, PTRN_Str)
-
-    // Append wafer size (fixes 'Found 2 unique substrate sizes' error)
-    Prog_Str = StrCat(Prog_Str, "_")
-    Prog_Str = StrCat(Prog_Str, vSampleSize)
-
-    // Append format suffix
-    Prog_Str = StrCat(Prog_Str, programSuffix)
+	// CZ2 program name construction:
+	//   prefix + ProbeProgramName (or Product or DeviceID) + PTRN + suffix
+	//   No wafer-size segment (_NNN) — CZ2 DB programs were registered without it.
+	Prog_Str = programPrefix
+	If((vProgramName <> "") AND (vProgramName <> "NA"))
+		Prog_Str = StrCat(Prog_Str,vProgramName)
+	Else If((vProduct <> "") AND (vProduct <> "NA"))
+		Prog_Str = StrCat(Prog_Str,vProduct)
+	Else
+		Prog_Str = StrCat(Prog_Str,ProductID_Str)
+	End If
+	Prog_Str = StrCat(Prog_Str,PTRN_Str)
+	Prog_Str = StrCat(Prog_Str,programSuffix)
 
     DpProgram_Str = vDbProgram(Prog_Str)
-    PTRN_Str = ""
+	PTRN_Str = ""
 
+    If ( IsProgramNew = FALSE)
 
-    // =========================================================================
-    //           SECTION 4: PROGRAM SETUP (if program is not new)
-    // =========================================================================
-
-    If (IsProgramNew = FALSE)
-
-        // --- Sample Type ---
         GoToBOF
         GoTo("SampleType")
         SkipWords(1)
         DbSampleType
 
-        // --- Product ---
-        If ((vProduct <> "") AND (vProduct <> "NA"))
-            str = vDbProduct(vProduct)
-        Else
-            str = vDbProduct(ProductID_Str)
-        End If
+		If((vProduct <> "") AND (vProduct <> "NA"))
+		   str = vDbProduct(vProduct)
+		Else
+		   str = vDbProduct(ProductID_Str)
+		End If
 
-        // --- Fab ---
-        If ((vFab <> "") AND (vFab <> "NA") AND (vFab <> ":NULL"))
-            str = vDbFab(vFab)
-        Else
-            str = vDbFab(fabIdFromFile)
-        End If
+		If ((vFab <> "") AND (vFab <> "NA") AND (vFab <> ":NULL"))
+			str = vDbFab(vFab)
+		Else
+			str = vDbFab(fabIdFromFile)
+		End If
 
-        // --- EQUIP4 (AlternateProduct) ---
-        If (vAlternateProduct <> "") AND (vAlternateProduct <> "NA")
-            str = vDbEquip4(vAlternateProduct)
-        End If
+		//EQUIP4
+		If (vAlternateProduct <> "") AND (vAlternateProduct <> "NA")
+			str = vDbEquip4(vAlternateProduct)
+		End If
 
-        // --- EQUIP6 (TestFacility) ---
-        // CZ2-SPECIFIC: vTestFacility populated from "Facility" attribute key
-        If (vTestFacility <> "") AND (vTestFacility <> "NA")
-            str = vDbEquip6(vTestFacility)
-        End If
+		//EQUIP6
+		If (vTestFacility <> "") AND (vTestFacility <> "NA")
+			str = vDbEquip6(vTestFacility)
+		End If
 
-        // --- Tester Info ---
         GoToBOF
         GoTo("InspectionStationID")
-        IF (ErrorCode = 0)
-            str = GetQuotedWord('"')
-            TesterType_Str = GetQuotedWord('"')
-            Tester_Str = GetQuotedWord('"')
-            If ((vTesterType <> "") AND (vTesterType <> "NA"))
-                str = vDbTesterType(vTesterType)
-            Else
-                str = vDbTesterType(TesterType_Str)
-            End If
-            If ((vTesterId <> "") AND (vTesterId <> "NA"))
-                str = vDbTester(vTesterId)
-            Else
-                str = vDbTester(Tester_Str)
-            End If
+        IF (ErrorCode=0)
+            str=GetQuotedWord('"')
+            TesterType_Str=GetQuotedWord('"')
+            Tester_Str=GetQuotedWord('"')
+			If((vTesterType <> "") AND (vTesterType <> "NA"))
+				str = vDbTesterType(vTesterType)
+			Else
+				str=vDbTesterType(TesterType_Str)
+			End If
+			If((vTesterId <> "") AND (vTesterId <> "NA"))
+				str = vDbTester(vTesterId)
+			Else
+				str = vDbTester(Tester_Str)
+			End If
         Else
-            Print("Warning: No tester name provided", 'NL')
+            Print("Warning:No tester name provided", 'NL')
         End If
 
-        // --- Lot ID ---
         GoToBOF
         GoTo("LotRecord")
-        IF (ErrorCode = 0)
+        IF (ErrorCode=0)
             str = GetWord
-            If (vLotID <> "NA")
-                str = vDbLot(vLotID)
-            Else
-                str = vDbLot(str)
-            End If
-            If ((vSourceLot <> "") AND (vSourceLot <> "NA"))
-                str = vDbSrcLot(vSourceLot)
-            Else
-                LotID_Str = vDbLot(Str)
-                Print("LOT=", LotID_Str, 'NL')
-                SkipWords(-1)
-                SrcLotID_Str = vDbSrcLot(StrCat(Left(str, 9), ".S"))
-                SourceLot_Str = vDbSrcLot(SourceLot_Str)
-                Print("vDbSrcLot = ", SourceLot_Str, 'NL')
-            End If
+			If(vLotID <> "NA")
+				str = vDbLot(vLotID)
+			Else
+				str = vDbLot(str)
+			End If
+			If((vSourceLot <> "") AND (vSourceLot <> "NA"))
+				str = vDbSrcLot(vSourceLot)
+			Else
+				LotID_Str = vDbLot(Str)
+				print("LOT=",LotID_Str,'NL')
+				SkipWords(-1)
+				SrcLotID_Str = vDbSrcLot(StrCat(Left(str,9), ".S"))
+				SourceLot_Str = vDbSrcLot(SourceLot_Str)
+				print("vDbSrcLot = ",SourceLot_Str,'NL')
+			End If
         Else
             ExitScript("ERROR: No LotID provided.")
         End If
 
-        // --- CZ2-SPECIFIC: ISO date format "%Y/%m/%d %H:%M:%S" ---
-        If ((vResultTime <> "") AND (vResultTime <> "NA"))
-            str = vDbResultTime(vResultTime, "%Y/%m/%d %H:%M:%S")
-        Else
-            ExitScript("ERROR: No result time provided.")
-        End If
+		// CZ2 date format: ISO "%Y/%m/%d %H:%M:%S"
+		If((vResultTime <> "") AND (vResultTime <> "NA"))
+			str = vDbResultTime(vResultTime, "%Y/%m/%d %H:%M:%S")
+		Else
+			ExitScript("ERROR: No result time provided.")
+		End If
 
-        If ((vStartTime <> "") AND (vStartTime <> "NA"))
-            str = vDbSetupTime(vStartTime, "%Y/%m/%d %H:%M:%S")
-        Else
-            Print("Warning: No Setup provided", 'NL')
-        End If
+		If((vStartTime <> "") AND (vStartTime <> "NA"))
+			str = vDbSetupTime(vStartTime, "%Y/%m/%d %H:%M:%S")
+		Else
+			Print("Warning: No Setup provided", 'NL')
+		End If
 
-        // --- Step, Recipe, Technology, PTI2, Process, LotType ---
-        If ((vStepId <> "") AND (vStepId <> "NA"))
-            str = vDbStep(vStepId)
-        Else
-            Print("Step is not provided")
-        End If
+		If((vStepId <> "") AND (vStepId <> "NA"))
+			str = vDbStep(vStepId)
+		Else
+			print ("Step is not provided")
+		End If
 
-        If ((vRecipe <> "") AND (vRecipe <> "NA"))
-            str = vDbRecipe(vRecipe)
-        Else
-            Print("Recipe is not provided")
-        End If
+		If((vRecipe <> "") AND (vRecipe <> "NA"))
+			str = vDbRecipe(vRecipe)
+		Else
+			print ("Recipe is not provided")
+		End If
 
-        If ((vTechnology <> "") AND (vTechnology <> "NA"))
-            str = vDbTechnology(vTechnology)
-        Else
-            Print("No Technology provided")
-        End If
+		If((vTechnology <> "") AND (vTechnology <> "NA"))
+			str = vDbTechnology(vTechnology)
+		Else
+			print ("No Technology provided")
+		End If
 
-        If ((vPTI2 <> "") AND (vPTI2 <> "NA"))
-            str = vDbFamily(vPTI2)
-        Else
-            Print("No PTI2 provided")
-        End If
+		If((vPTI2 <> "") AND (vPTI2 <> "NA"))
+			str = vDbFamily(vPTI2)
+		Else
+			print ("No PTI2 provided")
+		End If
 
-        If ((vProcess <> "") AND (vProcess <> "NA"))
-            str = vDbProcess(vProcess)
-        Else
-            Print("No Process provided")
-        End If
+		If((vProcess <> "") AND (vProcess <> "NA"))
+			str = vDbProcess(vProcess)
+		Else
+			print ("No Process provided")
+		End If
 
-        If ((vLotType <> "") AND (vLotType <> "NA"))
-            vDbLotClass(vLotID, "LotType", "LotType", vLotType)
-        Else
-            Print("No LotType provided")
-        End If
+		If((vLotType <> "") AND (vLotType <> "NA"))
+			vDbLotClass(vLotID, "LotType", "LotType", vLotType)
+		Else
+			print ("No LotType provided")
+		End If
 
-        // --- Orientation ---
         GoToBOF
         GoTo("SampleOrientationMarkType")
         IF (ErrorCode = 0)
             SkipWords(1)
             Flat_Type_Str = GetWord
-            If (Flat_Type_Str = "NOTCH")
-                flat_type = 'N'
-            Else If (Flat_Type_Str = "FLAT")
-                flat_type = 'F'
-            Else
-                ExitScript("ERROR: INVALID SampleOrientationMarkType provided.")
+            If ( Flat_Type_Str = "NOTCH")
+                flat_type='N'
+            Else If ( Flat_Type_Str = "FLAT")
+                flat_type='F'
+            Else ExitScript("ERROR: INVALID SampleOrientationMarkType provided.")
             End If
         Else
             Print("Warning: SampleOrientationMarkType not provided.", 'NL')
@@ -663,500 +613,449 @@ BEGIN
         GoTo("OrientationMarkLocation")
         IF (ErrorCode = 0)
             SkipWords(1)
-            Flat_Location_Str = GetWord
-            If (Flat_Location_Str = "0")
-                flat_location = 'B'
-            Else If (Flat_Location_Str = "180")
-                flat_location = 'T'
-            Else If (Flat_Location_Str = "270")
-                flat_location = 'R'
-            Else If (Flat_Location_Str = "90")
-                flat_location = 'L'
+            Flat_Location_Str=GetWord
+            If ( Flat_Location_Str = "0")
+                flat_location='B'
+            Else If ( Flat_Location_Str = "180")
+                flat_location='T'
+            Else If ( Flat_Location_Str = "270")
+                flat_location='R'
+            Else If ( Flat_Location_Str = "90")
+                flat_location='L'
             Else
                 ExitScript("ERROR: INVALID OrientationMarkLocation provided.")
             End If
         End If
 
-        // --- Position type and wafer type ---
-        If (wf_size = cluster_die_wd)
-            pos_type = 1
-            wafer_type = 0
+        If(wf_size = cluster_die_wd)
+            pos_type=1
+            wafer_type=0
         Else
-            pos_type = 0
-            wafer_type = 1
+            pos_type=0
+            wafer_type=1
         End If
         vPosType(pos_type)
 
-        wafer_type = 1
+		wafer_type = 1
         vDbIsWaferPatterned(wafer_type)
 
-
-        // =========================================================================
-        //    SECTION 5: CLASS LOOKUP, DIE MAP, IMAGE FILE (file-level, GoToBOF OK)
-        // =========================================================================
-
-        // --- Class LUT ---
         GoToBOF
         GoTo("ClassLookupList")
-        IF (ErrorCode = 0)
+        IF (ErrorCode=0)
             SkipWords(-1)
             SkipLines(5)
             While (IsNumber(GetWord))
                 SkipWords(-1)
-                num = GetInt
-                Class_Str = GetQuotedWord('"')
+                num=GetInt
+                Class_Str=GetQuotedWord('"')
                 Str = GetLine
                 vAddToClassLUT(num, Class_Str)
             End While
         Else
-            Print("Warning: No class LUT provided", 'NL')
+            Print("Warning:No class LUT provided", 'NL')
         End If
 
-        // --- Removed Die List ---
         dieCnt = 0
         GoToBOF
         GoTo("RemovedDieList")
-        IF (ErrorCode = 0)
+        IF (ErrorCode=0)
             SkipWords(-1)
             SkipLines(1)
             While (IsNumber(GetWord))
                 dieCnt = dieCnt + 1
                 SkipWords(-1)
-                diex[dieCnt] = GetInt
-                diey[dieCnt] = GetInt
-                dieType[dieCnt] = 'R'
+                diex[dieCnt]=GetInt
+                diey[dieCnt]=GetInt
+                dieType[dieCnt]='R'
             End While
         Else
             Print("Warning: No RemovedDieList provided", 'NL')
         End If
 
-        // --- Sample Test Plan List ---
         GoToBOF
         GoTo("SampleTestPlanList")
-        IF (ErrorCode = 0)
+        IF (ErrorCode=0)
             SkipWords(-1)
             SkipLines(5)
             While (IsNumber(GetWord))
                 dieCnt = dieCnt + 1
                 SkipWords(-1)
-                diex[dieCnt] = GetInt
-                diey[dieCnt] = GetInt
-                dieType[dieCnt] = 'V'
+                diex[dieCnt]=GetInt
+                diey[dieCnt]=GetInt
+                dieType[dieCnt]='V'
             End While
         Else
             Print("Warning: No SampleTestPlanList provided", 'NL')
         End If
 
-        // --- TIFF image file ---
         GoToBOF
         img_file = "NA"
         GoTo("Images")
-        IF (ErrorCode = 0)
-            img_file = GetWord
+        IF (ErrorCode=0)
+            img_file=GetWord
         Else
-            Print("WARNING: No TIFF file", 'NL')
+            Print("WARNING:No TIFF file", 'NL')
         End If
 
-
-        // =========================================================================
-        //          SECTION 6: COUNT WAFER RECORDS
-        // =========================================================================
-
         GoToBOF
-        HowManyRecords = 0
+        HowManyRecords=0
         GoTo("WaferRecord")
-        IF (ErrorCode = 0)
-            While (ErrorCode = 0)
+        IF (ErrorCode=0)
+            While(ErrorCode=0)
                 HowManyRecords = HowManyRecords + 1
                 GoTo("WaferRecord")
             End While
-            Print('NL', "Number of records ", HowManyRecords, 'NL')
+            Print('NL',"Number of records ", HowManyRecords, 'NL')
         Else
             ExitScript("ERROR: Could not count how many records in file.")
         End If
 
-        // --- Wafer ID and Slot ---
-        If ((vWaferID <> "") AND (vWaferID <> "NA"))
-            If ((vWaferNumber <> "") AND (vWaferNumber <> "NA"))
-                wfid = StrToInt(vWaferNumber)
-            Else
-                Print("No wafer number provided")
-                wfid = -1
-            End If
-            DbWfNum(vWaferID, wfid)
-        Else
-            ExitScript("ERROR: No WaferID.")
-        End If
+		If((vWaferID <> "") AND (vWaferID <> "NA"))
+			If((vWaferNumber <> "") AND (vWaferNumber <> "NA"))
+				wfid = StrToInt(vWaferNumber)
+			Else
+				print ("No wafer number provided")
+				wfid = -1
+			End If
+			DbWfNum(vWaferID, wfid)
+		Else
+			ExitScript("ERROR: No WaferID.")
+		End If
 
-        If ((vSlot <> "") AND (vSlot <> "NA"))
-            vDbSlotNum(StrToInt(vSlot))
-        Else
-            Print("No slot provided")
-        End If
+		If((vSlot <> "") AND (vSlot <> "NA"))
+			vDbSlotNum(StrToInt(vSlot))
+		Else
+			print ("No slot provided")
+		End If
 
+        GoToBOF
+        For  record=1  To  HowManyRecords
 
-        // =========================================================================
-        //  SECTION 7: PER-WAFER-RECORD PROCESSING (MULTI-WAFER SAFE)
-        //  FIX #7: Forward-only GoTo — no GoToBOF inside this loop.
-        //  GoTo("WaferRecord") advances to the next record each iteration,
-        //  and all subsequent GoTo calls search forward within that record.
-        // =========================================================================
-
-        GoToBOF  // Position to start of file ONCE before the record loop
-
-        For record = 1 To HowManyRecords
-
-            // --- Position to this WaferRecord (forward search) ---
-            GoTo("WaferRecord")
-
-            // --- Get test_area (forward within this record) ---
+			GoToBOF
             GoTo("AreaPerTest")
-            IF (ErrorCode = 0)
+            IF (ErrorCode=0)
                 SkipWords(1)
-                test_area = GetReal
-                test_area = test_area / unitDivisor
+                test_area=GetReal
+                test_area = test_area/unitDivisor
             Else
                 Print("Warning: No test area provided", 'NL')
             End If
 
-            // --- Get Wafer center (forward within this record) ---
+			GoToBOF
             GoTo("SampleCenterLocation")
-            IF (ErrorCode = 0)
+            IF (ErrorCode=0)
                 SkipWords(1)
                 Str = GetWord
-                wf_xcenter = StrToReal(StrTrim(Str, ','))
+                wf_xcenter = StrToReal(StrTrim(Str,','))
                 wf_ycenter = GetReal
-                wf_xcenter = wf_xcenter / unitDivisor
-                wf_ycenter = wf_ycenter / unitDivisor
+                wf_xcenter = wf_xcenter/unitDivisor
+                wf_ycenter = wf_ycenter/unitDivisor
             Else
                 ExitScript("ERROR: No wafer center location provided.")
             End If
 
-            // Wmap config
-            wmap_name_str = DpProgram_Str
+			wmap_name_str = DpProgram_Str
             wf_units = "microns"
 
-            // --- Get Die Origin (forward within this record) ---
+			GoToBOF
             GoTo("DieOrigin")
-            IF (ErrorCode = 0)
+            IF (ErrorCode=0)
                 SkipWords(1)
                 Str = GetWord
-                center_x = StrToReal(StrTrim(Str, ','))
+                center_x = StrToReal(StrTrim(Str,','))
                 center_y = GetReal
-                center_x = center_x / unitDivisor
-                center_y = center_y / unitDivisor
+				center_x = center_x/unitDivisor
+                center_y = center_y/unitDivisor
                 center_x = center_x - wf_xcenter
                 center_y = center_y - wf_ycenter
             Else
                 ExitScript("ERROR: No die origin provided.")
             End If
 
-            // Reticle info (not from KLARF)
             fld_rows = 1
             fld_cols = 1
             row_offset = 0
             col_offset = 0
-            xPosDir = 'R'
-
+			xPosDir = 'R'
             vDbWmapCfg(wmap_name_str, wf_size,
-                wf_units,      flat_location,
-                flat_type,     die_wd,
-                die_ht,        center_x,
-                center_y,      xPosDir,
-                'U',           fld_rows,
-                fld_cols,      row_offset,
-                col_offset)
+            wf_units     , flat_location,
+            flat_type    , die_wd,
+            die_ht       , center_x,
+            center_y     , xPosDir,
+            'U'          , fld_rows,
+            fld_cols     , row_offset,
+            col_offset)
 
-            // Apply die map entries
-            For j = 1 To dieCnt
+            For j=1 TO dieCnt
                 vDbAddToDieMapTable(diex[j], diey[j], dieType[j])
             End For
 
-
-            // =============================================================
-            //  SECTION 7A: DEFECT RECORD SPEC + DEFECT LIST PARSING
-            //  FIX #1: IMAGEINFO consumes full image list block
-            //  FIX #4: NotEndOfFile guard on defect loop
-            //  FIX #5: Dead IMAGEINFO handler removed
-            //  FIX #8: Unknown column types handled without SkipWords(-1)
-            // =============================================================
-
             GoTo("DefectList")
-            IF (ErrorCode = 0)
+            IF (ErrorCode=0)
 
-                // Reset column-parsing flags
-                do_cluster    = FALSE
-                do_roughbin   = FALSE
-                do_finebin    = FALSE
-                do_review     = FALSE
-                do_imagelist  = FALSE
-                do_autosem    = FALSE
-                do_mansem     = FALSE
+                do_cluster   = FALSE
+                do_roughbin  = FALSE
+                do_finebin   = FALSE
+                do_review    = FALSE
+                do_imagelist = FALSE
+                do_autosem   = FALSE
+                do_mansem    = FALSE
                 do_confidence = FALSE
-                do_cn_conf    = FALSE
+                do_cn_conf   = FALSE
 
-                // --- Parse DefectRecordSpec columns ---
                 GoTo("YSIZE,")
                 itemNum = 1
-                SkipWords(1)
-                str = GetWord
+                SkipWords(1)  // type token after YSIZE
+                str=GetWord
 
                 while ((str <> "Data") and (str <> "TiffFileName") and (str <> "TiffFilename") and (str <> "TiffSpec"))
 
-                    Item[itemNum] = StrTrim(Str, ',')
+                    Item[itemNum] = StrTrim(Str,',')
                     str = GetWord
 
                     if str = "int32"
-                        // known type — consumed
+                        // consumed
                     else if str = "float"
-                        // known type — consumed
+                        // consumed
                     else if str = "ImageList"
-                        // known type — consumed
+                        // consumed
                     else if str = "double"
-                        // known type — consumed
+                        // consumed
                     else
-                        // FIX #8: Unknown type — already consumed, do nothing.
-                        // Do NOT SkipWords(-1) which would misread type as column name.
+                        SkipWords(-1)
+                        // unknown token pushed back so while condition can test it
                     end if
 
                     If D
-                        Print("Items:", 'NL')
-                        Print(Item[itemNum], 'NL')
+                        print("Items:",Item[itemNum],'NL')
                     End If
                     str = GetWord
                     itemNum = itemNum + 1
                 end while
 
+            SkipWords(-1)
+            SkipLines(1)
+
+            //this is a klarf not tencor
+            intensity=-1
+
+            str = GetWord
+
+            While ((IsNumber(str)) OR (str = "TiffFileName")) AND NotEndOfFile
+
+                if (str = "TiffFileName")
+                    multiTiffFiles = True
+                    img_file = StrTrim(GetWord,'"')
+                    SkipWords(-1)
+                    SkipLines(2)
+                    Str = GetWord
+                end if
+
                 SkipWords(-1)
+                df_index = GetInt
+
+                xPos = GetReal
+                yPos = GetReal
+                xPos = xPos/unitDivisor
+                yPos = yPos/unitDivisor
+                xInd = GetInt
+                yInd = GetInt
+                x_size = GetReal
+                y_size = GetReal
+                x_size = x_size/unitDivisor
+                y_size = y_size/unitDivisor
+
+                For j = 1 to itemNum - 1
+                    If Item[j] = "DSIZE"
+                        df_size = GetReal
+                        df_size = df_size/unitDivisor
+                    Else If Item[j] = "TEST"
+                        test_num = GetInt
+                    Else If Item[j] = "CLUSTERNUMBER"
+                        do_cluster = TRUE
+                        cluster= GetInt
+                    Else If Item[j] = "CLASSNUMBER"
+                        manualclass = GetInt
+                    Else If Item[j] = "DEFECTAREA"
+                        df_area = GetReal
+                        df_area = df_area/unitDivisor
+                    Else If Item[j] = "ROUGHBINNUMBER"
+                        do_roughbin = TRUE
+                        roughbin=GetInt
+                    Else If Item[j] = "FINEBINNUMBER"
+                        do_finebin = TRUE
+                        finebin=GetInt
+                    Else If Item[j] = "REVIEWSAMPLE"
+                        do_review = TRUE
+                        review = GetInt
+                    Else If Item[j] = "POLARITY"
+                        num = GetInt
+                        If Not do_imagelist
+                            img_cnt = num
+                            img_list = num
+                        End If
+                    Else If Item[j] = "IMAGEINFO"
+                        Str = GetWord
+                        if Str = "Images"
+                            do_imagelist = TRUE
+                            img_cnt = GetInt
+                            img_list = img_cnt
+                            For k = 1 to img_cnt
+                                str = GetWord
+                                imgFileArr[k] = str
+                                SkipWords(1)
+                                str = GetWord
+                                imgArr[k] = StrToInt(str)
+                                SkipWords(1)
+                            End For
+                        End If
+                    Else If Item[j] = "AUTOSEMCLASS"
+                        do_autosem = TRUE
+                        autosem = GetInt
+                    Else If Item[j] = "MANSEMCLASS"
+                        do_mansem = TRUE
+                        mansem = GetInt
+                    Else If Item[j] = "CONFIDENCE"
+                        do_confidence = TRUE
+                        confidence = GetReal
+                    Else If Item[j] = "CN_CONFIDENCE"
+                        do_cn_conf = True
+                        cn_conf = GetReal
+                    Else
+                        Str = GetWord
+                    End if
+                End For
+
+                If D print ('NL',
+                    "--------------------------", 'NL',
+                    "df_index    = ", df_index,    'NL',
+                    "xInd        = ", xInd,        'NL',
+                    "yInd        = ", yInd,        'NL',
+                    "y_size      = ", y_size,      'NL',
+                    "df_size     = ", df_size,     'NL',
+                    "df_area     = ", df_area,     'NL',
+                    "manClass    = ", manualclass, 'NL',
+                    "Test num    = ", test_num,    'NL',
+                    "cluster num = ", cluster,     'NL',
+                    "review      = ", review,      'NL',
+                    "rough       = ", roughbin,    'NL',
+                    "fine        = ", finebin,     'NL',
+                    "autosem     = ", autosem,     'NL',
+                    "mansem      = ", mansem,      'NL',
+                    "confidence  = ", confidence,  'NL',
+                    "cn_conf     = ", cn_conf,     'NL',
+                    "img_list    = ", img_list,    'NL',
+                    "img_cnt     = ", img_cnt,     'NL')
+                End If
+
+                SkipWords(-1)//to make sure we are not at end of line
                 SkipLines(1)
 
-                intensity = -1
+                vDbAddToDieMapTable(xInd, yInd, 'V')
+                vDbDefect(df_index, xInd     , yInd,
+                xPos    , yPos     , x_size,
+                y_size  , df_area  , df_size,
+                cluster , intensity, test_num)
 
-                str = GetWord
+                if( manualclass > 0 )
+					vAddToClassLUT(manualclass, StrCat("manClass_",IntToStr(manualclass)))
+                    vDbAddDefectClass(df_index, manualclass , 1)
+                    vDbSetCriticalDfClass(manualclass, 1)
+                end if
 
-                // FIX #4: NotEndOfFile guard on defect record loop
-                While ((IsNumber(str)) OR (str = "TiffFileName")) AND NotEndOfFile
+				if( roughbin > 0) AND (do_roughbin = TRUE)
+					if (manualclass = 0)
+						manualclass = roughbin
+						vAddToClassLUT(manualclass, StrCat("manClass_",IntToStr(manualclass)))
+						vDbAddDefectClass(df_index, manualclass , 1)
+						vDbSetCriticalDfClass(manualclass, 1)
+					end if
+					vAddToClassLUT(roughbin, StrCat("roughBin_",IntToStr(roughbin)))
+					vDbAddDefectClass(df_index, roughbin   , 2)
+					vDbSetCriticalDfClass(roughbin, 2)
+			     end If
 
-                    if (str = "TiffFileName")
-                        multiTiffFiles = True
-                        img_file = StrTrim(GetWord, '"')
-                        SkipWords(-1)
-                        SkipLines(2)
-                        Str = GetWord
-                    end if
+                if( finebin > 0) AND (do_finebin = TRUE)
+					vAddToClassLUT(finebin, StrCat("fineBin_",IntToStr(finebin)))
+                    vDbAddDefectClass(df_index, finebin    , 3)
+                    vDbSetCriticalDfClass(finebin, 3)
+                end if
 
-                    SkipWords(-1)
-                    df_index = GetInt
+                if( mansem > 0) AND (do_mansem = TRUE)
+					vAddToClassLUT(mansem, StrCat("manSem_",IntToStr(mansem)))
+                    vDbAddDefectClass(df_index, mansem, 4)
+                    vDbSetCriticalDfClass(mansem, 4)
+                end if
 
-                    xPos = GetReal
-                    yPos = GetReal
-                    xPos = xPos / unitDivisor
-                    yPos = yPos / unitDivisor
-                    xInd = GetInt
-                    yInd = GetInt
-                    x_size = GetReal
-                    y_size = GetReal
-                    x_size = x_size / unitDivisor
-                    y_size = y_size / unitDivisor
+                if( autosem > 0) AND (do_autosem = TRUE)
+					vAddToClassLUT(autosem, StrCat("autoSem_",IntToStr(autosem)))
+                    vDbAddDefectClass(df_index, autosem, 5)
+                    vDbSetCriticalDfClass(autosem, 5)
+                end if
 
-                    For j = 1 to itemNum - 1
-                        If Item[j] = "DSIZE"
-                            df_size = GetReal
-                            df_size = df_size / unitDivisor
-                        Else If Item[j] = "TEST"
-                            test_num = GetInt
-                        Else If Item[j] = "CLUSTERNUMBER"
-                            do_cluster = TRUE
-                            cluster = GetInt
-                        Else If Item[j] = "CLASSNUMBER"
-                            manualclass = GetInt
-                        Else If Item[j] = "DEFECTAREA"
-                            df_area = GetReal
-                            df_area = df_area / unitDivisor
-                        Else If Item[j] = "ROUGHBINNUMBER"
-                            do_roughbin = TRUE
-                            roughbin = GetInt
-                        Else If Item[j] = "FINEBINNUMBER"
-                            do_finebin = TRUE
-                            finebin = GetInt
-                        Else If Item[j] = "REVIEWSAMPLE"
-                            do_review = TRUE
-                            review = GetInt
-                        // FIX #1: POLARITY — read into temp variable only
-                        Else If Item[j] = "POLARITY"
-                            num = GetInt
-                            If Not do_imagelist
-                                img_cnt = num
-                                img_list = num
-                            End If
-                        // FIX #1: IMAGEINFO — fully consume the image list block
-                        Else If Item[j] = "IMAGEINFO"
-                            Str = GetWord
-                            if Str = "Images"
-                                do_imagelist = TRUE
-                                img_cnt = GetInt
-                                img_list = img_cnt
-                                For k = 1 to img_cnt
-                                    str = GetWord
-                                    imgFileArr[k] = str
-                                    SkipWords(1)
-                                    str = GetWord
-                                    imgArr[k] = StrToInt(str)
-                                    SkipWords(1)
-                                End For
-                            End If
-                        Else If Item[j] = "AUTOSEMCLASS"
-                            do_autosem = TRUE
-                            autosem = GetInt
-                        Else If Item[j] = "MANSEMCLASS"
-                            do_mansem = TRUE
-                            mansem = GetInt
-                        Else If Item[j] = "CONFIDENCE"
-                            do_confidence = TRUE
-                            confidence = GetReal
-                        Else If Item[j] = "CN_CONFIDENCE"
-                            do_cn_conf = True
-                            cn_conf = GetReal
-                        Else
-                            Str = GetWord
-                        End if
+                img_path= Argument
+                If ((img_list <> 0) and (img_cnt > 0) and (img_file <> "NA"))
+                    For k = 1 to Img_cnt
+                        img_file = imgFileArr[k]
+                        If D print ("img_file [",imgArr[k],"] was added",'NL') End If
                     End For
-
-                    // Debug output
-                    If D print ('NL',
-                        "--------------------------", 'NL',
-                        "df_index    = ", df_index,    'NL',
-                        "xInd        = ", xInd,        'NL',
-                        "yInd        = ", yInd,        'NL',
-                        "y_size      = ", y_size,      'NL',
-                        "df_size     = ", df_size,     'NL',
-                        "df_area     = ", df_area,     'NL',
-                        "manClass    = ", manualclass, 'NL',
-                        "Test num    = ", test_num,    'NL',
-                        "cluster num = ", cluster,     'NL',
-                        "review      = ", review,      'NL',
-                        "rough       = ", roughbin,    'NL',
-                        "fine        = ", finebin,     'NL',
-                        "autosem     = ", autosem,     'NL',
-                        "mansem      = ", mansem,      'NL',
-                        "confidence  = ", confidence,  'NL',
-                        "cn_conf     = ", cn_conf,     'NL',
-                        "img_list    = ", img_list,    'NL',
-                        "img_cnt     = ", img_cnt,     'NL')
-                    End If
-
-                    SkipWords(-1)
-                    SkipLines(1)
-
-                    vDbAddToDieMapTable(xInd, yInd, 'V')
-                    vDbDefect(df_index, xInd,      yInd,
-                        xPos,           yPos,      x_size,
-                        y_size,         df_area,   df_size,
-                        cluster,        intensity, test_num)
-
-                    if (manualclass > 0)
-                        vAddToClassLUT(manualclass, StrCat("manClass_", IntToStr(manualclass)))
-                        vDbAddDefectClass(df_index, manualclass, 1)
-                        vDbSetCriticalDfClass(manualclass, 1)
-                    end if
-
-                    if (roughbin > 0) AND (do_roughbin = TRUE)
-                        if (manualclass = 0)
-                            manualclass = roughbin
-                            vAddToClassLUT(manualclass, StrCat("manClass_", IntToStr(manualclass)))
-                            vDbAddDefectClass(df_index, manualclass, 1)
-                            vDbSetCriticalDfClass(manualclass, 1)
-                        end if
-                        vAddToClassLUT(roughbin, StrCat("roughBin_", IntToStr(roughbin)))
-                        vDbAddDefectClass(df_index, roughbin, 2)
-                        vDbSetCriticalDfClass(roughbin, 2)
-                    end If
-
-                    if (finebin > 0) AND (do_finebin = TRUE)
-                        vAddToClassLUT(finebin, StrCat("fineBin_", IntToStr(finebin)))
-                        vDbAddDefectClass(df_index, finebin, 3)
-                        vDbSetCriticalDfClass(finebin, 3)
-                    end if
-
-                    if (mansem > 0) AND (do_mansem = TRUE)
-                        vAddToClassLUT(mansem, StrCat("manSem_", IntToStr(mansem)))
-                        vDbAddDefectClass(df_index, mansem, 4)
-                        vDbSetCriticalDfClass(mansem, 4)
-                    end if
-
-                    if (autosem > 0) AND (do_autosem = TRUE)
-                        vAddToClassLUT(autosem, StrCat("autoSem_", IntToStr(autosem)))
-                        vDbAddDefectClass(df_index, autosem, 5)
-                        vDbSetCriticalDfClass(autosem, 5)
-                    end if
-
-                    img_path = Argument
-
-                    If ((img_list <> 0) and (img_cnt > 0) and (img_file <> "NA"))
-                        For k = 1 to Img_cnt
-                            img_file = imgFileArr[k]
-                            If D print ("img_file [", imgArr[k], "] was added", 'NL') End If
-                        End For
-                    End If
-
-                    str = GetWord
-
-                End While //ends defect loop
-
-
-                // =============================================================
-                //  SECTION 7B: TEST SUMMARY LIST (forward within this record)
-                //  FIX #3: haze/areapertest as real + GetReal
-                //  FIX #3: NotEndOfFile evaluated before GetWord
-                // =============================================================
-
-                GoTo("TestSummaryList")
-                If (ErrorCode = 0)
-                    GoTo("Columns")
-                    cols_cnt = GetInt
-                    GoTo("Data")
-                    IF (ErrorCode = 0)
-                        SkipWords(1)
-
-                        While (NotEndOfFile AND IsNumber(GetWord))
-                            SkipWords(-1)
-                            test_num = GetInt
-                            def_cnt = GetInt
-                            dd = GetReal
-                            insp_die = GetInt
-                            def_die = GetInt
-                            haze_reg = GetReal
-                            haze_avg = GetReal
-                            haze_std = GetReal
-                            haze_med = GetReal
-                            haze_peak = GetReal
-                            areapertest = GetReal
-                            vDbDefectSummary(test_num, def_cnt,
-                                test_area, dd,
-                                insp_die, def_die)
-                            SkipWords(-1)
-                            SkipLines(1)
-                        End While
-                    Else
-                        Print("Warning: Could not find Data in summaries section of KLARF file", 'NL')
-                    End If
-                Else
-                    Print("Warning: Could not find summaries in KLARF file", 'NL')
                 End If
-                dBDumpLayer()
 
-            Else
-                ExitScript("ERROR: Could not find defectlist")
-            End If
+                str=GetWord
 
-        End For //ends record loop
+            End While //ends defect loop
 
-    Else //the program is new
-        Print("The program is New!", 'NL')
-        TestNum = 0
-        DD_Threshold = 2.3
-        DC_Threshold = 1000
-        DbDumpLayer()
-    End If
+            GoTo("TestSummaryList")
+			If(ErrorCode = 0)
+				GoTo("Columns")
+				cols_cnt = GetInt
+				GoTo("Data")
+				IF (ErrorCode=0)
+					SkipWords(1)
+					While (NotEndOfFile AND IsNumber(GetWord))
+						SkipWords(-1)
+						test_num=GetInt
+						def_cnt=GetInt
+						dd=GetReal
+						insp_die=GetInt
+						def_die=GetInt
+						haze_reg=GetReal
+						haze_avg=GetReal
+						haze_std=GetReal
+						haze_med=GetReal
+						haze_peak=GetReal
+						areapertest=GetReal
+						If (cols_cnt > 11)
+							For col_idx = 12 To cols_cnt
+								str = GetWord
+							End For
+						End If
+						vDbDefectSummary(test_num,  def_cnt,
+						test_area, dd,
+						insp_die,  def_die)
+						SkipWords(-1)
+						SkipLines(1)
+					End While
+				Else
+					Print("Warning:Could not find Data in summaries section of KLARF file", 'NL')
+				End If
+			Else
+				Print("Warning:Could not find summaries in KLARF file", 'NL')
+			End If
+            dBDumpLayer()
+
+        Else
+            ExitScript("ERROR: Could not find defectlist")
+        End If
+
+		End For //ends record loop
+
+	Else //the program is new
+		print("The program is New!", 'NL' )
+		TestNum = 0
+		DD_Threshold = 2.3
+		DC_Threshold = 1000
+		DbDumpLayer()
+	End If
 
 End
