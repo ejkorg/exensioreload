@@ -4,53 +4,71 @@
 // Color module for color manipulation
 @use 'sass:color';
 
-// Variables
+// Variables - use CSS variables for theme support
 $panel-width: 380px;
 $panel-height: 520px;
 $border-radius: 16px;
 $transition-speed: 0.25s;
 
-// Color scheme - matches app theme
-$primary-color: #6366f1;
-$primary-hover: #4f46e5;
-$bg-glass: rgba(30, 30, 45, 0.85);
-$bg-glass-light: rgba(50, 50, 70, 0.6);
-$text-primary: #f1f5f9;
-$text-secondary: #94a3b8;
-$text-muted: #64748b;
-$border-color: rgba(255, 255, 255, 0.1);
+// Theme-aware colors
+$primary-color: var(--accent-color, #6366f1);
+$primary-hover: color.adjust($primary-color, $lightness: -12%);
+$bg-glass: rgba(15, 23, 42, 0.92);
+$bg-glass-light: rgba(30, 41, 59, 0.75);
+$text-primary: var(--text-main, #f1f5f9);
+$text-secondary: var(--text-muted, #94a3b8);
+$text-muted: rgba(148, 163, 184, 0.7);
+$border-color: var(--card-border, rgba(255, 255, 255, 0.1));
 $shadow-color: rgba(0, 0, 0, 0.3);
+
+// Light theme overrides
+body.light-theme & {
+  $bg-glass: rgba(255, 255, 255, 0.94);
+  $bg-glass-light: rgba(241, 245, 249, 0.75);
+  $text-primary: var(--text-main, #0f172a);
+  $text-secondary: var(--text-muted, #475569);
+  $text-muted: rgba(71, 85, 105, 0.7);
+  $border-color: var(--card-border, rgba(15, 23, 42, 0.12));
+  $shadow-color: rgba(0, 0, 0, 0.12);
+}
 
 :host {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  top: 16px;
+  right: 20px;
   z-index: 1000;
   font-family: inherit;
 }
 
 // Floating Toggle Button
 .chat-toggle-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -15%));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 7px 10px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -12%));
   border: none;
   color: white;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 20px rgba($primary-color, 0.4);
+  box-shadow: 0 2px 12px rgba($primary-color, 0.35);
   transition: all $transition-speed ease;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+
+  .btn-label {
+    color: white;
+    line-height: 1;
+  }
 
   &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 28px rgba($primary-color, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 18px rgba($primary-color, 0.5);
   }
 
   &:active {
-    transform: scale(0.98);
+    transform: translateY(0);
   }
 
   &.disabled {
@@ -67,7 +85,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 // Chat Panel
 .chat-panel {
   position: absolute;
-  bottom: 0;
+  top: calc(100% + 8px);
   right: 0;
   width: $panel-width;
   height: $panel-height;
@@ -80,13 +98,13 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUp 0.3s ease-out;
+  animation: slideDown 0.25s ease-out;
 }
 
-@keyframes slideUp {
+@keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(-10px);
   }
   to {
     opacity: 1;
@@ -99,23 +117,43 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: 14px 16px;
   background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid $border-color;
+  border-bottom: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
 
   .header-content {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 
-    .ai-icon {
-      color: $primary-color;
+    .header-ai-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -15%));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      flex-shrink: 0;
     }
 
     .header-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
-      color: $text-primary;
+      color: var(--text-main, #f1f5f9);
+    }
+
+    .header-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba($primary-color, 0.25);
+      color: color.adjust($primary-color, $lightness: 25%);
+      border: 1px solid rgba($primary-color, 0.3);
     }
   }
 
@@ -130,7 +168,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   height: 32px;
   border: none;
   background: transparent;
-  color: $text-secondary;
+  color: var(--text-muted, #94a3b8);
   cursor: pointer;
   border-radius: 8px;
   display: flex;
@@ -139,8 +177,8 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: $text-primary;
+    background: var(--card-bg, rgba(255, 255, 255, 0.05));
+    color: var(--text-main, #f1f5f9);
   }
 }
 
@@ -152,6 +190,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: transparent;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -162,11 +201,11 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   }
 
   &::-webkit-scrollbar-thumb {
-    background: $border-color;
+    background: var(--card-border, rgba(255, 255, 255, 0.1));
     border-radius: 3px;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--card-hover-border, rgba(255, 255, 255, 0.2));
     }
   }
 }
@@ -184,17 +223,18 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   .welcome-icon {
     width: 64px;
     height: 64px;
-    border-radius: 50%;
+    border-radius: 18px;
     background: linear-gradient(135deg, $primary-color, color.adjust($primary-color, $lightness: -20%));
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
     color: white;
+    box-shadow: 0 4px 20px color.adjust($primary-color, $alpha: -0.6);
   }
 
   .welcome-text {
-    color: $text-secondary;
+    color: var(--text-muted, #94a3b8);
     font-size: 14px;
     margin-bottom: 20px;
   }
@@ -209,19 +249,19 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 
 .example-prompt {
   padding: 10px 14px;
-  background: $bg-glass-light;
-  border: 1px solid $border-color;
+  background: var(--card-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
   border-radius: 10px;
-  color: $text-secondary;
+  color: var(--text-muted, #94a3b8);
   font-size: 13px;
   cursor: pointer;
   text-align: left;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba($primary-color, 0.2);
-    border-color: rgba($primary-color, 0.4);
-    color: $text-primary;
+    background: rgba($primary-color, 0.15);
+    border-color: rgba($primary-color, 0.35);
+    color: var(--text-main, #f1f5f9);
   }
 }
 
@@ -247,9 +287,9 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     align-self: flex-start;
 
     .message-content {
-      background: $bg-glass-light;
+      background: var(--card-bg, rgba(255, 255, 255, 0.05));
       border-radius: 16px 16px 16px 4px;
-      color: $text-primary;
+      color: var(--text-main, #f1f5f9);
     }
   }
 
@@ -295,16 +335,16 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 
 .action-btn {
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  color: white;
+  color: var(--text-main, #f1f5f9);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
   }
 }
@@ -315,7 +355,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   gap: 10px;
   margin-top: 6px;
   font-size: 11px;
-  color: $text-muted;
+  color: var(--text-muted, #94a3b8);
 
   .confidence {
     padding: 2px 6px;
@@ -342,7 +382,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   span {
     width: 8px;
     height: 8px;
-    background: $text-muted;
+    background: var(--text-muted, #94a3b8);
     border-radius: 50%;
     animation: typingBounce 1.4s ease-in-out infinite;
 
@@ -382,15 +422,15 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 // Input Area
 .chat-input-area {
   padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid $border-color;
+  background: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
 
   .input-wrapper {
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid $border-color;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
     border-radius: 12px;
     padding: 4px;
   }
@@ -399,7 +439,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     flex: 1;
     background: transparent;
     border: none;
-    color: $text-primary;
+    color: var(--text-main, #f1f5f9);
     font-size: 14px;
     padding: 10px 12px;
     resize: none;
@@ -407,7 +447,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     outline: none;
 
     &::placeholder {
-      color: $text-muted;
+      color: var(--text-muted, #94a3b8);
     }
 
     &:disabled {
@@ -419,7 +459,7 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     width: 36px;
     height: 36px;
     border: none;
-    background: $primary-color;
+    background: var(--accent-color, #6366f1);
     color: white;
     border-radius: 10px;
     cursor: pointer;
@@ -429,11 +469,11 @@ $shadow-color: rgba(0, 0, 0, 0.3);
     transition: all 0.2s ease;
 
     &:hover:not(:disabled) {
-      background: $primary-hover;
+      filter: brightness(1.1);
     }
 
     &:disabled {
-      background: $text-muted;
+      background: var(--text-muted, #94a3b8);
       cursor: not-allowed;
       opacity: 0.5;
     }
@@ -455,10 +495,10 @@ $shadow-color: rgba(0, 0, 0, 0.3);
   left: 16px;
   right: 16px;
   padding: 12px;
-  background: rgba(245, 158, 11, 0.2);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid var(--card-border, rgba(245, 158, 11, 0.3));
   border-radius: 10px;
-  color: #f59e0b;
+  color: var(--warning, #f59e0b);
   font-size: 13px;
   text-align: center;
 }
@@ -466,13 +506,13 @@ $shadow-color: rgba(0, 0, 0, 0.3);
 // Responsive
 @media (max-width: 480px) {
   :host {
-    bottom: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
   }
 
   .chat-panel {
-    width: calc(100vw - 32px);
-    height: calc(100vh - 120px);
+    width: calc(100vw - 24px);
+    height: calc(100vh - 80px);
     max-width: 380px;
   }
 }
