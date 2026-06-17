@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { Routes } from '@angular/router';
+import { Router, Routes } from '@angular/router';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
 
@@ -43,6 +43,16 @@ export const routes: Routes = [
   },
   {
     path: 'login',
+    canActivate: [
+      () => {
+        const auth = inject(AuthService);
+        const router = inject(Router);
+        if (auth.isAuthenticated()) {
+          return router.parseUrl('/');
+        }
+        return true;
+      },
+    ],
     loadComponent: () => import('./auth/login.component').then((m) => m.LoginComponent),
   },
   {
