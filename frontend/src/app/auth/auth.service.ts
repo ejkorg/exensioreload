@@ -46,6 +46,10 @@ export class AuthService {
   private userSubject = new BehaviorSubject<UserInfo | null>(null);
   user$ = this.userSubject.asObservable();
 
+  // Track whether initial auth check has completed
+  private readonly initialAuthCheckComplete = signal(false);
+  readonly isInitialized = this.initialAuthCheckComplete.asReadonly();
+
   // Token change observable for SSE reconnection
   private tokenSubject = new BehaviorSubject<string | null>(null);
   token$ = this.tokenSubject.asObservable();
@@ -373,6 +377,8 @@ export class AuthService {
             const returnUrl = window.location.pathname + window.location.search;
             this.trySilentSso(returnUrl);
           }
+          // Mark initialization as complete
+          this.initialAuthCheckComplete.set(true);
           resolve();
         });
     });

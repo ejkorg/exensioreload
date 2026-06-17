@@ -42,9 +42,9 @@ $bg-glass-light: $dark-bg-glass-light;
 
 :host {
   position: fixed;
-  top: 16px;
+  bottom: 24px;
   right: 20px;
-  z-index: 1000;
+  z-index: 999;
   font-family: inherit;
 }
 
@@ -107,7 +107,7 @@ body.light-theme .chat-toggle-btn {
 // Chat Panel
 .chat-panel {
   position: absolute;
-  top: calc(100% + 8px);
+  bottom: 100%;
   right: 0;
   width: $panel-width;
   height: $panel-height;
@@ -120,7 +120,8 @@ body.light-theme .chat-toggle-btn {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideDown 0.25s ease-out;
+  animation: slideUp 0.25s ease-out;
+  margin-bottom: 8px;
 }
 
 body.light-theme .chat-panel {
@@ -129,10 +130,10 @@ body.light-theme .chat-panel {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
 }
 
-@keyframes slideDown {
+@keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -674,7 +675,7 @@ body.light-theme .not-available-banner {
 // Responsive
 @media (max-width: 480px) {
   :host {
-    top: 12px;
+    bottom: 12px;
     right: 12px;
   }
 
