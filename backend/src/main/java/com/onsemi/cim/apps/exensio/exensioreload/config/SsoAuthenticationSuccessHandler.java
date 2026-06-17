@@ -1,21 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.config;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.RefreshToken;
-import com.onsemi.cim.apps.exensio.exensioreload.service.RefreshTokenService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.SsoRoleMapper;
-import com.onsemi.cim.apps.exensio.exensioreload.service.SsoUserProvisioningService;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +8,24 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.RefreshToken;
+import com.onsemi.cim.apps.exensio.exensioreload.service.RefreshTokenService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.SsoRoleMapper;
+import com.onsemi.cim.apps.exensio.exensioreload.service.SsoUserProvisioningService;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * Handles a successful OIDC authentication by bridging Spring Security's OAuth2 login
@@ -95,6 +97,24 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
                 email = oidcUser.getSubject();
             }
 
+            // 1b. Extract short username from preferred_username for local user matching.
+            //
+            // In Azure AD, username and email are different:
+            //   preferred_username = fg8n8x@onsemi.com  (the AD login/UPN)
+            //   email              = junifferallan.garcia@onsemi.com (the personal email)
+            //
+            // Stripping the domain from preferred_username gives us the AD username "fg8n8x"
+            // which matches the local DB username. Email prefix is NOT reliable for this.
+            String preferredUsername = oidcUser.getPreferredUsername();
+            String idpUsername = null;
+            if (preferredUsername != null && !preferredUsername.isBlank()) {
+                idpUsername = preferredUsername.contains("@")
+                        ? preferredUsername.substring(0, preferredUsername.indexOf('@')).trim()
+                        : preferredUsername.trim();
+            }
+            logger.info("SSO callback: email='{}' preferred_username='{}' resolved idpUsername='{}'",
+                    email, preferredUsername, idpUsername);
+
             // 2. Extract group claims (configurable claim name, Requirement 4.1)
             Collection<String> idpGroups = extractGroupClaims(oidcUser);
 
@@ -103,7 +123,7 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
             logger.debug("SSO callback: email='{}' idpGroups={} localRoles={}", email, idpGroups, localRoles);
 
             // 4. JIT provision or load user (Requirements 3.1–3.4)
-            AppUser user = provisioningService.provisionOrLoad(email, localRoles);
+            AppUser user = provisioningService.provisionOrLoad(email, idpUsername, localRoles);
 
             // 5. Issue JWT access token (Requirement 2.4)
             String accessToken = jwtUtil.generateToken(user.getUsername(), user.getRoles());
