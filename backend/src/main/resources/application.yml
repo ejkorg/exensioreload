@@ -180,4 +180,3 @@ ai:
 etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}
-:false}
