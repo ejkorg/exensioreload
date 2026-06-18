@@ -1,14 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,6 +13,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 
 /**
  * Queries the CP Elasticsearch index to determine the enrichment outcome for a given file.
@@ -170,9 +171,7 @@ public class ElasticsearchLogService {
         long startTime = System.currentTimeMillis();
 
         log.info("Elasticsearch query START: url={}, dataId={}, lot={}, traceId={}", url, dataId, lot, traceId);
-        if (props.isLogRequestPayloads()) {
-            log.info("ES query payload:\n{}", queryJson);
-        }
+        log.info("ES query JSON:\n{}", queryJson);
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
