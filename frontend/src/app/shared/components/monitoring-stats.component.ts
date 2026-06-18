@@ -411,15 +411,18 @@ import { GlassIconComponent } from './glass-icon.component';
       .status-pending {
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
-        animation: pulse-pending 2s ease-in-out infinite;
       }
-      @keyframes pulse-pending {
-        0%,
-        100% {
-          opacity: 1;
+
+      .status-pending app-glass-icon {
+        animation: spin-icon 2s linear infinite;
+      }
+
+      @keyframes spin-icon {
+        0% {
+          transform: rotate(0deg);
         }
-        50% {
-          opacity: 0.5;
+        100% {
+          transform: rotate(360deg);
         }
       }
 
