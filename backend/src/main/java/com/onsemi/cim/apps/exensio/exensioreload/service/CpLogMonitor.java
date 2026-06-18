@@ -1,20 +1,21 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedResource;
-import java.util.concurrent.atomic.AtomicLong;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jmx.export.annotation.ManagedAttribute;
+import org.springframework.jmx.export.annotation.ManagedResource;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
  * Scheduled monitor that polls Elasticsearch for CP enrichment outcomes and drives
@@ -123,7 +124,9 @@ public class CpLogMonitor {
             log.warn("Elasticsearch query failed for record id={} dataId={} — skipping: {}",
                     record.id(), record.dataId(), e.getMessage());
             // Update per-record status
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "error", "ES query failed: " + e.getMessage());
+            String errMsg = "ES query failed: " + e.getMessage();
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "error", errMsg);
+            integrationStatusService.updateElasticsearch(requestId, "error", errMsg);
             return;
         }
 
@@ -135,6 +138,7 @@ public class CpLogMonitor {
                 String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
                         success.outputPath(), success.outputTarget(), success.traceId());
                 integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+                integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
                 successCount.incrementAndGet();
                 pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
             }
@@ -147,6 +151,7 @@ public class CpLogMonitor {
                 String statusMsg = String.format("CP enrichment failure: %s (traceId=%s)",
                         errorMessage, failure.traceId());
                 integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+                integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
                 failureCount.incrementAndGet();
                 // Add failure context to the message for better UI display
                 String contextMessage = "[CP Failure] " + statusMsg;
@@ -167,6 +172,7 @@ public class CpLogMonitor {
                     String statusMsg = String.format("CP enrichment completed via pp_log: %s (traceId=%s)",
                             ppLogOutputDir, notFound.traceId());
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+                    integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
                     successCount.incrementAndGet();
                     pipelineOrchestrator.onCpEnrichmentSuccess(record, ppLogOutputDir, "PP_LOG");
                 } else {
@@ -179,6 +185,7 @@ public class CpLogMonitor {
                         String statusMsg = String.format("CP enrichment failed in pp_log: %s (traceId=%s)",
                                 ppLogError, notFound.traceId());
                         integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+                        integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
                         failureCount.incrementAndGet();
                         String contextMessage = "[CP pp_log Failure] " + statusMsg;
                         refDbService.markFailed(record, contextMessage);
@@ -192,14 +199,16 @@ public class CpLogMonitor {
                                     record.id(), record.dataId(), notFound.traceId());
                             String statusMsg = String.format("%s (traceId=%s)", timeoutMessage, notFound.traceId());
                             integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", statusMsg);
+                            integrationStatusService.updateElasticsearch(requestId, "timeout", statusMsg);
                             timeoutCount.incrementAndGet();
                             String contextMessage = "[CP Timeout] " + statusMsg;
                             refDbService.markFailed(record, contextMessage);
                         } else {
                             log.debug("No CP log yet for record id={} dataId={} (traceId={}) — will retry next cycle",
                                     record.id(), record.dataId(), notFound.traceId());
-                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found",
-                                    String.format("No ES log or pp_log entry — retrying (traceId=%s)", notFound.traceId()));
+                            String notFoundMsg = String.format("No ES log or pp_log entry — retrying (traceId=%s)", notFound.traceId());
+                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found", notFoundMsg);
+                            integrationStatusService.updateElasticsearch(requestId, "not_found", notFoundMsg);
                         }
                     }
                 }

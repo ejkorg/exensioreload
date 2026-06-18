@@ -1,17 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchLookupResult;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedResource;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.time.Duration;
@@ -20,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -27,11 +16,22 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jmx.export.annotation.ManagedAttribute;
+import org.springframework.jmx.export.annotation.ManagedResource;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchLookupResult;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
  * Scheduled monitor that polls the Exensio API for records in {@code EXENSIO_LOADING}
@@ -453,6 +453,7 @@ public class ExensioLoadMonitor {
                             update.waferId() != null ? update.waferId() : "N/A",
                             update.traceId() != null ? update.traceId() : "N/A");
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "success", statusMsg);
+                    integrationStatusService.updateExensio(requestId, "success", statusMsg);
                 }
                 case NOT_FOUND -> {
                     String msg = String.format("Exensio wafer not found yet — retrying (traceId=%s)",
@@ -460,6 +461,7 @@ public class ExensioLoadMonitor {
                     log.debug("Record {} NOT_FOUND - {}", record.id(), msg);
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", msg);
+                    integrationStatusService.updateExensio(requestId, "not_found", msg);
                 }
                 case FAILED -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed";
@@ -468,6 +470,7 @@ public class ExensioLoadMonitor {
                     log.info("Record {} FAILED - {}", record.id(), traceMsg);
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "failure", traceMsg);
+                    integrationStatusService.updateExensio(requestId, "failure", traceMsg);
                     // Add Exensio-specific failure context for UI display
                     String contextMessage = "[Exensio Failure] " + traceMsg;
                     refDbService.markFailed(record, contextMessage);
@@ -479,6 +482,7 @@ public class ExensioLoadMonitor {
                     log.warn("Record {} ERROR - {}", record.id(), traceMsg);
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", traceMsg);
+                    integrationStatusService.updateExensio(requestId, "error", traceMsg);
                 }
             }
             // Emit ROW_UPDATE SSE event with per-record integration status
