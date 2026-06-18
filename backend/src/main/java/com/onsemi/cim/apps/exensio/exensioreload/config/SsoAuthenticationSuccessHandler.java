@@ -140,12 +140,23 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
             String returnUrl = getReturnUrlFromSession(request);
             String safeReturnUrl = sanitizeReturnUrl(returnUrl);
 
-            // 8. Redirect to /sso-callback (Requirement 2.5)
-            String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
-            String encodedReturn = URLEncoder.encode(safeReturnUrl, StandardCharsets.UTF_8);
-            String redirectUrl = request.getContextPath() + "/sso-callback?token=" + encodedToken + "&returnUrl=" + encodedReturn;
+            // 8. Check for cross-app callback (e.g. xfcs-reloader)
+            String callbackApp = getCrossAppCallbackFromSession(request);
+            String redirectUrl;
+            if (callbackApp != null) {
+                // Redirect to the trusted cross-app sso-callback with token and returnUrl
+                String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
+                String encodedReturn = URLEncoder.encode(safeReturnUrl, StandardCharsets.UTF_8);
+                redirectUrl = callbackApp + "?token=" + encodedToken + "&returnUrl=" + encodedReturn;
+                logger.info("SSO callback success: user='{}' redirecting to cross-app callback '{}'", user.getUsername(), callbackApp);
+            } else {
+                // 8. Redirect to /sso-callback (Requirement 2.5)
+                String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
+                String encodedReturn = URLEncoder.encode(safeReturnUrl, StandardCharsets.UTF_8);
+                redirectUrl = request.getContextPath() + "/sso-callback?token=" + encodedToken + "&returnUrl=" + encodedReturn;
+                logger.info("SSO callback success: user='{}' redirecting to sso-callback", user.getUsername());
+            }
 
-            logger.info("SSO callback success: user='{}' redirecting to sso-callback", user.getUsername());
             response.sendRedirect(redirectUrl);
 
         } catch (Exception e) {
@@ -184,6 +195,18 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
         if (session == null) return null;
         Object val = session.getAttribute(SESSION_RETURN_URL_KEY);
         session.removeAttribute(SESSION_RETURN_URL_KEY);
+        return val instanceof String ? (String) val : null;
+    }
+
+    /**
+     * Reads and removes the cross-app callback URL from the HTTP session.
+     * Set by {@code SsoController} when a trusted {@code callbackApp} parameter is provided.
+     */
+    private String getCrossAppCallbackFromSession(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) return null;
+        Object val = session.getAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
+        session.removeAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
         return val instanceof String ? (String) val : null;
     }
 

@@ -1,12 +1,12 @@
 package com.onsemi.cim.apps.exensio.exensioreload.config;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
 
 @Component
 @ConfigurationProperties(prefix = "reloader.sso")
@@ -23,6 +23,13 @@ public class SsoProperties {
     private Map<String, String> roleMappings = new HashMap<>();
     /** Name of the OIDC claim that carries IdP group memberships (e.g. "groups" for Azure AD). */
     private String groupClaimName = "groups";
+    /**
+     * Trusted cross-application callback URL prefixes. When an SSO initiation request includes
+     * a {@code callbackApp} parameter whose value starts with one of these prefixes, the
+     * success handler will redirect to that URL instead of the local /sso-callback.
+     * Example: https://usaz15ls088:8080/xfcs-reloader/sso-callback
+     */
+    private java.util.List<String> trustedCallbackApps = new java.util.ArrayList<>();
 
     public boolean isEnabled() {
         if (env != null) {
@@ -62,4 +69,15 @@ public class SsoProperties {
 
     public String getGroupClaimName() { return groupClaimName; }
     public void setGroupClaimName(String groupClaimName) { this.groupClaimName = groupClaimName; }
+
+    public java.util.List<String> getTrustedCallbackApps() { return trustedCallbackApps; }
+    public void setTrustedCallbackApps(java.util.List<String> trustedCallbackApps) { this.trustedCallbackApps = trustedCallbackApps; }
+
+    /**
+     * Returns true if the given callbackApp URL is trusted (starts with one of the configured prefixes).
+     */
+    public boolean isTrustedCallbackApp(String callbackApp) {
+        if (callbackApp == null || callbackApp.isBlank() || trustedCallbackApps == null) return false;
+        return trustedCallbackApps.stream().anyMatch(prefix -> callbackApp.startsWith(prefix));
+    }
 }

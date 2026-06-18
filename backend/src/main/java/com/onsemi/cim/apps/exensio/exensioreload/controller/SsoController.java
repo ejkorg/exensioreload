@@ -1,10 +1,9 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.SsoAuthenticationSuccessHandler;
-import com.onsemi.cim.apps.exensio.exensioreload.config.SsoProperties;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -13,9 +12,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.net.URLDecoder;
+import com.onsemi.cim.apps.exensio.exensioreload.config.SsoAuthenticationSuccessHandler;
+import com.onsemi.cim.apps.exensio.exensioreload.config.SsoProperties;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * Handles SSO initiation endpoints.
@@ -43,6 +45,13 @@ public class SsoController {
      */
     public static final String SESSION_SILENT_FLAG = "sso_silent_prompt_none";
 
+    /**
+     * Session attribute key where a trusted cross-application callback URL is stored.
+     * When set, {@link SsoAuthenticationSuccessHandler} will redirect there after authentication
+     * instead of the local /sso-callback.
+     */
+    public static final String SESSION_CALLBACK_APP_KEY = "sso_callback_app";
+
     /** Default landing page when no valid returnUrl is available. */
     private static final String DEFAULT_RETURN_URL = "/";
 
@@ -63,6 +72,7 @@ public class SsoController {
      */
     @GetMapping("/initiate")
     public void initiate(@RequestParam(value = "returnUrl", required = false) String returnUrl,
+                         @RequestParam(value = "callbackApp", required = false) String callbackApp,
                          HttpServletRequest request,
                          HttpServletResponse response) throws IOException {
         if (!ssoProperties.isEnabled()) {
@@ -72,6 +82,13 @@ public class SsoController {
 
         String safeReturnUrl = sanitizeReturnUrl(returnUrl);
         storeReturnUrl(request, safeReturnUrl);
+
+        // If a trusted cross-app callback is provided, store it so the success handler can redirect there
+        if (callbackApp != null && !callbackApp.isBlank() && ssoProperties.isTrustedCallbackApp(callbackApp)) {
+            HttpSession session = request.getSession(true);
+            session.setAttribute(SESSION_CALLBACK_APP_KEY, callbackApp);
+            logger.debug("SSO initiate: cross-app callbackApp='{}' stored in session", callbackApp);
+        }
 
         logger.debug("SSO initiate: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);
         response.sendRedirect(request.getContextPath() + "/oauth2/authorization/onsemi");
