@@ -1,6 +1,7 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -82,9 +83,18 @@ public class SsoUserProvisioningService {
 
         // 2. Match by full email, case-insensitive (covers users previously JIT-provisioned with
         //    email as username, and handles case differences between IdP and local DB)
-        AppUser byEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
-        if (byEmail != null) {
-            logger.debug("SSO login: matched existing user '{}' by email '{}' (case-insensitive)", byEmail.getUsername(), email);
+        List<AppUser> byEmailList = userRepository.findByEmailIgnoreCase(email);
+        if (!byEmailList.isEmpty()) {
+            // Prefer the oldest record (lowest id) — the original local user, not a JIT duplicate
+            AppUser byEmail = byEmailList.stream()
+                    .min(java.util.Comparator.comparingLong(AppUser::getId))
+                    .orElse(byEmailList.get(0));
+            if (byEmailList.size() > 1) {
+                logger.warn("SSO login: found {} users matching email '{}' (case-insensitive); using oldest record '{}'",
+                        byEmailList.size(), email, byEmail.getUsername());
+            } else {
+                logger.debug("SSO login: matched existing user '{}' by email '{}' (case-insensitive)", byEmail.getUsername(), email);
+            }
             return backfillEmailAndSave(byEmail, email);
         }
 

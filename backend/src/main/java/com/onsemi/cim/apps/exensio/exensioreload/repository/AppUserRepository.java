@@ -15,7 +15,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByUsername(String username);
     Optional<AppUser> findByEmail(String email);
-    Optional<AppUser> findByEmailIgnoreCase(String email);
+    List<AppUser> findByEmailIgnoreCase(String email);
     
     // Enhanced queries for Super Admin functionality
     
