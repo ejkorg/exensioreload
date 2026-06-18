@@ -80,11 +80,12 @@ public class SsoUserProvisioningService {
             }
         }
 
-        // 2. Match by full email (covers users previously JIT-provisioned with email as username)
-        AppUser byEmail = userRepository.findByEmail(email).orElse(null);
+        // 2. Match by full email, case-insensitive (covers users previously JIT-provisioned with
+        //    email as username, and handles case differences between IdP and local DB)
+        AppUser byEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
         if (byEmail != null) {
-            logger.debug("SSO login: matched existing user '{}' by email '{}'", byEmail.getUsername(), email);
-            return byEmail;
+            logger.debug("SSO login: matched existing user '{}' by email '{}' (case-insensitive)", byEmail.getUsername(), email);
+            return backfillEmailAndSave(byEmail, email);
         }
 
         // 3. JIT-provision: use idpUsername as the username (preferred), fallback to full email

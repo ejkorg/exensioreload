@@ -1,19 +1,21 @@
 package com.onsemi.cim.apps.exensio.exensioreload.repository;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByUsername(String username);
     Optional<AppUser> findByEmail(String email);
+    Optional<AppUser> findByEmailIgnoreCase(String email);
     
     // Enhanced queries for Super Admin functionality
     
