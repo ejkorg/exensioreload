@@ -110,11 +110,15 @@ public class CpLogMonitor {
      * status transition.
      */
     private void processRecord(StageRecord record) {
-        // Use createdAt as the lower bound for ES log timestamp matching
-        // createdAt is when the record was first staged, which is before CP processes it
-        Instant esLookbackTime = record.createdAt();
+        // For ES timestamp matching, use updatedAt if available (for reloaded duplicates),
+        // otherwise fall back to createdAt. Subtract 2 minutes to account for clock skew.
+        Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant esLookbackTime = lookbackTime.minusSeconds(120);
         String requestId = record.requestId();
         long stageRecordId = record.id();
+
+        log.debug("processRecord: createdAt={}, updatedAt={}, using={}, esLookbackTime={} (UTC, -2min buffer)", 
+                record.createdAt(), record.updatedAt(), lookbackTime, esLookbackTime);
 
         CpLogResult result;
         try {

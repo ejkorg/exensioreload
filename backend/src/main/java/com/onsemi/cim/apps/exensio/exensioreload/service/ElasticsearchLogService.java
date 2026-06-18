@@ -336,7 +336,11 @@ public class ElasticsearchLogService {
             ObjectNode rangeClause = must.addObject();
             ObjectNode range = rangeClause.putObject("range");
             ObjectNode tsRange = range.putObject("@timestamp");
-            tsRange.put("gte", since.toString());
+            String sinceStr = since.toString();
+            tsRange.put("gte", sinceStr);
+            if (log.isDebugEnabled()) {
+                log.debug("ES query @timestamp range: gte={}, since={}", sinceStr, since);
+            }
 
             // Nested bool with message matching conditions (inner should)
             ObjectNode messageBool = must.addObject();
