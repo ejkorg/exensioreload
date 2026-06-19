@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.onsemi.cim.apps.exensio.exensioreload.config.SsoAuthenticationSuccessHandler;
 import com.onsemi.cim.apps.exensio.exensioreload.config.SsoProperties;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -52,6 +53,12 @@ public class SsoController {
      */
     public static final String SESSION_CALLBACK_APP_KEY = "sso_callback_app";
 
+    /**
+     * Cookie name used as a fallback to carry the cross-app callback URL across
+     * the OAuth2 redirect chain when the HTTP session is replaced by Spring Security.
+     */
+    public static final String COOKIE_CALLBACK_APP = "sso_callback_app";
+
     /** Default landing page when no valid returnUrl is available. */
     private static final String DEFAULT_RETURN_URL = "/";
 
@@ -88,6 +95,14 @@ public class SsoController {
             HttpSession session = request.getSession(true);
             session.setAttribute(SESSION_CALLBACK_APP_KEY, callbackApp);
             logger.debug("SSO initiate: cross-app callbackApp='{}' stored in session", callbackApp);
+
+            // Also persist in a short-lived cookie so it survives Spring Security session migration
+            Cookie c = new Cookie(COOKIE_CALLBACK_APP, java.net.URLEncoder.encode(callbackApp, StandardCharsets.UTF_8));
+            c.setPath("/");
+            c.setHttpOnly(true);
+            c.setMaxAge(300); // 5 minutes — only needed during the OAuth2 round-trip
+            response.addCookie(c);
+            logger.debug("SSO initiate: cross-app callbackApp cookie written");
         }
 
         logger.debug("SSO initiate: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);

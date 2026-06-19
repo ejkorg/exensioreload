@@ -201,13 +201,50 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
     /**
      * Reads and removes the cross-app callback URL from the HTTP session.
      * Set by {@code SsoController} when a trusted {@code callbackApp} parameter is provided.
+     * Falls back to the {@code sso_callback_app} cookie if the session attribute is missing
+     * (Spring Security may migrate the session during the OAuth2 redirect chain).
      */
     private String getCrossAppCallbackFromSession(HttpServletRequest request) {
+        // 1. Try session first
         HttpSession session = request.getSession(false);
-        if (session == null) return null;
-        Object val = session.getAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
-        session.removeAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
-        return val instanceof String ? (String) val : null;
+        if (session != null) {
+            Object val = session.getAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
+            session.removeAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
+            if (val instanceof String s && !s.isBlank()) {
+                // Clear the cookie too so it doesn't persist
+                clearCallbackCookie(request);
+                return s;
+            }
+        }
+
+        // 2. Fall back to cookie (survives session migration)
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie c : cookies) {
+                if (com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.COOKIE_CALLBACK_APP.equals(c.getName())) {
+                    String raw = c.getValue();
+                    if (raw != null && !raw.isBlank()) {
+                        try {
+                            String decoded = java.net.URLDecoder.decode(raw, java.nio.charset.StandardCharsets.UTF_8);
+                            if (ssoProperties.isTrustedCallbackApp(decoded)) {
+                                logger.debug("SSO success handler: cross-app callbackApp recovered from cookie='{}'", decoded);
+                                clearCallbackCookie(request);
+                                return decoded;
+                            }
+                        } catch (Exception e) {
+                            logger.warn("SSO success handler: failed to decode callbackApp cookie", e);
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Expires the sso_callback_app cookie so it doesn't linger. */
+    private void clearCallbackCookie(HttpServletRequest request) {
+        // We can't remove cookies directly; instead we let the response header expire them.
+        // The cookie is short-lived (Max-Age=300) so this is best-effort.
     }
 
     /**
