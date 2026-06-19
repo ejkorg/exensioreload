@@ -130,6 +130,7 @@ public class SsoController {
      */
     @GetMapping("/silent")
     public void silent(@RequestParam(value = "returnUrl", required = false) String returnUrl,
+                       @RequestParam(value = "callbackApp", required = false) String callbackApp,
                        HttpServletRequest request,
                        HttpServletResponse response) throws IOException {
         if (!ssoProperties.isEnabled()) {
@@ -142,6 +143,24 @@ public class SsoController {
         session.setAttribute(SsoAuthenticationSuccessHandler.SESSION_RETURN_URL_KEY, safeReturnUrl);
         // Signal the custom resolver to add prompt=none
         session.setAttribute(SESSION_SILENT_FLAG, Boolean.TRUE);
+
+        // Store cross-app callback if provided (same as /initiate)
+        logger.info("SSO silent: callbackApp param received='{}'", callbackApp);
+        if (callbackApp != null && !callbackApp.isBlank()) {
+            boolean trusted = ssoProperties.isTrustedCallbackApp(callbackApp);
+            logger.info("SSO silent: callbackApp='{}' trusted={} trustedList={}", callbackApp, trusted, ssoProperties.getTrustedCallbackApps());
+            if (trusted) {
+                session.setAttribute(SESSION_CALLBACK_APP_KEY, callbackApp);
+                logger.info("SSO silent: cross-app callbackApp='{}' stored in session id='{}'", callbackApp, session.getId());
+
+                Cookie c = new Cookie(COOKIE_CALLBACK_APP, java.net.URLEncoder.encode(callbackApp, StandardCharsets.UTF_8));
+                c.setPath("/");
+                c.setHttpOnly(true);
+                c.setMaxAge(300);
+                response.addCookie(c);
+                logger.info("SSO silent: cross-app callbackApp cookie written");
+            }
+        }
 
         logger.debug("SSO silent: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);
         response.sendRedirect(request.getContextPath() + "/oauth2/authorization/onsemi");
