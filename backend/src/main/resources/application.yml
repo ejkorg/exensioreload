@@ -123,6 +123,9 @@ reloader:
     role-mappings:
       onsemi-exensioreload-admins: ADMIN
       onsemi-exensioreload-superadmins: SUPER_ADMIN
+    # Trusted cross-app SSO callback URLs — apps that may receive the JWT after authentication
+    trusted-callback-apps:
+      - ${ONSEMI_SSO_TRUSTED_CALLBACK_XFCS:https://usaz15ls088:8080/xfcs-reloader/sso-callback}
 
 # Exensio Loading API integration - see docs/INTEGRATION_ES_EXENSIO.md
 # EXENSIO_ENABLED=true + base URL activates ExensioLoadMonitor (StagePipelinePolicy).
