@@ -207,28 +207,30 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
     private String getCrossAppCallbackFromSession(HttpServletRequest request) {
         // 1. Try session first
         HttpSession session = request.getSession(false);
+        logger.info("SSO success: getCrossAppCallback — session={}", session != null ? session.getId() : "null");
         if (session != null) {
             Object val = session.getAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
             session.removeAttribute(com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.SESSION_CALLBACK_APP_KEY);
+            logger.info("SSO success: session callbackApp='{}'", val);
             if (val instanceof String s && !s.isBlank()) {
-                // Clear the cookie too so it doesn't persist
-                clearCallbackCookie(request);
                 return s;
             }
         }
 
         // 2. Fall back to cookie (survives session migration)
         jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        logger.info("SSO success: checking cookies, count={}", cookies != null ? cookies.length : 0);
         if (cookies != null) {
             for (jakarta.servlet.http.Cookie c : cookies) {
+                logger.info("SSO success: cookie name='{}' value='{}'", c.getName(), c.getValue());
                 if (com.onsemi.cim.apps.exensio.exensioreload.controller.SsoController.COOKIE_CALLBACK_APP.equals(c.getName())) {
                     String raw = c.getValue();
                     if (raw != null && !raw.isBlank()) {
                         try {
                             String decoded = java.net.URLDecoder.decode(raw, java.nio.charset.StandardCharsets.UTF_8);
-                            if (ssoProperties.isTrustedCallbackApp(decoded)) {
-                                logger.debug("SSO success handler: cross-app callbackApp recovered from cookie='{}'", decoded);
-                                clearCallbackCookie(request);
+                            boolean trusted = ssoProperties.isTrustedCallbackApp(decoded);
+                            logger.info("SSO success: callbackApp cookie decoded='{}' trusted={}", decoded, trusted);
+                            if (trusted) {
                                 return decoded;
                             }
                         } catch (Exception e) {
@@ -238,6 +240,7 @@ public class SsoAuthenticationSuccessHandler implements AuthenticationSuccessHan
                 }
             }
         }
+        logger.info("SSO success: no cross-app callbackApp found, will redirect to local sso-callback");
         return null;
     }
 

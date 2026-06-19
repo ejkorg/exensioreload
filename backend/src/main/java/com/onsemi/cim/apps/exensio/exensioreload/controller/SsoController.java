@@ -91,18 +91,23 @@ public class SsoController {
         storeReturnUrl(request, safeReturnUrl);
 
         // If a trusted cross-app callback is provided, store it so the success handler can redirect there
-        if (callbackApp != null && !callbackApp.isBlank() && ssoProperties.isTrustedCallbackApp(callbackApp)) {
-            HttpSession session = request.getSession(true);
-            session.setAttribute(SESSION_CALLBACK_APP_KEY, callbackApp);
-            logger.debug("SSO initiate: cross-app callbackApp='{}' stored in session", callbackApp);
+        logger.info("SSO initiate: callbackApp param received='{}'", callbackApp);
+        if (callbackApp != null && !callbackApp.isBlank()) {
+            boolean trusted = ssoProperties.isTrustedCallbackApp(callbackApp);
+            logger.info("SSO initiate: callbackApp='{}' trusted={} trustedList={}", callbackApp, trusted, ssoProperties.getTrustedCallbackApps());
+            if (trusted) {
+                HttpSession session = request.getSession(true);
+                session.setAttribute(SESSION_CALLBACK_APP_KEY, callbackApp);
+                logger.info("SSO initiate: cross-app callbackApp='{}' stored in session id='{}'", callbackApp, session.getId());
 
-            // Also persist in a short-lived cookie so it survives Spring Security session migration
-            Cookie c = new Cookie(COOKIE_CALLBACK_APP, java.net.URLEncoder.encode(callbackApp, StandardCharsets.UTF_8));
-            c.setPath("/");
-            c.setHttpOnly(true);
-            c.setMaxAge(300); // 5 minutes — only needed during the OAuth2 round-trip
-            response.addCookie(c);
-            logger.debug("SSO initiate: cross-app callbackApp cookie written");
+                // Also persist in a short-lived cookie so it survives Spring Security session migration
+                Cookie c = new Cookie(COOKIE_CALLBACK_APP, java.net.URLEncoder.encode(callbackApp, StandardCharsets.UTF_8));
+                c.setPath("/");
+                c.setHttpOnly(true);
+                c.setMaxAge(300); // 5 minutes — only needed during the OAuth2 round-trip
+                response.addCookie(c);
+                logger.info("SSO initiate: cross-app callbackApp cookie written");
+            }
         }
 
         logger.debug("SSO initiate: returnUrl='{}' -> safeReturnUrl='{}'", returnUrl, safeReturnUrl);
