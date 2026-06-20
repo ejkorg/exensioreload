@@ -1,18 +1,11 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 
 /**
  * Health indicator for Exensio.
@@ -32,12 +25,10 @@ public class ExensioHealthIndicator implements HealthIndicator {
 
     private final ExensioProperties props;
     private final ExensioAuthService authService;
-    private final HttpClient httpClient;
 
-    public ExensioHealthIndicator(ExensioProperties props, ExensioAuthService authService, HttpClient httpClient) {
+    public ExensioHealthIndicator(ExensioProperties props, ExensioAuthService authService) {
         this.props = props;
         this.authService = authService;
-        this.httpClient = httpClient;
     }
 
     @Override
@@ -50,7 +41,7 @@ public class ExensioHealthIndicator implements HealthIndicator {
 
         try {
             // Try to get a token (this will also validate the credentials and endpoint)
-            authService.getToken(); // This may throw ExensioAuthException
+            authService.getToken(props.resolvedDbschema()); // This may throw ExensioAuthException
             return Health.up()
                     .withDetail("exensio", "Credentials are valid and token service is reachable")
                     .build();

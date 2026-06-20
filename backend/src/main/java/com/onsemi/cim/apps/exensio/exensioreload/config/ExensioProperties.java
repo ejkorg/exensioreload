@@ -25,8 +25,8 @@ public class ExensioProperties {
     /** Target environment: QA or PROD. Controls which base URL is used. */
     private String env = "QA";
 
-    private String qaBaseUrl = "";
-    private String prodBaseUrl = "";
+    private String qaUrl = "";
+    private String prodUrl = "";
 
     /** Credentials for POST /v1/session/login */
     private String username = "";
@@ -196,8 +196,8 @@ public class ExensioProperties {
     @jakarta.annotation.PostConstruct
     public void validate() {
         log.info("Exensio Configuration: enabled={}, env={}, qaUrl={}, prodUrl={}, username={}", 
-            enabled, env, (!qaBaseUrl.isBlank() ? "set" : "empty"), 
-            (!prodBaseUrl.isBlank() ? "set" : "empty"), username);
+            enabled, env, (!qaUrl.isBlank() ? "set" : "empty"), 
+            (!prodUrl.isBlank() ? "set" : "empty"), username);
         
         if (batchSize < 1 || batchSize > 100) {
             throw new IllegalArgumentException("exensio.batchSize must be between 1 and 100");
@@ -271,7 +271,7 @@ public class ExensioProperties {
 
     /** Returns the base URL for the active environment. */
     public String resolvedBaseUrl() {
-        return "PROD".equalsIgnoreCase(env) ? prodBaseUrl : qaBaseUrl;
+        return "PROD".equalsIgnoreCase(env) ? prodUrl : qaUrl;
     }
 
     /** Returns the effective dbname (falls back to env value). */
@@ -323,11 +323,11 @@ public class ExensioProperties {
     public String getEnv() { return env; }
     public void setEnv(String env) { this.env = env; }
 
-    public String getQaBaseUrl() { return qaBaseUrl; }
-    public void setQaBaseUrl(String qaBaseUrl) { this.qaBaseUrl = qaBaseUrl == null ? "" : qaBaseUrl; }
+    public String getQaUrl() { return qaUrl; }
+    public void setQaUrl(String qaUrl) { this.qaUrl = qaUrl == null ? "" : qaUrl; }
 
-    public String getProdBaseUrl() { return prodBaseUrl; }
-    public void setProdBaseUrl(String prodBaseUrl) { this.prodBaseUrl = prodBaseUrl == null ? "" : prodBaseUrl; }
+    public String getProdUrl() { return prodUrl; }
+    public void setProdUrl(String prodUrl) { this.prodUrl = prodUrl == null ? "" : prodUrl; }
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username == null ? "" : username; }

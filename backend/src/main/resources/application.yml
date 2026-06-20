@@ -133,8 +133,8 @@ reloader:
 exensio:
   enabled: ${EXENSIO_ENABLED:false}
   env: ${EXENSIO_ENV:QA}
-  qa-base-url: ${EXENSIO_QA_URL:}
-  prod-base-url: ${EXENSIO_PROD_URL:}
+  qa-url: ${EXENSIO_QA_URL:}
+  prod-url: ${EXENSIO_PROD_URL:}
   username: ${EXENSIO_USERNAME:}
   password: ${EXENSIO_PASSWORD:}
   dbname: ${EXENSIO_DBNAME:}

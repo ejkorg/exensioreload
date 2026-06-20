@@ -169,7 +169,7 @@ public class ExensioClient {
 
         String token;
         try {
-            token = authService.getToken();
+            token = authService.getToken(props.resolvedDbschema());
         } catch (ExensioAuthService.ExensioAuthException e) {
             log.error("Exensio auth failed (traceId={}): {}", traceId, e.getMessage());
             return new ExensioLotWaferResult.Error("Auth failed: " + e.getMessage());
@@ -182,9 +182,9 @@ public class ExensioClient {
         // Retry once on 401 with a fresh token
         if (result instanceof ExensioLotWaferResult.Error err && err.message().contains("HTTP 401")) {
             log.debug("Exensio 401 — invalidating token and retrying (traceId={})", traceId);
-            authService.invalidateToken();
+            authService.invalidateToken(props.resolvedDbschema());
             try {
-                token = authService.login();
+                token = authService.login(props.resolvedDbschema());
             } catch (ExensioAuthService.ExensioAuthException e) {
                 log.error("Exensio re-auth failed (traceId={}): {}", traceId, e.getMessage());
                 return new ExensioLotWaferResult.Error("Re-auth failed: " + e.getMessage());
@@ -285,7 +285,7 @@ public class ExensioClient {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             if (needToRefreshToken) {
                 try {
-                    token = authService.getToken();
+                    token = authService.getToken(props.resolvedDbschema());
                 } catch (ExensioAuthService.ExensioAuthException e) {
                     // If we can't get a token, we break and return auth error.
                     return new BatchLookupResult("Auth failed: " + e.getMessage());
@@ -489,7 +489,7 @@ public class ExensioClient {
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
-                    String fallbackToken = authService.loginWithSchema(fallbackSchema);
+                    String fallbackToken = authService.login(fallbackSchema);
                     rows = executeRawSql(sql, fallbackToken, traceId);
                 }
             }
@@ -559,7 +559,7 @@ public class ExensioClient {
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
-                    String fallbackToken = authService.loginWithSchema(fallbackSchema);
+                    String fallbackToken = authService.login(fallbackSchema);
                     rows = executeRawSql(sql, fallbackToken, traceId);
                 }
             }

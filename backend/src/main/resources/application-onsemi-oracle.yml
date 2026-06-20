@@ -186,4 +186,4 @@ cp:
 
 # Exensio API — production overrides
 exensio:
-  logRequestPayloads: false # Suppress verbose Exensio request logging in production
+  logRequestPayloads: true # Suppress verbose Exensio request logging in production

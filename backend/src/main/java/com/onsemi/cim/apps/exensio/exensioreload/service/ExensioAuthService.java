@@ -14,14 +14,19 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Manages the Exensio API session token.
+ * Manages per-schema Exensio API session tokens.
  *
  * <p>Acquires a Bearer token via {@code POST /v1/session/login} and caches it
- * in memory. Re-authenticates automatically when the token is missing or a
- * downstream call returns HTTP 401. Logs out on application shutdown.</p>
+ * per schema. Re-authenticates automatically when the token is missing or a
+ * downstream call returns HTTP 401. Logs out all schemas on application shutdown.</p>
+ *
+ * <p>Uses its own {@link HttpClient} with {@code NEVER} redirect policy so that
+ * 3xx responses (e.g. HTTP→HTTPS redirect or wrong base URL) are surfaced as
+ * errors rather than silently followed.</p>
  *
  * <p>Thread-safe: a {@link ReentrantLock} prevents concurrent login storms.</p>
  */
@@ -35,81 +40,51 @@ public class ExensioAuthService {
     private final ObjectMapper objectMapper;
 
     private final ReentrantLock loginLock = new ReentrantLock();
-    private volatile String cachedToken = null;
+    private final ConcurrentHashMap<String, String> cachedTokens = new ConcurrentHashMap<>();
 
-    public ExensioAuthService(ExensioProperties props,
-                              HttpClient elasticsearchHttpClient,
-                              ObjectMapper objectMapper) {
+    public ExensioAuthService(ExensioProperties props, ObjectMapper objectMapper) {
         this.props = props;
-        // Reuse the shared HttpClient bean (same pattern as ElasticsearchLogService)
-        this.httpClient = elasticsearchHttpClient;
+        // NEVER_REDIRECT: a 3xx from the login endpoint means something is wrong with the
+        // URL or server config (e.g. HTTP→HTTPS redirect, or a proxy login page).
+        // We want to see and report the actual status code, not silently follow the redirect.
+        this.httpClient = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
         this.objectMapper = objectMapper;
     }
 
     /**
-     * Returns a valid Bearer token, logging in if necessary.
+     * Returns a valid Bearer token for the given schema, logging in if necessary.
      *
      * @throws ExensioAuthException if login fails
      */
-    public String getToken() {
-        if (cachedToken != null) {
-            return cachedToken;
-        }
-        return login();
+    public String getToken(String schema) {
+        if (schema == null) return null;
+        String token = cachedTokens.get(schema);
+        if (token != null) return token;
+        return login(schema);
     }
 
     /**
-     * Invalidates the cached token and forces a fresh login on the next call.
+     * Invalidates the cached token for the given schema, forcing a fresh login on the next call.
      * Called by {@link ExensioClient} when it receives HTTP 401.
      */
-    public void invalidateToken() {
-        cachedToken = null;
+    public void invalidateToken(String schema) {
+        if (schema != null) cachedTokens.remove(schema);
     }
 
     /**
-     * Performs a fresh login and caches the resulting token.
-     * If only Exensio is configured (ES not configured), retries with fallback schema on failure.
+     * Performs a fresh login for the given schema and caches the resulting token.
      */
-    public String login() {
+    public String login(String schema) {
+        if (schema == null) throw new IllegalArgumentException("Schema must not be null");
         loginLock.lock();
         try {
             // Double-check after acquiring lock
-            if (cachedToken != null) {
-                return cachedToken;
-            }
+            String cached = cachedTokens.get(schema);
+            if (cached != null) return cached;
 
-            String primarySchema = props.resolvedDbschema();
-            String fallbackSchema = props.resolvedDbschemaFallback();
-            
-            // Try primary schema first
-            ExensioAuthException primaryError = null;
-            try {
-                return loginWithSchema(primarySchema);
-            } catch (ExensioAuthException e) {
-                primaryError = e;
-            }
-            
-            // If fallback schema is available, try it
-            if (fallbackSchema != null && !fallbackSchema.isBlank()) {
-                try {
-                    log.debug("Primary schema {} failed, retrying with fallback schema {}", primarySchema, fallbackSchema);
-                    return loginWithSchema(fallbackSchema);
-                } catch (ExensioAuthException fallbackError) {
-                    log.warn("Both schemas failed: primary={}, fallback={}", primaryError.getMessage(), fallbackError.getMessage());
-                    throw fallbackError;
-                }
-            }
-            
-            // No fallback available, throw primary error
-            throw primaryError;
-            
-        } finally {
-            loginLock.unlock();
-        }
-    }
-    
-    String loginWithSchema(String schema) {
-        try {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/session/login";
 
             ObjectNode body = objectMapper.createObjectNode();
@@ -128,7 +103,13 @@ public class ExensioAuthService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new ExensioAuthException("Exensio login failed with HTTP " + response.statusCode() + " on schema " + schema);
+                String location = response.headers().firstValue("Location").orElse(null);
+                String detail = location != null
+                        ? "HTTP " + response.statusCode() + " → redirected to: " + location
+                          + " (check exensio.qa-url/prod-url — may need HTTPS or different path)"
+                        : "HTTP " + response.statusCode() + " → " + response.body();
+                log.warn("Exensio login failed for schema={}: {}", schema, detail);
+                throw new ExensioAuthException("Exensio login failed: " + detail);
             }
 
             JsonNode json = objectMapper.readTree(response.body());
@@ -137,7 +118,7 @@ public class ExensioAuthService {
                 throw new ExensioAuthException("Exensio login response missing 'token' field for schema " + schema);
             }
 
-            cachedToken = token;
+            cachedTokens.put(schema, token);
             log.info("Exensio session established (env={}, schema={})", props.getEnv(), schema);
             return token;
 
@@ -145,28 +126,31 @@ public class ExensioAuthService {
             throw e;
         } catch (Exception e) {
             throw new ExensioAuthException("Exensio login error on schema " + schema + ": " + e.getMessage(), e);
+        } finally {
+            loginLock.unlock();
         }
     }
 
     @PreDestroy
     public void logout() {
-        if (cachedToken == null || !props.isConfigured()) return;
-        try {
-            String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/session/logout";
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(5))
-                    .header("Authorization", "Bearer " + cachedToken)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
-            httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-            log.info("Exensio session closed");
-        } catch (Exception e) {
-            log.debug("Exensio logout failed (non-critical): {}", e.getMessage());
-        } finally {
-            cachedToken = null;
-        }
+        if (!props.isConfigured()) return;
+        cachedTokens.forEach((schema, token) -> {
+            try {
+                String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/session/logout";
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofSeconds(5))
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build();
+                httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+                log.info("Exensio session closed for schema={}", schema);
+            } catch (Exception e) {
+                log.debug("Exensio logout failed for schema={} (non-critical): {}", schema, e.getMessage());
+            }
+        });
+        cachedTokens.clear();
     }
 
     public static class ExensioAuthException extends RuntimeException {
