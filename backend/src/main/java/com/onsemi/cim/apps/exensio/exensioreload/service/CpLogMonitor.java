@@ -418,6 +418,3 @@ public class CpLogMonitor {
         record NotFound() implements PpLogResult {}
     }
 }
- NotFound() implements PpLogResult {}
-    }
-}
