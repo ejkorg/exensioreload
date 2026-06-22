@@ -104,7 +104,7 @@ cp:
     #   EXTERNAL-QA: service_country
     #   PHM-TARLAC-PROD: service.country
     poll-interval-ms: 60000
-    enrichment-timeout-minutes: 30 # Max wait in ENRICHMENT before FAILED (minutes)
+    enrichment-timeout-minutes: 15 # Max wait in ENRICHMENT before Exensio fallback (minutes)
     logRequestPayloads: true # Set to false in production profiles
 
 reloader:

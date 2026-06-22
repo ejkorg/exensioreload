@@ -20,7 +20,7 @@ public class StatusMapper {
         }
 
         return switch (dbStatus.toUpperCase()) {
-            case "NEW" -> "Staged";
+            case "NEW", "pending" -> "Staged";
             case "ENRICHMENT" -> inExternalQueue ? "In Queue (pending CP)" : "Enrichment / Translation";
             case "EXENSIO_LOADING" -> "Exensio Loading";
             case "PROCESSING" -> inExternalQueue ? "In Queue (pending CP)" : "Enrichment / Translation"; // legacy compat

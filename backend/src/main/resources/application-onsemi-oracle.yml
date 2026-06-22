@@ -181,7 +181,7 @@ cp:
     # Default country filter value can be set by env var CP_ES_SERVICE_COUNTRY_FILTER
     service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
     poll-interval-ms: 60000
-    enrichment-timeout-minutes: 30
+    enrichment-timeout-minutes: 15
     logRequestPayloads: false # Suppress verbose ES query logging in production
 
 # Exensio API — production overrides

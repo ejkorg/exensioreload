@@ -322,7 +322,7 @@ public class SenderController {
 
     @GetMapping("/{id}/queue")
     public List<SenderQueueEntry> getQueue(@PathVariable("id") Integer id,
-                                           @RequestParam(defaultValue = "NEW") String status,
+                                           @RequestParam(defaultValue = "pending") String status,
                                            @RequestParam(defaultValue = "100") int limit) {
         return senderService.getQueue(id, status, limit);
     }

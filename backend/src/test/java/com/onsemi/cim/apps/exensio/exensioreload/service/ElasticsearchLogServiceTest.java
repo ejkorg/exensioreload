@@ -14,7 +14,7 @@ class ElasticsearchLogServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private ElasticsearchLogService buildSvc(CpElasticsearchProperties props) {
-        return new ElasticsearchLogService(null, props, mapper, null);
+        return new ElasticsearchLogService(null, props, mapper);
     }
 
     // ── buildQuery: service.country field mapping ─────────────────────────────

@@ -38,6 +38,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # IDE setup is committed — see .vscode/settings.json
-.commandcode
+
 
 sync_config.jsonc

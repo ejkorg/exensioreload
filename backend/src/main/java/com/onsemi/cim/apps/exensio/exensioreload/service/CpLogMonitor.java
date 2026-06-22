@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
@@ -14,24 +15,24 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
- * Scheduled monitor that polls Elasticsearch for CP enrichment outcomes and drives
- * accurate status transitions for records in ENRICHMENT status.
+ * Scheduled monitor that polls Elasticsearch and pp_log in parallel for CP enrichment
+ * outcomes and drives status transitions for records in ENRICHMENT status.
  *
- * <p>Poll cycle (Requirements 2.1, 2.2):</p>
+ * <p>Poll cycle:</p>
  * <ol>
  *   <li>Load all ENRICHMENT records from SENDER_STAGE</li>
- *   <li>For each record, query Elasticsearch for a matching CP log entry</li>
- *   <li>On {@link CpLogResult.Success} → transition to EXENSIO_LOADING (Requirement 3.2)</li>
- *   <li>On {@link CpLogResult.Failure} → transition to FAILED (Requirement 4.2)</li>
- *   <li>On {@link CpLogResult.NotFound} + timeout exceeded → transition to FAILED (Requirement 2.7)</li>
+ *   <li>For each record, query ES and pp_log simultaneously</li>
+ *   <li>Consolidate results — either source's positive result wins</li>
+ *   <li>On success → transition to EXENSIO_LOADING</li>
+ *   <li>On failure → transition to FAILED</li>
+ *   <li>On both NotFound + timeout → try Exensio API direct lookup</li>
+ *   <li>If Exensio also NotFound → mark DONE with manual-verify indicator</li>
  * </ol>
- *
- * <p>If Elasticsearch is not configured ({@code cp.elasticsearch.url} is blank), all polling
- * cycles are skipped without affecting any records (Requirement 6.7).</p>
  */
 @Component
 @ManagedResource(
@@ -42,11 +43,12 @@ public class CpLogMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(CpLogMonitor.class);
 
-    /** Maximum characters stored in error_message column (Requirement 4.5). */
     private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
 
     private final RefDbService refDbService;
     private final ElasticsearchLogService elasticsearchLogService;
+    private final ExensioClient exensioClient;
+    private final ExensioProperties exensioProperties;
     private final CpElasticsearchProperties props;
     private final StagePipelineOrchestrator pipelineOrchestrator;
     private final IntegrationStatusService integrationStatusService;
@@ -59,12 +61,16 @@ public class CpLogMonitor {
 
     public CpLogMonitor(RefDbService refDbService,
                         ElasticsearchLogService elasticsearchLogService,
+                        ExensioClient exensioClient,
+                        ExensioProperties exensioProperties,
                         CpElasticsearchProperties props,
                         StagePipelineOrchestrator pipelineOrchestrator,
                         IntegrationStatusService integrationStatusService,
                         StageMonitorService stageMonitorService) {
         this.refDbService = refDbService;
         this.elasticsearchLogService = elasticsearchLogService;
+        this.exensioClient = exensioClient;
+        this.exensioProperties = exensioProperties;
         this.props = props;
         this.pipelineOrchestrator = pipelineOrchestrator;
         this.integrationStatusService = integrationStatusService;
@@ -106,120 +112,207 @@ public class CpLogMonitor {
     }
 
     /**
-     * Evaluates a single ENRICHMENT record against Elasticsearch and drives the appropriate
-     * status transition.
+     * Evaluates a single ENRICHMENT record by querying ES and pp_log in parallel,
+     * consolidating results, and falling through to Exensio direct lookup on timeout.
      */
     private void processRecord(StageRecord record) {
-        // For ES timestamp matching, use updatedAt if available (for reloaded duplicates),
-        // otherwise fall back to createdAt. Subtract 2 minutes to account for clock skew.
         Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
         Instant esLookbackTime = lookbackTime.minusSeconds(120);
         String requestId = record.requestId();
         long stageRecordId = record.id();
 
-        log.debug("processRecord: createdAt={}, updatedAt={}, using={}, esLookbackTime={} (UTC, -2min buffer)", 
-                record.createdAt(), record.updatedAt(), lookbackTime, esLookbackTime);
+        log.debug("processRecord: createdAt={}, updatedAt={}, esLookbackTime={}", 
+                record.createdAt(), record.updatedAt(), esLookbackTime);
 
-        CpLogResult result;
+        // --- Step 1: Query ES and pp_log in parallel ---
+        CompletableFuture<CpLogResult> esFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return elasticsearchLogService.findCpLog(
+                    record.metadataId(), record.dataId(), record.lot(),
+                    esLookbackTime, record.site(), record.filename());
+            } catch (Exception e) {
+                log.warn("ES query failed for record id={}: {}", record.id(), e.getMessage());
+                return new CpLogResult.NotFound("es-error-" + java.util.UUID.randomUUID());
+            }
+        });
+
+        CompletableFuture<PpLogResult> ppLogFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                String outputDir = refDbService.queryPpLogSuccess(record.lot(), record.metadataId());
+                if (outputDir != null) {
+                    return new PpLogResult.Success(outputDir);
+                }
+                String errMsg = refDbService.queryPpLogError(record.lot(), record.metadataId());
+                if (errMsg != null) {
+                    return new PpLogResult.Failure(errMsg);
+                }
+                return new PpLogResult.NotFound();
+            } catch (Exception e) {
+                log.warn("pp_log query failed for record id={}: {}", record.id(), e.getMessage());
+                return new PpLogResult.NotFound();
+            }
+        });
+
+        CpLogResult esResult;
+        PpLogResult ppLogResult;
         try {
-            result = elasticsearchLogService.findCpLog(record.metadataId(), record.dataId(), record.lot(), esLookbackTime, record.site(), record.filename());
-        } catch (ElasticsearchLogService.ElasticsearchQueryException e) {
-            // Requirement 6.7: ES unreachable — log warning, skip this record, do not mark failed
-            log.warn("Elasticsearch query failed for record id={} dataId={} — skipping: {}",
-                    record.id(), record.dataId(), e.getMessage());
-            // Update per-record status
-            String errMsg = "ES query failed: " + e.getMessage();
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "error", errMsg);
-            integrationStatusService.updateElasticsearch(requestId, "error", errMsg);
+            esResult = esFuture.get();
+            ppLogResult = ppLogFuture.get();
+        } catch (Exception e) {
+            log.warn("Parallel query interrupted for record id={}: {}", record.id(), e.getMessage());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "error", "Parallel query failed: " + e.getMessage());
+            integrationStatusService.updateElasticsearch(requestId, "error", "Parallel query failed: " + e.getMessage());
             return;
         }
 
-        switch (result) {
-            case CpLogResult.Success success -> {
-                log.info("CP enrichment success for record id={} dataId={}: path={} target={} traceId={}",
-                        record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
-                // Update per-record status with traceId
-                String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
-                        success.outputPath(), success.outputTarget(), success.traceId());
-                integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
-                integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
-                successCount.incrementAndGet();
-                pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
-            }
-            case CpLogResult.Failure failure -> {
-                // Requirement 4.2, 4.3, 4.5: transition to FAILED with truncated error message
-                String errorMessage = truncateErrorMessage(failure.errorMessage());
-                log.info("CP enrichment failure for record id={} dataId={}: {} (traceId={})",
-                        record.id(), record.dataId(), errorMessage, failure.traceId());
-                // Update per-record status with traceId
-                String statusMsg = String.format("CP enrichment failure: %s (traceId=%s)",
-                        errorMessage, failure.traceId());
-                integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
-                integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
-                failureCount.incrementAndGet();
-                // Add failure context to the message for better UI display
-                String contextMessage = "[CP Failure] " + statusMsg;
-                refDbService.markFailed(record, contextMessage);
-            }
-            case CpLogResult.NotFound notFound -> {
-                // ES returned NotFound - the enrichment may have happened externally (not through CP),
-                // so fall back to pp_log to check if enrichment completed externally
-                log.debug("No CP log found in ES for record id={} dataId={} (traceId={}) - checking pp_log fallback",
-                        record.id(), record.dataId(), notFound.traceId());
-                
-                // Query pp_log to check if enrichment completed externally
-                String ppLogOutputDir = refDbService.queryPpLogSuccess(record.lot(), record.filename());
-                if (ppLogOutputDir != null) {
-                    // pp_log shows success (process_code = 0)
-                    log.info("CP enrichment completed externally via pp_log for record id={} dataId={} - output={} (traceId={})",
-                            record.id(), record.dataId(), ppLogOutputDir, notFound.traceId());
-                    String statusMsg = String.format("CP enrichment completed via pp_log: %s (traceId=%s)",
-                            ppLogOutputDir, notFound.traceId());
+        // --- Step 2: Consolidate results ---
+        // Priority: ES Success > pp_log Success > ES Failure > pp_log Failure > NotFound
+        if (esResult instanceof CpLogResult.Success success) {
+            log.info("CP enrichment success (ES) for record id={} dataId={}: path={} target={} traceId={}",
+                    record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
+            String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
+                    success.outputPath(), success.outputTarget(), success.traceId());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
+            successCount.incrementAndGet();
+            pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
+        if (ppLogResult instanceof PpLogResult.Success ppSuccess) {
+            log.info("CP enrichment success (pp_log) for record id={} dataId={}: output={}",
+                    record.id(), record.dataId(), ppSuccess.outputDirectory());
+            String statusMsg = String.format("CP enrichment completed via pp_log: %s", ppSuccess.outputDirectory());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
+            successCount.incrementAndGet();
+            pipelineOrchestrator.onCpEnrichmentSuccess(record, ppSuccess.outputDirectory(), "PP_LOG");
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
+        if (esResult instanceof CpLogResult.Failure failure) {
+            String errorMessage = truncateErrorMessage(failure.errorMessage());
+            log.info("CP enrichment failure (ES) for record id={} dataId={}: {}",
+                    record.id(), record.dataId(), errorMessage);
+            String statusMsg = String.format(
+                    "[ES Failure] lot=%s, idFile=%s, dataId=%s, log.level=ERROR, message=\"%s\", traceId=%s",
+                    record.lot(), record.metadataId(), record.dataId(),
+                    errorMessage, failure.traceId());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
+            failureCount.incrementAndGet();
+            refDbService.markFailed(record, statusMsg);
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
+        if (ppLogResult instanceof PpLogResult.Failure ppFailure) {
+            log.info("CP enrichment failure (pp_log) for record id={} dataId={}: {}",
+                    record.id(), record.dataId(), ppFailure.errorMessage());
+            String statusMsg = String.format(
+                    "[pp_log Failure] lot=%s, idFile=%s, filename=%s, process_code!=0, log_message=\"%s\"",
+                    record.lot(), record.metadataId(), record.filename(), ppFailure.errorMessage());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
+            failureCount.incrementAndGet();
+            refDbService.markFailed(record, statusMsg);
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
+        // --- Step 3: Both ES and pp_log returned NotFound ---
+        if (isTimedOut(record)) {
+            timeoutCount.incrementAndGet();
+            String timeoutMsg = "CP enrichment timeout — no log found in ES or pp_log after "
+                    + props.getEnrichmentTimeoutMinutes() + " minutes";
+            log.info("{} for record id={} dataId={}, trying Exensio direct lookup", timeoutMsg, record.id(), record.dataId());
+
+            // Try Exensio direct lookup before giving up
+            tryExensioDirectLookup(record, requestId, stageRecordId, timeoutMsg);
+        } else {
+            log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
+                    record.id(), record.dataId());
+            String notFoundMsg = "No ES log or pp_log entry — retrying";
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found", notFoundMsg);
+            integrationStatusService.updateElasticsearch(requestId, "not_found", notFoundMsg);
+            emitRowUpdateSse(record, requestId);
+        }
+    }
+
+    /**
+     * Attempts a direct Exensio single-record lookup when ES + pp_log timed out.
+     * If Exensio finds the wafer, marks DONE with keys. Otherwise marks DONE
+     * with a manual-verification indicator — we can't assume failure when we
+     * simply have no info from the enrichment pipeline.
+     */
+    private void tryExensioDirectLookup(StageRecord record, String requestId, long stageRecordId, String timeoutMsg) {
+        // Build a diagnostic summary of everything attempted
+        String diagnosticSummary = String.format(
+                "ES: idData=%s since=%s; pp_log: lot=%s idFile=%s;",
+                record.dataId(), record.updatedAt() != null ? record.updatedAt() : record.createdAt(),
+                record.lot(), record.metadataId());
+
+        if (!exensioProperties.isConfigured()) {
+            log.info("Exensio not configured — marking record id={} as DONE with manual verify", record.id());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
+            integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
+            refDbService.markDoneManualVerify(record,
+                    "[Enrichment Unresolved] " + diagnosticSummary + " Exensio not configured. Manual verification required.");
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
+        try {
+            boolean waferBlank = record.wafer() == null || record.wafer().isBlank();
+            int pgcKey = com.onsemi.cim.apps.exensio.exensioreload.service.DataTypePgcKeyMapper.resolve(
+                    record.dataType(), waferBlank);
+
+            ExensioLotWaferResult exResult = exensioClient.lotWaferLookup(
+                    record.lot(), record.wafer(), record.endTime(),
+                    pgcKey, record.testPhase(),
+                    record.filename(), record.metadataId(), record.dataId());
+
+            switch (exResult) {
+                case ExensioLotWaferResult.Found found -> {
+                    log.info("Exensio direct lookup resolved record id={}: waferKey={}, pgKey={}",
+                            record.id(), found.waferKey(), found.pgKey());
+                    String statusMsg = String.format("Resolved via Exensio direct lookup: waferKey=%d, pgKey=%d",
+                            found.waferKey(), found.pgKey());
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
                     integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
                     successCount.incrementAndGet();
-                    pipelineOrchestrator.onCpEnrichmentSuccess(record, ppLogOutputDir, "PP_LOG");
-                } else {
-                    // Check pp_log for failure (process_code != 0)
-                    String ppLogError = refDbService.queryPpLogError(record.lot(), record.filename());
-                    if (ppLogError != null) {
-                        // pp_log shows failure
-                        log.info("CP enrichment failed in pp_log for record id={} dataId={}: {} (traceId={})",
-                                record.id(), record.dataId(), ppLogError, notFound.traceId());
-                        String statusMsg = String.format("CP enrichment failed in pp_log: %s (traceId=%s)",
-                                ppLogError, notFound.traceId());
-                        integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
-                        integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
-                        failureCount.incrementAndGet();
-                        String contextMessage = "[CP pp_log Failure] " + statusMsg;
-                        refDbService.markFailed(record, contextMessage);
-                    } else {
-                        // No pp_log entry found - still waiting, retry next cycle
-                        // Check timeout
-                        if (isTimedOut(record)) {
-                            String timeoutMessage = "CP enrichment timeout — no log found in ES or pp_log after "
-                                    + props.getEnrichmentTimeoutMinutes() + " minutes";
-                            log.info("CP enrichment timeout for record id={} dataId={} (traceId={})",
-                                    record.id(), record.dataId(), notFound.traceId());
-                            String statusMsg = String.format("%s (traceId=%s)", timeoutMessage, notFound.traceId());
-                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", statusMsg);
-                            integrationStatusService.updateElasticsearch(requestId, "timeout", statusMsg);
-                            timeoutCount.incrementAndGet();
-                            String contextMessage = "[CP Timeout] " + statusMsg;
-                            refDbService.markFailed(record, contextMessage);
-                        } else {
-                            log.debug("No CP log yet for record id={} dataId={} (traceId={}) — will retry next cycle",
-                                    record.id(), record.dataId(), notFound.traceId());
-                            String notFoundMsg = String.format("No ES log or pp_log entry — retrying (traceId=%s)", notFound.traceId());
-                            integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found", notFoundMsg);
-                            integrationStatusService.updateElasticsearch(requestId, "not_found", notFoundMsg);
-                        }
-                    }
+                    refDbService.markDoneFromExensio(record, found.waferKey(), found.pgKey());
+                }
+                case ExensioLotWaferResult.NotFound notFound -> {
+                    log.info("Exensio direct lookup also not found for record id={} — marking DONE with manual verify",
+                            record.id());
+                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
+                    integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
+                    refDbService.markDoneManualVerify(record,
+                            "[Enrichment Unresolved] " + diagnosticSummary
+                            + " Exensio: not found for lot=" + record.lot() + " wafer=" + record.wafer()
+                            + ". Manual verification required.");
+                }
+                case ExensioLotWaferResult.Error error -> {
+                    log.warn("Exensio direct lookup error for record id={}: {}", record.id(), error.message());
+                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
+                    integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
+                    refDbService.markDoneManualVerify(record,
+                            "[Enrichment Unresolved] " + diagnosticSummary
+                            + " Exensio: error=" + error.message()
+                            + ". Manual verification required.");
                 }
             }
+        } catch (Exception e) {
+            log.warn("Exensio direct lookup exception for record id={}: {}", record.id(), e.getMessage());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
+            integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
+            refDbService.markDoneManualVerify(record,
+                    timeoutMsg + " and Exensio API error: " + e.getMessage() + ". Manual verification required.");
         }
 
-        // Emit ROW_UPDATE SSE event with per-record integration status
         emitRowUpdateSse(record, requestId);
     }
 
@@ -315,5 +408,16 @@ public class CpLogMonitor {
     public double getSuccessRate() {
         long total = totalRecordsProcessed.get();
         return total > 0 ? (double) successCount.get() / total : 0.0;
+    }
+
+    // ── pp_log parallel query result ──────────────────────────────────────────
+
+    sealed interface PpLogResult {
+        record Success(String outputDirectory) implements PpLogResult {}
+        record Failure(String errorMessage) implements PpLogResult {}
+        record NotFound() implements PpLogResult {}
+    }
+}
+ NotFound() implements PpLogResult {}
     }
 }

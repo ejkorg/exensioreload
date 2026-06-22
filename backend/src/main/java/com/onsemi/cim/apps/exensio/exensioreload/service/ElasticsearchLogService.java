@@ -42,8 +42,6 @@ public class ElasticsearchLogService {
     private final HttpClient httpClient;
     private final String authHeader;
     private final CpElasticsearchProperties props;
-    /** May be null in test environments where RefDB is not configured. Requirements: 6.3, 6.4 */
-    private final RefDbService refDbService;
     private final ObjectMapper objectMapper;
 
     // Circuit breaker state (thread-safe for singleton access from @Scheduled threads)
@@ -56,13 +54,11 @@ public class ElasticsearchLogService {
 
     public ElasticsearchLogService(HttpClient elasticsearchHttpClient,
                                    CpElasticsearchProperties props,
-                                   ObjectMapper objectMapper,
-                                   RefDbService refDbService) {
+                                   ObjectMapper objectMapper) {
         this.httpClient = elasticsearchHttpClient;
         this.authHeader = buildAuthHeader(props);
         this.props = props;
         this.objectMapper = objectMapper;
-        this.refDbService = refDbService;
     }
 
     private static String buildAuthHeader(CpElasticsearchProperties props) {
@@ -342,20 +338,11 @@ public class ElasticsearchLogService {
                 log.debug("ES query @timestamp range: gte={}, since={}", sinceStr, since);
             }
 
-            // Nested bool with message matching conditions (inner should)
-            ObjectNode messageBool = must.addObject();
-            ObjectNode innerBool = messageBool.putObject("bool");
-            ArrayNode innerShould = innerBool.putArray("should");
-
-            // Boost 5: exact match for "Commands flow executed successfully"
-            ObjectNode shouldCmdSuccess = innerShould.addObject();
-            ObjectNode matchCmdSuccess = shouldCmdSuccess.putObject("match");
-            ObjectNode matchCmdSuccessMsg = matchCmdSuccess.putObject("message");
-            matchCmdSuccessMsg.put("query", "Commands flow executed successfully");
-            matchCmdSuccessMsg.put("boost", 5);
+            // Flat should clauses matching the curl query structure
+            ArrayNode should = bool.putArray("should");
 
             // Boost 4: PRODUCTION output path in message
-            ObjectNode shouldProd = innerShould.addObject();
+            ObjectNode shouldProd = should.addObject();
             ObjectNode wildcardProd = shouldProd.putObject("wildcard");
             ObjectNode wildcardProdMsg = wildcardProd.putObject("message");
             wildcardProdMsg.put("value", "*output path*PRODUCTION*");
@@ -363,21 +350,15 @@ public class ElasticsearchLogService {
             wildcardProdMsg.put("boost", 4);
 
             // Boost 3: SANDBOX in message
-            ObjectNode shouldSbx = innerShould.addObject();
+            ObjectNode shouldSbx = should.addObject();
             ObjectNode wildcardSbx = shouldSbx.putObject("wildcard");
             ObjectNode wildcardSbxMsg = wildcardSbx.putObject("message");
             wildcardSbxMsg.put("value", "*SANDBOX*");
             wildcardSbxMsg.put("case_insensitive", true);
             wildcardSbxMsg.put("boost", 3);
 
-            // Requirement: at least one inner should clause must match
-            innerBool.put("minimum_should_match", 1);
-
-            // Outer should clauses for scoring ( Requirements 2.1–2.4)
-            ArrayNode outerShould = bool.putArray("should");
-
             // Boost 3: non-ERROR log level
-            ObjectNode shouldNonError = outerShould.addObject();
+            ObjectNode shouldNonError = should.addObject();
             ObjectNode boolNonError = shouldNonError.putObject("bool");
             boolNonError.put("boost", 3);
             ArrayNode mustNotArr = boolNonError.putArray("must_not");
@@ -386,13 +367,13 @@ public class ElasticsearchLogService {
             mustNotTermInner.put("log.level", "ERROR");
 
             // Boost 1: ERROR log level
-            ObjectNode shouldError = outerShould.addObject();
+            ObjectNode shouldError = should.addObject();
             ObjectNode termError = shouldError.putObject("term");
             ObjectNode termErrorInner = termError.putObject("log.level");
             termErrorInner.put("value", "ERROR");
             termErrorInner.put("boost", 1);
 
-            // Requirement 2.5: at least one outer should clause must match
+            // At least one should clause must match
             bool.put("minimum_should_match", 1);
 
             // Sort by @timestamp desc, fetch only the most recent hit
@@ -483,11 +464,12 @@ public class ElasticsearchLogService {
                     return new CpLogResult.Success(traceId, message, "SANDBOX", timestamp);
                 }
 
-                // Priority 6: "executed successfully" or "Command Processor successfully" → pp_log fallback (Requirements 3.1–3.8)
+                // Priority 6: "executed successfully" or "Command Processor successfully"
+                // but no PRODUCTION/SANDBOX keyword — pp_log is queried in parallel by CpLogMonitor
                 String messageLower = message.toLowerCase();
                 if (messageLower.contains("executed successfully") || messageLower.contains("command processor successfully")) {
-                    log.debug("ES query: success indicator hit for dataId={} — querying pp_log fallback", dataId);
-                    return queryPpLogFallback(idFile, lot, timestamp, traceId);
+                    log.info("ES query RESULT: Success (executed successfully, no env keyword) for dataId={}", dataId);
+                    return new CpLogResult.Success(traceId, message, "PP_LOG", timestamp);
                 }
             }
 
@@ -513,40 +495,6 @@ public class ElasticsearchLogService {
         } catch (Exception e) {
             log.warn("Failed to parse ES response for dataId={}: {}", dataId, e.getMessage());
             throw new ElasticsearchQueryException("Failed to parse ES response", e);
-        }
-    }
-
-    /**
-     * Delegates to RefDbService to query pp_log for the output directory or error message.
-     * Requirements: 3.2–3.8, 6.3, 6.4
-     */
-    private CpLogResult queryPpLogFallback(String idFile, String lot, Instant timestamp, String traceId) {
-        // Requirement 6.4: guard against RefDbService being unavailable
-        if (refDbService == null || idFile == null || idFile.isBlank()) {
-            log.debug("pp_log fallback skipped — refDbService={} idFile={}", refDbService, idFile);
-            return new CpLogResult.NotFound(traceId);
-        }
-        try {
-            // Requirement 3.2–3.4: query for success row
-            String outputDirectory = refDbService.queryPpLogSuccess(lot, idFile);
-            if (outputDirectory != null) {
-                String target = detectOutputTarget(outputDirectory);
-                log.debug("pp_log success for idFile={} lot={}: dir={} target={}", idFile, lot, outputDirectory, target);
-                return new CpLogResult.Success(traceId, outputDirectory, target, timestamp);
-            }
-            // Requirement 3.5–3.6: query for error row
-            String logMessage = refDbService.queryPpLogError(lot, idFile);
-            if (logMessage != null) {
-                log.debug("pp_log error for idFile={} lot={}: {}", idFile, lot, logMessage);
-                return new CpLogResult.Failure(traceId, logMessage, timestamp);
-            }
-            // Requirement 3.7: no rows in either query → retry next cycle
-            log.debug("pp_log returned no rows for idFile={} lot={}", idFile, lot);
-            return new CpLogResult.NotFound(traceId);
-        } catch (Exception ex) {
-            // Requirement 3.8: SQLException or other error → log warning, retry next cycle
-            log.warn("pp_log fallback failed for idFile={} lot={}: {}", idFile, lot, ex.getMessage());
-            return new CpLogResult.NotFound(traceId);
         }
     }
 

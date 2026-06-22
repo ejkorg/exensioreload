@@ -618,7 +618,7 @@ public class StageSessionService {
             return;
         }
         String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'FAILED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'NEW'";
+        String stageSql = "UPDATE " + table + " SET status = 'FAILED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'pending'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(stageSql)) {
             ps.setString(1, sessionId);
@@ -646,7 +646,7 @@ public class StageSessionService {
             return;
         }
         String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'FAILED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'NEW'";
+        String stageSql = "UPDATE " + table + " SET status = 'FAILED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'pending'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(stageSql)) {
             ps.setString(1, sessionId);
@@ -809,7 +809,7 @@ public class StageSessionService {
     private StatusCounts loadCounts(String sessionId) {
         String table = refDbService.getStagingTable();
         String sql = "SELECT COUNT(*), " +
-                "SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) " +
@@ -837,7 +837,7 @@ public class StageSessionService {
                 .append("SUM(CASE WHEN UPPER(status) IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END) AS enqueued_count, ")
                 .append("SUM(CASE WHEN UPPER(status) = 'FAILED' AND UPPER(COALESCE(error_message, '')) NOT LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS failed_count, ")
                 .append("SUM(CASE WHEN UPPER(status) = 'FAILED' AND UPPER(COALESCE(error_message, '')) LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS cancelled_count, ")
-                .append("SUM(CASE WHEN UPPER(status) = 'NEW' THEN 1 ELSE 0 END) AS new_count, ")
+                .append("SUM(CASE WHEN UPPER(status) = 'pending' THEN 1 ELSE 0 END) AS pending_count, ")
                 .append("COUNT(*) AS total_count ")
                 .append("FROM ").append(table).append(" WHERE request_id = ? ");
         List<Object> params = new ArrayList<>();

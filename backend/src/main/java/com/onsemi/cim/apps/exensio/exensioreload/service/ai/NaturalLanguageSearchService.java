@@ -29,7 +29,7 @@ public class NaturalLanguageSearchService {
         Map.entry("completed", "DONE"),
         Map.entry("pending", "ENQUEUED_LOCAL"),
         Map.entry("processing", "EXENSIO_LOADING"),
-        Map.entry("new", "NEW"),
+        Map.entry("pending", "pending"),
         Map.entry("staging", "ENRICHMENT")
     );
 

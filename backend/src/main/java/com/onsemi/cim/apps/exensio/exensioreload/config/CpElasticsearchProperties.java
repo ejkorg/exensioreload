@@ -52,8 +52,8 @@ public class CpElasticsearchProperties {
     /** Polling interval in milliseconds. Default: 60 000 ms (1 minute). */
     private long pollIntervalMs = 60_000L;
 
-    /** Timeout in minutes before a record stuck in ENRICHMENT is marked FAILED. Default: 30 minutes. */
-    private int enrichmentTimeoutMinutes = 30;
+    /** Timeout in minutes before a record stuck in ENRICHMENT falls through to Exensio or marked for manual verify. Default: 15 minutes. */
+    private int enrichmentTimeoutMinutes = 15;
 
     /** Whether to log Elasticsearch request payloads (query JSON). */
     private boolean logRequestPayloads = false;

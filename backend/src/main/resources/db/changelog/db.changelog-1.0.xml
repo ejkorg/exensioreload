@@ -381,5 +381,7 @@
     <include file="db.changelog-9.4-exensio-columns.xml" relativeToChangelogFile="true" />
     <!-- Add data_type and test_phase columns for pgc_key derivation and PPID validation -->
     <include file="db.changelog-9.5-data-type-test-phase.xml" relativeToChangelogFile="true" />
+    <!-- Rename NEW → pending, update constraint and column default -->
+    <include file="db.changelog-9.6-rename-new-to-pending.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

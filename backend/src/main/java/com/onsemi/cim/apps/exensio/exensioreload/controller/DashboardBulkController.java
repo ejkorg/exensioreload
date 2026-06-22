@@ -50,7 +50,7 @@ public class DashboardBulkController {
 
     private static final Logger log = LoggerFactory.getLogger(DashboardBulkController.class);
 
-    private static final List<String> CANCELLABLE_STATUSES = List.of("NEW", "FAILED");
+    private static final List<String> CANCELLABLE_STATUSES = List.of("pending", "FAILED");
 
     private final RefDbService refDbService;
     private final SenderDispatchService senderDispatchService;
@@ -152,7 +152,7 @@ public class DashboardBulkController {
         for (int senderId : senderIds) {
             try {
                 // Only cancel NEW; leave PROCESSING/FAILED/DONE untouched
-                refDbService.bulkCancelBySender(senderId, List.of("NEW"));
+                refDbService.bulkCancelBySender(senderId, List.of("pending"));
                 successCount++;
             } catch (Exception ex) {
                 log.error("[BulkPause] failed for sender={}: {}", senderId, ex.getMessage(), ex);
