@@ -18,7 +18,7 @@
                     <span class="btn-label">Analytics</span>
                 </button>
                 <button mat-stroked-button (click)="refresh()" [disabled]="loading()" class="refresh-btn"
-                        [matTooltip]="'Last updated: ' + formatTimeAgo(lastUpdated())"
+                        [matTooltip]="'Last updated: ' + fmtTimeAgo(lastUpdated())"
                         aria-label="Refresh dashboard data"
                         [attr.aria-busy]="loading()">
                     <mat-icon aria-hidden="true">{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
@@ -26,10 +26,10 @@
                 </button>
                 <button mat-flat-button color="accent" class="resume-monitoring-btn"
                         (click)="startOrResumeMonitoring()"
-                        [matTooltip]="getPrimaryMonitoringActionTooltip()"
-                        [attr.aria-label]="getPrimaryMonitoringActionLabel()">
-                    <mat-icon aria-hidden="true">{{ getPrimaryMonitoringActionIcon() }}</mat-icon>
-                    <span class="btn-label">{{ getPrimaryMonitoringActionLabel() }}</span>
+                        [matTooltip]="primaryMonitoringActionTooltip()"
+                        [attr.aria-label]="primaryMonitoringActionLabel()">
+                    <mat-icon aria-hidden="true">{{ primaryMonitoringActionIcon() }}</mat-icon>
+                    <span class="btn-label">{{ primaryMonitoringActionLabel() }}</span>
                 </button>
                 <span class="file-list-label" *ngIf="activeMonitoringSession() && stagingSession.sessionFiles().length > 0"
                       aria-live="polite">
@@ -44,14 +44,14 @@
         </div>
     </header>
 
-    <div class="freshness-banner" *ngIf="!loading() && shouldShowFreshnessBanner()" [class.stale]="dataFreshness() === 'stale'" [class.very-stale]="dataFreshness() === 'very-stale'"
+    <div class="freshness-banner" *ngIf="!loading() && showFreshnessBanner()" [class.stale]="dataFreshness() === 'stale'" [class.very-stale]="dataFreshness() === 'very-stale'"
          role="alert"
          [attr.aria-live]="dataFreshness() === 'very-stale' ? 'assertive' : 'polite'"
          aria-atomic="true">
         <mat-icon aria-hidden="true">{{ dataFreshness() === 'very-stale' ? 'warning' : 'info' }}</mat-icon>
         <div class="freshness-text">
             <strong>Data freshness</strong>
-            <span>{{ getFreshnessMessage() }}</span>
+            <span>{{ freshnessMessage() }}</span>
         </div>
         <div class="freshness-actions">
             <button type="button" class="refresh-link" (click)="refresh()" aria-label="Refresh dashboard data now">
@@ -109,7 +109,7 @@
         <section class="metrics-section" aria-labelledby="kpi-heading">
             <h2 class="section-title" id="kpi-heading">Key Performance Indicators</h2>
             <div class="metrics-grid" role="region" aria-label="Key performance indicators">
-                <div *ngFor="let metric of primaryMetrics; let idx = index"
+                <div *ngFor="let metric of primaryMetrics(); let idx = index"
                      class="metric-card glass-panel"
                      [class.alert]="metric.alert"
                      [class.updated]="changedMetrics().has(getMetricChangeKey(metric.label))"
@@ -135,9 +135,9 @@
                         </div>
                         <div class="metric-value">{{ metric.value | number }}</div>
                         <div class="metric-subtext">{{ metric.subtext }}</div>
-                        @if (metric.key && getMetricHistory(metric.key).length > 1) {
+                        @if (metric.key && (metricHistories().get(metric.key)?.length ?? 0) > 1) {
                         <div class="sparkline-container" role="img" [attr.aria-label]="metric.label + ' trend chart'">
-                            <app-sparkline [data]="getMetricHistory(metric.key)" [color]="metric.accentColor || '#10b981'"></app-sparkline>
+                            <app-sparkline [data]="metricHistories().get(metric.key) ?? []" [color]="metric.accentColor || '#10b981'"></app-sparkline>
                         </div>
                         }
                     </div>
@@ -149,7 +149,7 @@
         <section class="supporting-metrics">
             <h2 class="section-title">Infrastructure</h2>
             <div class="metrics-row glass-panel infrastructure-banner">
-                <div *ngFor="let metric of supportingMetrics" class="metric-compact inner-item" [ngClass]="'color-' + metric.color">
+                <div *ngFor="let metric of supportingMetrics()" class="metric-compact inner-item" [ngClass]="'color-' + metric.color">
                     <div class="compact-header">
                         <mat-icon>{{ metric.icon }}</mat-icon>
                         <span class="compact-label">{{ metric.label }}</span>
@@ -321,7 +321,7 @@
             <div class="footer-sync-status">
                 <mat-icon class="sync-icon" [class.spinning]="loading()" [class.pulsing]="lastUpdatePulse()">{{ loading() ? 'cloud_sync' : 'cloud_done' }}</mat-icon>
                 <span class="sync-text">
-                    {{ loading() ? 'Updating...' : 'Live sync active • Last update: ' + formatTimeAgo(lastUpdated()) }}
+                    {{ loading() ? 'Updating...' : 'Live sync active • Last update: ' + fmtTimeAgo(lastUpdated()) }}
                 </span>
             </div>
         </footer>

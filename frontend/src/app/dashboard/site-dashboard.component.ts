@@ -101,7 +101,7 @@ import { environment } from '../../environments/environment';
             padding: 2rem;
             display: flex;
             flex-direction: column;
-            gap: 2rem;
+            gap: 1.5rem;
             color: var(--text-primary);
         }
 
@@ -109,26 +109,26 @@ import { environment } from '../../environments/environment';
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 1.5rem;
+            gap: 1rem;
             flex-wrap: wrap;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 1.5rem;
+            padding-bottom: 1.25rem;
         }
 
         .header-left {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
             flex-wrap: wrap;
         }
 
         .title-block h2 {
             margin: 0;
-            font-size: 2rem;
+            font-size: 1.8rem;
         }
 
         .subtitle {
-            margin: 0.35rem 0 0 0;
+            margin: 0.25rem 0 0 0;
             color: var(--text-secondary);
         }
 
@@ -137,7 +137,7 @@ import { environment } from '../../environments/environment';
             gap: 0.75rem;
             align-items: center;
             padding: 0.75rem 1rem;
-            border-radius: 12px;
+            border-radius: 10px;
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
@@ -145,49 +145,49 @@ import { environment } from '../../environments/environment';
         .metrics {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            gap: 0.85rem;
         }
 
         .metric-card {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
-            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            padding: 0.85rem 1.15rem;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.35rem;
         }
 
         .metric-card .label {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: var(--text-secondary);
         }
 
         .metric-card .value {
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             font-weight: 700;
         }
 
         .senders h3 {
-            margin: 0 0 1rem 0;
+            margin: 0 0 0.75rem 0;
         }
 
         .sender-list {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
         }
 
         .sender-row {
             display: grid;
             grid-template-columns: 1.2fr 2fr 1.2fr;
-            gap: 1rem;
-            padding: 1rem 1.25rem;
+            gap: 0.85rem;
+            padding: 0.85rem 1.15rem;
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
+            border-radius: 12px;
             align-items: center;
         }
 
@@ -279,7 +279,10 @@ import { environment } from '../../environments/environment';
         }
 
         @media (max-width: 600px) {
-            .site-dashboard { padding: 1.5rem; }
+            .site-dashboard { padding: 1rem; gap: 1rem; }
+            .site-header { padding-bottom: 1rem; }
+            .metric-card { padding: 0.75rem 1rem; }
+            .sender-row { padding: 0.75rem 1rem; grid-template-columns: 1fr; }
             .sender-metrics { grid-template-columns: 1fr; }
         }
     `],

@@ -24,19 +24,6 @@ import { BulkActionsComponent, SelectableItem } from './bulk-actions.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
 import { SiteDetailModalComponent } from './site-detail-modal.component';
 
-/**
- * PHASE 3.5 PERFORMANCE OPTIMIZATIONS:
- * - ChangeDetectionStrategy.OnPush: Minimal re-renders, only when signals change
- * - Computed properties with memoization: Expensive calculations cached
- * - Metric history limited to 60 points: Reduces DOM node count
- * - SparklineComponent lazy-loaded via signals: No eager instantiation
- * - Material icons imported efficiently: No unused icon modules
- * - Event handlers use arrow functions: Preserves 'this' context
- * - Keyboard handlers debounced: Prevents excessive calculations
- * - No inline functions in templates: Pre-computed values used
- * Target: Lighthouse performance >90
- */
-
 interface MetricCard {
   key?: keyof MetricSnapshot;
   label: string;
@@ -59,9 +46,7 @@ interface SenderPerformance {
   successRate: number;
   alert: boolean;
   isCritical?: boolean;
-  /** NEW records that can still be cancelled before dispatch */
   cancellableCount: number;
-  /** ENQUEUED records already dispatched to the sender queue — cannot be cancelled */
   enqueuedCount: number;
 }
 
@@ -74,13 +59,6 @@ interface ActiveMonitoringSessionContext {
 
 interface MetricSnapshot {
   timestamp: number;
-  backlog: number;
-  ready: number;
-  enqueued: number;
-  completed: number;
-}
-
-interface MetricTrend {
   backlog: number;
   ready: number;
   enqueued: number;
@@ -118,8 +96,8 @@ interface DashboardErrorDetails {
 export class DashboardComponent implements OnInit, OnDestroy {
   private readonly monitoringResumeStorageKey = 'exensioreload.activeMonitoringSessionId';
 
-  // Make Math available in template for accessibility labels
-  Math = Math;
+  /** Exposed for template Math.abs() call in aria-label */
+  readonly Math = Math;
 
   snapshot = signal<DashboardSnapshot | null>(null);
   loading = signal(false);
@@ -135,22 +113,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   changedMetrics = signal<Set<string>>(new Set<string>());
   lastUpdatePulse = signal(false);
 
-  /** Resolved limits from backend; null until the API call completes */
   resolvedLimits = signal<LimitsConfig | null>(null);
-  /** True when the limits API call failed and environment fallback values are in use */
   limitsError = signal(false);
-  /** True when the operator has dismissed the fallback limits banner */
   limitsBannerDismissed = signal(false);
 
-  /** Resolved monitorMaxRows from backend limits, falling back to environment value */
   resolvedMonitorMaxRows = computed<number>(
     () => this.resolvedLimits()?.stageMaxRowsCap ?? environment.monitoring.monitorMaxRows,
   );
 
-  /** Phase 4.2: Bulk selection — tracks selected sender IDs from top-senders section */
   selectedSenderIds = signal<Set<number>>(new Set<number>());
 
-  /** Derives SelectableItem[] from topSenders for BulkActionsComponent */
   selectableItems = computed<SelectableItem[]>(() =>
     this.topSenders().map((s: SenderPerformance) => ({
       id: s.senderId,
@@ -161,19 +133,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     })),
   );
 
-  private freshnessPollInterval?: ReturnType<typeof setInterval>;
-  private pollSub?: Subscription;
-  private retryAttempts = 0;
-  private readonly maxRetries = 5;
-  private readonly retryBaseDelayMs = 5000;
-  private autoRetryTimeout?: ReturnType<typeof setTimeout>;
-  private retryCountdownInterval?: ReturnType<typeof setInterval>;
+  // ── Computed KPIs ───────────────────────────────────────────────
 
-  // Computed properties for enhanced metrics
   overallHealthScore = computed(() => {
     const s = this.snapshot();
     if (!s) return 0;
-    // Include failed in the terminal count so failures reduce the health score
     const terminal = s.global.completed + s.global.failed;
     if (terminal === 0) return 100;
     return Math.round((s.global.completed / terminal) * 100);
@@ -189,30 +153,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
   metricTrends = computed(() => {
     const history = this.metricHistory();
     const now = Date.now();
-    const oneHourAgo = now - 60 * 60 * 1000; // 1 hour in milliseconds
-
-    // Filter history to last hour
+    const oneHourAgo = now - 60 * 60 * 1000;
     const recentHistory = history.filter((h: MetricSnapshot) => h.timestamp >= oneHourAgo);
 
     if (recentHistory.length < 2) {
       return { backlog: 0, ready: 0, enqueued: 0, completed: 0 };
     }
 
-    // Get oldest and newest within the hour
     const oldest = recentHistory[0];
     const newest = recentHistory[recentHistory.length - 1];
 
-    // Calculate percentage change
-    const calculateTrend = (current: number, old: number): number => {
+    const calcTrend = (current: number, old: number): number => {
       if (old === 0) return current > 0 ? 100 : 0;
       return Math.round(((current - old) / old) * 100);
     };
 
     return {
-      backlog: calculateTrend(newest.backlog, oldest.backlog),
-      ready: calculateTrend(newest.ready, oldest.ready),
-      enqueued: calculateTrend(newest.enqueued, oldest.enqueued),
-      completed: calculateTrend(newest.completed, oldest.completed),
+      backlog: calcTrend(newest.backlog, oldest.backlog),
+      ready: calcTrend(newest.ready, oldest.ready),
+      enqueued: calcTrend(newest.enqueued, oldest.enqueued),
+      completed: calcTrend(newest.completed, oldest.completed),
     };
   });
 
@@ -222,8 +182,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const senders: SenderPerformance[] = [];
     s.sites.forEach((site: DashboardSiteSnapshot) => {
       site.senders.forEach((sender: DashboardSenderSnapshot) => {
-        // Calculate success rate: completed / (completed + failed)
-        // Terminal files are those that have finished processing (either successfully or with failure)
         const completed = sender.metrics.completed || 0;
         const failed = sender.metrics.failed || 0;
         const terminal = completed + failed;
@@ -233,7 +191,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           senderLabel: sender.senderLabel,
           site: site.site,
           backlog: sender.metrics.backlog,
-          throughput: 0, // Backend metrics don't provide throughput
+          throughput: 0,
           successRate: successRate,
           alert: sender.metrics.backlog > 500,
           isCritical: sender.metrics.backlog > 5000,
@@ -245,16 +203,173 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return senders.sort((a, b) => b.backlog - a.backlog).slice(0, 6);
   });
 
+  /** Computed KPI cards — memoized via signal */
+  primaryMetrics = computed<MetricCard[]>(() => {
+    const s = this.snapshot();
+    if (!s) return [];
+    const trends = this.metricTrends();
+    return [
+      {
+        key: 'backlog',
+        label: 'Backlog Pending',
+        abbrev: 'BCK',
+        value: s.global.backlog,
+        icon: 'hourglass_bottom',
+        color: s.global.backlog > 5000 ? 'danger' : s.global.backlog > 1000 ? 'warning' : 'secondary',
+        accentColor: s.global.backlog > 5000 ? '#ef4444' : '#f59e0b',
+        alert: s.global.backlog > 1000,
+        subtext: 'items waiting to be staged',
+        trend: trends.backlog,
+      },
+      {
+        key: 'ready',
+        label: 'Ready to Send',
+        abbrev: 'RDY',
+        value: s.global.ready,
+        icon: 'play_arrow',
+        color: 'primary',
+        accentColor: '#818cf8',
+        subtext: 'prepared payloads ready',
+        trend: trends.ready,
+      },
+      {
+        key: 'enqueued',
+        label: 'In Queue',
+        abbrev: 'QUE',
+        value: s.global.enqueued,
+        icon: 'schedule',
+        color: 'info',
+        accentColor: '#3b82f6',
+        subtext: 'actively being dispatched',
+        trend: trends.enqueued,
+      },
+      {
+        key: 'completed',
+        label: 'Completed Today',
+        abbrev: 'CPL',
+        value: s.global.completed,
+        icon: 'check_circle',
+        color: 'success',
+        accentColor: '#10b981',
+        subtext: 'successful operations',
+        trend: trends.completed,
+      },
+    ];
+  });
+
+  /** Supporting infrastructure metrics — memoized */
+  supportingMetrics = computed<MetricCard[]>(() => {
+    const s = this.snapshot();
+    if (!s) return [];
+    return [
+      {
+        label: 'Active Senders',
+        value: s.global.activeSenders,
+        icon: 'groups',
+        color: 'info',
+        accentColor: '#3b82f6',
+      },
+      {
+        label: 'Active Sites',
+        value: s.sites.length,
+        icon: 'location_on',
+        color: 'secondary',
+        accentColor: '#8b5cf6',
+      },
+    ];
+  });
+
+  /** Pre-computed per-key histories (avoids 8x map+slice per render) */
+  metricHistories = computed<Map<string, number[]>>(() => {
+    const history = this.metricHistory();
+    const keys: (keyof MetricSnapshot)[] = ['backlog', 'ready', 'enqueued', 'completed'];
+    const map = new Map<string, number[]>();
+    for (const key of keys) {
+      map.set(key, history.map((m: MetricSnapshot) => m[key]).slice(-60));
+    }
+    return map;
+  });
+
+  // ── Monitoring action computeds ─────────────────────────────────
+
+  primaryMonitoringActionLabel = computed<string>(() =>
+    this.activeMonitoringSession() ? 'Resume Monitoring' : 'Start Monitoring',
+  );
+
+  primaryMonitoringActionTooltip = computed<string>(() => {
+    const active = this.activeMonitoringSession();
+    return active ? `Resume active session ${active.sessionId}` : 'Start a new monitoring session';
+  });
+
+  primaryMonitoringActionIcon = computed<string>(() =>
+    this.activeMonitoringSession() ? 'play_circle' : 'play_arrow',
+  );
+
+  // ── Freshness / error computeds ─────────────────────────────────
+
+  /** Seconds since last successful data fetch */
+  dataAgeSeconds = computed<number>(() => {
+    const lastUpdated = this.lastUpdated();
+    if (!lastUpdated) return Number.POSITIVE_INFINITY;
+    return Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
+  });
+
+  /** Human-readable freshness banner message */
+  freshnessMessage = computed<string>(() => {
+    const ageSeconds = this.dataAgeSeconds();
+    if (!Number.isFinite(ageSeconds)) return 'No dashboard data has been loaded yet.';
+    if (this.dataFreshness() === 'very-stale') {
+      return `Data is very stale (${ageSeconds}s old). Refresh recommended.`;
+    }
+    return `Data may be stale (${ageSeconds}s old). Last refresh was ${this.fmtTimeAgo(this.lastUpdated())}.`;
+  });
+
+  /** Whether to render the freshness banner */
+  showFreshnessBanner = computed<boolean>(() => {
+    const freshness = this.dataFreshness();
+    if (freshness === 'fresh') return false;
+    if (freshness === 'very-stale') return true;
+    return !this.freshnessBannerDismissed();
+  });
+
+  /** True when dashboard has zero sites */
+  hasNoData = computed<boolean>(() => {
+    const snap = this.snapshot();
+    return !snap || !snap.sites || snap.sites.length === 0;
+  });
+
+  /** True when all global metrics are zero */
+  hasZeroMetrics = computed<boolean>(() => {
+    const snap = this.snapshot();
+    if (!snap?.global) return false;
+    return (
+      (snap.global.completed || 0) === 0 &&
+      (snap.global.enqueued || 0) === 0 &&
+      (snap.global.ready || 0) === 0 &&
+      (snap.global.backlog || 0) === 0 &&
+      (snap.global.activeSenders || 0) === 0
+    );
+  });
+
+  // ── Private state ───────────────────────────────────────────────
+
+  private freshnessPollInterval?: ReturnType<typeof setInterval>;
+  private pollSub?: Subscription;
+  private retryAttempts = 0;
+  private readonly maxRetries = 5;
+  private readonly retryBaseDelayMs = 5000;
+  private autoRetryTimeout?: ReturnType<typeof setTimeout>;
+  private retryCountdownInterval?: ReturnType<typeof setInterval>;
+  private toast: ToastService;
+
   constructor(
     private backend: BackendService,
     private router: Router,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
   ) {
-    this.toast = inject(ToastService) as ToastService;
+    this.toast = inject(ToastService);
   }
-
-  private toast: ToastService;
 
   ngOnInit() {
     this.backend.getLimits().subscribe({
@@ -289,13 +404,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.freshnessBannerDismissed.set(true);
   }
 
-  shouldShowFreshnessBanner(): boolean {
-    const freshness = this.dataFreshness();
-    if (freshness === 'fresh') return false;
-    if (freshness === 'very-stale') return true;
-    return !this.freshnessBannerDismissed();
-  }
-
+  /** Whether an active session exists for a given site + sender */
   hasActiveSessionForSender(site: string, senderId: number): boolean {
     const active = this.activeMonitoringSession();
     if (!active) return false;
@@ -312,23 +421,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
     this.router.navigate(['/new']);
-  }
-
-  getPrimaryMonitoringActionLabel(): string {
-    return this.activeMonitoringSession() ? 'Resume Monitoring' : 'Start Monitoring';
-  }
-
-  getPrimaryMonitoringActionTooltip(): string {
-    const active = this.activeMonitoringSession();
-    if (active) {
-      return `Resume active session ${active.sessionId}`;
-    }
-
-    return 'Start a new monitoring session';
-  }
-
-  getPrimaryMonitoringActionIcon(): string {
-    return this.activeMonitoringSession() ? 'play_circle' : 'play_arrow';
   }
 
   openAlertSettings(sender: SenderPerformance): void {
@@ -391,7 +483,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           setTimeout(() => this.changedMetrics.set(new Set<string>()), 600);
         }
 
-        // Track metric history for trend calculation
         const newSnapshot: MetricSnapshot = {
           timestamp: Date.now(),
           backlog: snap.global.backlog,
@@ -400,7 +491,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           completed: snap.global.completed,
         };
 
-        // Keep only last 360 snapshots (1 hour at 10-second intervals)
         this.metricHistory.update((history: MetricSnapshot[]) => {
           const updated = [...history, newSnapshot];
           if (updated.length > 360) {
@@ -431,7 +521,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           timestamp: new Date(),
         });
 
-        // Show toast notification to user
         this.toast.error(parsed.message, 7000);
 
         if (this.retryAttempts < this.maxRetries) {
@@ -459,9 +548,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private autoRetry(): void {
-    if (this.retryAttempts >= this.maxRetries) {
-      return;
-    }
+    if (this.retryAttempts >= this.maxRetries) return;
     this.loadSnapshot(false);
   }
 
@@ -471,21 +558,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.retryCountdownInterval = setInterval(() => {
       remaining -= 1;
-
       this.errorDetails.update((current: DashboardErrorDetails | null) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          retryIn: Math.max(remaining, 0),
-        };
+        if (!current) return current;
+        return { ...current, retryIn: Math.max(remaining, 0) };
       });
-
-      if (remaining <= 0) {
-        this.clearRetryCountdownInterval();
-      }
+      if (remaining <= 0) this.clearRetryCountdownInterval();
     }, 1000);
   }
 
@@ -504,201 +581,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.clearRetryCountdownInterval();
   }
 
-  private extractHttpStatus(err: unknown): number | undefined {
-    if (typeof err === 'object' && err !== null && 'status' in err) {
-      const value = (err as { status?: unknown }).status;
-      if (typeof value === 'number') {
-        return value;
-      }
-    }
-    return undefined;
-  }
-
-  private classifyDashboardError(status?: number): Pick<DashboardErrorDetails, 'message' | 'code' | 'details'> {
-    if (status === 0) {
-      return {
-        message: 'Unable to connect to server',
-        code: 'NO_CONNECTION',
-        details: 'Check your network connection, VPN, or firewall settings.',
-      };
-    }
-
-    if (status === 408 || status === 504) {
-      return {
-        message: 'Request timed out',
-        code: 'TIMEOUT',
-        details: 'The server took too long to respond. Please wait while we retry automatically.',
-      };
-    }
-
-    if (status === 401 || status === 403) {
-      return {
-        message: 'Authentication failed',
-        code: 'AUTH_ERROR',
-        details: 'Your session may have expired. Please sign in again.',
-      };
-    }
-
-    if (typeof status === 'number' && (status === 500 || status === 502 || status === 503)) {
-      return {
-        message: 'Server error',
-        code: 'SERVER_ERROR',
-        details: 'The backend service is currently unavailable. Retrying automatically.',
-      };
-    }
-
-    if (typeof status === 'number' && status >= 400 && status < 500) {
-      return {
-        message: 'Invalid request',
-        code: 'CLIENT_ERROR',
-        details: `The server returned ${status}. Please retry or contact support if this persists.`,
-      };
-    }
-
-    return {
-      message: 'Could not connect to backend services.',
-      code: 'UNKNOWN',
-      details: 'An unexpected error occurred while loading dashboard data.',
-    };
-  }
-
-  private detectChanges(previous: DashboardSnapshot | null, current: DashboardSnapshot | null): Set<string> {
-    const changed = new Set<string>();
-
-    if (!previous || !current) {
-      return changed;
-    }
-
-    const trackedMetrics: Array<keyof DashboardSnapshot['global']> = [
-      'backlog',
-      'ready',
-      'enqueued',
-      'completed',
-      'activeSenders',
-    ];
-    trackedMetrics.forEach((metric) => {
-      if (previous.global[metric] !== current.global[metric]) {
-        changed.add(`metric-${metric}`);
-      }
-    });
-
-    const previousSites = new Map(previous.sites.map((site) => [site.site, site]));
-    current.sites.forEach((site) => {
-      const previousSite = previousSites.get(site.site);
-      if (!previousSite) {
-        changed.add(`site-${site.site}`);
-        return;
-      }
-
-      if (
-        previousSite.metrics.backlog !== site.metrics.backlog ||
-        previousSite.metrics.completed !== site.metrics.completed ||
-        previousSite.metrics.ready !== site.metrics.ready ||
-        previousSite.metrics.enqueued !== site.metrics.enqueued
-      ) {
-        changed.add(`site-${site.site}`);
-      }
-
-      const previousSenders = new Map(previousSite.senders.map((sender) => [sender.senderId, sender]));
-      site.senders.forEach((sender) => {
-        const previousSender = previousSenders.get(sender.senderId);
-        if (!previousSender) {
-          changed.add(`sender-${sender.senderId}`);
-          return;
-        }
-
-        const senderChanged =
-          previousSender.metrics.backlog !== sender.metrics.backlog ||
-          previousSender.metrics.completed !== sender.metrics.completed ||
-          previousSender.metrics.enqueued !== sender.metrics.enqueued ||
-          previousSender.metrics.failed !== sender.metrics.failed;
-
-        if (senderChanged) {
-          changed.add(`sender-${sender.senderId}`);
-        }
-      });
-    });
-
-    return changed;
-  }
-
-  get primaryMetrics(): MetricCard[] {
-    const s = this.snapshot();
-    if (!s) return [];
-    const trends = this.metricTrends();
-    return [
-      {
-        key: 'backlog',
-        label: 'Backlog Pending',
-        abbrev: 'BCK',
-        value: s.global.backlog,
-        icon: 'hourglass_bottom',
-        color: s.global.backlog > 5000 ? 'danger' : s.global.backlog > 1000 ? 'warning' : 'secondary',
-        accentColor: s.global.backlog > 5000 ? '#ef4444' : '#f59e0b',
-        alert: s.global.backlog > 1000,
-        subtext: 'items waiting to be staged',
-        trend: trends.backlog,
-      },
-      {
-        key: 'ready',
-        label: 'Ready to Send',
-        abbrev: 'RDY',
-        value: s.global.ready,
-        icon: 'play_arrow',
-        color: 'primary',
-        accentColor: '#818cf8',
-        subtext: 'prepared payloads ready',
-        trend: trends.ready,
-      },
-      {
-        key: 'enqueued',
-        label: 'In Queue',
-        abbrev: 'QUE',
-        value: s.global.enqueued,
-        icon: 'schedule',
-        color: 'info',
-        accentColor: '#3b82f6',
-        subtext: 'actively being dispatched',
-        trend: trends.enqueued,
-      },
-      {
-        key: 'completed',
-        label: 'Completed Today',
-        abbrev: 'CPL',
-        value: s.global.completed,
-        icon: 'check_circle',
-        color: 'success',
-        accentColor: '#10b981',
-        subtext: 'successful operations',
-        trend: trends.completed,
-      },
-    ];
-  }
-
-  getMetricHistory(metricKey: keyof MetricSnapshot): number[] {
-    // Performance: Slice to last 60 points to limit DOM rendering
-    // Combined with OnPush change detection strategy to minimize re-renders
-    // Sparkline component lazy-loads through signal inputs
-    return this.metricHistory()
-      .map((snapshot: MetricSnapshot) => snapshot[metricKey])
-      .slice(-60);
-  }
-
-  /** Phase 4.2: Toggle a single sender card's selected state */
   toggleSenderSelection(senderId: number, event: MouseEvent | Event): void {
     event.stopPropagation();
     this.selectedSenderIds.update((current: Set<number>) => {
       const next = new Set(current);
-      if (next.has(senderId)) {
-        next.delete(senderId);
-      } else {
-        next.add(senderId);
-      }
+      if (next.has(senderId)) next.delete(senderId);
+      else next.add(senderId);
       return next;
     });
   }
 
-  /** Phase 4.2: Sync selection from BulkActionsComponent (e.g. select-all / clear) */
   onBulkSelectionChanged(ids: Set<number>): void {
     this.selectedSenderIds.set(ids);
   }
@@ -714,41 +606,49 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: (err: unknown) => {
         console.error('Dispatch failed for sender', sender.senderId, err);
-        const errorMsg = this.extractErrorMessage(err);
-        this.toast.error(`Dispatch failed: ${errorMsg}`, 7000);
+        this.toast.error(`Dispatch failed: ${this.extractErrorMessage(err)}`, 7000);
       },
     });
   }
 
-  private extractErrorMessage(err: any): string {
-    if (err?.error?.message) {
-      return err.error.message;
+  // ── Parameterized helpers (can't be computed — called with template variables) ──
+
+  getMetricChangeKey(metricLabel: string): string {
+    switch (metricLabel) {
+      case 'Backlog Pending':
+        return 'metric-backlog';
+      case 'Ready to Send':
+        return 'metric-ready';
+      case 'In Queue':
+        return 'metric-enqueued';
+      case 'Completed Today':
+        return 'metric-completed';
+      default:
+        return `metric-${metricLabel.toLowerCase().replace(/\s+/g, '-')}`;
     }
-    if (err?.error?.detail) {
-      return err.error.detail;
-    }
-    if (err?.error?.error) {
-      return err.error.error;
-    }
-    if (err?.statusText) {
-      return err.statusText;
-    }
-    if (err?.message) {
-      return err.message;
-    }
-    if (err?.status === 409) {
-      return 'Conflict: Dispatch already in progress';
-    }
-    if (err?.status === 400) {
-      return 'Invalid request data';
-    }
-    if (err?.status === 403) {
-      return 'You do not have permission to dispatch';
-    }
-    if (err?.status === 500) {
-      return 'Server error occurred';
-    }
-    return 'Failed to dispatch sender';
+  }
+
+  getHealthStatusLabel(score: number): string {
+    if (score >= 95) return 'Excellent';
+    if (score >= 85) return 'Good';
+    if (score >= 70) return 'Fair';
+    return 'Poor';
+  }
+
+  getHealthStatusColor(score: number): string {
+    if (score >= 95) return '#10b981';
+    if (score >= 85) return '#3b82f6';
+    if (score >= 70) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  fmtTimeAgo(date: Date | null): string {
+    if (!date) return 'Never';
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
   }
 
   getBacklogCapacity(_sender: SenderPerformance): number {
@@ -777,12 +677,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return 'normal';
   }
 
-  /**
-   * Returns a human-readable label for the file list count.
-   * - loaded >= total  → "Showing X of Y"
-   * - loaded >= cap    → "Showing X of Y (cap reached)"
-   * - otherwise        → "Showing X of Y (cap: Z)"
-   */
   getFileListLabel(loaded: number, total: number, cap: number): string {
     if (loaded >= total) {
       return `Showing ${loaded.toLocaleString()} of ${total.toLocaleString()}`;
@@ -791,120 +685,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return `Showing ${loaded.toLocaleString()} of ${total.toLocaleString()} (cap reached)`;
     }
     return `Showing ${loaded.toLocaleString()} of ${total.toLocaleString()} (cap: ${cap.toLocaleString()})`;
-  }
-
-  getMetricChangeKey(metricLabel: string): string {
-    switch (metricLabel) {
-      case 'Backlog Pending':
-        return 'metric-backlog';
-      case 'Ready to Send':
-        return 'metric-ready';
-      case 'In Queue':
-        return 'metric-enqueued';
-      case 'Completed Today':
-        return 'metric-completed';
-      default:
-        return `metric-${metricLabel.toLowerCase().replace(/\s+/g, '-')}`;
-    }
-  }
-
-  get supportingMetrics(): MetricCard[] {
-    const s = this.snapshot();
-    if (!s) return [];
-    return [
-      {
-        label: 'Active Senders',
-        value: s.global.activeSenders,
-        icon: 'groups',
-        color: 'info',
-        accentColor: '#3b82f6',
-      },
-      {
-        label: 'Active Sites',
-        value: s.sites.length,
-        icon: 'location_on',
-        color: 'secondary',
-        accentColor: '#8b5cf6',
-      },
-    ];
-  }
-
-  getHealthStatusLabel(score: number): string {
-    if (score >= 95) return 'Excellent';
-    if (score >= 85) return 'Good';
-    if (score >= 70) return 'Fair';
-    return 'Poor';
-  }
-
-  getHealthStatusColor(score: number): string {
-    if (score >= 95) return '#10b981'; // green
-    if (score >= 85) return '#3b82f6'; // blue
-    if (score >= 70) return '#f59e0b'; // amber
-    return '#ef4444'; // red
-  }
-
-  formatTimeAgo(date: Date | null): string {
-    if (!date) return 'Never';
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
-  }
-
-  getDataAgeSeconds(): number {
-    const lastUpdated = this.lastUpdated();
-    if (!lastUpdated) return Number.POSITIVE_INFINITY;
-    return Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
-  }
-
-  getFreshnessMessage(): string {
-    const ageSeconds = this.getDataAgeSeconds();
-    if (!Number.isFinite(ageSeconds)) return 'No dashboard data has been loaded yet.';
-    if (this.dataFreshness() === 'very-stale') {
-      return `Data is very stale (${ageSeconds}s old). Refresh recommended.`;
-    }
-    return `Data may be stale (${ageSeconds}s old). Last refresh was ${this.formatTimeAgo(this.lastUpdated())}.`;
-  }
-
-  private setupFreshnessMonitor(): void {
-    this.freshnessPollInterval = setInterval(() => {
-      const ageSeconds = this.getDataAgeSeconds();
-
-      if (!Number.isFinite(ageSeconds)) {
-        this.dataFreshness.set('fresh');
-        return;
-      }
-
-      if (ageSeconds < 30) {
-        this.dataFreshness.set('fresh');
-        this.freshnessBannerDismissed.set(false);
-      } else if (ageSeconds < 60) {
-        this.dataFreshness.set('stale');
-      } else {
-        this.dataFreshness.set('very-stale');
-      }
-    }, 1000);
-  }
-
-  // Helper to check if dashboard has no data
-  hasNoData(): boolean {
-    const snap = this.snapshot();
-    return !snap || !snap.sites || snap.sites.length === 0;
-  }
-
-  // Helper to check if all metrics are zero
-  hasZeroMetrics(): boolean {
-    const snap = this.snapshot();
-    if (!snap?.global) return false;
-    return (
-      (snap.global.completed || 0) === 0 &&
-      (snap.global.enqueued || 0) === 0 &&
-      (snap.global.ready || 0) === 0 &&
-      (snap.global.backlog || 0) === 0 &&
-      (snap.global.activeSenders || 0) === 0
-    );
   }
 
   isSiteExpanded(siteName: string): boolean {
@@ -926,13 +706,143 @@ export class DashboardComponent implements OnInit, OnDestroy {
   toggleSiteSenders(siteName: string): void {
     this.expandedSites.update((current: Set<string>) => {
       const next = new Set(current);
-      if (next.has(siteName)) {
-        next.delete(siteName);
-      } else {
-        next.add(siteName);
-      }
+      if (next.has(siteName)) next.delete(siteName);
+      else next.add(siteName);
       return next;
     });
+  }
+
+  // ── Private helpers ─────────────────────────────────────────────
+
+  private setupFreshnessMonitor(): void {
+    this.freshnessPollInterval = setInterval(() => {
+      const ageSeconds = this.dataAgeSeconds();
+      if (!Number.isFinite(ageSeconds)) {
+        this.dataFreshness.set('fresh');
+        return;
+      }
+      if (ageSeconds < 30) {
+        this.dataFreshness.set('fresh');
+        this.freshnessBannerDismissed.set(false);
+      } else if (ageSeconds < 60) {
+        this.dataFreshness.set('stale');
+      } else {
+        this.dataFreshness.set('very-stale');
+      }
+    }, 1000);
+  }
+
+  private extractHttpStatus(err: unknown): number | undefined {
+    if (typeof err === 'object' && err !== null && 'status' in err) {
+      const value = (err as { status?: unknown }).status;
+      return typeof value === 'number' ? value : undefined;
+    }
+    return undefined;
+  }
+
+  private classifyDashboardError(status?: number): Pick<DashboardErrorDetails, 'message' | 'code' | 'details'> {
+    if (status === 0) {
+      return {
+        message: 'Unable to connect to server',
+        code: 'NO_CONNECTION',
+        details: 'Check your network connection, VPN, or firewall settings.',
+      };
+    }
+    if (status === 408 || status === 504) {
+      return {
+        message: 'Request timed out',
+        code: 'TIMEOUT',
+        details: 'The server took too long to respond. Please wait while we retry automatically.',
+      };
+    }
+    if (status === 401 || status === 403) {
+      return {
+        message: 'Authentication failed',
+        code: 'AUTH_ERROR',
+        details: 'Your session may have expired. Please sign in again.',
+      };
+    }
+    if (typeof status === 'number' && (status === 500 || status === 502 || status === 503)) {
+      return {
+        message: 'Server error',
+        code: 'SERVER_ERROR',
+        details: 'The backend service is currently unavailable. Retrying automatically.',
+      };
+    }
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      return {
+        message: 'Invalid request',
+        code: 'CLIENT_ERROR',
+        details: `The server returned ${status}. Please retry or contact support if this persists.`,
+      };
+    }
+    return {
+      message: 'Could not connect to backend services.',
+      code: 'UNKNOWN',
+      details: 'An unexpected error occurred while loading dashboard data.',
+    };
+  }
+
+  private detectChanges(previous: DashboardSnapshot | null, current: DashboardSnapshot | null): Set<string> {
+    const changed = new Set<string>();
+    if (!previous || !current) return changed;
+
+    const trackedMetrics: Array<keyof DashboardSnapshot['global']> = [
+      'backlog', 'ready', 'enqueued', 'completed', 'activeSenders',
+    ];
+    trackedMetrics.forEach((metric) => {
+      if (previous.global[metric] !== current.global[metric]) {
+        changed.add(`metric-${metric}`);
+      }
+    });
+
+    const previousSites = new Map(previous.sites.map((site) => [site.site, site]));
+    current.sites.forEach((site) => {
+      const previousSite = previousSites.get(site.site);
+      if (!previousSite) {
+        changed.add(`site-${site.site}`);
+        return;
+      }
+      if (
+        previousSite.metrics.backlog !== site.metrics.backlog ||
+        previousSite.metrics.completed !== site.metrics.completed ||
+        previousSite.metrics.ready !== site.metrics.ready ||
+        previousSite.metrics.enqueued !== site.metrics.enqueued
+      ) {
+        changed.add(`site-${site.site}`);
+      }
+      const previousSenders = new Map(previousSite.senders.map((s) => [s.senderId, s]));
+      site.senders.forEach((sender) => {
+        const previousSender = previousSenders.get(sender.senderId);
+        if (!previousSender) {
+          changed.add(`sender-${sender.senderId}`);
+          return;
+        }
+        if (
+          previousSender.metrics.backlog !== sender.metrics.backlog ||
+          previousSender.metrics.completed !== sender.metrics.completed ||
+          previousSender.metrics.enqueued !== sender.metrics.enqueued ||
+          previousSender.metrics.failed !== sender.metrics.failed
+        ) {
+          changed.add(`sender-${sender.senderId}`);
+        }
+      });
+    });
+
+    return changed;
+  }
+
+  private extractErrorMessage(err: any): string {
+    if (err?.error?.message) return err.error.message;
+    if (err?.error?.detail) return err.error.detail;
+    if (err?.error?.error) return err.error.error;
+    if (err?.statusText) return err.statusText;
+    if (err?.message) return err.message;
+    if (err?.status === 409) return 'Conflict: Dispatch already in progress';
+    if (err?.status === 400) return 'Invalid request data';
+    if (err?.status === 403) return 'You do not have permission to dispatch';
+    if (err?.status === 500) return 'Server error occurred';
+    return 'Failed to dispatch sender';
   }
 
   private loadActiveMonitoringSessionContext() {
@@ -941,7 +851,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.activeMonitoringSession.set(null);
       return;
     }
-
     this.backend.getStagingSession(persistedId).subscribe({
       next: (session: StagingSessionDetail) => {
         const status = (session?.status || '').toUpperCase();
@@ -950,7 +859,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.activeMonitoringSession.set(null);
           return;
         }
-
         this.activeMonitoringSession.set({
           sessionId: session.sessionId,
           site: session.site,
