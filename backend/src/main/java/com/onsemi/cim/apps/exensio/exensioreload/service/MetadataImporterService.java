@@ -792,6 +792,12 @@ public class MetadataImporterService {
                 }
             }
 
+            // Capture final copy for lambda — qDataTypeParam may be reassigned below
+            // Only pass dataType through (not testPhase) to preserve existing Exensio
+            // lookup matching behavior — testPhase is used for PPID suffix validation
+            // and changing it from null would alter the match semantics.
+            String dataTypeForPayload = qDataTypeParam;
+
             java.util.function.Consumer<MetadataRow> processor = mr -> {
                 discoveredCount[0]++;
                 String metadataIdValue = mr.getId();
@@ -805,7 +811,7 @@ public class MetadataImporterService {
                 }
                 enqueuePayloadIds.add(payload);
                 java.time.Instant endTime = mr.getEndTime() == null ? null : mr.getEndTime().toInstant(java.time.ZoneOffset.UTC);
-                batch.add(new PayloadCandidate(metadataIdValue, dataIdValue, mr.getLot(), mr.getWafer(), mr.getOriginalFileName(), endTime));
+                batch.add(new PayloadCandidate(metadataIdValue, dataIdValue, mr.getLot(), mr.getWafer(), mr.getOriginalFileName(), endTime, dataTypeForPayload, null));
                 if (batch.size() >= batchSize) {
                     StageResult result = stageCurrentBatch(site, resolvedSenderId, batch, requestId);
                     stagedCount[0] += result.stagedCount();
