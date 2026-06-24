@@ -319,12 +319,17 @@ public class ElasticsearchLogService {
             }
 
             // Optional inputFileName wildcard match for discovered file
-            // Uses inputFileName field to match against the actual CP log field name
+            // Uses inputFileName field to match against the actual CP log field name.
+            // Strips file extension (e.g. "data.csv" -> "data") because CP may index the
+            // file name with or without extension. The surrounding wildcard catches both.
             if (filename != null && !filename.isBlank()) {
+                String nameBase = filename.trim();
+                int dot = nameBase.lastIndexOf('.');
+                if (dot > 0) nameBase = nameBase.substring(0, dot);
                 ObjectNode wildcardFilename = must.addObject();
                 ObjectNode wildcardFilenameInner = wildcardFilename.putObject("wildcard");
                 ObjectNode filenameWildcard = wildcardFilenameInner.putObject("inputFileName");
-                filenameWildcard.put("value", "*" + filename + "*");
+                filenameWildcard.put("value", "*" + nameBase + "*");
                 filenameWildcard.put("case_insensitive", true);
             }
 
