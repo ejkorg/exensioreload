@@ -53,6 +53,9 @@ export class StagingSessionService {
   private postConnectRefreshHandles: ReturnType<typeof setTimeout>[] = [];
   private rowUpdateRefreshHandle?: ReturnType<typeof setTimeout>;
   private tokenSubscription?: Subscription;
+  /** Tracks file IDs that have already generated a terminal activity event, so that
+   *  initial/polling loads don't re-push the same event. */
+  private notifiedTerminalFileIds = new Set<number>();
   private authService = inject(AuthService);
   private toast = inject(ToastService) as ToastService;
   private readonly debugLogsEnabled = false;
@@ -216,6 +219,7 @@ export class StagingSessionService {
     this.nextSseRetryAt = 0;
     this._liveSnapshotTick = 0;
     this.isConnected.set(false);
+    this.notifiedTerminalFileIds.clear();
     this.streamStatus.set('idle');
   }
 
@@ -234,6 +238,19 @@ export class StagingSessionService {
 
         this.debugLog('[StagingSession] Files loaded:', items.length, 'files');
         this.sessionFiles.set(items);
+
+        // Push terminal activity events for files that reached COMPLETED/ERROR but haven't
+        // been notified yet. This covers the initial page-load case where files finished
+        // before the SSE connection was established, and polling refreshes that discover
+        // newly-terminal files without going through the SSE FILE_UPDATE path.
+        for (const file of items) {
+          if (file.id != null && (file.status === 'COMPLETED' || file.status === 'ERROR')) {
+            if (!this.notifiedTerminalFileIds.has(file.id)) {
+              this.notifiedTerminalFileIds.add(file.id);
+              this.buildAndPushTerminalActivityMessage(file);
+            }
+          }
+        }
 
         const current = this.currentSession();
         if (current && (current.totalFiles || 0) === 0 && items.length > 0) {
