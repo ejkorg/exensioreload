@@ -171,7 +171,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
    * Format timestamp for display.
    */
   formatTime(date: Date): string {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
   }
 
   /**

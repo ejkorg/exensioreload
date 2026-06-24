@@ -281,19 +281,24 @@ export class GlassDateRangeComponent implements ControlValueAccessor {
     this.emitChange();
   }
 
-  private formatISO(date: Date | null): string | null {
-    if (!date) return null;
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    return `${date.getFullYear()}-${mm}-${dd}`;
+  /**
+   * Build a UTC ISO 8601 string from the date picker's local date plus the given time.
+   * Takes the DATE COMPONENTS from the local Date object and treats them as UTC,
+   * so "June 24" always maps to 2024-06-24T00:00:00Z regardless of browser timezone.
+   */
+  private toUtcIsoString(date: Date, hours: string, minutes: string, seconds: string): string {
+    const y = date.getFullYear();
+    const mo = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${d}T${hours}:${minutes}:${seconds}Z`;
   }
 
   private emitChange() {
-    const start = this.formatISO(this.startCtrl.value);
-    const end = this.formatISO(this.endCtrl.value);
+    const start = this.startCtrl.value;
+    const end = this.endCtrl.value;
     const value: DateRange = {
-      start: start ? `${start} ${this.includeTime ? this.startTime() : '00:00'}:00` : null,
-      end: end ? `${end} ${this.includeTime ? this.endTime() : '23:59'}:59` : null,
+      start: start ? this.toUtcIsoString(start, this.includeTime ? this.startTime() : '00', '00', '00') : null,
+      end: end ? this.toUtcIsoString(end, this.includeTime ? this.endTime() : '23', '59', '59') : null,
     };
     this.onChange(value);
     this.onTouched();
@@ -303,21 +308,33 @@ export class GlassDateRangeComponent implements ControlValueAccessor {
   writeValue(val: any): void {
     if (val && typeof val === 'object') {
       if (val.start) {
-        const [datePart, timePart] = val.start.split(' ');
-        const d = new Date(datePart);
-        if (!isNaN(d.getTime())) this.startCtrl.setValue(d, { emitEvent: false });
-        if (timePart) this.startTime.set(timePart.substring(0, 5));
+        const utc = new Date(val.start);
+        if (!isNaN(utc.getTime())) {
+          // Extract UTC date components and create a local-midnight Date so the picker
+          // displays the same calendar date that was originally selected.
+          const local = new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+          this.startCtrl.setValue(local, { emitEvent: false });
+        }
+        this.startTime.set(this.extractTime(val.start, '00:00'));
       }
       if (val.end) {
-        const [datePart, timePart] = val.end.split(' ');
-        const d = new Date(datePart);
-        if (!isNaN(d.getTime())) this.endCtrl.setValue(d, { emitEvent: false });
-        if (timePart) this.endTime.set(timePart.substring(0, 5));
+        const utc = new Date(val.end);
+        if (!isNaN(utc.getTime())) {
+          const local = new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+          this.endCtrl.setValue(local, { emitEvent: false });
+        }
+        this.endTime.set(this.extractTime(val.end, '23:59'));
       }
     } else {
       this.startCtrl.setValue(null, { emitEvent: false });
       this.endCtrl.setValue(null, { emitEvent: false });
     }
+  }
+
+  /** Extract HH:mm from a UTC ISO string like "2024-06-24T07:30:00Z". */
+  private extractTime(iso: string, fallback: string): string {
+    const match = iso.match(/T(\d{2}):(\d{2})/);
+    return match ? `${match[1]}:${match[2]}` : fallback;
   }
 
   registerOnChange(fn: any): void { this.onChange = fn; }

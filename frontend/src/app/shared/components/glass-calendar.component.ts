@@ -188,7 +188,7 @@ export class GlassCalendarComponent implements OnChanges {
 
   formatMonth(date: Date): string {
     const opts: Intl.DateTimeFormatOptions = { month: 'long', year: 'numeric' };
-    return date.toLocaleDateString(undefined, opts);
+    return date.toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' });
   }
 
   visibleMonth(): Date {

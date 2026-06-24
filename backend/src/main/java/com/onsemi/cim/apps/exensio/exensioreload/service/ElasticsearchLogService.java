@@ -311,6 +311,13 @@ public class ElasticsearchLogService {
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
+            // Optional idFile term match (metadata_id) — file-level key for precise matching
+            if (idFile != null && !idFile.isBlank()) {
+                ObjectNode termIdFile = must.addObject();
+                ObjectNode termIdFileInner = termIdFile.putObject("term");
+                termIdFileInner.put("idFile", idFile);
+            }
+
             // Optional inputFileName wildcard match for discovered file
             // Uses inputFileName field to match against the actual CP log field name
             if (filename != null && !filename.isBlank()) {
@@ -389,6 +396,7 @@ public class ElasticsearchLogService {
             source.add("@timestamp");
             source.add("cpConfig");
             source.add("idData");
+            source.add("idFile");
             source.add("inputFileName");
             source.add("message");
             source.add("log.level");

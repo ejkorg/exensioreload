@@ -88,8 +88,8 @@ import { AuditService, EtlAuditLog } from './audit.service';
             <tr *ngFor="let log of dataSource(); trackBy: trackById">
               <td>
                 <div class="time-cell">
-                  <span class="time-value">{{ log.timestamp | date:'short' }}</span>
-                  <span class="time-seconds">{{ log.timestamp | date:'ss' }}s</span>
+                  <span class="time-value">{{ formatUtcTimestamp(log.timestamp) }}</span>
+                  <span class="time-seconds">{{ formatUtcSeconds(log.timestamp) }}s</span>
                 </div>
               </td>
               <td>
@@ -140,6 +140,22 @@ import { AuditService, EtlAuditLog } from './audit.service';
 })
 export class AuditLogTableComponent implements OnInit {
   private auditService = inject(AuditService);
+
+  formatUtcTimestamp(value: string | Date | null | undefined): string {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleString([], {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
+    });
+  }
+
+  formatUtcSeconds(value: string | Date | null | undefined): string {
+    if (!value) return '';
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '' : String(d.getUTCSeconds()).padStart(2, '0');
+  }
 
   dataSource = signal<EtlAuditLog[]>([]);
   loading = signal(false);
