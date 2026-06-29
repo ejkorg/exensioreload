@@ -212,13 +212,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     @Override
-    public long countMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers) {
+    public long countMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices) {
         String viewName = getPreviewViewName(dataType);
         boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
                 (testPhase != null && !testPhase.isBlank()) ||
                 (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank());
-        SqlWithParams sql = buildPreviewDedupedCountQuery(viewName, !hasOptionalFilters, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
+        SqlWithParams sql = buildPreviewDedupedCountQuery(viewName, !hasOptionalFilters, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
         try (Connection c = externalDbConfig.getConnection(site, environment);
              PreparedStatement ps = prepareStatement(c, sql);
              ResultSet rs = ps.executeQuery()) {
