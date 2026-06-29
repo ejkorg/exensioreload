@@ -153,14 +153,16 @@
             </app-glass-date-range>
           </div>
 
-          <!-- Device filter (admin only) -->
-          <div class="form-row" *ngIf="showDeviceFilter()">
+          <!-- Device filter (admin only) — always visible for admins, disabled until Data Type is selected -->
+          <div class="form-row" *ngIf="isAdminUser()">
             <div class="device-field">
               <app-glass-select
-                label="Device"
+                label="Device (Admin)"
+                placeholder="Select Device"
                 [ngModel]="deviceFilter()"
                 (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
                 [options]="deviceOptions()"
+                [disabled]="!selectedDataType() || devicesLoading()"
               >
               </app-glass-select>
               <div class="device-loading" *ngIf="devicesLoading()">

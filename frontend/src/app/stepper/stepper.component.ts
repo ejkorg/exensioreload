@@ -1342,6 +1342,10 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.testerTypes.set([]);
     this.dataTypeExt.set([]);
     this.testPhases.set([]);
+    // Reset device filter and options whenever data type changes
+    this.deviceFilter.set('');
+    this.deviceFilterControl.setValue('', { emitEvent: false });
+    this.deviceOptions.set([]);
 
     if (dataType) {
       // Load both testerTypes and dataTypeExt filtered by location + dataType
@@ -1357,9 +1361,15 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.selectedTesterType.set(testerType);
     this.selectedTestPhase.set(null);
     this.testPhases.set([]);
+    // Reset device selection — device list is filtered by tester type
+    this.deviceFilter.set('');
+    this.deviceFilterControl.setValue('', { emitEvent: false });
+    this.deviceOptions.set([]);
 
     if (this.selectedDataType()) {
       this.loadTestPhasesForFilters();
+      // Re-fetch devices filtered by the newly selected tester type
+      this.loadDevicesForDataType();
       // Sender lookup will trigger automatically via reactive effect
     }
   }
