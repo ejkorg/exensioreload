@@ -9,6 +9,7 @@ public record DiscoveryPreviewRequest(
         String endDate,
         List<String> lots,
         List<String> wafers,
+        List<String> devices,
         List<com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewPair> pairs,
         String testerType,
         String dataType,

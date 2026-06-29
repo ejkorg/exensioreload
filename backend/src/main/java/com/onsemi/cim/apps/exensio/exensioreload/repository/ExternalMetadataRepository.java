@@ -5,10 +5,10 @@ import java.util.List;
 
 public interface ExternalMetadataRepository {
     List<MetadataRow> findMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
-                                   String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit);
+                                   String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit);
 
     List<MetadataRow> findMetadataPage(String site, String environment, LocalDateTime start, LocalDateTime end,
-                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers,
+                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
                                        int offset, int limit);
 
     /**
@@ -18,16 +18,16 @@ public interface ExternalMetadataRepository {
      */
     default MetadataPageResult findMetadataPageWithCount(String site, String environment, LocalDateTime start, LocalDateTime end,
                                                          String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                                         java.util.List<String> lots, java.util.List<String> wafers,
+                                                         java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
                                                          int offset, int limit) {
         // Default implementation falls back to two queries for backwards compatibility
-        long total = countMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
-        List<MetadataRow> rows = findMetadataPage(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, offset, limit);
+        long total = countMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
+        List<MetadataRow> rows = findMetadataPage(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, offset, limit);
         return new MetadataPageResult(rows, total);
     }
 
     long countMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
-                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers);
+                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices);
 
     /**
      * Lightweight aggregate for preview-like requests. Returns total row count and the
@@ -35,7 +35,7 @@ public interface ExternalMetadataRepository {
      */
     MetadataSummary summarizeMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                      java.util.List<String> lots, java.util.List<String> wafers);
+                                      java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices);
 
     default String describePreviewQuery(LocalDateTime start,
                                         LocalDateTime end,
@@ -46,6 +46,7 @@ public interface ExternalMetadataRepository {
                                         String location,
                                         java.util.List<String> lots,
                                         java.util.List<String> wafers,
+                                        java.util.List<String> devices,
                                         int offset,
                                         int limit) {
         return null;
@@ -55,14 +56,14 @@ public interface ExternalMetadataRepository {
      * Stream rows; consumer should be fast. This will use JDBC ResultSet iteration.
      */
     void streamMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
-                        String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit,
+                        String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
                         java.util.function.Consumer<MetadataRow> consumer);
 
     /**
      * Stream rows using an existing JDBC Connection (caller is responsible for lifecycle).
      */
     void streamMetadataWithConnection(java.sql.Connection conn, LocalDateTime start, LocalDateTime end,
-                                      String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit,
+                                      String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
                                       java.util.function.Consumer<MetadataRow> consumer);
 
     /**
@@ -108,4 +109,8 @@ public interface ExternalMetadataRepository {
                                                                 String testerType,
                                                                 Integer senderId,
                                                                 String senderName);
+
+    java.util.List<String> findDistinctDevicesWithConnection(java.sql.Connection conn,
+                                                             String dataType,
+                                                             String testerType);
 }

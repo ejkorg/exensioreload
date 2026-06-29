@@ -49,6 +49,7 @@ export interface DiscoveryPreviewRequest {
   lots?: string[] | null;
   wafers?: string[] | null;
   pairs?: Array<{ lot?: string | null; wafer?: string | null }> | null;
+  devices?: string[] | null;
   testerType?: string | null;
   dataType?: string | null;
   dataTypeExt?: string | null;
@@ -741,6 +742,10 @@ export class BackendService {
 
   getDistinctDataTypeExts(params: Record<string, any>): Observable<string[]> {
     return this.http.get<string[]>(`${this.apiUrl}/senders/external/dataTypeExts`, { params: this.toParams(params) });
+  }
+
+  getDistinctDevices(params: Record<string, any>): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/senders/external/devices`, { params: this.toParams(params) });
   }
 
   // ========================================================================

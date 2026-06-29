@@ -517,6 +517,7 @@ public class SenderController {
                 filters.endDate(),
                 filters.lots(),
                 filters.wafers(),
+                filters.devices(),
                 request.testerType(),
                 request.dataType(),
                 request.dataTypeExt(),
@@ -575,6 +576,7 @@ public class SenderController {
                 filters.endDate(),
                 filters.lots(),
                 filters.wafers(),
+                filters.devices(),
                 request.testerType(),
                 request.dataType(),
                 request.dataTypeExt(),
@@ -624,7 +626,7 @@ public class SenderController {
                         log.info("Preview returned {} but total is {}, caching full results in background for token={}", previewResponse.returned(), previewResponse.total(), asyncToken);
                         DiscoveryPreviewResponse fullResponse = metadataImporterService.previewMetadata(
                                 request.site(), request.environment(), asyncSenderId,
-                                filters.startDate(), filters.endDate(), filters.lots(), filters.wafers(),
+                                filters.startDate(), filters.endDate(), filters.lots(), filters.wafers(), filters.devices(),
                                 request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(),
                                 request.location(), request.locationId(),
                                 0, (int) previewResponse.total(), // fetch all
@@ -705,6 +707,8 @@ public class SenderController {
         // Validate request using the same rules as preview/stage-all
         metadataImporterService.validatePreviewRequest(request.site(), id, dateMode.startDate(), dateMode.endDate(), lotsParam, wafersParam, request.testerType());
 
+        java.util.List<String> devices = isAdmin ? request.devices() : null;
+
         var summary = metadataImporterService.summarizePreview(
                 request.site(),
                 request.environment(),
@@ -713,6 +717,7 @@ public class SenderController {
                 dateMode.endDate(),
                 lotsParam,
                 wafersParam,
+                devices,
                 request.testerType(),
                 request.dataType(),
                 request.dataTypeExt(),
@@ -826,7 +831,7 @@ public class SenderController {
             try {
                 DiscoveryPreviewResponse resp = metadataImporterService.previewMetadata(
                         site, request.environment(), resolvedSender,
-                        dateMode.startDate(), dateMode.endDate(), lotsParam, wafersParam,
+                        dateMode.startDate(), dateMode.endDate(), lotsParam, wafersParam, request.devices(),
                         request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(),
                         request.location(), request.locationId(),
                         0, resolvedMaxRows, strictFilters, true); // bypassCap = true
@@ -954,7 +959,7 @@ public class SenderController {
                 boolean strictFilters = request.historicalMode() && hasDateRange && !hasLotFilter && !hasWaferFilter;
 
                 com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewResponse resp = metadataImporterService.previewMetadata(
-                        request.site(), request.environment(), id, filters.startDate(), filters.endDate(), filters.lots(), filters.wafers(),
+                        request.site(), request.environment(), id, filters.startDate(), filters.endDate(), filters.lots(), filters.wafers(), filters.devices(),
                         request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(), request.location(), request.locationId(), page, pageSize,
                         /* strictFilters */ strictFilters,
                         request.bypassCap());
@@ -974,12 +979,13 @@ public class SenderController {
 
         // Build CSV content
         StringBuilder sb = new StringBuilder();
-        sb.append("metadataId,dataId,lot,wafer,originalFileName,endTime\n");
+        sb.append("metadataId,dataId,lot,wafer,device,originalFileName,endTime\n");
         for (com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRow r : collected) {
             sb.append(csvEscape(r.metadataId())).append(',');
             sb.append(csvEscape(r.dataId())).append(',');
             sb.append(csvEscape(r.lot())).append(',');
             sb.append(csvEscape(r.wafer())).append(',');
+            sb.append(csvEscape(r.device())).append(',');
             sb.append(csvEscape(r.originalFileName())).append(',');
             sb.append(csvEscape(r.endTime())).append('\n');
         }
@@ -1040,7 +1046,16 @@ public class SenderController {
             startDate = null;
             endDate = null;
         }
-        return new PreviewFilters(lotsParam, wafersParam, startDate, endDate);
+
+        java.util.List<String> devices = request.devices();
+        if (!isAdmin || devices == null || devices.isEmpty()) {
+            if (devices != null && !devices.isEmpty() && log.isInfoEnabled()) {
+                log.info("Ignoring device filter for preview (sender={}): admin={} deviceCount={}", senderId, isAdmin, devices.size());
+            }
+            devices = null;
+        }
+
+        return new PreviewFilters(lotsParam, wafersParam, startDate, endDate, devices);
     }
 
     private String trimToNull(String value) {
@@ -1077,7 +1092,7 @@ public class SenderController {
 
     private record DateMode(String startDate, String endDate, boolean historicalMode) {}
 
-    private record PreviewFilters(java.util.List<String> lots, java.util.List<String> wafers, String startDate, String endDate) { }
+    private record PreviewFilters(java.util.List<String> lots, java.util.List<String> wafers, String startDate, String endDate, java.util.List<String> devices) { }
 
     private String csvEscape(String v) {
         if (v == null) return "";
@@ -1683,6 +1698,28 @@ public class SenderController {
                         exactTesterType
                 );
                 return ResponseEntity.ok(out);
+            }
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(java.util.List.of());
+        }
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('USER','ADMIN')")
+    @GetMapping("/external/devices")
+    public ResponseEntity<java.util.List<String>> externalDistinctDevices(@RequestParam(required = false, name = "connectionKey") String connectionKey,
+                                                                           @RequestParam(required = false) String dataType,
+                                                                           @RequestParam(required = false) String testerType,
+                                                                           @RequestParam(defaultValue = "qa") String environment) {
+        try {
+            java.sql.Connection conn = null;
+            if (connectionKey != null && !connectionKey.isBlank()) {
+                conn = metadataImporterService.resolveConnectionForKey(connectionKey, environment);
+            } else {
+                throw new IllegalArgumentException("connectionKey is required");
+            }
+            try (java.sql.Connection c = conn) {
+                java.util.List<String> out = metadataImporterService.findDistinctDevicesWithConnection(c, dataType, testerType);
+                return ResponseEntity.ok(out == null ? java.util.List.of() : out);
             }
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(java.util.List.of());

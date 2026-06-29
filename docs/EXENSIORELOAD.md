@@ -141,6 +141,7 @@ Optional SSH + remote crontab kick (separate from queue dispatch): **[docs/ETL_S
 | GET    | `/external/testerTypes`                  | Distinct testerType values               |
 | GET    | `/external/dataTypeExts`                 | Distinct data_type_ext values            |
 | GET    | `/external/testPhases`                   | Distinct test_phase values               |
+| GET    | `/external/devices`                      | Distinct device values (filtered by dataType + testerType) |
 | GET    | `/external/senders`                      | All external senders                     |
 
 #### Stage (`/api/stage`) — Authenticated
@@ -570,7 +571,7 @@ ECharts instances adapt to container width/height
 
 ### The Resend Workflow (3-Step Stepper)
 
-1. **Configure Request** — Select environment → site → sender (auto-resolved or manual lookup from external DB). Set filters: lots, wafers, date range, tester type, data type, test phase, location.
+1. **Configure Request** — Select environment → site → sender (auto-resolved or manual lookup from external DB). Set filters: lots, wafers, date range (admin only), device (admin only), tester type, data type, test phase, location. The device filter is a dropdown populated from the external DB filtered by data type and tester type.
 
 2. **Discovery Preview** — Query external Oracle DB for matching metadata. Shows paginated results with lot/wafer/filename details. Duplicate detection against already-staged records. Option to stage selected items or stage-all.
    - **Adaptive request behavior (frontend)**:
@@ -579,7 +580,19 @@ ECharts instances adapt to container width/height
 
 3. **Monitor Dispatch** — Real-time SSE progress tracking. Files are staged in `SENDER_STAGE` table → dispatched to external sender queues → completion notifications via email.
 
-### Data Flow
+### Admin-Only Discovery Filters
+
+Admins and super-admins have access to additional discovery filters beyond the standard lot/wafer/tester-type controls. These are gated at three layers (UI visibility, frontend logic, backend authorization) to prevent non-admin use.
+
+| Filter | Type | Description |
+|---|---|---|
+| **Date Range** | Date range picker | Narrows discovery to a specific `end_time` window. Enables high-volume mode (10000 rows, `bypassCap=true`). Available in historical mode or standalone. |
+| **Historical Mode** | Checkbox | Strict filter mode — enforces `testerType`, `dataTypeExt`, and `location` predicates alongside date range for targeted historical queries. |
+| **Device** (NEW) | Dropdown + text input | Filters by `device` column in external `dtp_*_view` tables. Dropdown is populated from the external DB filtered by the selected data type and tester type. Devices can also be typed manually (comma/newline separated). Supports up to 1000 values. |
+
+**Backend enforcement:** The `normalizePreviewFilters()` method in `SenderController` strips device and date filters from non-admin requests server-side, even if they're somehow included. The `GET /api/senders/external/devices` endpoint returns distinct device values filtered by data type and optional tester type.
+
+**CSV export** includes the device column alongside the existing metadata fields.
 
 ```
 External Oracle DBs (20+ sites)

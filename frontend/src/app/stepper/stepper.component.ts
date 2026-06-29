@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormControl, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subject, Subscription, of } from 'rxjs';
-import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   BackendService,
   CreateSessionResponse,
@@ -66,6 +66,7 @@ interface DiscoveryFiltersSnapshot {
   testPhase?: string;
   location?: string;
   historicalMode: boolean;
+  devices?: string[];
 }
 
 interface DuplicateStageContext {
@@ -396,6 +397,12 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   // Date range for historical mode
   dateRange = signal<DateRange | null>(null);
+
+  // Device filter (admin only) — comma/newline separated text input
+  deviceFilter = signal<string>('');
+  deviceOptions = signal<string[]>([]);
+  devicesLoading = signal(false);
+  deviceFilterControl = new FormControl('');
 
   // Site / DTP instance options for the selected environment (external instances)
   siteOptions = signal<GlassOption[]>([]);
@@ -952,6 +959,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     return this.isAdminUser() || this.historicalMode();
   });
 
+  // Device filter — admin only, populated from external DB filtered by dataType + testerType
+  showDeviceFilter = computed(() => {
+    return this.isAdminUser() && !!this.selectedDataType();
+  });
+
   private hasActiveDateRange = computed(() => {
     const range = this.dateRange();
     return !!range?.start && !!range?.end;
@@ -1180,6 +1192,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     // Note: envOptions is reactive via isAdminSignal; the effect in the constructor
     // handles auto-selecting PROD once user data resolves asynchronously.
     this.tryRestoreMonitoringSession();
+
+    // Debounced device filter sync (400ms, matching admin page search pattern)
+    this.deviceFilterControl.valueChanges.pipe(debounceTime(400), distinctUntilChanged()).subscribe((val: string | null) => {
+      this.deviceFilter.set(val ?? '');
+    });
   }
 
   /**
@@ -1331,6 +1348,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       this.loadTesterTypesForDataType();
       this.loadDataTypeExtForDataType();
       this.loadTestPhasesForFilters();
+      this.loadDevicesForDataType();
       // Sender lookup will trigger automatically via reactive effect
     }
   }
@@ -1373,6 +1391,14 @@ export class StepperComponent implements OnInit, OnDestroy {
       .filter((pair: { lot: string | null; wafer: string | null }) => pair.lot != null || pair.wafer != null);
   }
 
+  private parseDeviceList(raw: string): string[] {
+    if (!raw?.trim()) return [];
+    return raw
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+
   private buildDiscoveryFiltersFromCurrentSelection(): DiscoveryFiltersSnapshot | null {
     const site = this.selectedSite();
     if (!site) {
@@ -1387,6 +1413,9 @@ export class StepperComponent implements OnInit, OnDestroy {
     const startDate = useDateFilters ? (range?.start ?? undefined) : undefined;
     const endDate = useDateFilters ? (range?.end ?? undefined) : undefined;
 
+    const deviceList = this.parseDeviceList(this.deviceFilter());
+    const useDeviceFilter = this.isAdminUser() && deviceList.length > 0;
+
     return {
       site,
       environment,
@@ -1395,6 +1424,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       lots: null,
       wafers: null,
       pairs: normalizedPairs.length ? normalizedPairs : null,
+      devices: useDeviceFilter ? deviceList : undefined,
       testerType: this.selectedTesterType() || undefined,
       dataType: this.selectedDataType() || undefined,
       dataTypeExt: this.selectedDataTypeExt() || undefined,
@@ -1558,6 +1588,36 @@ export class StepperComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadDevicesForDataType() {
+    if (!this.isAdminUser() || !this.selectedSite() || !this.selectedDataType()) {
+      this.deviceOptions.set([]);
+      return;
+    }
+
+    this.devicesLoading.set(true);
+    const params: Record<string, any> = {
+      connectionKey: this.selectedSite()!,
+      environment: (this.selectedEnv() || 'QA').toLowerCase(),
+      dataType: this.selectedDataType()!,
+    };
+    const testerType = this.normalizeTesterType(this.selectedTesterType());
+    if (testerType) {
+      params['testerType'] = testerType;
+    }
+
+    this.backend.getDistinctDevices(params).subscribe({
+      next: (devs: string[]) => {
+        this.deviceOptions.set(devs || []);
+        this.devicesLoading.set(false);
+      },
+      error: (err: any) => {
+        console.error('Failed to load devices:', err);
+        this.deviceOptions.set([]);
+        this.devicesLoading.set(false);
+      },
+    });
+  }
+
   onHistoricalModeChange(checked: boolean) {
     this.historicalMode.set(!!checked);
   }
@@ -1616,10 +1676,17 @@ export class StepperComponent implements OnInit, OnDestroy {
     const hasTesterType = !!this.normalizeTesterType(this.selectedTesterType());
     const range = this.dateRange();
     const hasDateRange = !!(range?.start && range?.end);
+    const deviceList = this.parseDeviceList(this.deviceFilter());
+    const hasDeviceFilter = deviceList.length > 0;
 
     // Historical mode: require date range or tester type (admins only)
     if (this.historicalMode()) {
-      return this.isAdminUser() && (hasDateRange || hasTesterType || hasLotOnly);
+      return this.isAdminUser() && (hasDateRange || hasTesterType || hasLotOnly || hasDeviceFilter);
+    }
+
+    // Admin can also search by device
+    if (this.isAdminUser() && hasDeviceFilter) {
+      return true;
     }
 
     // Normal mode: require at least lot/wafer or (for super admins) date range
@@ -1666,6 +1733,10 @@ export class StepperComponent implements OnInit, OnDestroy {
     const startDate = useDateFilters ? (range?.start ?? undefined) : undefined;
     const endDate = useDateFilters ? (range?.end ?? undefined) : undefined;
 
+    // Device filter — admin only
+    const deviceList = this.parseDeviceList(this.deviceFilter());
+    const useDeviceFilter = this.isAdminUser() && deviceList.length > 0;
+
     // High-volume discovery is expected for historical mode and for admin date-range queries.
     // Keep normal non-date-range requests smaller for better responsiveness.
     const useLargePreviewWindow = this.historicalMode() || useDateFilters;
@@ -1681,6 +1752,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       lots: null, // Old frontend always sends null for lots (uses pairs instead)
       wafers: null, // Old frontend always sends null for wafers (uses pairs instead)
       pairs: normalizedPairs.length ? normalizedPairs : null,
+      devices: useDeviceFilter ? deviceList : null,
       testerType: this.selectedTesterType() || undefined,
       dataType: this.selectedDataType() || undefined,
       dataTypeExt: this.selectedDataTypeExt() || undefined,

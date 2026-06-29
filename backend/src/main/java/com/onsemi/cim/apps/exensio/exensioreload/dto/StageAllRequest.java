@@ -11,6 +11,7 @@ public record StageAllRequest(
         String endDate,
         List<String> lots,
         List<String> wafers,
+        List<String> devices,
         List<DiscoveryPreviewPair> pairs,
         String testerType,
         String dataType,

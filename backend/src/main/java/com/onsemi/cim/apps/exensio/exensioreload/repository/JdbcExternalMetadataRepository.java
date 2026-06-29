@@ -50,15 +50,15 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     // using top-level SenderCandidate DTO
 
     @Override
-    public List<MetadataRow> findMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit) {
+    public List<MetadataRow> findMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit) {
         List<MetadataRow> rows = new ArrayList<>();
-        streamMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, limit, rows::add);
+        streamMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, limit, rows::add);
         return rows;
     }
 
     @Override
     public List<MetadataRow> findMetadataPage(String site, String environment, LocalDateTime start, LocalDateTime end,
-                                              String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers,
+                                              String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
                                               int offset, int limit) {
         // OPTIMIZATION: Use the optimized query builder if non-indexed filters are not provided
         // This significantly speeds up queries when users don't specify testerType, testPhase, location, dataTypeExt
@@ -72,13 +72,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         SqlWithParams sql;
         if (!hasOptionalFilters) {
             // Fast path: Use optimized query (indexed columns only)
-            sql = buildPreviewDedupedPageQuery(viewName, true, start, end, dataType, null, null, null, null, lots, wafers);
+            sql = buildPreviewDedupedPageQuery(viewName, true, start, end, dataType, null, null, null, null, lots, wafers, null);
             if (log.isDebugEnabled()) {
                 log.debug("Using optimized query path for findMetadataPage (no optional filters)");
             }
         } else {
             // Full path: Apply all filters if optional filters are provided
-            sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+            sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
         }
 
         sql.append(" order by end_time desc");
@@ -104,7 +104,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     @Override
     public MetadataSummary summarizeMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
                                              String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                             java.util.List<String> lots, java.util.List<String> wafers) {
+                                             java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices) {
         // OPTIMIZATION: Build a simpler query using ONLY indexed columns for summary queries
         // This avoids expensive filters on non-indexed columns (testerType, testPhase, dataTypeExt, location)
         // which were likely null anyway after the MetadataImporterService optimization.
@@ -113,7 +113,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 "select count(*) as total_count, min(end_time) as min_end_time, max(end_time) as max_end_time from " + viewName,
                 start, end,
                 dataType,
-                lots, wafers);  // Only pass indexed columns
+                lots, wafers, null);  // Only pass indexed columns
         try (Connection c = externalDbConfig.getConnection(site, environment);
              PreparedStatement ps = prepareStatement(c, sql);
              ResultSet rs = ps.executeQuery()) {
@@ -138,13 +138,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     @Override
     public MetadataPageResult findMetadataPageWithCount(String site, String environment, LocalDateTime start, LocalDateTime end,
                                                         String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                                        java.util.List<String> lots, java.util.List<String> wafers,
+                                                        java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
                                                         int offset, int limit) {
         // Use COUNT(*) OVER() window function to get total count with each row
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
-                "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name, COUNT(*) OVER() as total_count from " + viewName,
-                start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+                "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name, COUNT(*) OVER() as total_count from " + viewName,
+                start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
         sql.append(" order by end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
@@ -199,8 +199,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Use the internal builder variant with emitInfo=false so describing
         // the query doesn't produce the same INFO logs as the executing call.
         String viewName = getPreviewViewName(dataType);
-        SqlWithParams sql = buildMetadataQueryInternal("select lot, id as metadata_id, id_data, end_time, wafer, original_file_name from " + viewName,
-                start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, false, this.forceAllMetadataView);
+        SqlWithParams sql = buildMetadataQueryInternal("select lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name from " + viewName,
+                start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, devices, false, this.forceAllMetadataView);
         sql.append(" order by end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
@@ -217,7 +217,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 (testPhase != null && !testPhase.isBlank()) ||
                 (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank());
-        SqlWithParams sql = buildPreviewDedupedCountQuery(viewName, !hasOptionalFilters, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+        SqlWithParams sql = buildPreviewDedupedCountQuery(viewName, !hasOptionalFilters, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
         try (Connection c = externalDbConfig.getConnection(site, environment);
              PreparedStatement ps = prepareStatement(c, sql);
              ResultSet rs = ps.executeQuery()) {
@@ -229,9 +229,9 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     @Override
-    public void streamMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit, java.util.function.Consumer<MetadataRow> consumer) {
+    public void streamMetadata(String site, String environment, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit, java.util.function.Consumer<MetadataRow> consumer) {
         try (Connection c = externalDbConfig.getConnection(site, environment)) {
-            streamMetadataWithConnection(c, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, limit, consumer);
+            streamMetadataWithConnection(c, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, limit, consumer);
         } catch (Exception ex) {
             log.error("Failed streaming metadata for site {} env {}: {}", site, environment, ex.getMessage(), ex);
             throw new RuntimeException("External metadata read failed", ex);
@@ -243,8 +243,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
-            SqlWithParams sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, original_file_name from all_metadata_view",
-                    start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+            SqlWithParams sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name from all_metadata_view",
+                    start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");
             }
@@ -838,6 +838,50 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         }
     }
 
+    @Override
+    public java.util.List<String> findDistinctDevicesWithConnection(Connection c,
+                                                                     String dataType,
+                                                                     String testerType) {
+        if (dataType == null || dataType.isBlank()) {
+            return new ArrayList<>();
+        }
+        String viewName = getPreviewViewName(dataType);
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT DISTINCT device FROM ").append(viewName).append(" WHERE device IS NOT NULL");
+        List<Object> params = new ArrayList<>();
+        if (testerType != null && !testerType.isBlank()) {
+            String tt = testerType.trim();
+            if (!tt.isEmpty() && !"ANY".equalsIgnoreCase(tt) && !"ALL".equalsIgnoreCase(tt) && !"NONE".equalsIgnoreCase(tt) && !"NULL".equalsIgnoreCase(tt)) {
+                sql.append(" AND UPPER(tester_type) = ?");
+                params.add(tt.toUpperCase(Locale.ROOT));
+            }
+        }
+        sql.append(" ORDER BY device");
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            SqlWithParams swp = new SqlWithParams(sql.toString());
+            swp.params.addAll(params);
+            ps = prepareStatement(c, swp);
+            rs = ps.executeQuery();
+            List<String> out = new ArrayList<>();
+            while (rs.next()) {
+                String dev = null;
+                try { dev = rs.getString("device"); } catch (Exception ignore) {}
+                if (dev != null && !dev.isBlank()) {
+                    out.add(dev.trim());
+                }
+            }
+            return out;
+        } catch (Exception ex) {
+            log.error("Failed fetching distinct devices: {}", ex.getMessage(), ex);
+            throw new RuntimeException("Distinct devices query failed", ex);
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception ignore) {}
+            try { if (ps != null) ps.close(); } catch (Exception ignore) {}
+        }
+    }
+
     /**
      * Helper method to get the appropriate metadata view name based on dataType.
      * Returns the specific view for known data types, or all_metadata_view as fallback.
@@ -903,8 +947,9 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
     private SqlWithParams buildMetadataQuery(String select, LocalDateTime start, LocalDateTime end,
                                              String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                             java.util.List<String> lots, java.util.List<String> wafers) {
-        return buildMetadataQueryInternal(select, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, true, this.forceAllMetadataView);
+                                             java.util.List<String> lots, java.util.List<String> wafers,
+                                             java.util.List<String> devices) {
+        return buildMetadataQueryInternal(select, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, true, this.forceAllMetadataView);
     }
 
     /**
@@ -915,7 +960,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
      * 2. Non-historical preview queries when optional filters not provided
      */
     private SqlWithParams buildOptimizedMetadataQuery(String select, LocalDateTime start, LocalDateTime end,
-                                                      String dataType, java.util.List<String> lots, java.util.List<String> wafers) {
+                                                      String dataType, java.util.List<String> lots, java.util.List<String> wafers,
+                                                      java.util.List<String> devices) {
         String effectiveSelect = select;
         String viewName = null;
 
@@ -1065,6 +1111,36 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             result.append(")");
         }
 
+        // Device filter (capped at 1000)
+        if (devices != null && !devices.isEmpty()) {
+            int cap = Math.min(devices.size(), 1000);
+            List<String> vals = new ArrayList<>();
+            boolean allUpper = true;
+            for (int i = 0; i < cap; i++) {
+                String v = devices.get(i);
+                if (v != null && !v.isBlank()) {
+                    String trimmed = v.trim();
+                    String upper = trimmed.toUpperCase(Locale.ROOT);
+                    if (!trimmed.equals(upper)) allUpper = false;
+                    vals.add(upper);
+                }
+            }
+            if (!vals.isEmpty()) {
+                if (vals.size() == 1) {
+                    result.append(allUpper ? " and device = ?" : " and UPPER(device) = ?");
+                    result.params.add(vals.get(0));
+                } else {
+                    result.append(allUpper ? " and device IN (" : " and UPPER(device) IN (");
+                    for (int i = 0; i < vals.size(); i++) {
+                        if (i > 0) result.append(",");
+                        result.append("?");
+                        result.params.add(vals.get(i));
+                    }
+                    result.append(")");
+                }
+            }
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("Optimized query: {}", result.format());
         }
@@ -1072,10 +1148,11 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     private SqlWithParams buildOptimizedSummaryQuery(String select, LocalDateTime start, LocalDateTime end,
-                                                     String dataType, java.util.List<String> lots, java.util.List<String> wafers) {
+                                                     String dataType, java.util.List<String> lots, java.util.List<String> wafers,
+                                                     java.util.List<String> devices) {
         // REFACTORED: Now reuses the generic buildOptimizedMetadataQuery() logic
         // Summary query is just a SELECT COUNT(...) using the same indexed-column-only approach
-        return buildOptimizedMetadataQuery(select, start, end, dataType, lots, wafers);
+        return buildOptimizedMetadataQuery(select, start, end, dataType, lots, wafers, devices);
     }
 
     /**
@@ -1087,6 +1164,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     private SqlWithParams buildMetadataQueryInternal(String select, LocalDateTime start, LocalDateTime end,
                                                      String dataType, String dataTypeExt, String testPhase, String testerType, String location,
                                                      java.util.List<String> lots, java.util.List<String> wafers,
+                                                     java.util.List<String> devices,
                                                      boolean emitInfo,
                                                      boolean forceAllView) {
         // Allow selecting a specialized view depending on dataType to improve
@@ -1378,6 +1456,37 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 }
             }
         }
+
+        // Device filter (capped at 1000)
+        if (devices != null && !devices.isEmpty()) {
+            int cap = Math.min(devices.size(), 1000);
+            List<String> vals = new ArrayList<>();
+            boolean allUpper = true;
+            for (int i = 0; i < cap; i++) {
+                String v = devices.get(i);
+                if (v != null && !v.isBlank()) {
+                    String trimmed = v.trim();
+                    String upper = trimmed.toUpperCase(Locale.ROOT);
+                    if (!trimmed.equals(upper)) allUpper = false;
+                    vals.add(upper);
+                }
+            }
+            if (!vals.isEmpty()) {
+                if (vals.size() == 1) {
+                    result.append(allUpper ? " and device = ?" : " and UPPER(device) = ?");
+                    result.params.add(vals.get(0));
+                } else {
+                    result.append(allUpper ? " and device IN (" : " and UPPER(device) IN (");
+                    for (int i = 0; i < vals.size(); i++) {
+                        if (i > 0) result.append(",");
+                        result.append("?");
+                        result.params.add(vals.get(i));
+                    }
+                    result.append(")");
+                }
+            }
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("Metadata query: {} params={} ", result.sql, result.params);
         }
@@ -1459,7 +1568,9 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         try { wafer = rs.getString("wafer"); } catch (Exception ignore) {}
         String originalFileName = null;
         try { originalFileName = rs.getString("original_file_name"); } catch (Exception ignore) {}
-        return new MetadataRow(lot, metadataId, idData, endTime, wafer, originalFileName);
+        String device = null;
+        try { device = rs.getString("device"); } catch (Exception ignore) {}
+        return new MetadataRow(lot, metadataId, idData, endTime, wafer, originalFileName, device);
     }
 
     private static final String PREVIEW_ROW_NUMBER =
@@ -1480,16 +1591,17 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                        String testerType,
                                                        String location,
                                                        java.util.List<String> lots,
-                                                       java.util.List<String> wafers) {
-        String innerSelect = "select lot, id as metadata_id, id_data, end_time, wafer, original_file_name, "
+                                                       java.util.List<String> wafers,
+                                                       java.util.List<String> devices) {
+        String innerSelect = "select lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name, "
                 + PREVIEW_ROW_NUMBER + " from " + viewName;
         SqlWithParams ranked = optimized
-                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers)
-                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
+                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
         ranked.append(") preview_ranked where rn = 1");
 
         SqlWithParams outer = new SqlWithParams(
-                "select lot, metadata_id, id_data, end_time, wafer, original_file_name from (");
+                "select lot, metadata_id, id_data, end_time, wafer, device, original_file_name from (");
         outer.sql.append(ranked.sql);
         outer.params.addAll(ranked.params);
         return outer;
@@ -1505,11 +1617,12 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                         String testerType,
                                                         String location,
                                                         java.util.List<String> lots,
-                                                        java.util.List<String> wafers) {
+                                                        java.util.List<String> wafers,
+                                                        java.util.List<String> devices) {
         String innerSelect = "select distinct lot, wafer, original_file_name from " + viewName;
         SqlWithParams inner = optimized
-                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers)
-                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers);
+                ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
+                : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
 
         SqlWithParams outer = new SqlWithParams("select count(*) from (");
         outer.sql.append(inner.sql);
@@ -1536,6 +1649,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 return sql.toString();
             }
             return sql + " /* params=" + params + " */";
+        }
+    }
+}
+ms + " */";
         }
     }
 }

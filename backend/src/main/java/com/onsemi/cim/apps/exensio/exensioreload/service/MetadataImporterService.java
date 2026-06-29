@@ -257,6 +257,14 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct test phases supported only by JDBC implementation");
     }
 
+    public java.util.List<String> findDistinctDevicesWithConnection(java.sql.Connection c, String dataType, String testerType) {
+        if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
+            return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository)
+                    .findDistinctDevicesWithConnection(c, dataType, testerType);
+        }
+        throw new UnsupportedOperationException("Distinct devices supported only by JDBC implementation");
+    }
+
     /**
      * Discover metadata rows from external site and enqueue into local sender queue.
      * Returns number enqueued.
@@ -264,6 +272,7 @@ public class MetadataImporterService {
     public DiscoveryPreviewResponse previewMetadata(String site, String environment, Integer senderId,
                                                     String startDate, String endDate,
                                                     java.util.List<String> lots, java.util.List<String> wafers,
+                                                    java.util.List<String> devices,
                                                     String testerType, String dataType, String dataTypeExt, String testPhase,
                                                     String location, Long locationId, int page, int size, boolean strictFilters, boolean bypassCap) {
         if (site == null || site.isBlank()) {
@@ -366,11 +375,11 @@ public class MetadataImporterService {
                                         /*testPhase*/ effectiveTestPhase,
                                         testerType,
                                         /*location*/ effectiveLocation,
-                                        lots, wafers, offset, resolvedSize);
+                                        lots, wafers, devices, offset, resolvedSize);
                     } else {
                         debugSql = externalMetadataRepository.describePreviewQuery(lstart, lend, dataType,
                                 effectiveDataTypeExt, effectiveTestPhase, testerType,
-                                effectiveLocation, lots, wafers, offset, resolvedSize);
+                                effectiveLocation, lots, wafers, devices, offset, resolvedSize);
                     }
                 } catch (Exception ex) {
                     log.warn("Failed generating preview debug SQL: {}", ex.getMessage());
@@ -394,7 +403,7 @@ public class MetadataImporterService {
                         effectiveTestPhase,
                         testerType,
                         effectiveLocation,
-                        lots, wafers, offset, resolvedSize);
+                        lots, wafers, devices, offset, resolvedSize);
                 long queryDurationMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStartNanos);
 
                 long total;
@@ -424,6 +433,7 @@ public class MetadataImporterService {
                                 nullSafe(row.getIdData()),
                                 nullSafe(row.getLot()),
                                 nullSafe(row.getWafer()),
+                                nullSafe(row.getDevice()),
                                 nullSafe(row.getOriginalFileName()),
                                 toIsoString(row.getEndTime())
                         ))
@@ -468,6 +478,7 @@ public class MetadataImporterService {
     public MetadataSummary summarizePreview(String site, String environment, Integer senderId,
                                             String startDate, String endDate,
                                             java.util.List<String> lots, java.util.List<String> wafers,
+                                            java.util.List<String> devices,
                                             String testerType, String dataType, String dataTypeExt, String testPhase, String location, boolean historicalMode) {
         if (site == null || site.isBlank()) {
             throw new IllegalArgumentException("site is required");
@@ -516,7 +527,7 @@ public class MetadataImporterService {
                 effectiveTestPhase,
                 effectiveTesterType,
                 effectiveLocation,
-                lots, wafers);
+                lots, wafers, devices);
     }
 
     /**
