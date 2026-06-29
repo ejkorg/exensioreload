@@ -363,6 +363,12 @@
     position: relative;
 }
 
+.device-hint {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 .device-loading {
     display: inline-flex;
     align-items: center;

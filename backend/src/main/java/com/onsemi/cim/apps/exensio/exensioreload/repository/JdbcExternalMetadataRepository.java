@@ -1,6 +1,7 @@
 package com.onsemi.cim.apps.exensio.exensioreload.repository;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.util.DevicePatternUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
@@ -1112,35 +1113,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             result.append(")");
         }
 
-        // Device filter (capped at 1000)
-        if (devices != null && !devices.isEmpty()) {
-            int cap = Math.min(devices.size(), 1000);
-            List<String> vals = new ArrayList<>();
-            boolean allUpper = true;
-            for (int i = 0; i < cap; i++) {
-                String v = devices.get(i);
-                if (v != null && !v.isBlank()) {
-                    String trimmed = v.trim();
-                    String upper = trimmed.toUpperCase(Locale.ROOT);
-                    if (!trimmed.equals(upper)) allUpper = false;
-                    vals.add(upper);
-                }
-            }
-            if (!vals.isEmpty()) {
-                if (vals.size() == 1) {
-                    result.append(allUpper ? " and device = ?" : " and UPPER(device) = ?");
-                    result.params.add(vals.get(0));
-                } else {
-                    result.append(allUpper ? " and device IN (" : " and UPPER(device) IN (");
-                    for (int i = 0; i < vals.size(); i++) {
-                        if (i > 0) result.append(",");
-                        result.append("?");
-                        result.params.add(vals.get(i));
-                    }
-                    result.append(")");
-                }
-            }
-        }
+        appendDeviceFilter(result, devices);
 
         if (log.isDebugEnabled()) {
             log.debug("Optimized query: {}", result.format());
@@ -1458,35 +1431,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
         }
 
-        // Device filter (capped at 1000)
-        if (devices != null && !devices.isEmpty()) {
-            int cap = Math.min(devices.size(), 1000);
-            List<String> vals = new ArrayList<>();
-            boolean allUpper = true;
-            for (int i = 0; i < cap; i++) {
-                String v = devices.get(i);
-                if (v != null && !v.isBlank()) {
-                    String trimmed = v.trim();
-                    String upper = trimmed.toUpperCase(Locale.ROOT);
-                    if (!trimmed.equals(upper)) allUpper = false;
-                    vals.add(upper);
-                }
-            }
-            if (!vals.isEmpty()) {
-                if (vals.size() == 1) {
-                    result.append(allUpper ? " and device = ?" : " and UPPER(device) = ?");
-                    result.params.add(vals.get(0));
-                } else {
-                    result.append(allUpper ? " and device IN (" : " and UPPER(device) IN (");
-                    for (int i = 0; i < vals.size(); i++) {
-                        if (i > 0) result.append(",");
-                        result.append("?");
-                        result.params.add(vals.get(i));
-                    }
-                    result.append(")");
-                }
-            }
-        }
+        appendDeviceFilter(result, devices);
 
         if (log.isDebugEnabled()) {
             log.debug("Metadata query: {} params={} ", result.sql, result.params);
@@ -1630,6 +1575,74 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         outer.params.addAll(inner.params);
         outer.append(")");
         return outer;
+    }
+
+    private void appendDeviceFilter(SqlWithParams result, List<String> devices) {
+        if (devices == null || devices.isEmpty()) {
+            return;
+        }
+
+        int cap = Math.min(devices.size(), 1000);
+        List<String> vals = new ArrayList<>();
+        boolean allUpper = true;
+        for (int i = 0; i < cap; i++) {
+            String v = devices.get(i);
+            if (v != null && !v.isBlank()) {
+                String trimmed = v.trim();
+                String upper = trimmed.toUpperCase(Locale.ROOT);
+                if (!trimmed.equals(upper)) {
+                    allUpper = false;
+                }
+                vals.add(upper);
+            }
+        }
+        if (vals.isEmpty()) {
+            return;
+        }
+
+        String deviceExpr = allUpper ? "device" : "UPPER(device)";
+        boolean hasWildcard = vals.stream().anyMatch(DevicePatternUtils::containsWildcard);
+
+        if (vals.size() == 1 && !hasWildcard) {
+            result.append(" and ").append(deviceExpr).append(" = ?");
+            result.params.add(vals.get(0));
+            return;
+        }
+
+        if (vals.size() == 1) {
+            result.append(" and ").append(deviceExpr).append(" LIKE ? ESCAPE '\\'");
+            result.params.add(DevicePatternUtils.toSqlLikePattern(vals.get(0)));
+            return;
+        }
+
+        if (!hasWildcard) {
+            result.append(" and ").append(deviceExpr).append(" IN (");
+            for (int i = 0; i < vals.size(); i++) {
+                if (i > 0) {
+                    result.append(",");
+                }
+                result.append("?");
+                result.params.add(vals.get(i));
+            }
+            result.append(")");
+            return;
+        }
+
+        result.append(" and (");
+        for (int i = 0; i < vals.size(); i++) {
+            if (i > 0) {
+                result.append(" OR ");
+            }
+            String val = vals.get(i);
+            if (DevicePatternUtils.containsWildcard(val)) {
+                result.append(deviceExpr).append(" LIKE ? ESCAPE '\\'");
+                result.params.add(DevicePatternUtils.toSqlLikePattern(val));
+            } else {
+                result.append(deviceExpr).append(" = ?");
+                result.params.add(val);
+            }
+        }
+        result.append(")");
     }
 
     private static class SqlWithParams {

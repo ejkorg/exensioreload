@@ -398,7 +398,7 @@ export class StepperComponent implements OnInit, OnDestroy {
   // Date range for historical mode
   dateRange = signal<DateRange | null>(null);
 
-  // Device filter (admin only) — comma/newline separated text input
+  // Device filter (admin only) — exact value, glob wildcard (*), or comma/newline separated list
   deviceFilter = signal<string>('');
   deviceOptions = signal<string[]>([]);
   devicesLoading = signal(false);

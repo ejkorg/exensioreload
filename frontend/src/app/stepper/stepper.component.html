@@ -158,7 +158,7 @@
             <div class="device-field">
               <app-glass-select
                 label="Device (Admin)"
-                placeholder="Select or enter device"
+                placeholder="Select device or pattern (e.g. FNB7*)"
                 [editable]="true"
                 [ngModel]="deviceFilter()"
                 (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
@@ -166,6 +166,7 @@
                 [disabled]="!selectedDataType() || devicesLoading()"
               >
               </app-glass-select>
+              <div class="device-hint">Use * as a wildcard — FNB7* matches FNB7-8, FNB7-S, etc.</div>
               <div class="device-loading" *ngIf="devicesLoading()">
                 <span class="mini-spinner"></span>
                 <span>Loading devices...</span>

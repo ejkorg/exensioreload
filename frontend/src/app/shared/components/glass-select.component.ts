@@ -399,9 +399,13 @@ export class GlassSelectComponent implements ControlValueAccessor {
   readonly dropdownOptions = computed(() => {
     const opts = this.optionsSignal();
     if (!this.editable) return opts;
-    const query = this.inputText().trim().toLowerCase();
+    const query = this.inputText().trim();
     if (!query) return opts;
-    return opts.filter((o) => this.getOptionLabel(o).toLowerCase().includes(query));
+    if (query.includes('*')) {
+      return opts.filter((o) => matchesGlobPattern(this.getOptionLabel(o), query));
+    }
+    const q = query.toLowerCase();
+    return opts.filter((o) => this.getOptionLabel(o).toLowerCase().includes(q));
   });
 
   triggerOrigin: any;
@@ -760,4 +764,25 @@ export class GlassSelectComponent implements ControlValueAccessor {
   setDisabledState?(isDisabled: boolean): void {
     this.disabled = isDisabled;
   }
+}
+
+function matchesGlobPattern(value: string, pattern: string): boolean {
+  const normalizedValue = value.trim().toUpperCase();
+  const normalizedPattern = pattern.trim().toUpperCase();
+  if (!normalizedPattern.includes('*')) {
+    return normalizedValue.includes(normalizedPattern);
+  }
+
+  let regex = '^';
+  for (const char of normalizedPattern) {
+    if (char === '*') {
+      regex += '.*';
+    } else if ('\\.[]{}()+^$|?'.includes(char)) {
+      regex += '\\' + char;
+    } else {
+      regex += char;
+    }
+  }
+  regex += '$';
+  return new RegExp(regex).test(normalizedValue);
 }
