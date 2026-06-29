@@ -137,7 +137,7 @@
                         <app-glass-icon [name]="user.enabled ? 'check_circle' : 'cancel'" [size]="18"></app-glass-icon>
                     </button>
                 </td>
-                <td>{{ user.createdAt | date:'shortDate' }}</td>
+                <td>{{ formatUtcDate(user.createdAt) }}</td>
                 <td>
                     <div class="row-actions">
                         <button type="button" class="actions-menu-btn" (click)="editUser(user)" [glassTooltip]="'Edit user'" aria-label="Edit user">

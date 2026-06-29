@@ -1385,7 +1385,8 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         month: 'numeric',
         day: 'numeric',
         hour: 'numeric',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'UTC'
       }).format(d);
     }
 

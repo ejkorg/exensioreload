@@ -397,6 +397,13 @@ export class CoverageComponent implements OnInit, OnDestroy {
         });
     }
 
+    /** Convert a local date string (YYYY-MM-DD) to a UTC ISO instant (YYYY-MM-DDT00:00:00Z). */
+    private toUtcIso(dateStr: string): string {
+        if (!dateStr) return '';
+        // Treat the date components as UTC so the same calendar date always maps to the same UTC range.
+        return `${dateStr}T00:00:00Z`;
+    }
+
     load(): void {
         if (!this.selectedSite || this.loading()) return;
         this.loading.set(true);
@@ -406,8 +413,8 @@ export class CoverageComponent implements OnInit, OnDestroy {
             site: this.selectedSite,
             senderId: this.selectedSenderId ?? undefined,
             granularity: this.granularity,
-            endTimeFrom: this.endTimeFrom || undefined,
-            endTimeTo: this.endTimeTo || undefined
+            endTimeFrom: this.toUtcIso(this.endTimeFrom) || undefined,
+            endTimeTo: this.toUtcIso(this.endTimeTo) || undefined
         }).subscribe({
             next: (pts: CoveragePoint[]) => {
                 this.points.set(pts || []);

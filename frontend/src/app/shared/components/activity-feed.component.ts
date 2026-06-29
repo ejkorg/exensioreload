@@ -285,7 +285,8 @@ export class ActivityFeedComponent implements AfterViewInit {
       } else {
         return date.toLocaleTimeString('en-US', {
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
+          timeZone: 'UTC'
         });
       }
     } catch {

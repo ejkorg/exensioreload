@@ -99,6 +99,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Exposed for template Math.abs() call in aria-label */
   readonly Math = Math;
 
+  formatUtcTimestamp(value: string | Date | null | undefined): string {
+    if (!value) return '-';
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '-' : d.toLocaleString([], {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
+    });
+  }
+
   snapshot = signal<DashboardSnapshot | null>(null);
   loading = signal(false);
   error = signal<string | null>(null);

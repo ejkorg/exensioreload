@@ -513,6 +513,6 @@ export class AlertConfigurationComponent implements OnInit {
         if (diffMins < 60) return `${diffMins}m ago`;
         const diffHours = Math.floor(diffMins / 60);
         if (diffHours < 24) return `${diffHours}h ago`;
-        return date.toLocaleDateString();
+        return date.toLocaleDateString([], { timeZone: 'UTC' });
     }
 }

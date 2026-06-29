@@ -30,6 +30,12 @@ import { User, UserService, UserStatistics } from './user.service';
 })
 export class UserListComponent implements OnInit {
   private userService = inject(UserService);
+
+  formatUtcDate(value: string | Date | null | undefined): string {
+    if (!value) return '-';
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '-' : d.toLocaleDateString([], { timeZone: 'UTC' });
+  }
   private dialog = inject(MatDialog);
   private toast = inject(ToastService);
   private router = inject(Router);

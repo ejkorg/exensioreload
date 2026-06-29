@@ -242,7 +242,7 @@ export class MonitoringActivityComponent {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
 
-    return timestamp.toLocaleTimeString();
+    return timestamp.toLocaleTimeString([], { timeZone: 'UTC' });
   }
 
   trackByTimestamp(_index: number, item: ActivityEvent): number {

@@ -434,7 +434,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     private toShortTime(timestamp: number): string {
-        return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     }
 
     private disposeCharts(): void {

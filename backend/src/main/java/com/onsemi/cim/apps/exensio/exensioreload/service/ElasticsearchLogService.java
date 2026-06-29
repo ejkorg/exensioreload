@@ -311,13 +311,25 @@ public class ElasticsearchLogService {
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
 
+            // Optional idFile term match (metadata_id) — file-level key for precise matching
+            if (idFile != null && !idFile.isBlank()) {
+                ObjectNode termIdFile = must.addObject();
+                ObjectNode termIdFileInner = termIdFile.putObject("term");
+                termIdFileInner.put("idFile", idFile);
+            }
+
             // Optional inputFileName wildcard match for discovered file
-            // Uses inputFileName field to match against the actual CP log field name
+            // Uses inputFileName field to match against the actual CP log field name.
+            // Strips file extension (e.g. "data.csv" -> "data") because CP may index the
+            // file name with or without extension. The surrounding wildcard catches both.
             if (filename != null && !filename.isBlank()) {
+                String nameBase = filename.trim();
+                int dot = nameBase.lastIndexOf('.');
+                if (dot > 0) nameBase = nameBase.substring(0, dot);
                 ObjectNode wildcardFilename = must.addObject();
                 ObjectNode wildcardFilenameInner = wildcardFilename.putObject("wildcard");
                 ObjectNode filenameWildcard = wildcardFilenameInner.putObject("inputFileName");
-                filenameWildcard.put("value", "*" + filename + "*");
+                filenameWildcard.put("value", "*" + nameBase + "*");
                 filenameWildcard.put("case_insensitive", true);
             }
 
@@ -389,6 +401,7 @@ public class ElasticsearchLogService {
             source.add("@timestamp");
             source.add("cpConfig");
             source.add("idData");
+            source.add("idFile");
             source.add("inputFileName");
             source.add("message");
             source.add("log.level");
