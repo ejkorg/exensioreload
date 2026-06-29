@@ -158,7 +158,8 @@
             <div class="device-field">
               <app-glass-select
                 label="Device (Admin)"
-                placeholder="Select Device"
+                placeholder="Select or enter device"
+                [editable]="true"
                 [ngModel]="deviceFilter()"
                 (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
                 [options]="deviceOptions()"

@@ -1,4 +1,4 @@
-import { Component, Input, forwardRef, signal, ElementRef, ViewChild, ViewChildren, QueryList } from '@angular/core';
+import { Component, Input, forwardRef, signal, computed, ElementRef, ViewChild, ViewChildren, QueryList } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,15 +24,37 @@ export interface GlassOption {
     <div class="glass-select-container" [class.is-open]="isOpen()" [class.has-value]="hasValue()" [class.disabled]="disabled" (keydown)="onContainerKeydown($event)">
       <label *ngIf="label" class="floating-label">{{ label }}</label>
 
-      <div class="select-trigger" (click)="toggleDropdown()" #trigger tabindex="0" (keydown)="onTriggerKeydown($event)">
+      <div
+        class="select-trigger"
+        [class.editable-trigger]="editable"
+        (click)="!editable && toggleDropdown()"
+        #trigger
+        [attr.tabindex]="editable ? null : 0"
+        (keydown)="!editable && onTriggerKeydown($event)"
+      >
         <mat-icon *ngIf="prefixIcon" class="prefix-icon">{{ prefixIcon }}</mat-icon>
 
-        <div class="selected-content">
+        <div class="selected-content" *ngIf="!editable">
           <span class="selected-label" *ngIf="getSelectedLabel()">{{ getSelectedLabel() }}</span>
           <span class="placeholder" *ngIf="!getSelectedLabel()">{{ placeholder }}</span>
         </div>
 
-        <mat-icon class="chevron-icon">expand_more</mat-icon>
+        <input
+          *ngIf="editable"
+          #editableInput
+          type="text"
+          class="editable-input"
+          [placeholder]="placeholder"
+          [value]="inputText()"
+          [disabled]="disabled"
+          (input)="onEditableInput($event)"
+          (focus)="onEditableFocus()"
+          (blur)="onEditableBlur()"
+          (keydown)="onEditableKeydown($event)"
+          (click)="$event.stopPropagation()"
+        />
+
+        <mat-icon class="chevron-icon" (click)="toggleDropdown(); $event.stopPropagation()">expand_more</mat-icon>
       </div>
 
       <ng-template
@@ -40,15 +62,26 @@ export interface GlassOption {
         [cdkConnectedOverlayOrigin]="triggerOrigin"
         [cdkConnectedOverlayOpen]="isOpen()"
         [cdkConnectedOverlayWidth]="triggerWidth"
-        (overlayOutsideClick)="closeDropdown()"
+        (overlayOutsideClick)="onOverlayOutsideClick()"
       >
         <div class="glass-dropdown-panel glass-panel" [class.light-theme]="isLightTheme()" role="listbox">
           <div
+            *ngIf="editable && inputText().trim() && !hasExactMatch()"
+            class="glass-option custom-option"
+            [class.is-highlighted]="isCustomOptionHighlighted()"
+            (mousedown)="preventBlur($event)"
+            (click)="commitEditableValue()"
+          >
+            Use "{{ inputText().trim() }}"
+          </div>
+
+          <div
             #optionElement
-            *ngFor="let option of optionsSignal(); let i = index"
+            *ngFor="let option of dropdownOptions(); let i = index"
             class="glass-option"
             [class.is-selected]="isSelected(option)"
             [class.is-highlighted]="i === highlightedIndex()"
+            (mousedown)="preventBlur($event)"
             (click)="selectOption(option)"
             (keydown.enter)="selectOption(option)"
             (keydown.space)="selectOption(option)"
@@ -60,7 +93,7 @@ export interface GlassOption {
             <mat-icon *ngIf="isSelected(option)" class="check-icon">check</mat-icon>
           </div>
 
-          <div *ngIf="optionsSignal().length === 0" class="no-options">
+          <div *ngIf="dropdownOptions().length === 0 && !(editable && inputText().trim())" class="no-options">
             No options available
           </div>
         </div>
@@ -172,6 +205,47 @@ export interface GlassOption {
     .is-open .chevron-icon {
       transform: rotate(180deg);
       color: var(--accent-color);
+    }
+
+    .editable-trigger {
+      cursor: text;
+    }
+
+    .editable-input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: #fff;
+      font-size: 0.9375rem;
+      font-weight: 500;
+      line-height: 1.5;
+      font-family: inherit;
+      padding: 0;
+    }
+
+    :host-context(body.light-theme) .editable-input {
+      color: var(--text-main);
+    }
+
+    .editable-input::placeholder {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    :host-context(body.light-theme) .editable-input::placeholder {
+      color: rgba(0, 0, 0, 0.4);
+    }
+
+    .custom-option {
+      font-style: italic;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 0.25rem;
+    }
+
+    .glass-dropdown-panel.light-theme .custom-option {
+      border-bottom-color: rgba(0, 0, 0, 0.08);
     }
 
     /* Dropdown Panel */
@@ -293,6 +367,7 @@ export class GlassSelectComponent implements ControlValueAccessor {
   @Input() placeholder: string = 'Select option';
   @Input() prefixIcon: string = '';
   @Input() multiple: boolean = false;
+  @Input() editable: boolean = false;
   @Input() error: string | null = null;
 
   // Internal signal — CDK overlay portal is a detached EmbeddedViewRef that doesn't
@@ -312,12 +387,22 @@ export class GlassSelectComponent implements ControlValueAccessor {
   private _options: (GlassOption | string)[] = [];
 
   @ViewChild('trigger') triggerElement!: ElementRef;
+  @ViewChild('editableInput') editableInputElement?: ElementRef<HTMLInputElement>;
   @ViewChildren('optionElement') optionElements!: QueryList<ElementRef>;
 
   value = signal<any>(null);
+  inputText = signal('');
   isOpen = signal(false);
   @Input() disabled = false;
   highlightedIndex = signal<number>(-1);
+
+  readonly dropdownOptions = computed(() => {
+    const opts = this.optionsSignal();
+    if (!this.editable) return opts;
+    const query = this.inputText().trim().toLowerCase();
+    if (!query) return opts;
+    return opts.filter((o) => this.getOptionLabel(o).toLowerCase().includes(query));
+  });
 
   triggerOrigin: any;
   triggerWidth: number = 0;
@@ -335,13 +420,136 @@ export class GlassSelectComponent implements ControlValueAccessor {
     if (this.disabled) return;
     this.triggerOrigin = this.triggerElement.nativeElement;
     this.triggerWidth = this.triggerElement.nativeElement.offsetWidth;
-    this.isOpen.set(!this.isOpen());
+
+    if (this.isOpen()) {
+      if (this.editable) {
+        this.commitEditableValue();
+      } else {
+        this.closeDropdown();
+      }
+      return;
+    }
+
+    this.isOpen.set(true);
     this.highlightedIndex.set(-1);
+    if (this.editable) {
+      this.inputText.set(this.getCommittedDisplayValue());
+      this.editableInputElement?.nativeElement.focus();
+    }
+  }
+
+  openDropdown() {
+    this.triggerOrigin = this.triggerElement.nativeElement;
+    this.triggerWidth = this.triggerElement.nativeElement.offsetWidth;
+    if (!this.isOpen()) {
+      this.isOpen.set(true);
+      this.highlightedIndex.set(-1);
+    }
   }
 
   closeDropdown() {
     this.isOpen.set(false);
     this.highlightedIndex.set(-1);
+  }
+
+  onOverlayOutsideClick() {
+    if (this.editable) {
+      this.commitEditableValue();
+    } else {
+      this.closeDropdown();
+    }
+  }
+
+  preventBlur(event: MouseEvent) {
+    event.preventDefault();
+  }
+
+  onEditableFocus() {
+    if (this.disabled) return;
+    this.inputText.set(this.getCommittedDisplayValue());
+    this.openDropdown();
+  }
+
+  onEditableInput(event: Event) {
+    const text = (event.target as HTMLInputElement).value;
+    this.inputText.set(text);
+    this.openDropdown();
+    this.highlightedIndex.set(-1);
+  }
+
+  onEditableBlur() {
+    setTimeout(() => {
+      if (!this.isOpen()) {
+        this.commitEditableValue();
+      }
+    }, 150);
+  }
+
+  onEditableKeydown(event: KeyboardEvent) {
+    const options = this.dropdownOptions();
+    const hasCustomOption = this.editable && !!this.inputText().trim() && !this.hasExactMatch();
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        if (!this.isOpen()) {
+          this.openDropdown();
+        }
+        this.moveHighlight(1, options.length, hasCustomOption);
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        if (!this.isOpen()) {
+          this.openDropdown();
+        }
+        this.moveHighlight(-1, options.length, hasCustomOption);
+        return;
+      case 'Escape':
+        event.preventDefault();
+        this.inputText.set(this.getCommittedDisplayValue());
+        this.closeDropdown();
+        return;
+      case 'Enter':
+        event.preventDefault();
+        if (this.highlightedIndex() >= 0) {
+          const opts = this.dropdownOptions();
+          if (this.highlightedIndex() < opts.length) {
+            this.selectOption(opts[this.highlightedIndex()]);
+          }
+        } else {
+          this.commitEditableValue();
+        }
+        return;
+      case 'Tab':
+        this.commitEditableValue();
+        this.closeDropdown();
+        return;
+    }
+  }
+
+  commitEditableValue() {
+    const text = this.inputText().trim();
+    this.value.set(text);
+    this.inputText.set(text);
+    this.onChange(text);
+    this.onTouched();
+    this.closeDropdown();
+  }
+
+  hasExactMatch(): boolean {
+    const query = this.inputText().trim().toLowerCase();
+    if (!query) return false;
+    return this.optionsSignal().some((o) => this.getOptionLabel(o).toLowerCase() === query);
+  }
+
+  isCustomOptionHighlighted(): boolean {
+    return this.editable && !!this.inputText().trim() && !this.hasExactMatch() && this.highlightedIndex() === -1;
+  }
+
+  private getCommittedDisplayValue(): string {
+    const current = this.value();
+    if (current === null || current === undefined) return '';
+    return String(current);
   }
 
   onTriggerKeydown(event: KeyboardEvent) {
@@ -377,16 +585,17 @@ export class GlassSelectComponent implements ControlValueAccessor {
   }
 
   onContainerKeydown(event: KeyboardEvent) {
-    if (!this.isOpen()) return;
+    if (!this.isOpen() || this.editable) return;
 
+    const options = this.dropdownOptions();
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.moveHighlight(1);
+        this.moveHighlight(1, options.length);
         break;
       case 'ArrowUp':
         event.preventDefault();
-        this.moveHighlight(-1);
+        this.moveHighlight(-1, options.length);
         break;
       case 'Escape':
         event.preventDefault();
@@ -397,13 +606,13 @@ export class GlassSelectComponent implements ControlValueAccessor {
       case ' ':
         if (this.highlightedIndex() >= 0) {
           event.preventDefault();
-          this.selectOption(this._options[this.highlightedIndex()]);
+          this.selectOption(options[this.highlightedIndex()]);
         }
         break;
       default:
         if (event.key.length === 1 && /[a-zA-Z0-9]/.test(event.key)) {
           event.preventDefault();
-          this.findAndHighlightByLetter(event.key.toLowerCase());
+          this.findAndHighlightByLetter(event.key.toLowerCase(), options);
         }
         break;
     }
@@ -415,23 +624,24 @@ export class GlassSelectComponent implements ControlValueAccessor {
     }
   }
 
-  moveHighlight(direction: number) {
+  moveHighlight(direction: number, optionCount?: number, hasCustomOption = false) {
+    const count = optionCount ?? this.dropdownOptions().length;
     const current = this.highlightedIndex();
+    const minIndex = hasCustomOption ? -1 : 0;
     const next = current + direction;
-    if (next >= 0 && next < this._options.length) {
+    if (next >= minIndex && next < count) {
       this.highlightedIndex.set(next);
-      // Scroll highlighted option into view
       setTimeout(() => {
         const optionElements = this.optionElements?.toArray();
-        if (optionElements && optionElements[next]) {
-          optionElements[next].nativeElement.scrollIntoView({ block: 'nearest' });
+        const elementIndex = hasCustomOption ? next : next;
+        if (optionElements && elementIndex >= 0 && optionElements[elementIndex]) {
+          optionElements[elementIndex].nativeElement.scrollIntoView({ block: 'nearest' });
         }
       });
     }
   }
 
-  private findAndHighlightByLetter(letter: string) {
-    const list = this._options || [];
+  private findAndHighlightByLetter(letter: string, list: (GlassOption | string)[] = this._options) {
     if (list.length === 0) return;
 
     const current = this.highlightedIndex();
@@ -494,6 +704,9 @@ export class GlassSelectComponent implements ControlValueAccessor {
       }
     } else {
       current = val;
+      if (this.editable) {
+        this.inputText.set(this.getOptionLabel(option));
+      }
       this.closeDropdown();
     }
 
@@ -531,6 +744,9 @@ export class GlassSelectComponent implements ControlValueAccessor {
   // ControlValueAccessor
   writeValue(val: any): void {
     this.value.set(val);
+    if (this.editable) {
+      this.inputText.set(val ?? '');
+    }
   }
 
   registerOnChange(fn: any): void {
