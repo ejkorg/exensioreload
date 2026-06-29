@@ -194,6 +194,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                        String location,
                                        java.util.List<String> lots,
                                        java.util.List<String> wafers,
+                                       java.util.List<String> devices,
                                        int offset,
                                        int limit) {
         // Use the internal builder variant with emitInfo=false so describing
@@ -239,7 +240,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     @Override
-    public void streamMetadataWithConnection(Connection c, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, int limit, java.util.function.Consumer<MetadataRow> consumer) {
+    public void streamMetadataWithConnection(Connection c, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit, java.util.function.Consumer<MetadataRow> consumer) {
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {

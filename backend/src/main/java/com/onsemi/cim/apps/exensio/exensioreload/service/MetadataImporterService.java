@@ -411,7 +411,7 @@ public class MetadataImporterService {
                     // Caller explicitly requested an accurate total — run the count query.
                     total = externalMetadataRepository.countMetadata(site, resolvedEnv, lstart, lend, dataType,
                             effectiveDataTypeExt, effectiveTestPhase, testerType,
-                            effectiveLocation, lots, wafers);
+                            effectiveLocation, lots, wafers, devices);
                 } else {
                     // Don't run a full count by default; infer whether more rows exist.
                     if (rows.size() == resolvedSize) {
@@ -840,11 +840,11 @@ public class MetadataImporterService {
                     log.warn("External location id {} not found, aborting discovery", locationId);
                 } else {
                     try (Connection conn = externalDbResolverService.resolveConnectionForLocation(loc, environment)) {
-                        externalMetadataRepository.streamMetadataWithConnection(conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, maxToStage, processor);
+                        externalMetadataRepository.streamMetadataWithConnection(conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor);
                     }
                 }
             } else {
-                externalMetadataRepository.streamMetadata(site, environment, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, maxToStage, processor);
+                externalMetadataRepository.streamMetadata(site, environment, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor);
             }
 
             boolean hadTailBatch = !batch.isEmpty();
