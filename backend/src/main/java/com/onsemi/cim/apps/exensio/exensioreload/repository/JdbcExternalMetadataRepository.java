@@ -1652,7 +1652,3 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         }
     }
 }
-ms + " */";
-        }
-    }
-}
