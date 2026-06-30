@@ -1411,13 +1411,19 @@ export class StepperComponent implements OnInit, OnDestroy {
       .filter((s) => s.length > 0);
   }
 
-  private buildDiscoveryFiltersFromCurrentSelection(): DiscoveryFiltersSnapshot | null {
+  /**
+   * Build discovery preview/stage query params from the current form state.
+   * Device filter is included whenever an admin has entered or selected a device value.
+   */
+  private buildDiscoveryPreviewParams(options: { page?: number; size?: number } = {}): {
+    params: Record<string, any>;
+    snapshot: DiscoveryFiltersSnapshot;
+  } | null {
     const site = this.selectedSite();
     if (!site) {
       return null;
     }
 
-    const environment = this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa';
     const normalizedPairs = this.normalizedLotWaferPairs();
     const range = this.dateRange();
     const hasRange = !!range?.start && !!range?.end;
@@ -1428,26 +1434,69 @@ export class StepperComponent implements OnInit, OnDestroy {
     const deviceList = this.parseDeviceList(this.deviceFilter());
     const useDeviceFilter = this.isAdminUser() && deviceList.length > 0;
 
-    return {
+    const useLargePreviewWindow = this.historicalMode() || useDateFilters;
+    const defaultSize = useLargePreviewWindow ? 10000 : 1000;
+    const page = options.page ?? 0;
+    const size = options.size ?? defaultSize;
+
+    const params: Record<string, any> = {
       site,
-      environment,
+      environment: this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa',
       startDate,
       endDate,
       lots: null,
       wafers: null,
       pairs: normalizedPairs.length ? normalizedPairs : null,
-      devices: useDeviceFilter ? deviceList : undefined,
+      devices: useDeviceFilter ? deviceList : null,
       testerType: this.selectedTesterType() || undefined,
       dataType: this.selectedDataType() || undefined,
       dataTypeExt: this.selectedDataTypeExt() || undefined,
       testPhase: this.selectedTestPhase() || undefined,
       location: this.selectedLocation() || undefined,
+      page,
+      size,
+      bypassCap: useLargePreviewWindow,
       historicalMode: this.historicalMode(),
     };
+
+    const snapshot: DiscoveryFiltersSnapshot = {
+      site: params['site'],
+      environment: params['environment'],
+      startDate: params['startDate'],
+      endDate: params['endDate'],
+      lots: params['lots'],
+      wafers: params['wafers'],
+      pairs: params['pairs'],
+      devices: useDeviceFilter ? deviceList : undefined,
+      testerType: params['testerType'],
+      dataType: params['dataType'],
+      dataTypeExt: params['dataTypeExt'],
+      testPhase: params['testPhase'],
+      location: params['location'],
+      historicalMode: params['historicalMode'],
+    };
+
+    return { params, snapshot };
+  }
+
+  private buildDiscoveryFiltersFromCurrentSelection(): DiscoveryFiltersSnapshot | null {
+    return this.buildDiscoveryPreviewParams()?.snapshot ?? null;
   }
 
   private getEffectiveDiscoveryFilters(): DiscoveryFiltersSnapshot | null {
-    return this.lastDiscoveryFilters() || this.buildDiscoveryFiltersFromCurrentSelection();
+    const saved = this.lastDiscoveryFilters();
+    const current = this.buildDiscoveryFiltersFromCurrentSelection();
+    if (!saved) {
+      return current;
+    }
+    if (!current) {
+      return saved;
+    }
+    // Always apply the live device filter from the form to preview/stage re-queries.
+    return {
+      ...saved,
+      devices: current.devices,
+    };
   }
 
   // Cascading filter loading methods (progressive, not parallel)
@@ -1727,62 +1776,21 @@ export class StepperComponent implements OnInit, OnDestroy {
     }
 
     this.previewLoading.set(true);
-    const selectedSite = this.selectedSite();
-
-    if (!selectedSite) {
+    const built = this.buildDiscoveryPreviewParams();
+    if (!built) {
       this.previewLoading.set(false);
       this.toast.error('Site is required for preview request');
       return;
     }
 
-    // Normalize lot/wafer pairs (old frontend pattern)
-    const normalizedPairs = this.normalizedLotWaferPairs();
-
-    // Include date filters for admins with a complete range (historical mode not required)
-    const range = this.dateRange();
-    const hasRange = !!range?.start && !!range?.end;
-    const useDateFilters = this.isAdminUser() && hasRange;
-    const startDate = useDateFilters ? (range?.start ?? undefined) : undefined;
-    const endDate = useDateFilters ? (range?.end ?? undefined) : undefined;
-
-    // Device filter — admin only
-    const deviceList = this.parseDeviceList(this.deviceFilter());
-    const useDeviceFilter = this.isAdminUser() && deviceList.length > 0;
-
-    // High-volume discovery is expected for historical mode and for admin date-range queries.
-    // Keep normal non-date-range requests smaller for better responsiveness.
-    const useLargePreviewWindow = this.historicalMode() || useDateFilters;
-    const previewRequestSize = useLargePreviewWindow ? 10000 : 1000;
-    const useBypassCap = useLargePreviewWindow;
-
-    // Build request matching old frontend structure
-    const params: any = {
-      site: selectedSite,
-      environment: this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa',
-      startDate,
-      endDate,
-      lots: null, // Old frontend always sends null for lots (uses pairs instead)
-      wafers: null, // Old frontend always sends null for wafers (uses pairs instead)
-      pairs: normalizedPairs.length ? normalizedPairs : null,
-      devices: useDeviceFilter ? deviceList : null,
-      testerType: this.selectedTesterType() || undefined,
-      dataType: this.selectedDataType() || undefined,
-      dataTypeExt: this.selectedDataTypeExt() || undefined,
-      testPhase: this.selectedTestPhase() || undefined,
-      location: this.selectedLocation() || undefined,
-      page: 0,
-      // Use larger window only when needed for high-volume date-range/historical queries.
-      size: previewRequestSize,
-      bypassCap: useBypassCap,
-      historicalMode: this.historicalMode(),
-    };
+    const { params, snapshot } = built;
 
     console.log('Sending preview request (matching old frontend pattern):', params);
     console.log('Using sender ID:', senderId);
     console.log('Sender auto-resolved:', this.senderAutoResolved());
-    console.log('Normalized pairs:', normalizedPairs);
+    console.log('Normalized pairs:', params.pairs);
 
-    if (useBypassCap) {
+    if (params.bypassCap) {
       this.toast.info('Running high-volume discovery query (no preview cap). This may take longer to complete.', 5000);
     }
 
@@ -1831,21 +1839,7 @@ export class StepperComponent implements OnInit, OnDestroy {
         }
 
         // Capture discovery query filters for "Stage All Matching" re-execution
-        this.lastDiscoveryFilters.set({
-          site: selectedSite,
-          environment: params.environment,
-          startDate: params.startDate,
-          endDate: params.endDate,
-          lots: params.lots,
-          wafers: params.wafers,
-          pairs: params.pairs,
-          testerType: params.testerType,
-          dataType: params.dataType,
-          dataTypeExt: params.dataTypeExt,
-          testPhase: params.testPhase,
-          location: params.location,
-          historicalMode: params.historicalMode,
-        });
+        this.lastDiscoveryFilters.set(snapshot);
         this.discoveryToken.set(res.discoveryToken || null);
 
         // Move to preview step after successful load
@@ -1879,6 +1873,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
     const hasDateRange = !!filters.startDate && !!filters.endDate;
     const useBypassCap = !!filters.historicalMode || hasDateRange;
+    const deviceList = filters.devices && filters.devices.length > 0 ? filters.devices : null;
 
     const params: any = {
       site: filters.site,
@@ -1888,6 +1883,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       lots: filters.lots,
       wafers: filters.wafers,
       pairs: filters.pairs,
+      devices: deviceList,
       testerType: filters.testerType,
       dataType: filters.dataType,
       dataTypeExt: filters.dataTypeExt,

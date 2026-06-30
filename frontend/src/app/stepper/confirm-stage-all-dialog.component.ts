@@ -21,6 +21,7 @@ export interface ConfirmStageAllDialogData {
         testPhase?: string;
         location?: string;
         historicalMode: boolean;
+        devices?: string[];
     };
     totalDiscovered: number;
     selectedCount: number;
@@ -55,6 +56,7 @@ export interface ConfirmStageAllDialogData {
                         <li *ngIf="data.queryFilters.testerType"><strong>Tester Type:</strong> {{ data.queryFilters.testerType }}</li>
                         <li *ngIf="data.queryFilters.testPhase"><strong>Test Phase:</strong> {{ data.queryFilters.testPhase }}</li>
                         <li *ngIf="data.queryFilters.startDate"><strong>Date Range:</strong> {{ data.queryFilters.startDate }} to {{ data.queryFilters.endDate }}</li>
+                        <li *ngIf="data.queryFilters.devices && data.queryFilters.devices.length"><strong>Device:</strong> {{ data.queryFilters.devices.join(', ') }}</li>
                         <li *ngIf="data.queryFilters.pairs && data.queryFilters.pairs.length"><strong>Lot/Wafer Pairs:</strong> {{ data.queryFilters.pairs.length }} pair(s)</li>
                     </ul>
                 </div>
