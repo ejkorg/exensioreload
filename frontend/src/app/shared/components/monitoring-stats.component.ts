@@ -392,6 +392,10 @@ import { GlassIconComponent } from './glass-icon.component';
         white-space: nowrap;
       }
 
+      .integration-row {
+        transition: background 0.3s ease;
+      }
+
       .status-success {
         color: #10b981;
         background: rgba(16, 185, 129, 0.12);
@@ -399,6 +403,7 @@ import { GlassIconComponent } from './glass-icon.component';
       .status-warning {
         color: #f59e0b;
         background: rgba(245, 158, 11, 0.12);
+        animation: pulse-integration 2.5s ease-in-out infinite;
       }
       .status-error {
         color: #ef4444;
@@ -411,10 +416,35 @@ import { GlassIconComponent } from './glass-icon.component';
       .status-pending {
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
+        animation: pulse-integration 3s ease-in-out infinite;
       }
 
       .status-pending app-glass-icon {
         animation: spin-icon 2s linear infinite;
+      }
+
+      .status-warning app-glass-icon {
+        animation: pulse-icon 2.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse-integration {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.65;
+        }
+      }
+
+      @keyframes pulse-icon {
+        0%, 100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.6;
+          transform: scale(0.9);
+        }
       }
 
       @keyframes spin-icon {

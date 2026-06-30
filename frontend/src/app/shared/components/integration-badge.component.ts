@@ -45,16 +45,19 @@ import { Component, Input } from '@angular/core';
       .integration-badge-pending.integration-badge-exensio {
         background-color: #e0e0e0;
         color: #666666;
+        animation: integration-badge-pulse 3s ease-in-out infinite;
       }
 
       /* Not found state */
       .integration-badge-not-found.integration-badge-cp {
         background-color: #fff3e0;
         color: #f57c00;
+        animation: integration-badge-pulse 2.5s ease-in-out infinite;
       }
       .integration-badge-not-found.integration-badge-exensio {
         background-color: #fff3e0;
         color: #f57c00;
+        animation: integration-badge-pulse 2.5s ease-in-out infinite;
       }
 
       /* Success state */
@@ -102,6 +105,15 @@ import { Component, Input } from '@angular/core';
       .integration-badge-not-configured.integration-badge-exensio {
         background-color: #f5f5f5;
         color: #9e9e9e;
+      }
+
+      @keyframes integration-badge-pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
       }
     `,
   ],

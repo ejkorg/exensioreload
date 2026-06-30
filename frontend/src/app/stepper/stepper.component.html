@@ -538,7 +538,7 @@
             [ngClass]="'status-' + stagingSession.streamStatus()"
             [attr.title]="streamStatusTooltip()"
           >
-            <span class="status-dot" [class.pulsing]="stagingSession.streamStatus() === 'live'"></span>
+            <span class="status-dot" [class.pulsing]="stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'polling'"></span>
             <span class="status-text">{{ streamStatusLabel() }}</span>
           </div>
         </div>
@@ -800,7 +800,18 @@
           <!-- File List and Activity Feed in Grid -->
           <div class="monitoring-grid">
             <app-monitoring-file-list [files]="monitoringFiles()"></app-monitoring-file-list>
-            <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
+            <div class="activity-feed-column" [class.collapsed]="!showActivityFeed()">
+              <button
+                class="activity-toggle-btn"
+                type="button"
+                (click)="showActivityFeed.set(!showActivityFeed())"
+                [attr.aria-expanded]="showActivityFeed()"
+                [attr.title]="showActivityFeed() ? 'Hide activity feed' : 'Show activity feed'"
+              >
+                <app-glass-icon [name]="showActivityFeed() ? 'chevron_right' : 'chevron_left'" [size]="16"></app-glass-icon>
+              </button>
+              <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
+            </div>
           </div>
         </div>
       </div>
@@ -830,7 +841,7 @@
             <span
               class="status-dot"
               [class.pulsing]="
-                stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'connecting'
+                stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'connecting' || stagingSession.streamStatus() === 'polling'
               "
             ></span>
             <span>{{ streamStatusLabel() }}</span>

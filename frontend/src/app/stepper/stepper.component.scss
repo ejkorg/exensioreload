@@ -121,12 +121,29 @@
     }
 }
 
+// Polling gets a slower, softer pulse to distinguish from live
+.status-polling .status-dot.pulsing {
+    animation: pulse-dot-polling 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.4));
+}
+
 @keyframes pulse-dot {
     0%, 100% {
         opacity: 1;
     }
     50% {
         opacity: 0.5;
+    }
+}
+
+@keyframes pulse-dot-polling {
+    0%, 100% {
+        opacity: 0.85;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.45;
+        transform: scale(0.85);
     }
 }
 
@@ -248,7 +265,7 @@
 
 .monitoring-grid {
     display: grid;
-    grid-template-columns: 3fr 1fr;
+    grid-template-columns: 3fr var(--feed-width, 1fr);
     gap: 1.75rem;
     align-items: stretch;
     min-height: 420px;
@@ -260,8 +277,73 @@
     }
 }
 
+.activity-feed-column {
+    position: relative;
+    overflow: hidden;
+    transition: max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease,
+                margin 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: 600px;
+    opacity: 1;
+
+    &.collapsed {
+        max-width: 0;
+        opacity: 0;
+        margin: 0;
+        padding: 0;
+        min-width: 0;
+        pointer-events: none;
+    }
+}
+
+.activity-toggle-btn {
+    position: absolute;
+    left: -28px;
+    top: 8px;
+    z-index: 5;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(129, 140, 248, 0.12);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    color: var(--accent-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background: rgba(129, 140, 248, 0.25);
+        color: #a5b4fc;
+    }
+
+    &:active {
+        transform: scale(0.95);
+    }
+}
+
+.activity-feed-column.collapsed .activity-toggle-btn {
+    left: -28px;
+    border-radius: 0 8px 8px 0;
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    border-left: none;
+
+    &:hover {
+        background: rgba(129, 140, 248, 0.25);
+    }
+}
+
 @media (max-width: 1200px) {
     .monitoring-grid { grid-template-columns: 1fr; min-height: unset; }
+    .activity-feed-column {
+        max-width: none;
+        &.collapsed { display: none; }
+    }
+    .activity-toggle-btn { display: none; }
     .form-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 }
 

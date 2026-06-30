@@ -179,6 +179,7 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   private monitoringStopped = signal(false);
+  showActivityFeed = signal(true);
 
   monitorUiState = computed<'no-session' | 'connecting' | 'waiting' | 'live' | 'polling' | 'completed' | 'stopped'>(
     () => {
