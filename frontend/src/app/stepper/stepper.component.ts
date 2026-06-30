@@ -7,6 +7,7 @@ import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from '
 import {
   BackendService,
   CreateSessionResponse,
+  DiscoveryPreviewRequest,
   DiscoveryPreviewRow,
   ReloadFilterOptions,
   SenderOption,
@@ -1416,7 +1417,7 @@ export class StepperComponent implements OnInit, OnDestroy {
    * Device filter is included whenever an admin has entered or selected a device value.
    */
   private buildDiscoveryPreviewParams(options: { page?: number; size?: number } = {}): {
-    params: Record<string, any>;
+    params: DiscoveryPreviewRequest;
     snapshot: DiscoveryFiltersSnapshot;
   } | null {
     const site = this.selectedSite();
@@ -1439,20 +1440,20 @@ export class StepperComponent implements OnInit, OnDestroy {
     const page = options.page ?? 0;
     const size = options.size ?? defaultSize;
 
-    const params: Record<string, any> = {
+    const params: DiscoveryPreviewRequest = {
       site,
       environment: this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa',
-      startDate,
-      endDate,
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
       lots: null,
       wafers: null,
       pairs: normalizedPairs.length ? normalizedPairs : null,
       devices: useDeviceFilter ? deviceList : null,
-      testerType: this.selectedTesterType() || undefined,
-      dataType: this.selectedDataType() || undefined,
-      dataTypeExt: this.selectedDataTypeExt() || undefined,
-      testPhase: this.selectedTestPhase() || undefined,
-      location: this.selectedLocation() || undefined,
+      testerType: this.selectedTesterType() || null,
+      dataType: this.selectedDataType() || null,
+      dataTypeExt: this.selectedDataTypeExt() || null,
+      testPhase: this.selectedTestPhase() || null,
+      location: this.selectedLocation() || null,
       page,
       size,
       bypassCap: useLargePreviewWindow,
@@ -1460,20 +1461,20 @@ export class StepperComponent implements OnInit, OnDestroy {
     };
 
     const snapshot: DiscoveryFiltersSnapshot = {
-      site: params['site'],
-      environment: params['environment'],
-      startDate: params['startDate'],
-      endDate: params['endDate'],
-      lots: params['lots'],
-      wafers: params['wafers'],
-      pairs: params['pairs'],
+      site: params.site,
+      environment: params.environment ?? 'qa',
+      startDate: params.startDate ?? undefined,
+      endDate: params.endDate ?? undefined,
+      lots: params.lots,
+      wafers: params.wafers,
+      pairs: params.pairs,
       devices: useDeviceFilter ? deviceList : undefined,
-      testerType: params['testerType'],
-      dataType: params['dataType'],
-      dataTypeExt: params['dataTypeExt'],
-      testPhase: params['testPhase'],
-      location: params['location'],
-      historicalMode: params['historicalMode'],
+      testerType: params.testerType ?? undefined,
+      dataType: params.dataType ?? undefined,
+      dataTypeExt: params.dataTypeExt ?? undefined,
+      testPhase: params.testPhase ?? undefined,
+      location: params.location ?? undefined,
+      historicalMode: !!params.historicalMode,
     };
 
     return { params, snapshot };
@@ -1875,20 +1876,20 @@ export class StepperComponent implements OnInit, OnDestroy {
     const useBypassCap = !!filters.historicalMode || hasDateRange;
     const deviceList = filters.devices && filters.devices.length > 0 ? filters.devices : null;
 
-    const params: any = {
+    const params: DiscoveryPreviewRequest = {
       site: filters.site,
       environment: filters.environment,
-      startDate: filters.startDate,
-      endDate: filters.endDate,
+      startDate: filters.startDate ?? null,
+      endDate: filters.endDate ?? null,
       lots: filters.lots,
       wafers: filters.wafers,
       pairs: filters.pairs,
       devices: deviceList,
-      testerType: filters.testerType,
-      dataType: filters.dataType,
-      dataTypeExt: filters.dataTypeExt,
-      testPhase: filters.testPhase,
-      location: filters.location,
+      testerType: filters.testerType ?? null,
+      dataType: filters.dataType ?? null,
+      dataTypeExt: filters.dataTypeExt ?? null,
+      testPhase: filters.testPhase ?? null,
+      location: filters.location ?? null,
       page,
       size,
       bypassCap: useBypassCap,
