@@ -884,7 +884,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private getPersistedMonitoringSession(): string | null {
     try {
-      return sessionStorage.getItem(this.monitoringResumeStorageKey);
+      return localStorage.getItem(this.monitoringResumeStorageKey);
     } catch {
       return null;
     }
@@ -892,7 +892,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private clearPersistedMonitoringSession() {
     try {
-      sessionStorage.removeItem(this.monitoringResumeStorageKey);
+      localStorage.removeItem(this.monitoringResumeStorageKey);
     } catch {
       // no-op
     }

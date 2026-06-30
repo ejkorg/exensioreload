@@ -3123,7 +3123,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   private persistMonitoringSession(sessionId: string) {
     try {
-      sessionStorage.setItem(this.monitoringResumeStorageKey, sessionId);
+      localStorage.setItem(this.monitoringResumeStorageKey, sessionId);
     } catch {
       // no-op
     }
@@ -3131,7 +3131,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   private getPersistedMonitoringSession(): string | null {
     try {
-      return sessionStorage.getItem(this.monitoringResumeStorageKey);
+      return localStorage.getItem(this.monitoringResumeStorageKey);
     } catch {
       return null;
     }
@@ -3139,7 +3139,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   private clearPersistedMonitoringSession() {
     try {
-      sessionStorage.removeItem(this.monitoringResumeStorageKey);
+      localStorage.removeItem(this.monitoringResumeStorageKey);
     } catch {
       // no-op
     }
