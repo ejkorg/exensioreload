@@ -23,6 +23,7 @@ import { GlassInputComponent } from '../shared/components/glass-input.component'
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
 import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
 import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
+import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassSenderSelectorComponent } from '../shared/components/glass-sender-selector.component';
 import { GlassStep, GlassStepperComponent } from '../shared/components/glass-stepper.component';
 import { LotWaferProgressComponent } from '../shared/components/lot-wafer-progress.component';
@@ -102,6 +103,7 @@ interface DuplicateStageContext {
     ActivityFeedComponent,
     GlassSenderSelectorComponent,
     GlassLoadingOverlayComponent,
+    GlassDeviceFilterComponent,
     SiteNamePipe,
   ],
   templateUrl: './stepper.component.html',

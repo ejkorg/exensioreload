@@ -155,17 +155,19 @@
             </app-glass-date-range>
 
             <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-select
+              <app-glass-device-filter
                 label="Device (Admin)"
-                placeholder="Type or select device (e.g. FNB7*)"
-                [editable]="true"
+                placeholder="Enter device or pattern (e.g. FNB7*)"
+                browseTooltip="Browse devices for site, data type, and tester type"
                 [ngModel]="deviceFilter()"
                 (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
                 [options]="deviceOptions()"
-                [disabled]="!selectedDataType() || devicesLoading()"
+                [optionsLoading]="devicesLoading()"
+                [canBrowseOptions]="!!selectedDataType() && !!selectedSite()"
+                [disabled]="!selectedDataType()"
               >
-              </app-glass-select>
-              <div class="device-hint">Type freely, or pick from the list. Use * as a wildcard.</div>
+              </app-glass-device-filter>
+              <div class="device-hint">Type freely, or use the search icon to pick from loaded devices. Use * as a wildcard.</div>
               <div class="device-loading" *ngIf="devicesLoading()">
                 <span class="mini-spinner"></span>
                 <span>Loading devices...</span>
