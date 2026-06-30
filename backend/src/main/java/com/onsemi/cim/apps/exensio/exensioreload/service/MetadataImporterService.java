@@ -340,7 +340,7 @@ public class MetadataImporterService {
         String effectiveLocation = (strictFilters || forceLocation ? location : null);
 
         // Build cache key for this request (include all filters that will be used in the query)
-        String cacheKey = buildPreviewCacheKey(site, resolvedEnv, senderId, lstart, lend, lots, wafers,
+        String cacheKey = buildPreviewCacheKey(site, resolvedEnv, senderId, lstart, lend, lots, wafers, devices,
                 testerType, /*dataType*/ dataType,
                 /*dataTypeExt*/ effectiveDataTypeExt,
                 /*testPhase*/ effectiveTestPhase,
@@ -537,6 +537,7 @@ public class MetadataImporterService {
     private String buildPreviewCacheKey(String site, String environment, Integer senderId,
                                         LocalDateTime start, LocalDateTime end,
                                         java.util.List<String> lots, java.util.List<String> wafers,
+                                        java.util.List<String> devices,
                                         String testerType, String dataType, String dataTypeExt, String testPhase,
                                         String location, int page, int size, boolean bypassCap) {
         StringBuilder sb = new StringBuilder();
@@ -547,6 +548,7 @@ public class MetadataImporterService {
         sb.append(end).append("|");
         sb.append(lots != null ? String.join(",", lots.stream().filter(Objects::nonNull).toList()) : "").append("|");
         sb.append(wafers != null ? String.join(",", wafers.stream().filter(Objects::nonNull).toList()) : "").append("|");
+        sb.append(devices != null ? String.join(",", devices.stream().filter(Objects::nonNull).toList()) : "").append("|");
         sb.append(nullToEmpty(testerType)).append("|");
         sb.append(nullToEmpty(dataType)).append("|");
         sb.append(nullToEmpty(dataTypeExt)).append("|");

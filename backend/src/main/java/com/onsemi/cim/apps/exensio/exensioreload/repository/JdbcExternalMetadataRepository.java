@@ -73,13 +73,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         SqlWithParams sql;
         if (!hasOptionalFilters) {
             // Fast path: Use optimized query (indexed columns only)
-            sql = buildPreviewDedupedPageQuery(viewName, true, start, end, dataType, null, null, null, null, lots, wafers, null);
+            sql = buildPreviewDedupedPageQuery(viewName, true, start, end, dataType, null, null, null, null, lots, wafers, devices);
             if (log.isDebugEnabled()) {
                 log.debug("Using optimized query path for findMetadataPage (no optional filters)");
             }
         } else {
             // Full path: Apply all filters if optional filters are provided
-            sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
+            sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
         }
 
         sql.append(" order by end_time desc");
@@ -114,7 +114,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 "select count(*) as total_count, min(end_time) as min_end_time, max(end_time) as max_end_time from " + viewName,
                 start, end,
                 dataType,
-                lots, wafers, null);  // Only pass indexed columns
+                lots, wafers, devices);
         try (Connection c = externalDbConfig.getConnection(site, environment);
              PreparedStatement ps = prepareStatement(c, sql);
              ResultSet rs = ps.executeQuery()) {
@@ -246,7 +246,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         ResultSet rs = null;
         try {
             SqlWithParams sql = buildMetadataQuery("select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name from all_metadata_view",
-                    start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, null);
+                    start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");
             }

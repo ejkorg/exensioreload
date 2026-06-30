@@ -290,9 +290,9 @@
       </header>
 
       <div class="preview-summary-strip" *ngIf="previewTotal() > 0">
-        <span class="summary-pill">Preview loaded: {{ previewRows().length | number }}</span>
+        <span class="summary-pill">Loaded in preview: {{ previewRows().length | number }}</span>
         <span class="summary-pill subtle" *ngIf="previewTotal() > previewRows().length">
-          Showing sampled preview only. Stage all will process all {{ previewTotal() | number }} files.
+          {{ previewTotal() | number }} total match your filters. Stage all will process every matching file.
         </span>
       </div>
 
