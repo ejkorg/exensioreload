@@ -361,6 +361,43 @@
 
 .device-field {
     position: relative;
+    min-width: 240px;
+    flex: 0 1 280px;
+}
+
+.time-device-row {
+    display: flex;
+    grid-template-columns: unset;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+
+    app-glass-date-range {
+        flex: 1 1 520px;
+        min-width: 0;
+    }
+
+    .device-field {
+        flex: 1 1 240px;
+        max-width: 320px;
+
+        ::ng-deep .select-trigger {
+            min-height: 44px;
+            padding: 0.625rem 0.875rem;
+            border-radius: 12px;
+        }
+    }
+}
+
+@media (max-width: 900px) {
+    .time-device-row {
+        flex-direction: column;
+        align-items: stretch;
+
+        .device-field {
+            max-width: none;
+        }
+    }
 }
 
 .device-hint {

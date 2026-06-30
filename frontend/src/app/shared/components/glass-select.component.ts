@@ -45,8 +45,8 @@ export interface GlassOption {
           type="text"
           class="editable-input"
           [placeholder]="placeholder"
-          [value]="inputText()"
           [disabled]="disabled"
+          [value]="inputText()"
           (input)="onEditableInput($event)"
           (focus)="onEditableFocus()"
           (blur)="onEditableBlur()"
@@ -378,10 +378,6 @@ export class GlassSelectComponent implements ControlValueAccessor {
   @Input() set options(val: (GlassOption | string)[]) {
     this._options = val || [];
     this.optionsSignal.set(this._options);
-    // Close dropdown if it's open and options changed — prevents stale list
-    if (this.isOpen()) {
-      this.isOpen.set(false);
-    }
   }
   get options(): (GlassOption | string)[] { return this._options; }
   private _options: (GlassOption | string)[] = [];
@@ -477,6 +473,8 @@ export class GlassSelectComponent implements ControlValueAccessor {
   onEditableInput(event: Event) {
     const text = (event.target as HTMLInputElement).value;
     this.inputText.set(text);
+    this.value.set(text);
+    this.onChange(text);
     this.openDropdown();
     this.highlightedIndex.set(-1);
   }
@@ -532,7 +530,7 @@ export class GlassSelectComponent implements ControlValueAccessor {
   }
 
   commitEditableValue() {
-    const text = this.inputText().trim();
+    const text = this.inputText();
     this.value.set(text);
     this.inputText.set(text);
     this.onChange(text);
@@ -749,7 +747,10 @@ export class GlassSelectComponent implements ControlValueAccessor {
   writeValue(val: any): void {
     this.value.set(val);
     if (this.editable) {
-      this.inputText.set(val ?? '');
+      const isFocused = this.editableInputElement?.nativeElement === document.activeElement;
+      if (!isFocused) {
+        this.inputText.set(val ?? '');
+      }
     }
   }
 

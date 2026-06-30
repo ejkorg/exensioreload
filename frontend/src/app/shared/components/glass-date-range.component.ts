@@ -30,11 +30,11 @@ export interface DateRange {
     }
   ],
   template: `
-    <div class="glass-date-range-container">
-      <h4 *ngIf="label" class="range-label">{{ label }}</h4>
+    <div class="glass-date-range-container" [class.inline-layout]="inline">
+      <h4 *ngIf="label && !inline" class="range-label">{{ label }}</h4>
+      <label *ngIf="label && inline" class="input-label range-inline-label">{{ label }}</label>
 
-      <div class="date-range-inputs">
-
+      <div class="range-inputs-row" [class.with-time]="includeTime">
         <!-- Start date -->
         <div class="date-input-wrapper">
           <label class="input-label">From</label>
@@ -81,19 +81,21 @@ export interface DateRange {
           </div>
         </div>
 
-      </div>
+        <ng-container *ngIf="includeTime">
+          <div class="separator"><span>→</span></div>
 
-      <!-- Time inputs (optional) -->
-      <div class="time-range-inputs" *ngIf="includeTime">
-        <div class="time-input-wrapper">
-          <label class="input-label">From Time</label>
-          <input type="time" class="time-input" [value]="startTime()" (change)="onStartTimeChange($event)" [disabled]="disabled" />
-        </div>
-        <div class="separator"><span>→</span></div>
-        <div class="time-input-wrapper">
-          <label class="input-label">To Time</label>
-          <input type="time" class="time-input" [value]="endTime()" (change)="onEndTimeChange($event)" [disabled]="disabled" />
-        </div>
+          <div class="time-input-wrapper">
+            <label class="input-label">From Time</label>
+            <input type="time" class="time-input" [value]="startTime()" (change)="onStartTimeChange($event)" [disabled]="disabled" />
+          </div>
+
+          <div class="separator"><span>→</span></div>
+
+          <div class="time-input-wrapper">
+            <label class="input-label">To Time</label>
+            <input type="time" class="time-input" [value]="endTime()" (change)="onEndTimeChange($event)" [disabled]="disabled" />
+          </div>
+        </ng-container>
       </div>
     </div>
   `,
@@ -106,6 +108,10 @@ export interface DateRange {
       gap: 1rem;
     }
 
+    .glass-date-range-container.inline-layout {
+      gap: 0.375rem;
+    }
+
     .range-label {
       font-size: 0.875rem;
       font-weight: 600;
@@ -113,12 +119,21 @@ export interface DateRange {
       margin: 0;
     }
 
-    .date-range-inputs,
-    .time-range-inputs {
+    .range-inline-label {
+      display: block;
+      margin-bottom: 0.125rem;
+    }
+
+    .range-inputs-row {
       display: flex;
       gap: 0.75rem;
       align-items: flex-end;
       flex-wrap: wrap;
+    }
+
+    .inline-layout .range-inputs-row {
+      flex-wrap: nowrap;
+      gap: 0.5rem;
     }
 
     .date-input-wrapper,
@@ -128,6 +143,16 @@ export interface DateRange {
       gap: 0.375rem;
       flex: 1;
       min-width: 140px;
+    }
+
+    .inline-layout .date-input-wrapper {
+      flex: 1 1 130px;
+      min-width: 120px;
+    }
+
+    .inline-layout .time-input-wrapper {
+      flex: 0 1 110px;
+      min-width: 100px;
     }
 
     .input-label {
@@ -204,6 +229,17 @@ export interface DateRange {
       color: var(--text-muted);
       margin-top: 1.25rem;
       opacity: 0.6;
+      flex-shrink: 0;
+    }
+
+    .inline-layout .separator {
+      margin-top: 1.25rem;
+    }
+
+    @media (max-width: 900px) {
+      .inline-layout .range-inputs-row {
+        flex-wrap: wrap;
+      }
     }
 
     /* Material datepicker popup — dark theme override */
@@ -253,6 +289,7 @@ export interface DateRange {
 export class GlassDateRangeComponent implements ControlValueAccessor {
   @Input() label: string = '';
   @Input() includeTime: boolean = true;
+  @Input() inline: boolean = false;
   @Input() disabled: boolean = false;
 
   readonly startCtrl = new FormControl<Date | null>(null);

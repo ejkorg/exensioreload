@@ -142,23 +142,22 @@
             </div>
           </div>
 
-          <!-- Date range inline if visible -->
-          <div class="form-row" *ngIf="showDateRangePanel()">
+          <!-- Time range + device filter (admin) on one row -->
+          <div class="form-row time-device-row" *ngIf="showDateRangePanel() || isAdminUser()">
             <app-glass-date-range
+              *ngIf="showDateRangePanel()"
               label="Time Range"
+              [inline]="true"
               [includeTime]="true"
               [ngModel]="dateRange()"
               (ngModelChange)="dateRange.set($event)"
             >
             </app-glass-date-range>
-          </div>
 
-          <!-- Device filter (admin only) — always visible for admins, disabled until Data Type is selected -->
-          <div class="form-row" *ngIf="isAdminUser()">
-            <div class="device-field">
+            <div class="device-field" *ngIf="isAdminUser()">
               <app-glass-select
                 label="Device (Admin)"
-                placeholder="Select device or pattern (e.g. FNB7*)"
+                placeholder="Type or select device (e.g. FNB7*)"
                 [editable]="true"
                 [ngModel]="deviceFilter()"
                 (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
@@ -166,7 +165,7 @@
                 [disabled]="!selectedDataType() || devicesLoading()"
               >
               </app-glass-select>
-              <div class="device-hint">Use * as a wildcard — FNB7* matches FNB7-8, FNB7-S, etc.</div>
+              <div class="device-hint">Type freely, or pick from the list. Use * as a wildcard.</div>
               <div class="device-loading" *ngIf="devicesLoading()">
                 <span class="mini-spinner"></span>
                 <span>Loading devices...</span>
