@@ -319,6 +319,17 @@ export class GlassDateRangeComponent implements ControlValueAccessor {
   }
 
   /**
+   * Parse an HTML time input value (HH:mm or HH:mm:ss) into hour/minute parts.
+   */
+  private parseTimeParts(time: string): { hours: string; minutes: string } {
+    const [rawHours = '00', rawMinutes = '00'] = time.split(':');
+    return {
+      hours: rawHours.padStart(2, '0'),
+      minutes: rawMinutes.padStart(2, '0'),
+    };
+  }
+
+  /**
    * Build a UTC ISO 8601 string from the date picker's local date plus the given time.
    * Takes the DATE COMPONENTS from the local Date object and treats them as UTC,
    * so "June 24" always maps to 2024-06-24T00:00:00Z regardless of browser timezone.
@@ -333,9 +344,11 @@ export class GlassDateRangeComponent implements ControlValueAccessor {
   private emitChange() {
     const start = this.startCtrl.value;
     const end = this.endCtrl.value;
+    const startParts = this.includeTime ? this.parseTimeParts(this.startTime()) : { hours: '00', minutes: '00' };
+    const endParts = this.includeTime ? this.parseTimeParts(this.endTime()) : { hours: '23', minutes: '59' };
     const value: DateRange = {
-      start: start ? this.toUtcIsoString(start, this.includeTime ? this.startTime() : '00', '00', '00') : null,
-      end: end ? this.toUtcIsoString(end, this.includeTime ? this.endTime() : '23', '59', '59') : null,
+      start: start ? this.toUtcIsoString(start, startParts.hours, startParts.minutes, '00') : null,
+      end: end ? this.toUtcIsoString(end, endParts.hours, endParts.minutes, '59') : null,
     };
     this.onChange(value);
     this.onTouched();
