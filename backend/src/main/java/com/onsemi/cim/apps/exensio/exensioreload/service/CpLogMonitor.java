@@ -166,7 +166,20 @@ public class CpLogMonitor {
         }
 
         // --- Step 2: Consolidate results ---
-        // Priority: ES Success > pp_log Success > ES Failure > pp_log Failure > NotFound
+        // Priority: pp_log Success > ES Success > pp_log Failure > ES Failure > NotFound
+        // pp_log is the production source of truth — if it has the record, that's final.
+        if (ppLogResult instanceof PpLogResult.Success ppSuccess) {
+            log.info("CP enrichment success (pp_log) for record id={} dataId={}: output={}",
+                    record.id(), record.dataId(), ppSuccess.outputDirectory());
+            String statusMsg = String.format("CP enrichment completed via pp_log: %s", ppSuccess.outputDirectory());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
+            successCount.incrementAndGet();
+            pipelineOrchestrator.onCpEnrichmentSuccess(record, ppSuccess.outputDirectory(), "PP_LOG");
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
         if (esResult instanceof CpLogResult.Success success) {
             log.info("CP enrichment success (ES) for record id={} dataId={}: path={} target={} traceId={}",
                     record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
@@ -180,14 +193,16 @@ public class CpLogMonitor {
             return;
         }
 
-        if (ppLogResult instanceof PpLogResult.Success ppSuccess) {
-            log.info("CP enrichment success (pp_log) for record id={} dataId={}: output={}",
-                    record.id(), record.dataId(), ppSuccess.outputDirectory());
-            String statusMsg = String.format("CP enrichment completed via pp_log: %s", ppSuccess.outputDirectory());
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
-            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
-            successCount.incrementAndGet();
-            pipelineOrchestrator.onCpEnrichmentSuccess(record, ppSuccess.outputDirectory(), "PP_LOG");
+        if (ppLogResult instanceof PpLogResult.Failure ppFailure) {
+            log.info("CP enrichment failure (pp_log) for record id={} dataId={}: {}",
+                    record.id(), record.dataId(), ppFailure.errorMessage());
+            String statusMsg = String.format(
+                    "[pp_log Failure] lot=%s, idFile=%s, filename=%s, process_code!=0, log_message=\"%s\"",
+                    record.lot(), record.metadataId(), record.filename(), ppFailure.errorMessage());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
+            failureCount.incrementAndGet();
+            refDbService.markFailed(record, statusMsg);
             emitRowUpdateSse(record, requestId);
             return;
         }
@@ -200,20 +215,6 @@ public class CpLogMonitor {
                     "[ES Failure] lot=%s, idFile=%s, dataId=%s, log.level=ERROR, message=\"%s\", traceId=%s",
                     record.lot(), record.metadataId(), record.dataId(),
                     errorMessage, failure.traceId());
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
-            integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
-            failureCount.incrementAndGet();
-            refDbService.markFailed(record, statusMsg);
-            emitRowUpdateSse(record, requestId);
-            return;
-        }
-
-        if (ppLogResult instanceof PpLogResult.Failure ppFailure) {
-            log.info("CP enrichment failure (pp_log) for record id={} dataId={}: {}",
-                    record.id(), record.dataId(), ppFailure.errorMessage());
-            String statusMsg = String.format(
-                    "[pp_log Failure] lot=%s, idFile=%s, filename=%s, process_code!=0, log_message=\"%s\"",
-                    record.lot(), record.metadataId(), record.filename(), ppFailure.errorMessage());
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
             integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
             failureCount.incrementAndGet();
