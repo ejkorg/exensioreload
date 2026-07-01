@@ -16,8 +16,11 @@ import org.springframework.stereotype.Component;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * Scheduled monitor that polls Elasticsearch and pp_log in parallel for CP enrichment
@@ -50,6 +53,7 @@ public class CpLogMonitor {
     private final ExensioClient exensioClient;
     private final ExensioProperties exensioProperties;
     private final CpElasticsearchProperties props;
+    private final PpLogDbProperties ppLogDbProperties;
     private final StagePipelineOrchestrator pipelineOrchestrator;
     private final IntegrationStatusService integrationStatusService;
     private final StageMonitorService stageMonitorService;
@@ -64,6 +68,7 @@ public class CpLogMonitor {
                         ExensioClient exensioClient,
                         ExensioProperties exensioProperties,
                         CpElasticsearchProperties props,
+                        PpLogDbProperties ppLogDbProperties,
                         StagePipelineOrchestrator pipelineOrchestrator,
                         IntegrationStatusService integrationStatusService,
                         StageMonitorService stageMonitorService) {
@@ -72,9 +77,25 @@ public class CpLogMonitor {
         this.exensioClient = exensioClient;
         this.exensioProperties = exensioProperties;
         this.props = props;
+        this.ppLogDbProperties = ppLogDbProperties;
         this.pipelineOrchestrator = pipelineOrchestrator;
         this.integrationStatusService = integrationStatusService;
         this.stageMonitorService = stageMonitorService;
+    }
+
+    @PostConstruct
+    public void logActiveEnrichmentSources() {
+        boolean hasEs = props.isConfigured();
+        boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
+        if (hasEs && hasPpLog) {
+            log.info("CpLogMonitor: enrichment sources active — Elasticsearch + pp_log (parallel)");
+        } else if (hasEs) {
+            log.info("CpLogMonitor: enrichment sources active — Elasticsearch only (pp_log disabled)");
+        } else if (hasPpLog) {
+            log.info("CpLogMonitor: enrichment sources active — pp_log only (Elasticsearch not configured)");
+        } else {
+            log.info("CpLogMonitor: no enrichment sources configured — polling disabled (will use Exensio or DONE)");
+        }
     }
 
     /**
@@ -83,9 +104,12 @@ public class CpLogMonitor {
      */
     @Scheduled(fixedDelayString = "${cp.elasticsearch.poll-interval-ms:60000}")
     public void monitorEnrichmentRecords() {
-        if (!props.isConfigured()) {
-            log.debug("Elasticsearch not configured — CP log polling disabled ({})",
-                    "SenderQueueMonitor routes to Exensio API or DONE");
+        boolean hasEs = props.isConfigured();
+        boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
+
+        if (!hasEs && !hasPpLog) {
+            log.debug("Neither Elasticsearch nor pp_log available — resolving any stuck ENRICHMENT records immediately");
+            resolveStuckEnrichmentRecords();
             return;
         }
 
@@ -114,6 +138,7 @@ public class CpLogMonitor {
     /**
      * Evaluates a single ENRICHMENT record by querying ES and pp_log in parallel,
      * consolidating results, and falling through to Exensio direct lookup on timeout.
+     * Either source is skipped (returns NotFound immediately) when not available.
      */
     private void processRecord(StageRecord record) {
         Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
@@ -124,34 +149,45 @@ public class CpLogMonitor {
         log.debug("processRecord: createdAt={}, updatedAt={}, esLookbackTime={}", 
                 record.createdAt(), record.updatedAt(), esLookbackTime);
 
-        // --- Step 1: Query ES and pp_log in parallel ---
-        CompletableFuture<CpLogResult> esFuture = CompletableFuture.supplyAsync(() -> {
-            try {
-                return elasticsearchLogService.findCpLog(
-                    record.metadataId(), record.dataId(), record.lot(),
-                    esLookbackTime, record.site(), record.filename());
-            } catch (Exception e) {
-                log.warn("ES query failed for record id={}: {}", record.id(), e.getMessage());
-                return new CpLogResult.NotFound("es-error-" + java.util.UUID.randomUUID());
-            }
-        });
+        boolean hasEs = props.isConfigured();
+        boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
 
-        CompletableFuture<PpLogResult> ppLogFuture = CompletableFuture.supplyAsync(() -> {
-            try {
-                String outputDir = refDbService.queryPpLogSuccess(record.lot(), record.metadataId());
-                if (outputDir != null) {
-                    return new PpLogResult.Success(outputDir);
+        // --- Step 1: Query ES and pp_log in parallel (skip sources that are not available) ---
+        CompletableFuture<CpLogResult> esFuture = hasEs
+            ? CompletableFuture.supplyAsync(() -> {
+                try {
+                    return elasticsearchLogService.findCpLog(
+                        record.metadataId(), record.dataId(), record.lot(),
+                        esLookbackTime, record.site(), record.filename());
+                } catch (Exception e) {
+                    log.warn("ES query failed for record id={}: {}", record.id(), e.getMessage());
+                    return new CpLogResult.NotFound("es-error-" + java.util.UUID.randomUUID());
                 }
-                String errMsg = refDbService.queryPpLogError(record.lot(), record.metadataId());
-                if (errMsg != null) {
-                    return new PpLogResult.Failure(errMsg);
+              })
+            : CompletableFuture.completedFuture(new CpLogResult.NotFound("es-not-configured"));
+
+        if (!hasEs) {
+            log.debug("ES not configured — skipping ES query for record id={}", record.id());
+        }
+
+        CompletableFuture<PpLogResult> ppLogFuture = hasPpLog
+            ? CompletableFuture.supplyAsync(() -> {
+                try {
+                    String outputDir = refDbService.queryPpLogSuccess(record.lot(), record.metadataId());
+                    if (outputDir != null) {
+                        return new PpLogResult.Success(outputDir);
+                    }
+                    String errMsg = refDbService.queryPpLogError(record.lot(), record.metadataId());
+                    if (errMsg != null) {
+                        return new PpLogResult.Failure(errMsg);
+                    }
+                    return new PpLogResult.NotFound();
+                } catch (Exception e) {
+                    log.warn("pp_log query failed for record id={}: {}", record.id(), e.getMessage());
+                    return new PpLogResult.NotFound();
                 }
-                return new PpLogResult.NotFound();
-            } catch (Exception e) {
-                log.warn("pp_log query failed for record id={}: {}", record.id(), e.getMessage());
-                return new PpLogResult.NotFound();
-            }
-        });
+              })
+            : CompletableFuture.completedFuture(new PpLogResult.NotFound());
 
         CpLogResult esResult;
         PpLogResult ppLogResult;
@@ -239,6 +275,31 @@ public class CpLogMonitor {
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "not_found", notFoundMsg);
             integrationStatusService.updateElasticsearch(requestId, "not_found", notFoundMsg);
             emitRowUpdateSse(record, requestId);
+        }
+    }
+
+    /**
+     * Called when neither ES nor pp_log is configured. Any records already sitting in
+     * ENRICHMENT status (e.g. left over from a previous configuration) must not stay
+     * stuck indefinitely. Route them forward immediately using the same Exensio fallback
+     * that the timeout path would eventually reach.
+     */
+    private void resolveStuckEnrichmentRecords() {
+        List<StageRecord> stuck;
+        try {
+            stuck = refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE);
+        } catch (Exception e) {
+            log.warn("resolveStuckEnrichmentRecords: failed to load ENRICHMENT records: {}", e.getMessage());
+            return;
+        }
+        if (stuck.isEmpty()) {
+            return;
+        }
+        log.info("resolveStuckEnrichmentRecords: {} record(s) found in ENRICHMENT with no enrichment sources — resolving immediately", stuck.size());
+        String reason = "No enrichment sources configured (ES url blank, pp_log disabled) — bypassing enrichment wait";
+        for (StageRecord record : stuck) {
+            totalRecordsProcessed.incrementAndGet();
+            tryExensioDirectLookup(record, record.requestId(), record.id(), reason);
         }
     }
 

@@ -37,6 +37,12 @@ public class PpLogDbProperties {
     private String user;
     private String password;
     private Pool pool = new Pool();
+    /**
+     * Whether pp_log queries are enabled for this deployment.
+     * Set to {@code false} at sites where the {@code pp_log} table does not exist.
+     * Defaults to {@code true} so existing deployments are unaffected.
+     */
+    private boolean enabled = true;
 
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
@@ -52,10 +58,22 @@ public class PpLogDbProperties {
     public void setPassword(String password) { this.password = password; }
     public Pool getPool() { return pool; }
     public void setPool(Pool pool) { this.pool = pool; }
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     /** Returns true if a separate pp_log host is configured. */
     public boolean isConfigured() {
         return host != null && !host.isBlank();
+    }
+
+    /**
+     * Returns true if pp_log queries should be attempted.
+     * Requires both {@code enabled=true} AND a non-blank {@code host}.
+     * A site without a pp_log host configured is treated as "not available"
+     * regardless of the enabled flag.
+     */
+    public boolean isPpLogAvailable() {
+        return enabled && isConfigured();
     }
 
     public String buildJdbcUrl() {
