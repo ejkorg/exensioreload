@@ -1,26 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StatusMapper;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import javax.sql.DataSource;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -34,10 +13,31 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.sql.DataSource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StatusMapper;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 @Service
 public class RefDbService {
@@ -77,11 +77,11 @@ public class RefDbService {
             config.setUsername(properties.getUser());
             config.setPassword(properties.getPassword());
             config.setDriverClassName("oracle.jdbc.OracleDriver");
-            // Tell the Oracle JDBC driver the DB server's local timezone so that
-            // TIMESTAMP (without time zone) columns are interpreted correctly.
-            // The DB server runs in US Mountain time (UTC-7 / UTC-6 DST).
+            // Use UTC for all timestamp operations to ensure portability across sites.
+            // This allows the application to work correctly regardless of the DB server's
+            // physical timezone or location.
             config.addDataSourceProperty("oracle.jdbc.timezoneAsRegion", "false");
-            config.setConnectionInitSql("ALTER SESSION SET TIME_ZONE = 'America/Phoenix'");
+            config.setConnectionInitSql("ALTER SESSION SET TIME_ZONE = 'UTC'");
         } else {
             // Test environment fallback: use an embedded H2 datasource so tests don't try to contact Oracle
             config.setJdbcUrl("jdbc:h2:mem:refdb;DB_CLOSE_DELAY=-1");
@@ -102,6 +102,9 @@ public class RefDbService {
             ppConfig.setUsername(ppLogDbProperties.getUser());
             ppConfig.setPassword(ppLogDbProperties.getPassword());
             ppConfig.setDriverClassName("oracle.jdbc.OracleDriver");
+            // Use UTC for all timestamp operations to ensure portability across sites
+            ppConfig.addDataSourceProperty("oracle.jdbc.timezoneAsRegion", "false");
+            ppConfig.setConnectionInitSql("ALTER SESSION SET TIME_ZONE = 'UTC'");
             ppConfig.setMaximumPoolSize(ppLogDbProperties.getPool().getMaxSize());
             ppConfig.setMinimumIdle(ppLogDbProperties.getPool().getMinIdle());
             ppConfig.setPoolName("refdb-pplog");
