@@ -2149,6 +2149,55 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.currentStep.set(0);
   }
 
+  /**
+   * Reset Step 1 configuration to initial state.
+   * Clears environment, site, all filters, sender, lot/wafer pairs, and preview data.
+   * User can start fresh without leaving the page.
+   */
+  resetStep1() {
+    // Clear all selections
+    this.selectedEnv.set(null);
+    this.selectedSite.set(null);
+    this.selectedLocation.set(null);
+    this.selectedDataType.set(null);
+    this.selectedTesterType.set(null);
+    this.selectedDataTypeExt.set(null);
+    this.selectedTestPhase.set(null);
+    this.dateRange.set(null);
+    this.deviceFilter.set('');
+    this.deviceFilterControl.setValue('', { emitEvent: false });
+    this.historicalMode.set(false);
+
+    // Clear all filter options
+    this.siteOptions.set([]);
+    this.locations.set([]);
+    this.dataTypes.set([]);
+    this.testerTypes.set([]);
+    this.dataTypeExt.set([]);
+    this.testPhases.set([]);
+    this.deviceOptions.set([]);
+
+    // Clear sender state
+    this.resetSenderState();
+
+    // Reset lot/wafer pairs to single empty pair
+    this.lotWaferPairs.set([{ lot: '', wafer: '' }]);
+
+    // Clear all preview data
+    this.previewRows.set([]);
+    this.allPreviewRows.set([]);
+    this.previewTotal.set(0);
+    this.selectedRows.set(new Set());
+    this.selectedRowLookup.set(new Map());
+    this.filterText.set('');
+    this.selectedFileType.set('ALL');
+    this.pageIndex.set(0);
+    this.pageSize.set(25);
+
+    // Show success feedback
+    this.toast.info('Configuration reset. Ready to start a new request.', 4000);
+  }
+
   goToFirstPage() {
     if (this.pageIndex() !== 0) {
       this.fetchPreviewPage(0, this.pageSize());

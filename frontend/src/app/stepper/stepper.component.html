@@ -281,6 +281,15 @@
 
       <div class="step-actions-compact">
         <app-glass-button
+          variant="tertiary"
+          size="medium"
+          title="Reset all configuration filters and start fresh"
+          (clicked)="resetStep1()"
+        >
+          <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+          Reset
+        </app-glass-button>
+        <app-glass-button
           variant="primary"
           size="medium"
           [disabled]="!canProceedToPreview() || previewLoading()"
