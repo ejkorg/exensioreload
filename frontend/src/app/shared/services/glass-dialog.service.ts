@@ -1,4 +1,13 @@
-import { Injectable, ComponentRef, ApplicationRef, createComponent, EnvironmentInjector, Type, Injector, signal } from '@angular/core';
+import {
+  ApplicationRef,
+  ComponentRef,
+  createComponent,
+  EnvironmentInjector,
+  Injectable,
+  Injector,
+  signal,
+  Type,
+} from '@angular/core';
 
 export interface GlassDialogConfig<T = any> {
   data?: T;
@@ -18,7 +27,7 @@ export class GlassDialogRef<T = any, R = any> {
   constructor(
     private componentRef: ComponentRef<any>,
     private backdropElement: HTMLElement,
-    private containerElement: HTMLElement
+    private containerElement: HTMLElement,
   ) {}
 
   close(result?: R): void {
@@ -51,25 +60,20 @@ export class GlassDialogRef<T = any, R = any> {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class GlassDialogService {
   constructor(
     private appRef: ApplicationRef,
-    private injector: EnvironmentInjector
+    private injector: EnvironmentInjector,
   ) {}
 
-  open<T, D = any, R = any>(
-    component: Type<T>,
-    config?: GlassDialogConfig<D>
-  ): GlassDialogRef<T, R> {
+  open<T, D = any, R = any>(component: Type<T>, config?: GlassDialogConfig<D>): GlassDialogRef<T, R> {
     // Create backdrop
     const backdrop = document.createElement('div');
     backdrop.className = 'glass-dialog-backdrop';
     if (config?.backdropClass) {
-      const classes = Array.isArray(config.backdropClass)
-        ? config.backdropClass
-        : [config.backdropClass];
+      const classes = Array.isArray(config.backdropClass) ? config.backdropClass : [config.backdropClass];
       backdrop.classList.add(...classes);
     }
 
@@ -77,9 +81,7 @@ export class GlassDialogService {
     const container = document.createElement('div');
     container.className = 'glass-dialog-container';
     if (config?.panelClass) {
-      const classes = Array.isArray(config.panelClass)
-        ? config.panelClass
-        : [config.panelClass];
+      const classes = Array.isArray(config.panelClass) ? config.panelClass : [config.panelClass];
       container.classList.add(...classes);
     }
 
@@ -93,7 +95,7 @@ export class GlassDialogService {
     const dialogRef = new GlassDialogRef<T, R>(
       null as any, // Will be set after component creation
       backdrop,
-      container
+      container,
     );
 
     // Create custom injector with dialog data and ref
@@ -101,14 +103,14 @@ export class GlassDialogService {
       parent: this.injector,
       providers: [
         { provide: GLASS_DIALOG_DATA, useValue: config?.data },
-        { provide: GlassDialogRef, useValue: dialogRef }
-      ]
+        { provide: GlassDialogRef, useValue: dialogRef },
+      ],
     });
 
     // Create component
     const componentRef = createComponent(component, {
       environmentInjector: this.injector,
-      elementInjector: customInjector
+      elementInjector: customInjector,
     });
 
     // Set component ref in dialog ref
@@ -137,14 +139,60 @@ export class GlassDialogService {
       });
     }
 
+    // Save previously focused element so we can restore focus on close
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Focus trap: keep focus within the dialog while it is open
+    const focusTrapHandler = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.shiftKey) {
+        // Shift+Tab: if focus is on the first element, wrap to last
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        // Tab: if focus is on the last element, wrap to first
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', focusTrapHandler);
+
     // Handle ESC key
     const escapeHandler = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !config?.disableClose) {
         dialogRef.close();
         document.removeEventListener('keydown', escapeHandler);
+        document.removeEventListener('keydown', focusTrapHandler);
+        // Restore focus to the element that opened the dialog
+        previouslyFocused?.focus();
       }
     };
     document.addEventListener('keydown', escapeHandler);
+
+    // Also restore focus when dialog is closed via backdrop click or programmatic close
+    const originalClose = dialogRef.close.bind(dialogRef);
+    (dialogRef as any).close = (result?: any) => {
+      document.removeEventListener('keydown', escapeHandler);
+      document.removeEventListener('keydown', focusTrapHandler);
+      previouslyFocused?.focus();
+      originalClose(result);
+    };
 
     return dialogRef;
   }

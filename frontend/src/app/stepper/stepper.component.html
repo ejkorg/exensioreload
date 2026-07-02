@@ -167,7 +167,9 @@
                 [disabled]="!selectedDataType()"
               >
               </app-glass-device-filter>
-              <div class="device-hint">Type freely, or use the search icon to pick from loaded devices. Use * as a wildcard.</div>
+              <div class="device-hint">
+                Type freely, or use the search icon to pick from loaded devices. Use * as a wildcard.
+              </div>
               <div class="device-loading" *ngIf="devicesLoading()">
                 <span class="mini-spinner"></span>
                 <span>Loading devices...</span>
@@ -220,6 +222,17 @@
             </div>
 
             <ng-container *ngIf="showLotWaferFilters()">
+              <button
+                class="bulk-add-lots-btn"
+                type="button"
+                (click)="onBulkAddLotsClick()"
+                aria-label="Bulk add lots"
+                title="Paste or upload multiple lots at once"
+              >
+                <app-glass-icon name="upload_file" [size]="18"></app-glass-icon>
+                <span>Bulk Add Lots</span>
+              </button>
+
               <div class="pairs-list-compact">
                 <div *ngFor="let pair of lotWaferPairs(); let i = index" class="pair-row-compact">
                   <app-glass-input
@@ -538,7 +551,10 @@
             [ngClass]="'status-' + stagingSession.streamStatus()"
             [attr.title]="streamStatusTooltip()"
           >
-            <span class="status-dot" [class.pulsing]="stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'polling'"></span>
+            <span
+              class="status-dot"
+              [class.pulsing]="stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'polling'"
+            ></span>
             <span class="status-text">{{ streamStatusLabel() }}</span>
           </div>
         </div>
@@ -637,7 +653,8 @@
       <div
         *ngIf="
           !allDuplicatesSkipped() &&
-            monitorUiState() !== 'completed' && (monitorUiState() === 'live' || hasMonitoringData());
+            monitorUiState() !== 'completed' &&
+            (monitorUiState() === 'live' || hasMonitoringData());
           else noMonitoringData
         "
       >
@@ -808,7 +825,10 @@
                 [attr.aria-expanded]="showActivityFeed()"
                 [attr.title]="showActivityFeed() ? 'Hide activity feed' : 'Show activity feed'"
               >
-                <app-glass-icon [name]="showActivityFeed() ? 'chevron_right' : 'chevron_left'" [size]="16"></app-glass-icon>
+                <app-glass-icon
+                  [name]="showActivityFeed() ? 'chevron_right' : 'chevron_left'"
+                  [size]="16"
+                ></app-glass-icon>
               </button>
               <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
             </div>
@@ -841,7 +861,9 @@
             <span
               class="status-dot"
               [class.pulsing]="
-                stagingSession.streamStatus() === 'live' || stagingSession.streamStatus() === 'connecting' || stagingSession.streamStatus() === 'polling'
+                stagingSession.streamStatus() === 'live' ||
+                stagingSession.streamStatus() === 'connecting' ||
+                stagingSession.streamStatus() === 'polling'
               "
             ></span>
             <span>{{ streamStatusLabel() }}</span>

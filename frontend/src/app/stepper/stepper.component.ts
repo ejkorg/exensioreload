@@ -19,12 +19,12 @@ import { ActivityFeedComponent } from '../shared/components/activity-feed.compon
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { DateRange, GlassDateRangeComponent } from '../shared/components/glass-date-range.component';
+import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
 import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
 import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
-import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassSenderSelectorComponent } from '../shared/components/glass-sender-selector.component';
 import { GlassStep, GlassStepperComponent } from '../shared/components/glass-stepper.component';
 import { LotWaferProgressComponent } from '../shared/components/lot-wafer-progress.component';
@@ -40,6 +40,11 @@ import {
   StagingSessionService,
 } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
+import {
+  BulkLotInputDialogComponent,
+  BulkLotInputDialogData,
+  BulkLotInputDialogResult,
+} from './bulk-lot-input-dialog.component';
 import { ConfirmStageAllDialogComponent, ConfirmStageAllDialogData } from './confirm-stage-all-dialog.component';
 import {
   DuplicatePayloadInfo,
@@ -1198,9 +1203,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.tryRestoreMonitoringSession();
 
     // Debounced device filter sync (400ms, matching admin page search pattern)
-    this.deviceFilterControl.valueChanges.pipe(debounceTime(400), distinctUntilChanged()).subscribe((val: string | null) => {
-      this.deviceFilter.set(val ?? '');
-    });
+    this.deviceFilterControl.valueChanges
+      .pipe(debounceTime(400), distinctUntilChanged())
+      .subscribe((val: string | null) => {
+        this.deviceFilter.set(val ?? '');
+      });
   }
 
   /**
@@ -1723,6 +1730,35 @@ export class StepperComponent implements OnInit, OnDestroy {
       updated[index] = { ...updated[index], wafer: value };
       return updated;
     });
+  }
+
+  onBulkAddLotsClick(): void {
+    const existingLots = this.lotWaferPairs()
+      .map((p) => p.lot)
+      .filter((l) => !!l.trim());
+
+    const dialogRef = this.dialog.open<
+      BulkLotInputDialogComponent,
+      BulkLotInputDialogData,
+      BulkLotInputDialogResult | undefined
+    >(BulkLotInputDialogComponent, { data: { existingLots } });
+
+    dialogRef.afterClosed().then((result) => {
+      if (result && result.lots.length > 0) {
+        this.addBulkLots(result.lots);
+      }
+    });
+  }
+
+  private addBulkLots(lots: string[]): void {
+    const newPairs = lots.map((lot) => ({ lot, wafer: '' }));
+    this.lotWaferPairs.update((existing) => [...existing, ...newPairs]);
+
+    this.toast.success(`Added ${lots.length} lot${lots.length === 1 ? '' : 's'}`);
+
+    if (!this.showLotWaferFilters()) {
+      this.showLotWaferFilters.set(true);
+    }
   }
 
   canProceedToPreview = computed(() => {
