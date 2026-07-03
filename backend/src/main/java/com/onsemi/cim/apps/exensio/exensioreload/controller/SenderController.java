@@ -1,54 +1,67 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.SenderQueueEntry;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderQueueRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.SenderDispatchService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.SenderService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.MailService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRow;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewWithDuplicatesResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StageAllRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DuplicatePayloadView;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.EnqueueRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.HistoricalPreviewSummary;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.util.Map;
-
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.Locale;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.stream.Collectors;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRow;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewWithDuplicatesResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DuplicatePayloadView;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.EnqueueRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.HistoricalPreviewSummary;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.LotVerificationRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.LotVerificationResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageAllRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.SenderQueueEntry;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderQueueRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioPreCheckService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.MailService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.SenderDispatchService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.SenderService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/senders")
@@ -74,8 +87,9 @@ public class SenderController {
     private final com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig;
     private final MailService mailService;
     private final com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService;
+    private final ExensioPreCheckService exensioPreCheckService;
 
-    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService) {
+    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckService exensioPreCheckService) {
         this.senderService = senderService;
         this.repo = repo;
         this.metadataImporterService = metadataImporterService;
@@ -87,6 +101,7 @@ public class SenderController {
         this.externalDbConfig = externalDbConfig;
         this.mailService = mailService;
         this.stageSessionService = stageSessionService;
+        this.exensioPreCheckService = exensioPreCheckService;
     }
 
     // Expose download URL template defined in dbconnections.yml/json for the selected site/environment.
@@ -1208,6 +1223,79 @@ public class SenderController {
         }
         StagePayloadResponse response = new StagePayloadResponse(result.stagedCount(), duplicateViews.size(), duplicateViews, dispatched, requiresConfirmation, candidates.size(), false, result.requeuedCount());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Verify lot existence in Exensio before running discovery.
+     * Returns a map indicating which lots exist and which don't.
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")
+    @PostMapping("/{id}/verify-lots")
+    public ResponseEntity<LotVerificationResponse> verifyLots(
+            @PathVariable("id") Integer id,
+            @RequestBody LotVerificationRequest request) {
+
+        // Validate request
+        if (request == null || request.lots() == null || request.lots().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<String> lots = request.lots();
+        if (lots.size() > 1000) {
+            return ResponseEntity.badRequest()
+                .body(new LotVerificationResponse(
+                    Map.of(),
+                    "Too many lots. Maximum 1000 lots per request."
+                ));
+        }
+
+        // Extract dataType from request (required field)
+        String dataType = request.dataType();
+        if (dataType == null || dataType.isBlank()) {
+            return ResponseEntity.badRequest()
+                .body(new LotVerificationResponse(
+                    Map.of(),
+                    "dataType is required for lot verification."
+                ));
+        }
+
+        try {
+            // Transform LotVerificationRequest to ExensioPreCheckRequest
+            // Pass dataType and null blocks (no date filtering for simple lot verification)
+            ExensioPreCheckRequest preCheckRequest = new ExensioPreCheckRequest(
+                request.environment(),
+                lots,
+                null, // blocks - not needed for simple lot check
+                dataType
+            );
+
+            // Call ExensioPreCheckService.check()
+            ExensioPreCheckResponse preCheckResponse = exensioPreCheckService.check(preCheckRequest);
+
+            // Transform ExensioPreCheckResponse to LotVerificationResponse
+            // Map lotsFound list to Map<String, Boolean> (true for found, false for not found)
+            Map<String, Boolean> lotExists = new HashMap<>();
+            for (String lot : lots) {
+                boolean found = preCheckResponse.lotsFound().contains(lot);
+                lotExists.put(lot, found);
+            }
+
+            // Include error field from ExensioPreCheckResponse if present
+            String error = preCheckResponse.error();
+            
+            log.info("Lot verification completed for sender {}: {} lots checked, {} found, {} not found",
+                    id, lots.size(), preCheckResponse.lotsFound().size(), preCheckResponse.lotsNotFound().size());
+
+            return ResponseEntity.ok(new LotVerificationResponse(lotExists, error));
+
+        } catch (Exception e) {
+            log.error("Lot verification failed for sender {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(500)
+                .body(new LotVerificationResponse(
+                    Map.of(),
+                    "Verification failed: " + e.getMessage()
+                ));
+        }
     }
 
     private java.time.Instant parseIsoInstant(String value) {

@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
 import { FormControl, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { Subject, Subscription, of } from 'rxjs';
+import { Subject, Subscription, firstValueFrom, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   BackendService,
@@ -51,6 +51,7 @@ import {
   DuplicateWarningDialogComponent,
   DuplicateWarningDialogData,
 } from './duplicate-warning-dialog.component';
+import { LotVerificationDialogComponent, LotVerificationDialogData } from './lot-verification-dialog.component';
 
 interface WaferMonitoringRow {
   lot: string;
@@ -111,6 +112,7 @@ interface DuplicateStageContext {
     GlassLoadingOverlayComponent,
     GlassDeviceFilterComponent,
     SiteNamePipe,
+    LotVerificationDialogComponent,
   ],
   templateUrl: './stepper.component.html',
   styleUrls: ['./stepper.component.scss'],
@@ -562,6 +564,17 @@ export class StepperComponent implements OnInit, OnDestroy {
   // These are captured when loadPreview() runs successfully
   lastDiscoveryFilters = signal<DiscoveryFiltersSnapshot | null>(null);
   discoveryToken = signal<string | null>(null);
+
+  // Verification summary shown after verification completes
+  // Stores: choice ('all' | 'not-found'), totalLots, foundCount, notFoundCount
+  // Initialize as null (no verification performed yet)
+  // Set after user makes choice in dialog
+  verificationSummary = signal<{
+    choice: 'all' | 'not-found';
+    totalLots: number;
+    foundCount: number;
+    notFoundCount: number;
+  } | null>(null);
 
   // Pagination state
   pageSize = signal(25);
@@ -1031,6 +1044,16 @@ export class StepperComponent implements OnInit, OnDestroy {
           }
         }
       },
+    );
+
+    // Clear verification summary when lot/wafer pairs change (detect changes with effect())
+    effect(
+      () => {
+        this.lotWaferPairs();
+        // Whenever lots/wafers change, clear the verification summary banner
+        this.verificationSummary.set(null);
+      },
+      { allowSignalWrites: true },
     );
 
     effect(
@@ -1796,7 +1819,157 @@ export class StepperComponent implements OnInit, OnDestroy {
     return hasLotOnly;
   });
 
-  loadPreview() {
+  /**
+   * Task 6.1: Pre-flight lot verification before discovery
+   * Extracts unique lots from lotWaferPairs signal, verifies them against Exensio,
+   * displays results in dialog, and returns filtered lots based on user action.
+   *
+   * Task 11: Date range filtering support
+   * Extracts year and month from dateRange signal and passes to backend for filtering.
+   *
+   * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 10.1, 10.2, 10.3, 10.5, 10.6
+   */
+  private async verifyLotsBeforeDiscovery(): Promise<string[] | null> {
+    // Extract unique lots from lotWaferPairs
+    const lotsArray = this.lotWaferPairs()
+      .map((pair: any) => pair.lot?.trim())
+      .filter((lot: any) => lot && lot.length > 0);
+    const lots = Array.from(new Set(lotsArray)) as string[];
+
+    // Skip verification if lots list is empty (date range only query)
+    if (lots.length === 0) {
+      return [];
+    }
+
+    // Get sender ID for the API call
+    const senderId = this.getSenderIdForRequest();
+    if (!senderId) {
+      this.toast.error('Sender is required for verification');
+      return null;
+    }
+
+    // Show loading overlay
+    this.previewLoading.set(true);
+
+    try {
+      // Extract date range if provided (Task 11: Date range filtering)
+      const dateRangeData = this.dateRange();
+      let appliedDateRange: { start: Date; end: Date } | null = null;
+      const preCheckBlocks: Array<{ year: number; month: number }> = [];
+
+      if (dateRangeData?.start && dateRangeData?.end) {
+        appliedDateRange = { start: dateRangeData.start, end: dateRangeData.end };
+
+        // Extract year and month from dateRange to create PreCheckBlock entries
+        const startDate = new Date(dateRangeData.start);
+        const endDate = new Date(dateRangeData.end);
+
+        // Generate all month/year combinations between start and end dates (inclusive)
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          preCheckBlocks.push({
+            year: current.getFullYear(),
+            month: current.getMonth() + 1, // Month is 1-12 in PreCheckBlock format
+          });
+          current.setMonth(current.getMonth() + 1);
+        }
+
+        console.log('Task 11: Date range filtering - PreCheckBlocks:', preCheckBlocks);
+      }
+
+      // Call backend to verify lots with optional date range filtering
+      const result = await firstValueFrom(
+        this.backend.verifyLotsExistenceWithDateRange(senderId, lots, preCheckBlocks),
+      );
+
+      this.previewLoading.set(false);
+
+      // Convert response to Map for dialog data
+      const verificationMap = new Map<string, boolean>();
+      if (result.lotExists instanceof Map) {
+        // If it's already a Map, use it directly
+        result.lotExists.forEach((value: boolean, key: string) => {
+          verificationMap.set(key, value);
+        });
+      } else {
+        // Convert object to Map
+        Object.entries(result.lotExists).forEach(([key, value]: [string, any]) => {
+          verificationMap.set(key, Boolean(value));
+        });
+      }
+
+      // Count found and not found lots
+      let foundCount = 0;
+      let notFoundCount = 0;
+      verificationMap.forEach((found: boolean) => {
+        if (found) foundCount++;
+        else notFoundCount++;
+      });
+
+      // Open LotVerificationDialogComponent with dialog service
+      const dialogRef = this.dialog.open(LotVerificationDialogComponent, {
+        data: {
+          lots,
+          verificationResult: verificationMap,
+          verifiedAt: new Date(),
+          appliedDateRange,
+        } as LotVerificationDialogData,
+        width: '900px',
+      });
+
+      // Wait for dialog result using firstValueFrom
+      const dialogResult = await firstValueFrom(dialogRef.afterClosed());
+
+      if (!dialogResult || dialogResult.action === 'cancel') {
+        return null; // User cancelled
+      }
+
+      // Task 8: Store verification summary for display in discovery banner
+      if (dialogResult.action === 'all') {
+        this.verificationSummary.set({
+          choice: 'all',
+          totalLots: lots.length,
+          foundCount,
+          notFoundCount,
+        });
+        return lots; // Continue with all lots
+      }
+
+      if (dialogResult.action === 'not-found') {
+        this.verificationSummary.set({
+          choice: 'not-found',
+          totalLots: lots.length,
+          foundCount,
+          notFoundCount,
+        });
+        return dialogResult.filteredLots || []; // Continue with only non-existent lots
+      }
+
+      return null;
+    } catch (error) {
+      this.previewLoading.set(false);
+      console.error('Lot verification failed:', error);
+
+      // Show error with option to skip verification
+      const proceed = await this.confirmSkipVerification(error);
+      return proceed ? lots : null;
+    }
+  }
+
+  /**
+   * Task 6.2: Error handler for verification failures
+   * Shows error message and confirm dialog asking if user wants to skip verification.
+   *
+   * Requirements: 8.3, 8.4, 8.5
+   */
+  private async confirmSkipVerification(error: any): Promise<boolean> {
+    const errorMsg = error?.error?.message || error?.statusText || error?.message || 'Verification failed';
+    const message = `Lot verification failed: ${errorMsg}\n\nWould you like to skip verification and continue with discovery?`;
+
+    return window.confirm(message);
+  }
+
+  async loadPreview() {
     // Reference: old frontend buildPreviewRequest() lines 2810-2856 and doPreview() lines 2563-2695
 
     if (!this.canProceedToPreview()) {
@@ -1812,6 +1985,26 @@ export class StepperComponent implements OnInit, OnDestroy {
       this.toast.error('Sender is required for preview. Please wait for auto-resolution or select manually.');
       return;
     }
+
+    // === NEW: Task 6.3 - Pre-flight lot verification ===
+    try {
+      const lotsToDiscover = await this.verifyLotsBeforeDiscovery();
+      if (lotsToDiscover === null) {
+        // User cancelled or verification failed and chose not to proceed
+        return;
+      }
+
+      // Update lot/wafer pairs with filtered lots if verification returned non-empty list
+      if (lotsToDiscover.length > 0 && lotsToDiscover.length < this.lotWaferPairs().length) {
+        const filteredPairs = this.lotWaferPairs().filter((pair) => lotsToDiscover.includes(pair.lot?.trim() || ''));
+        this.lotWaferPairs.set(filteredPairs);
+      }
+    } catch (error) {
+      console.error('Verification process failed unexpectedly:', error);
+      this.toast.error('Verification process failed. Please try again.');
+      return;
+    }
+    // === END: Pre-flight lot verification ===
 
     this.previewLoading.set(true);
     const built = this.buildDiscoveryPreviewParams();
@@ -2146,6 +2339,8 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.skippedDuplicatesCount.set(0);
     this.restagedCount.set(0);
     this.allDuplicatesSkipped.set(false);
+    // Task 8.3: Clear verification summary when returning to config (Requirement 6.5)
+    this.verificationSummary.set(null);
     this.currentStep.set(0);
   }
 
@@ -2193,6 +2388,9 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.selectedFileType.set('ALL');
     this.pageIndex.set(0);
     this.pageSize.set(25);
+
+    // Task 8.3: Clear verification summary when resetting config (Requirement 6.5)
+    this.verificationSummary.set(null);
 
     // Show success feedback
     this.toast.info('Configuration reset. Ready to start a new request.', 4000);
@@ -2997,6 +3195,11 @@ export class StepperComponent implements OnInit, OnDestroy {
   onStepChange(index: number) {
     this.currentStep.set(index);
 
+    // Clear verification summary when navigating back to step 0 (Configuration)
+    if (index === 0) {
+      this.verificationSummary.set(null);
+    }
+
     // Start monitoring when entering step 3
     if (index === 2) {
       this.startMonitoring();
@@ -3516,5 +3719,175 @@ export class StepperComponent implements OnInit, OnDestroy {
    */
   private getSenderIdForRequest(): number | null {
     return this.selectedSenderId();
+  }
+
+  /**
+   * Task 6.1: Pre-flight lot verification before discovery
+   * Task 11: Date range filtering support
+   *
+   * Extracts unique lots from lotWaferPairs signal, verifies them against Exensio,
+   * displays results in dialog, and returns filtered lots based on user action.
+   *
+   * When date range is provided (historical mode), extracts year and month from
+   * dateRange signal and creates PreCheckBlock entries to filter lots by end_time.
+   *
+   * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 9.1, 10.1, 10.2, 10.3, 10.5, 10.6
+   */
+  private async verifyLotsBeforeDiscovery(): Promise<string[] | null> {
+    // Extract unique lots from lotWaferPairs
+    const lots = Array.from(
+      new Set(
+        this.lotWaferPairs()
+          .map((pair) => pair.lot?.trim())
+          .filter((lot) => lot && lot.length > 0),
+      ),
+    );
+
+    if (lots.length === 0) {
+      // No lots to verify - proceed immediately (date range only query)
+      // Requirements: 1.5 - If no lots are provided (date range only query), skip verification
+      return [];
+    }
+
+    // Get sender ID for the API call
+    const senderId = this.getSenderIdForRequest();
+    if (!senderId) {
+      this.toast.error('Sender is required for verification');
+      return null;
+    }
+
+    // Task 9.1: Set previewLoading(true) before verification call
+    // Display message: "Verifying lots in Exensio..."
+    // Show spinner animation (existing loading overlay component)
+    this.previewLoading.set(true);
+
+    try {
+      // Task 11: Extract date range if provided (historical mode with date range)
+      const dateRangeData = this.dateRange();
+      let appliedDateRange: { start: Date; end: Date } | null = null;
+      const preCheckBlocks: Array<{ year: number; month: number }> = [];
+
+      if (dateRangeData?.start && dateRangeData?.end) {
+        appliedDateRange = { start: dateRangeData.start, end: dateRangeData.end };
+
+        // Extract year and month from dateRange to create PreCheckBlock entries
+        // Requirements: 10.3, 10.6 - Extract year and month from date range
+        const startDate = new Date(dateRangeData.start);
+        const endDate = new Date(dateRangeData.end);
+
+        // Generate all month/year combinations between start and end dates (inclusive)
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          preCheckBlocks.push({
+            year: current.getFullYear(),
+            month: current.getMonth() + 1, // Month is 1-12 in PreCheckBlock format
+          });
+          current.setMonth(current.getMonth() + 1);
+        }
+
+        console.log('Task 11: Date range filtering - PreCheckBlocks:', preCheckBlocks);
+      }
+
+      // Call backend to verify lots with optional date range filtering
+      // Requirements: 2.1, 2.2, 2.3, 2.4 - Use raw-SQL endpoint with PGC_KEY filter
+      const result = await firstValueFrom(
+        this.backend.verifyLotsExistenceWithDateRange(
+          senderId,
+          lots,
+          preCheckBlocks.length > 0 ? preCheckBlocks : null,
+        ),
+      );
+
+      // Task 9.1: Set previewLoading(false) after verification completes
+      this.previewLoading.set(false);
+
+      // Requirements: 1.3 - Display verification dialog showing results
+      // Open verification dialog with GlassDialogService
+      const verificationMap = new Map<string, boolean>();
+      if (result.lotExists instanceof Map) {
+        result.lotExists.forEach((value: boolean, key: string) => {
+          verificationMap.set(key, value);
+        });
+      } else {
+        Object.entries(result.lotExists).forEach(([key, value]: [string, any]) => {
+          verificationMap.set(key, Boolean(value));
+        });
+      }
+
+      // Count found and not found lots for summary
+      let foundCount = 0;
+      let notFoundCount = 0;
+      verificationMap.forEach((found: boolean) => {
+        if (found) foundCount++;
+        else notFoundCount++;
+      });
+
+      const dialogRef = this.dialog.open(LotVerificationDialogComponent, {
+        data: {
+          lots,
+          verificationResult: verificationMap,
+          verifiedAt: new Date(),
+          appliedDateRange,
+        } as LotVerificationDialogData,
+        disableClose: false,
+        panelClass: 'glass-dialog',
+        backdropClass: 'glass-backdrop',
+      });
+
+      const dialogResult = await firstValueFrom(dialogRef.afterClosed());
+
+      if (!dialogResult || dialogResult.action === 'cancel') {
+        // User cancelled
+        return null;
+      }
+
+      if (dialogResult.action === 'all') {
+        // Requirements: 1.4 - Execute discovery with all originally input lots
+        // Task 6 & 8: Store verification summary for banner display
+        this.verificationSummary.set({
+          choice: 'all',
+          totalLots: lots.length,
+          foundCount,
+          notFoundCount,
+        });
+        return lots;
+      }
+
+      if (dialogResult.action === 'not-found') {
+        // Requirements: 1.4 - Execute discovery with only non-existent lots
+        // Task 6 & 8: Store verification summary for banner display
+        this.verificationSummary.set({
+          choice: 'not-found',
+          totalLots: lots.length,
+          foundCount,
+          notFoundCount,
+        });
+        return dialogResult.filteredLots || [];
+      }
+
+      return null;
+    } catch (error) {
+      // Task 9.1: Set previewLoading(false) after verification fails
+      this.previewLoading.set(false);
+      console.error('Lot verification failed:', error);
+
+      // Show error with option to skip verification
+      // Requirements: 8.3, 8.4 - Error handling with confirmation
+      const proceed = await this.confirmSkipVerification(error);
+      return proceed ? lots : null;
+    }
+  }
+
+  /**
+   * Task 8.3, 8.4, 8.5: Error handler for verification failures
+   * Display error message and show confirm dialog to skip verification
+   *
+   * Requirements: 8.3, 8.4, 8.5
+   */
+  private async confirmSkipVerification(error: any): Promise<boolean> {
+    const errorMsg = error?.error?.message || error?.statusText || 'Verification failed';
+    const message = `Lot verification failed: ${errorMsg}\n\nWould you like to skip verification and continue with discovery?`;
+
+    return window.confirm(message);
   }
 }

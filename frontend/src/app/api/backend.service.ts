@@ -113,6 +113,21 @@ export interface DiscoveryPreviewWithDuplicatesResponse extends DiscoveryPreview
 }
 
 // ============================================================================
+// Lot Verification Interfaces
+// ============================================================================
+export interface LotVerificationRequest {
+  lots: string[];
+  site: string;
+  environment: string;
+  blocks?: Array<{ year: number; month: number }> | null;
+}
+
+export interface LotVerificationResponse {
+  lotExists: Map<string, boolean> | Record<string, boolean>;
+  error?: string | null;
+}
+
+// ============================================================================
 // Staging Interfaces
 // ============================================================================
 export interface StagePayloadRequestItem {
@@ -785,6 +800,35 @@ export class BackendService {
       `${this.apiUrl}/senders/${senderId}/discover/historical-summary`,
       params,
     );
+  }
+
+  verifyLotsExistence(senderId: number, lots: string[]): Observable<LotVerificationResponse> {
+    const request: LotVerificationRequest = {
+      lots,
+      site: 'default',
+      environment: 'qa',
+    };
+    return this.http.post<LotVerificationResponse>(`${this.apiUrl}/senders/${senderId}/verify-lots`, request);
+  }
+
+  /**
+   * Task 11: Verify lot existence with optional date range filtering.
+   * When date range is provided (via PreCheckBlocks), verification filters lots by end_time.
+   *
+   * Requirements: 10.1, 10.2, 10.3, 10.5, 10.6
+   */
+  verifyLotsExistenceWithDateRange(
+    senderId: number,
+    lots: string[],
+    blocks?: Array<{ year: number; month: number }> | null,
+  ): Observable<LotVerificationResponse> {
+    const request: LotVerificationRequest = {
+      lots,
+      site: 'default',
+      environment: 'qa',
+      blocks: blocks || null,
+    };
+    return this.http.post<LotVerificationResponse>(`${this.apiUrl}/senders/${senderId}/verify-lots`, request);
   }
 
   // ========================================================================

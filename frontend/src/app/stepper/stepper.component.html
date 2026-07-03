@@ -318,6 +318,34 @@
         </span>
       </div>
 
+      <!-- Verification Summary Banner -->
+      <section class="verification-summary-banner glass-panel" *ngIf="verificationSummary() as summary">
+        <div class="info-banner-content">
+          <app-glass-icon name="info" class="info-icon"></app-glass-icon>
+          <div class="info-text">
+            <h3>Lot Verification Results</h3>
+            <p>
+              <ng-container *ngIf="summary.choice === 'all'">
+                Showing results for all lots ({{ summary.totalLots }} verified, {{ summary.foundCount }} found,
+                {{ summary.notFoundCount }} not found)
+              </ng-container>
+              <ng-container *ngIf="summary.choice === 'not-found'">
+                Showing results for lots not in Exensio ({{ summary.totalLots }} verified,
+                {{ summary.foundCount }} found, {{ summary.notFoundCount }} not found)
+              </ng-container>
+            </p>
+          </div>
+          <button
+            class="dismiss-banner-btn"
+            (click)="verificationSummary.set(null)"
+            aria-label="Dismiss verification summary banner"
+            title="Dismiss"
+          >
+            <app-glass-icon name="close" [size]="20"></app-glass-icon>
+          </button>
+        </div>
+      </section>
+
       <div class="preview-container-optimized glass-panel">
         <div class="table-toolbar">
           <div class="toolbar-left">
