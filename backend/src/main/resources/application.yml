@@ -8,6 +8,8 @@ spring:
       - org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration
       - org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
       - org.springframework.boot.autoconfigure.security.oauth2.client.OAuth2ClientAutoConfiguration
+  liquibase:
+    enabled: false
 
 logging:
   level:
