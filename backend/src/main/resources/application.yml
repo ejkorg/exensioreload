@@ -191,6 +191,7 @@ etl:
 # This is NOT the application datasource—it's a secondary connection
 # Credentials provided via environment variables (ODBC-style configuration)
 # NOTE: This connection is read-only and should NOT be used for JPA/Hibernate
+# IMPORTANT: Uses custom namespace "snowflake.*" to prevent Spring Boot auto-configuration
 snowflake:
   url: ${SNOW_URL:}
   username: ${SNOW_USER:}
@@ -204,3 +205,4 @@ snowflake:
 # - JDBC_QUERY_RESULT_FORMAT=JSON enables JSON parsing for lot verification queries
 # - This datasource is managed by ExensioPreCheckService, NOT by Spring's JPA/Hibernate
 # - Set these in systemd service file or environment before starting the application
+# - Custom namespace prevents Spring Boot from treating this as the primary datasource
