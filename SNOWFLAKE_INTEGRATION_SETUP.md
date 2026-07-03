@@ -100,23 +100,46 @@ When `ExensioPreCheckService` is called (from lot verification feature):
 
 ## Environment Variable Setup
 
-Required environment variables for production:
+### Systemd Service Configuration (Recommended)
 
-```bash
-# Snowflake connection (for lot pre-check verification)
-SNOW_URL=jdbc:snowflake://account.region.snowflakecomputing.com
-SNOW_USER=exensio_user
-SNOW_PASS=secure_password_here
-SNOW_PRECHECK_ROW_LIMIT=10000
+Add the following to your systemd service file (`/etc/systemd/system/exensio-reload.service`):
+
+```ini
+[Service]
+# ... other service configuration ...
+
+# Snowflake pre-check configuration (secondary datasource only)
+Environment="SNOW_URL=jdbc:snowflake://onsemi.west-us-2.azure.snowflakecomputing.com/?db=ANALYTICSPRD&schema=MFG&warehouse=MFG_PRD_RPT_WH&JDBC_QUERY_RESULT_FORMAT=JSON"
+Environment="SNOW_USER=MFG_PRD_RPT_EXENSIO_USER"
+Environment="SNOW_PASS=your_secure_password_here"
+Environment="SNOW_PRECHECK_ROW_LIMIT=10000"
 
 # Exensio fallback (HTTP API)
-EXENSIO_ENABLED=true
-EXENSIO_ENV=PROD
-EXENSIO_QA_URL=https://exnqa.onsemi.com/api
-EXENSIO_PROD_URL=https://api-prod.canyon.aws.pdf.com/api
-EXENSIO_USERNAME=exensio_api_user
-EXENSIO_PASSWORD=exensio_api_password
+Environment="EXENSIO_ENABLED=true"
+Environment="EXENSIO_ENV=PROD"
+Environment="EXENSIO_QA_URL=https://exnqa.onsemi.com/api"
+Environment="EXENSIO_PROD_URL=https://api-prod.canyon.aws.pdf.com/api"
+Environment="EXENSIO_USERNAME=exensio_api_user"
+Environment="EXENSIO_PASSWORD=exensio_api_password"
 ```
+
+### Configuration Parameters Explained
+
+- **SNOW_URL**: Full Snowflake JDBC connection string including:
+  - Account: `onsemi.west-us-2.azure`
+  - Region: `west-us-2` (Azure)
+  - Database: `ANALYTICSPRD`
+  - Schema: `MFG`
+  - Warehouse: `MFG_PRD_RPT_WH` (for query execution)
+  - `JDBC_QUERY_RESULT_FORMAT=JSON` (enables JSON parsing for lot queries)
+
+- **SNOW_USER**: Snowflake username with access to MFG schema
+  - Current: `MFG_PRD_RPT_EXENSIO_USER`
+
+- **SNOW_PASS**: Snowflake password for the user
+
+- **SNOW_PRECHECK_ROW_LIMIT**: Maximum rows per query (default: 10000)
+  - Adjust based on your lot verification batch sizes
 
 ## ODBC-Style Configuration
 

@@ -195,3 +195,9 @@ snowflake:
   password: ${SNOW_PASS:}
   driver-class-name: net.snowflake.client.jdbc.SnowflakeDriver
   precheck-row-limit: ${SNOW_PRECHECK_ROW_LIMIT:10000}
+
+# Configuration notes:
+# - SNOW_URL must include database, schema, and warehouse parameters
+# - Example: jdbc:snowflake://account.region.azure.snowflakecomputing.com/?db=ANALYTICSPRD&schema=MFG&warehouse=MFG_PRD_RPT_WH&JDBC_QUERY_RESULT_FORMAT=JSON
+# - JDBC_QUERY_RESULT_FORMAT=JSON enables JSON parsing for lot verification queries
+# - Set these in systemd service file or environment before starting the application
