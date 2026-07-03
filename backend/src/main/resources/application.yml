@@ -186,9 +186,11 @@ etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}
 
-# Snowflake JDBC connection for lot pre-flight verification
-# Used by ExensioPreCheckService for fast lot existence validation
+# Snowflake JDBC connection for lot pre-flight verification ONLY
+# Used ONLY by ExensioPreCheckService for fast lot existence validation
+# This is NOT the application datasource—it's a secondary connection
 # Credentials provided via environment variables (ODBC-style configuration)
+# NOTE: This connection is read-only and should NOT be used for JPA/Hibernate
 snowflake:
   url: ${SNOW_URL:}
   username: ${SNOW_USER:}
@@ -200,4 +202,5 @@ snowflake:
 # - SNOW_URL must include database, schema, and warehouse parameters
 # - Example: jdbc:snowflake://account.region.azure.snowflakecomputing.com/?db=ANALYTICSPRD&schema=MFG&warehouse=MFG_PRD_RPT_WH&JDBC_QUERY_RESULT_FORMAT=JSON
 # - JDBC_QUERY_RESULT_FORMAT=JSON enables JSON parsing for lot verification queries
+# - This datasource is managed by ExensioPreCheckService, NOT by Spring's JPA/Hibernate
 # - Set these in systemd service file or environment before starting the application
