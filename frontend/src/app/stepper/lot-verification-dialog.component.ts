@@ -81,7 +81,7 @@ export interface LotVerificationDialogResult {
 
       <!-- Task 11: Date range info banner if applied -->
       <div *ngIf="dateRangeText" class="info-banner">
-        <app-glass-icon name="calendar" [size]="16" color="info"></app-glass-icon>
+        <app-glass-icon name="calendar" [size]="16" color="primary"></app-glass-icon>
         <span>Date range filters applied: {{ dateRangeText }}</span>
       </div>
 
