@@ -164,6 +164,12 @@
             <artifactId>jsch</artifactId>
             <version>0.1.55</version>
         </dependency>
+        <!-- Snowflake JDBC for lot pre-check verification -->
+        <dependency>
+            <groupId>net.snowflake</groupId>
+            <artifactId>snowflake-jdbc</artifactId>
+            <version>3.27.1</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -178,6 +184,13 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- Snowflake JDBC requires unpacking to avoid native library issues -->
+                    <requiresUnpack>
+                        <dependency>
+                            <groupId>net.snowflake</groupId>
+                            <artifactId>snowflake-jdbc</artifactId>
+                        </dependency>
+                    </requiresUnpack>
                 </configuration>
             </plugin>
         </plugins>

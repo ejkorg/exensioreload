@@ -183,3 +183,13 @@ ai:
 etl:
   trigger:
     enabled: ${ETL_TRIGGER_ENABLED:false}
+
+# Snowflake JDBC connection for lot pre-flight verification
+# Used by ExensioPreCheckService for fast lot existence validation
+# Credentials provided via environment variables (ODBC-style configuration)
+snowflake:
+  url: ${SNOW_URL:}
+  username: ${SNOW_USER:}
+  password: ${SNOW_PASS:}
+  driver-class-name: net.snowflake.client.jdbc.SnowflakeDriver
+  precheck-row-limit: ${SNOW_PRECHECK_ROW_LIMIT:10000}
