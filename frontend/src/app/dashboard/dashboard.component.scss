@@ -270,6 +270,37 @@
   }
 }
 
+/* ── Device Filter Bar ─────────────────────────────────────── */
+.dashboard-filter-bar {
+  @include card;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+
+  .filter-controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+
+    app-glass-device-filter {
+      flex: 1;
+      min-width: 250px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+
+    .filter-controls {
+      gap: 0.5rem;
+
+      app-glass-device-filter {
+        min-width: 200px;
+      }
+    }
+  }
+}
+
 /* ── Health Section ────────────────────────────────────────── */
 .health-section {
   width: 100%;

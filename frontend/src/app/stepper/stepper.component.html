@@ -442,6 +442,17 @@
             >
             </app-glass-select>
 
+            <app-glass-select
+              class="device-filter"
+              label="Device"
+              placeholder="All Devices"
+              [ngModel]="previewDeviceFilter()"
+              (ngModelChange)="onPreviewDeviceFilterChange($event)"
+              [options]="previewDeviceOptions()"
+              [multiple]="true"
+            >
+            </app-glass-select>
+
             <app-glass-input
               class="search-field-compact"
               label="Search"
@@ -461,6 +472,9 @@
                 <th class="col-select"></th>
                 <th>Lot</th>
                 <th *ngIf="showWaferColumn()">Wafer</th>
+                <th>Device</th>
+                <th>Metadata ID</th>
+                <th>Data ID</th>
                 <th>Filename</th>
               </tr>
             </thead>
@@ -481,6 +495,9 @@
                 </td>
                 <td>{{ row.lot }}</td>
                 <td *ngIf="showWaferColumn()">{{ row.wafer || '-' }}</td>
+                <td>{{ row.device || 'N/A' }}</td>
+                <td>{{ row.metadataId || 'N/A' }}</td>
+                <td>{{ row.dataId || 'N/A' }}</td>
                 <td class="filename-cell-compact" [glassTooltip]="row.filename">
                   {{ row.filename }}
                 </td>

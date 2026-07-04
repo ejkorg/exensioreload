@@ -1,7 +1,17 @@
 package com.onsemi.cim.apps.exensio.exensioreload.entity;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
 @Table(name = "load_session_payload", uniqueConstraints = @UniqueConstraint(name = "uk_load_session_payload_session_payload", columnNames = {"session_id", "payload_id"}))
@@ -26,6 +36,9 @@ public class LoadSessionPayload {
     // Placeholder for future global payload mapping. Nullable; populated later when available.
     @Column(name = "global_payload_id")
     private Long globalPayloadId;
+
+    @Column(name = "device", length = 100)
+    private String device;
 
     public LoadSessionPayload() {}
 
@@ -59,6 +72,9 @@ public class LoadSessionPayload {
 
     public Long getGlobalPayloadId() { return globalPayloadId; }
     public void setGlobalPayloadId(Long globalPayloadId) { this.globalPayloadId = globalPayloadId; }
+
+    public String getDevice() { return device; }
+    public void setDevice(String device) { this.device = device; }
 
     // Convenience state transition helpers used by SessionPushService and tests
     public void markStaged() {

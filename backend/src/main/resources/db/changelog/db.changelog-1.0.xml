@@ -385,5 +385,7 @@
     <include file="db.changelog-9.6-rename-new-to-pending.xml" relativeToChangelogFile="true" />
     <!-- Add ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT states for honest accounting -->
     <include file="db.changelog-9.8-timeout-states.xml" relativeToChangelogFile="true" />
+    <!-- Add device column and index for device-based filtering -->
+    <include file="db.changelog-9.9-add-device-column.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

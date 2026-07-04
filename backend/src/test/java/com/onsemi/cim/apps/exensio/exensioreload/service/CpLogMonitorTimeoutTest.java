@@ -84,17 +84,17 @@ class CpLogMonitorTimeoutTest {
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60); // 16 minutes ago
         StageRecord record = new StageRecord(
             1L,                    // id
-            "req-123",             // requestId
             "test-site",           // site
-            1L,                    // senderId
+            1,                     // senderId
             "TestSender",          // senderName
             "meta-456",            // metadataId
             "data-789",            // dataId
             "LOT-001",             // lot
             "W1",                  // wafer
+            null,                  // device
             "test.csv",            // filename
             Instant.now(),         // endTime
-            "pending",             // status
+            "ENRICHMENT",          // status
             null,                  // errorMessage
             createdAt,             // createdAt
             createdAt,             // updatedAt (same as createdAt means in ENRICHMENT for 16 min)
@@ -102,6 +102,7 @@ class CpLogMonitorTimeoutTest {
             "operator1",           // stagedBy
             null,                  // lastRequestedBy
             null,                  // lastRequestedAt
+            "req-123",             // requestId
             null,                  // cpOutputPath
             null,                  // cpOutputTarget
             null,                  // exensioWaferKey
@@ -152,10 +153,10 @@ class CpLogMonitorTimeoutTest {
         // Setup: Create a timed-out record
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60); // 16 minutes ago
         StageRecord record = new StageRecord(
-            1L, "req-123", "test-site", 1L, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", "test.csv",
-            Instant.now(), "pending", null, createdAt, createdAt, null,
-            "operator1", null, null, null, null, null, null,
+            1L, "test-site", 1, "TestSender",
+            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
 
@@ -191,10 +192,10 @@ class CpLogMonitorTimeoutTest {
         // Setup: Create a timed-out record
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60); // 16 minutes ago
         StageRecord record = new StageRecord(
-            1L, "req-123", "test-site", 1L, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", "test.csv",
-            Instant.now(), "pending", null, createdAt, createdAt, null,
-            "operator1", null, null, null, null, null, null,
+            1L, "test-site", 1, "TestSender",
+            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
 
@@ -227,10 +228,10 @@ class CpLogMonitorTimeoutTest {
         // Setup: Create a record that's only 5 minutes old
         Instant createdAt = Instant.now().minusSeconds(5 * 60);
         StageRecord record = new StageRecord(
-            1L, "req-123", "test-site", 1L, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", "test.csv",
-            Instant.now(), "pending", null, createdAt, createdAt, null,
-            "operator1", null, null, null, null, null, null,
+            1L, "test-site", 1, "TestSender",
+            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
 
@@ -267,10 +268,10 @@ class CpLogMonitorTimeoutTest {
         // Setup: Create a timed-out record
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60);
         StageRecord record = new StageRecord(
-            1L, "req-123", "test-site", 1L, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", "test.csv",
-            Instant.now(), "pending", null, createdAt, createdAt, null,
-            "operator1", null, null, null, null, null, null,
+            1L, "test-site", 1, "TestSender",
+            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
 

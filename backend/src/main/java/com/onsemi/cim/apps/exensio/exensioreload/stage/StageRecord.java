@@ -11,6 +11,7 @@ public record StageRecord(
         String dataId,
         String lot,
         String wafer,
+        String device,
         String filename,
         java.time.Instant endTime,
         String status,

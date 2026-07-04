@@ -1,13 +1,14 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.service.IntegrationStatusService;
+import java.time.Instant;
+
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
+import com.onsemi.cim.apps.exensio.exensioreload.service.IntegrationStatusService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 @Component
 public class StageRecordMapper {
@@ -42,8 +43,10 @@ public class StageRecordMapper {
                     null,
                     null,
                     null,
+                    null,
                     "unknown",
                     "unknown",
+                    null,
                     null,
                     null,
                     null,
@@ -96,6 +99,7 @@ public class StageRecordMapper {
                 record.dataId(),
                 lot,
                 wafer,
+                record.device(),
                 filename,
                 toIso(record.endTime()),
                 record.status(),

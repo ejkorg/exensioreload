@@ -185,12 +185,11 @@ public class RefDbService {
                         site, senderId, normalizedUser, normalizedSenderName, payloads.size(), forceDuplicates);
             } catch (Exception _e) {
                 // ignore logging failures
-            }
         }
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -214,17 +213,18 @@ public class RefDbService {
                 ps.setString(5, candidate.dataId());
                 ps.setString(6, candidate.lot());
                 ps.setString(7, candidate.wafer());
-                ps.setString(8, candidate.filename());
+                ps.setString(8, candidate.device());
+                ps.setString(9, candidate.filename());
                 if (candidate.endTime() != null) {
-                    ps.setTimestamp(9, Timestamp.from(candidate.endTime()));
+                    ps.setTimestamp(10, Timestamp.from(candidate.endTime()));
                 } else {
-                    ps.setNull(9, java.sql.Types.TIMESTAMP);
+                    ps.setNull(10, java.sql.Types.TIMESTAMP);
                 }
-                ps.setString(10, normalizedUser);
                 ps.setString(11, normalizedUser);
-                ps.setString(12, requestId);
-                ps.setString(13, candidate.dataType());
-                ps.setString(14, candidate.testPhase());
+                ps.setString(12, normalizedUser);
+                ps.setString(13, requestId);
+                ps.setString(14, candidate.dataType());
+                ps.setString(15, candidate.testPhase());
                 log.info("About to add batch for metadataId={}", candidate.metadataId());
                 ps.addBatch();
                 log.info("Batch added successfully");
@@ -346,8 +346,8 @@ public class RefDbService {
         int requeuedCount = 0;
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (PayloadCandidate candidate : batch) {
@@ -358,17 +358,18 @@ public class RefDbService {
                 ps.setString(5, candidate.dataId());
                 ps.setString(6, candidate.lot());
                 ps.setString(7, candidate.wafer());
-                ps.setString(8, candidate.filename());
+                ps.setString(8, candidate.device());
+                ps.setString(9, candidate.filename());
                 if (candidate.endTime() != null) {
-                    ps.setTimestamp(9, Timestamp.from(candidate.endTime()));
+                    ps.setTimestamp(10, Timestamp.from(candidate.endTime()));
                 } else {
-                    ps.setNull(9, java.sql.Types.TIMESTAMP);
+                    ps.setNull(10, java.sql.Types.TIMESTAMP);
                 }
-                ps.setString(10, user);
                 ps.setString(11, user);
-                ps.setString(12, requestId);
-                ps.setString(13, candidate.dataType());
-                ps.setString(14, candidate.testPhase());
+                ps.setString(12, user);
+                ps.setString(13, requestId);
+                ps.setString(14, candidate.dataType());
+                ps.setString(15, candidate.testPhase());
                 try {
                     ps.executeUpdate();
                     freshInserted++;
@@ -1317,8 +1318,12 @@ public class RefDbService {
     }
 
     public List<StageRecord> listRecords(String site, Integer senderId, String status, int offset, int limit, String sortBy, String sortDir, String requestId) {
+        return listRecords(site, senderId, status, offset, limit, sortBy, sortDir, requestId, null);
+    }
+
+    public List<StageRecord> listRecords(String site, Integer senderId, String status, int offset, int limit, String sortBy, String sortDir, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, ")
                 .append(coalesce("error_message", "''"))
                 .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase FROM ")
                 .append(table)
@@ -1344,6 +1349,15 @@ public class RefDbService {
         if (requestId != null && !requestId.isBlank()) {
             sb.append(" AND request_id = ?");
             params.add(requestId);
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sb.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append("?");
+            }
+            sb.append(")");
+            params.addAll(devices);
         }
         sb.append(resolveOrderBy(sortBy, sortDir));
         int effectiveOffset = Math.max(offset, 0);
@@ -1385,8 +1399,12 @@ public class RefDbService {
     }
 
     public List<StageRecord> listRecords(String site, Integer senderId, String status, String q, int offset, int limit, String sortBy, String sortDir, String requestId) {
+        return listRecords(site, senderId, status, q, offset, limit, sortBy, sortDir, requestId, null);
+    }
+
+    public List<StageRecord> listRecords(String site, Integer senderId, String status, String q, int offset, int limit, String sortBy, String sortDir, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, ")
                 .append(coalesce("error_message", "''"))
                 .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id FROM ")
                 .append(table)
@@ -1407,6 +1425,15 @@ public class RefDbService {
         if (requestId != null && !requestId.isBlank()) {
             sb.append(" AND request_id = ?");
             params.add(requestId);
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sb.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append("?");
+            }
+            sb.append(")");
+            params.addAll(devices);
         }
         if (q != null && !q.isBlank()) {
             // case-insensitive contains across a set of textual columns
@@ -1855,6 +1882,10 @@ public class RefDbService {
      * Count with optional server-side q filtering.
      */
     public long countRecords(String site, Integer senderId, String status, String q, String requestId) {
+        return countRecords(site, senderId, status, q, requestId, null);
+    }
+
+    public long countRecords(String site, Integer senderId, String status, String q, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
         StringBuilder sb = new StringBuilder("SELECT COUNT(1) FROM ").append(table).append(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
@@ -1873,6 +1904,15 @@ public class RefDbService {
         if (requestId != null && !requestId.isBlank()) {
             sb.append(" AND request_id = ?");
             params.add(requestId);
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sb.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append("?");
+            }
+            sb.append(")");
+            params.addAll(devices);
         }
         if (q != null && !q.isBlank()) {
             String likeExpr = "%" + q.toLowerCase() + "%";
@@ -2080,6 +2120,7 @@ public class RefDbService {
                 rs.getString("data_id"),
                 rs.getString("lot"),
                 rs.getString("wafer"),
+                safeString(rs, "device"),
                 rs.getString("filename"),
                 toInstant(safeTimestamp(rs, "end_time")),
                 rs.getString("status"),

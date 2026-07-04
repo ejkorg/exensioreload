@@ -113,6 +113,13 @@
     </button>
   </div>
 
+  <!-- Device Filter Bar -->
+  <div class="dashboard-filter-bar glass-panel" *ngIf="!loading() && !error() && snapshot()">
+    <div class="filter-controls">
+      <app-glass-device-filter (deviceChange)="onDeviceFilterChange($event)"></app-glass-device-filter>
+    </div>
+  </div>
+
   <div class="dashboard-content" *ngIf="!error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
     <!-- Health Overview Card -->
     <section class="health-section" aria-labelledby="health-heading">

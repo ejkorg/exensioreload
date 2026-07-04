@@ -15,5 +15,5 @@ public record StagePayloadRequest(
     String dataType,   // Optional: data type from stepper (e.g. PROBE, FT, DEFECT, MAP)
     String testPhase   // Optional: test phase from stepper (e.g. FT, QA, RG, CRSS)
 ) {
-    public record Payload(String metadataId, String dataId, String lot, String wafer, String filename, String endTime) {}
+    public record Payload(String metadataId, String dataId, String lot, String wafer, String filename, String endTime, String device) {}
 }

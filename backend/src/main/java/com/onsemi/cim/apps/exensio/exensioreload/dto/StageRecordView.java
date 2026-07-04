@@ -9,6 +9,7 @@ public record StageRecordView(
         String dataId,
         String lot,
         String wafer,
+        String device,
         String filename,
         String endTime,
         String status,

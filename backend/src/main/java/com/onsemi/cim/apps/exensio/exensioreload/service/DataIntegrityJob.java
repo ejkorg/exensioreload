@@ -326,7 +326,7 @@ public class DataIntegrityJob {
         String requestId = rs.getString("request_id");
 
         return new StageRecord(
-            id, site, senderId, senderName, metadataId, dataId, lot, wafer, filename,
+            id, site, senderId, senderName, metadataId, dataId, lot, wafer, null, filename,
             null,  // end_time
             status, null,  // error_message
             createdAt, updatedAt, null,  // processed_at

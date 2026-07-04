@@ -1,33 +1,11 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionDailyStatusPoint;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionLotWaferDailyPoint;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionLotWaferPairTotal;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionDetail;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionSummary;
-import com.onsemi.cim.apps.exensio.exensioreload.service.EtlSshTriggerService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.TriggerResult;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,7 +21,31 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import javax.sql.DataSource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionDailyStatusPoint;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionLotWaferDailyPoint;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionLotWaferPairTotal;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionDetail;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionSummary;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.LoadSessionPayloadRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class StageSessionService {
@@ -57,6 +59,7 @@ public class StageSessionService {
     private final CpElasticsearchProperties elasticsearchProperties;
     private final ExensioProperties exensioProperties;
     private final IntegrationStatusService integrationStatusService;
+    private final LoadSessionPayloadRepository loadSessionPayloadRepository;
     private final boolean debugSessionFiles;
 
     public StageSessionService(RefDbService refDbService, ExternalDbConfig externalDbConfig,
@@ -65,6 +68,7 @@ public class StageSessionService {
                                CpElasticsearchProperties elasticsearchProperties,
                                ExensioProperties exensioProperties,
                                IntegrationStatusService integrationStatusService,
+                               LoadSessionPayloadRepository loadSessionPayloadRepository,
                                @Value("${app.stage.debug-session-files:false}") boolean debugSessionFiles) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
@@ -74,6 +78,7 @@ public class StageSessionService {
         this.elasticsearchProperties = elasticsearchProperties;
         this.exensioProperties = exensioProperties;
         this.integrationStatusService = integrationStatusService;
+        this.loadSessionPayloadRepository = loadSessionPayloadRepository;
         this.debugSessionFiles = debugSessionFiles;
     }
 
@@ -355,6 +360,7 @@ public class StageSessionService {
                                            String search,
                                            int page,
                                            int size,
+                                           java.util.List<String> devices,
                                            com.onsemi.cim.apps.exensio.exensioreload.controller.StageRecordMapper mapper) {
         StagingSessionDetail session = getOwnedSession(sessionId, username);
         if (session == null) {
@@ -365,15 +371,26 @@ public class StageSessionService {
         int offset = resolvedPage * resolvedSize;
 
         List<StageRecord> rows = (search != null && !search.isBlank())
-                ? refDbService.listRecords(session.site(), session.senderId(), statusFilter, search, offset, resolvedSize, "updated_at", "desc", sessionId)
-                : refDbService.listRecords(session.site(), session.senderId(), statusFilter, offset, resolvedSize, "updated_at", "desc", sessionId);
+                ? refDbService.listRecords(session.site(), session.senderId(), statusFilter, search, offset, resolvedSize, "updated_at", "desc", sessionId, devices)
+                : refDbService.listRecords(session.site(), session.senderId(), statusFilter, offset, resolvedSize, "updated_at", "desc", sessionId, devices);
 
-        long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId);
+        long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId, devices);
         List<StageRecordView> views = rows.stream().map(mapper::toView).toList();
         if (debugSessionFiles) {
             tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
         }
         return new StageRecordPage(views, total, resolvedPage, resolvedSize);
+    }
+
+    // Backward compatible overload without device parameter
+    public StageRecordPage getSessionFiles(String sessionId,
+                                           String username,
+                                           String statusFilter,
+                                           String search,
+                                           int page,
+                                           int size,
+                                           com.onsemi.cim.apps.exensio.exensioreload.controller.StageRecordMapper mapper) {
+        return getSessionFiles(sessionId, username, statusFilter, search, page, size, null, mapper);
     }
 
     public StageRecordPage getSessionFiles(String sessionId,
@@ -383,6 +400,7 @@ public class StageSessionService {
                                            String search,
                                            int page,
                                            int size,
+                                           java.util.List<String> devices,
                                            com.onsemi.cim.apps.exensio.exensioreload.controller.StageRecordMapper mapper) {
         StagingSessionDetail session = isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         if (session == null) {
@@ -393,15 +411,27 @@ public class StageSessionService {
         int offset = resolvedPage * resolvedSize;
 
         List<StageRecord> rows = (search != null && !search.isBlank())
-                ? refDbService.listRecords(session.site(), session.senderId(), statusFilter, search, offset, resolvedSize, "updated_at", "desc", sessionId)
-                : refDbService.listRecords(session.site(), session.senderId(), statusFilter, offset, resolvedSize, "updated_at", "desc", sessionId);
+                ? refDbService.listRecords(session.site(), session.senderId(), statusFilter, search, offset, resolvedSize, "updated_at", "desc", sessionId, devices)
+                : refDbService.listRecords(session.site(), session.senderId(), statusFilter, offset, resolvedSize, "updated_at", "desc", sessionId, devices);
 
-        long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId);
+        long total = refDbService.countRecords(session.site(), session.senderId(), statusFilter, search, sessionId, devices);
         List<StageRecordView> views = rows.stream().map(mapper::toView).toList();
         if (debugSessionFiles) {
             tempDebugSessionFileFieldCoverage(sessionId, session.site(), session.senderId(), statusFilter, search, resolvedPage, resolvedSize, rows, views);
         }
         return new StageRecordPage(views, total, resolvedPage, resolvedSize);
+    }
+
+    // Backward compatible overload without device parameter
+    public StageRecordPage getSessionFiles(String sessionId,
+                                           String username,
+                                           boolean isAdmin,
+                                           String statusFilter,
+                                           String search,
+                                           int page,
+                                           int size,
+                                           com.onsemi.cim.apps.exensio.exensioreload.controller.StageRecordMapper mapper) {
+        return getSessionFiles(sessionId, username, isAdmin, statusFilter, search, page, size, null, mapper);
     }
 
     /**
@@ -673,7 +703,8 @@ public class StageSessionService {
                                                         boolean isAdmin,
                                                         int topPairsLimit,
                                                         String startDate,
-                                                        String endDate) {
+                                                        String endDate,
+                                                        java.util.List<String> devices) {
         StagingSessionDetail session = isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         if (session == null) {
             return null;
@@ -684,11 +715,21 @@ public class StageSessionService {
         Instant start = parseDateStart(startDate);
         Instant end = parseDateEnd(endDate);
 
-        List<SessionDailyStatusPoint> dailyStatus = loadDailyStatus(table, sessionId, start, end);
-        List<SessionLotWaferPairTotal> topPairs = loadTopLotWaferPairs(table, sessionId, resolvedTopPairs, start, end);
-        List<SessionLotWaferDailyPoint> heatmap = loadLotWaferDailyHeatmap(table, sessionId, topPairs, start, end);
+        List<SessionDailyStatusPoint> dailyStatus = loadDailyStatus(table, sessionId, start, end, devices);
+        List<SessionLotWaferPairTotal> topPairs = loadTopLotWaferPairs(table, sessionId, resolvedTopPairs, start, end, devices);
+        List<SessionLotWaferDailyPoint> heatmap = loadLotWaferDailyHeatmap(table, sessionId, topPairs, start, end, devices);
 
         return new SessionAnalyticsResponse(sessionId, dailyStatus, topPairs, heatmap);
+    }
+
+    // Backward compatible overload without device parameter
+    public SessionAnalyticsResponse getSessionAnalytics(String sessionId,
+                                                        String username,
+                                                        boolean isAdmin,
+                                                        int topPairsLimit,
+                                                        String startDate,
+                                                        String endDate) {
+        return getSessionAnalytics(sessionId, username, isAdmin, topPairsLimit, startDate, endDate, null);
     }
 
     public void refreshSessions(Collection<String> sessionIds) {
@@ -828,7 +869,7 @@ public class StageSessionService {
         return new StatusCounts(0, 0, 0, 0, 0);
     }
 
-    private List<SessionDailyStatusPoint> loadDailyStatus(String table, String sessionId, Instant start, Instant end) {
+    private List<SessionDailyStatusPoint> loadDailyStatus(String table, String sessionId, Instant start, Instant end, java.util.List<String> devices) {
         String timestampExpr = "COALESCE(end_time, processed_at, updated_at, created_at)";
         StringBuilder sql = new StringBuilder("SELECT CAST(")
                 .append(timestampExpr)
@@ -849,6 +890,15 @@ public class StageSessionService {
         if (end != null) {
             sql.append(" AND ").append(timestampExpr).append(" < ?");
             params.add(Timestamp.from(end));
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sql.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append("?");
+            }
+            sql.append(")");
+            params.addAll(devices);
         }
         sql.append(" GROUP BY CAST(").append(timestampExpr).append(" AS DATE) ORDER BY day_bucket");
 
@@ -876,11 +926,17 @@ public class StageSessionService {
         return points;
     }
 
+    // Backward compatible overload without device parameter
+    private List<SessionDailyStatusPoint> loadDailyStatus(String table, String sessionId, Instant start, Instant end) {
+        return loadDailyStatus(table, sessionId, start, end, null);
+    }
+
     private List<SessionLotWaferPairTotal> loadTopLotWaferPairs(String table,
                                                                 String sessionId,
                                                                 int topPairsLimit,
                                                                 Instant start,
-                                                                Instant end) {
+                                                                Instant end,
+                                                                java.util.List<String> devices) {
         String timestampExpr = "COALESCE(end_time, processed_at, updated_at, created_at)";
         StringBuilder sql = new StringBuilder("SELECT COALESCE(lot, '-') AS lot_key, COALESCE(wafer, '-') AS wafer_key, COUNT(*) AS pair_total ")
                 .append("FROM ").append(table).append(" WHERE request_id = ?");
@@ -893,6 +949,15 @@ public class StageSessionService {
         if (end != null) {
             sql.append(" AND ").append(timestampExpr).append(" < ?");
             params.add(Timestamp.from(end));
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sql.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append("?");
+            }
+            sql.append(")");
+            params.addAll(devices);
         }
         sql.append(" GROUP BY COALESCE(lot, '-'), COALESCE(wafer, '-') ORDER BY pair_total DESC, lot_key, wafer_key");
 
@@ -915,11 +980,21 @@ public class StageSessionService {
         return pairs;
     }
 
+    // Backward compatible overload without device parameter
+    private List<SessionLotWaferPairTotal> loadTopLotWaferPairs(String table,
+                                                                String sessionId,
+                                                                int topPairsLimit,
+                                                                Instant start,
+                                                                Instant end) {
+        return loadTopLotWaferPairs(table, sessionId, topPairsLimit, start, end, null);
+    }
+
     private List<SessionLotWaferDailyPoint> loadLotWaferDailyHeatmap(String table,
                                                                      String sessionId,
                                                                      List<SessionLotWaferPairTotal> topPairs,
                                                                      Instant start,
-                                                                     Instant end) {
+                                                                     Instant end,
+                                                                     java.util.List<String> devices) {
         if (topPairs == null || topPairs.isEmpty()) {
             return List.of();
         }
@@ -944,6 +1019,15 @@ public class StageSessionService {
             sql.append(" AND ").append(timestampExpr).append(" < ?");
             params.add(Timestamp.from(end));
         }
+        if (devices != null && !devices.isEmpty()) {
+            sql.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append("?");
+            }
+            sql.append(")");
+            params.addAll(devices);
+        }
         sql.append(" GROUP BY CAST(").append(timestampExpr).append(" AS DATE), COALESCE(lot, '-'), COALESCE(wafer, '-')")
                 .append(" ORDER BY day_bucket, lot_key, wafer_key");
 
@@ -967,6 +1051,15 @@ public class StageSessionService {
             throw new IllegalStateException("Failed loading session lot/wafer daily heatmap", ex);
         }
         return new ArrayList<>(compact.values());
+    }
+
+    // Backward compatible overload without device parameter
+    private List<SessionLotWaferDailyPoint> loadLotWaferDailyHeatmap(String table,
+                                                                     String sessionId,
+                                                                     List<SessionLotWaferPairTotal> topPairs,
+                                                                     Instant start,
+                                                                     Instant end) {
+        return loadLotWaferDailyHeatmap(table, sessionId, topPairs, start, end, null);
     }
 
     private void bindParams(PreparedStatement ps, List<Object> params) throws SQLException {
@@ -1266,5 +1359,37 @@ public class StageSessionService {
     }
 
     private record SessionMetrics(double throughput, int eta, double successRate) {
+    }
+
+    /**
+     * Get all distinct devices across all sessions and payloads.
+     * Requirements: 2.5, 7.3
+     * @return list of unique device identifiers
+     */
+    public List<String> getAllDistinctDevices() {
+        try {
+            return loadSessionPayloadRepository.findDistinctDevices();
+        } catch (Exception e) {
+            log.error("Error retrieving all distinct devices", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Get distinct devices for a specific session.
+     * Requirements: 2.5, 7.3
+     * @param sessionId the session ID to query
+     * @return list of unique device identifiers for the session
+     */
+    public List<String> getDistinctDevicesForSession(Long sessionId) {
+        if (sessionId == null) {
+            return getAllDistinctDevices();
+        }
+        try {
+            return loadSessionPayloadRepository.findDistinctDevicesBySessionId(sessionId);
+        } catch (Exception e) {
+            log.error("Error retrieving distinct devices for session {}", sessionId, e);
+            return List.of();
+        }
     }
 }

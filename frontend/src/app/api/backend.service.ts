@@ -612,8 +612,14 @@ export class BackendService {
   // ========================================================================
   // Dashboard
   // ========================================================================
-  getDashboardSnapshot(): Observable<DashboardSnapshot> {
-    return this.http.get<DashboardSnapshot>(`${this.apiUrl}/dashboard/snapshot`);
+  getDashboardSnapshot(devices?: string[]): Observable<DashboardSnapshot> {
+    let params = new HttpParams();
+    if (devices && devices.length > 0) {
+      devices.forEach((device) => {
+        params = params.append('devices', device);
+      });
+    }
+    return this.http.get<DashboardSnapshot>(`${this.apiUrl}/dashboard/snapshot`, { params });
   }
 
   // ========================================================================
@@ -970,6 +976,23 @@ export class BackendService {
         params: this.toParams(params),
       },
     );
+  }
+
+  /**
+   * Get distinct device values for filter dropdowns.
+   *
+   * Retrieves unique device identifiers from the staging table. Supports optional
+   * filtering by session ID to get devices for a specific session.
+   *
+   * Validates: Requirements 2.5, 7.3 - Device filter options from API
+   *
+   * @param params Optional parameters including sessionId for filtering
+   * @returns Observable<string[]> Array of unique device identifiers
+   */
+  getDistinctSessionDevices(params?: Record<string, any>): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/sessions/devices`, {
+      params: this.toParams(params || {}),
+    });
   }
 
   refreshStagingSession(sessionId: string): Observable<StagingSessionDetail> {

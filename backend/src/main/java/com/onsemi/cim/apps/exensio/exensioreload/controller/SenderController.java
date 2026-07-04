@@ -835,7 +835,8 @@ public class SenderController {
                         row.lot(),
                         row.wafer(),
                         row.originalFileName(),
-                        row.endTime()
+                        row.endTime(),
+                        row.device()
                 ));
                 if (payloads.size() >= resolvedMaxRows) {
                     break;
@@ -862,7 +863,7 @@ public class SenderController {
 
                             payloads.add(new StagePayloadRequest.Payload(
                                     metadataId.trim(), dataId.trim(), row.lot(), row.wafer(),
-                                    row.originalFileName(), row.endTime()
+                                    row.originalFileName(), row.endTime(), row.device()
                             ));
                             if (payloads.size() >= resolvedMaxRows) break;
                         }
@@ -1154,7 +1155,7 @@ public class SenderController {
             return ResponseEntity.ok(new StagePayloadResponse(0, 0, List.<DuplicatePayloadView>of(), 0, false, 0, false, 0));
         }
         List<PayloadCandidate> candidates = payloads.stream()
-                .map(p -> new PayloadCandidate(p.metadataId(), p.dataId(), p.lot(), p.wafer(), p.filename(), parseIsoInstant(p.endTime()), request.dataType(), request.testPhase()))
+                .map(p -> new PayloadCandidate(p.metadataId(), p.dataId(), p.lot(), p.wafer(), p.filename(), parseIsoInstant(p.endTime()), request.dataType(), request.testPhase(), p.device()))
                 .collect(Collectors.toList());
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String requestedBy = authentication != null && authentication.getName() != null ? authentication.getName().trim() : "ui";

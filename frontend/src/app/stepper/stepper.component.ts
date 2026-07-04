@@ -505,6 +505,7 @@ export class StepperComponent implements OnInit, OnDestroy {
   });
   filterText = signal('');
   selectedFileType = signal('ALL');
+  previewDeviceFilter = signal<string[]>([]);
 
   fileTypeOptions = computed((): GlassOption[] => {
     const types = new Set<string>();
@@ -518,6 +519,18 @@ export class StepperComponent implements OnInit, OnDestroy {
 
     const sortedTypes = Array.from(types).sort((a: string, b: string) => a.localeCompare(b));
     return [{ value: 'ALL', label: 'All Types' }, ...sortedTypes.map((type: string) => ({ value: type, label: type }))];
+  });
+
+  previewDeviceOptions = computed((): GlassOption[] => {
+    const devices = new Set<string>();
+    this.previewRows().forEach((row: DiscoveryPreviewRow) => {
+      if (row.device && row.device.trim() !== '') {
+        devices.add(row.device);
+      }
+    });
+
+    const sortedDevices = Array.from(devices).sort((a: string, b: string) => a.localeCompare(b));
+    return sortedDevices.map((device: string) => ({ value: device, label: device }));
   });
 
   // Staging state
@@ -587,6 +600,7 @@ export class StepperComponent implements OnInit, OnDestroy {
   filteredPreviewRows = computed(() => {
     const text = (this.filterText() || '').toString().toLowerCase();
     const selectedType = this.selectedFileType();
+    const selectedDevices = this.previewDeviceFilter();
 
     const normalize = (value: unknown): string => {
       if (value === undefined || value === null) {
@@ -611,6 +625,14 @@ export class StepperComponent implements OnInit, OnDestroy {
 
         if (selectedType !== 'ALL' && fileType !== selectedType) {
           return false;
+        }
+
+        // Filter by device if selected
+        if (selectedDevices.length > 0) {
+          const rowDevice = row.device ? row.device.trim() : '';
+          if (!rowDevice || !selectedDevices.includes(rowDevice)) {
+            return false;
+          }
         }
 
         if (!text) {
@@ -1727,6 +1749,11 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   onFileTypeChange(fileType: string | null) {
     this.selectedFileType.set(fileType || 'ALL');
+    this.pageIndex.set(0);
+  }
+
+  onPreviewDeviceFilterChange(devices: string[] | null) {
+    this.previewDeviceFilter.set(devices || []);
     this.pageIndex.set(0);
   }
 

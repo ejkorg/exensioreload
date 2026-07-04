@@ -112,6 +112,7 @@ interface DashboardErrorDetails {
     RouterModule,
     BulkActionsComponent,
     GlassCheckboxComponent,
+    GlassDeviceFilterComponent,
     StateLegendTooltipComponent,
   ],
   templateUrl: './dashboard.component.html',
@@ -152,6 +153,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   previousSnapshot = signal<DashboardSnapshot | null>(null);
   changedMetrics = signal<Set<string>>(new Set<string>());
   lastUpdatePulse = signal(false);
+  devices = signal<string[]>([]);
 
   resolvedLimits = signal<LimitsConfig | null>(null);
   limitsError = signal(false);
@@ -486,6 +488,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.freshnessBannerDismissed.set(true);
   }
 
+  /**
+   * Handle device filter changes.
+   * When user selects or deselects devices, reload dashboard data with the filter applied.
+   * Requirements: 4.1, 4.2
+   */
+  onDeviceFilterChange(selectedDevices: string[]): void {
+    this.devices.set(selectedDevices);
+    this.refresh();
+  }
+
   /** Whether an active session exists for a given site + sender */
   hasActiveSessionForSender(site: string, senderId: number): boolean {
     const active = this.activeMonitoringSession();
@@ -585,7 +597,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private loadSnapshot(showLoading: boolean) {
     if (showLoading) this.loading.set(true);
-    this.backend.getDashboardSnapshot().subscribe({
+    this.backend.getDashboardSnapshot(this.devices()).subscribe({
       next: (snap: DashboardSnapshot) => {
         this.clearRetryTimers();
         this.retryAttempts = 0;
@@ -1053,6 +1065,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /**
    * Handle a single state change event from the SSE stream.
    * Updates dashboard metrics when records transition to ENRICHMENT_TIMEOUT or EXENSIO_TIMEOUT.
+   * Filters events by active device filter (Requirements 4.3).
    *
    * @param event The state change event containing before/after states and count
    */
@@ -1064,9 +1077,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const afterState = event.afterState || '';
     const count = event.count || 0;
+    const eventDevice = event.device || null;
 
     if (count <= 0) {
       return; // No records changed
+    }
+
+    // Filter by active device filter
+    // If device filters are active, only process events matching those devices
+    // Requirements 4.3: Apply device filter to real-time SSE updates
+    const activeDevices = this.devices();
+    if (activeDevices && activeDevices.length > 0 && eventDevice) {
+      if (!activeDevices.includes(eventDevice)) {
+        return; // Event device not in active filter, skip it
+      }
     }
 
     // Create updated snapshot with incremented timeout counts

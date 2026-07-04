@@ -1,10 +1,29 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
-import com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+import java.io.BufferedWriter;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.GZIPOutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
 import com.onsemi.cim.apps.exensio.exensioreload.dto.CreateSessionRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.CreateSessionResponse;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotWaferProgress;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.SessionAnalyticsResponse;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
@@ -12,30 +31,11 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionDetail;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionPage;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagingSessionSummary;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.HashMap;
-import java.time.Instant;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import jakarta.servlet.http.HttpServletRequest;
-import java.io.BufferedWriter;
-import java.io.OutputStreamWriter;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.zip.GZIPOutputStream;
 
 @RestController
 @RequestMapping("/api/stage")
@@ -351,12 +351,18 @@ public class StageController {
                                                           @RequestParam(required = false) String username,
                                                           @RequestParam(required = false) String sessionId,
                                                           @RequestParam(required = false) String site,
-                                                          @RequestParam(required = false) String status) {
+                                                          @RequestParam(required = false) String status,
+                                                          @RequestParam(required = false) List<String> devices) {
+        // GET /api/stage/sessions - Get sessions with optional device filtering
+        // Requirements: 3.2, 7.1, 7.2
         String currentUsername = getCurrentUsername();
         String usernameFilter = username;
         boolean isAdmin = isAdminUser();
         int resolvedPage = Math.max(page, 0);
         int resolvedSize = size <= 0 ? 20 : Math.min(size, 200);
+        
+        // Note: Device filtering will be applied at the file/payload level, not session level
+        // This method still returns matching sessions, device filtering is handled in getSessionFiles
         List<StagingSessionSummary> items = isAdmin
                 ? stageSessionService.getAllSessions(resolvedPage, resolvedSize, q, senderId, usernameFilter, sessionId, site, status)
                 : stageSessionService.getUserSessions(currentUsername, resolvedPage, resolvedSize, q, senderId, sessionId, site, status);
@@ -382,8 +388,11 @@ public class StageController {
                                                            @RequestParam(required = false) String status,
                                                            @RequestParam(required = false) String q,
                                                            @RequestParam(defaultValue = "0") int page,
-                                                           @RequestParam(defaultValue = "100") int size) {
-        StageRecordPage response = stageSessionService.getSessionFiles(sessionId, getCurrentUsername(), isAdminUser(), status, q, page, size, mapper);
+                                                           @RequestParam(defaultValue = "100") int size,
+                                                           @RequestParam(required = false) List<String> devices) {
+        // GET /api/stage/sessions/{sessionId}/files - Get session files with optional device filtering
+        // Requirements: 3.2, 7.2
+        StageRecordPage response = stageSessionService.getSessionFiles(sessionId, getCurrentUsername(), isAdminUser(), status, q, page, size, devices, mapper);
         return ResponseEntity.ok(response);
     }
 
@@ -399,14 +408,18 @@ public class StageController {
     public ResponseEntity<SessionAnalyticsResponse> getSessionAnalytics(@PathVariable String sessionId,
                                                                         @RequestParam(defaultValue = "10") int topPairs,
                                                                         @RequestParam(required = false) String startDate,
-                                                                        @RequestParam(required = false) String endDate) {
+                                                                        @RequestParam(required = false) String endDate,
+                                                                        @RequestParam(required = false) List<String> devices) {
+        // GET /api/stage/sessions/{sessionId}/analytics - Get analytics with optional device filtering
+        // Requirements: 2.2, 7.1, 7.2
         SessionAnalyticsResponse analytics = stageSessionService.getSessionAnalytics(
                 sessionId,
                 getCurrentUsername(),
                 isAdminUser(),
                 topPairs,
                 startDate,
-                endDate);
+                endDate,
+                devices);
         if (analytics == null) {
             return ResponseEntity.notFound().build();
         }
@@ -568,6 +581,33 @@ public class StageController {
             }
         }
         return false;
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")
+    @GetMapping("/sessions/devices")
+    public ResponseEntity<List<String>> getDistinctDevices(@RequestParam(required = false) Long sessionId) {
+        // GET /api/stage/sessions/devices - Get distinct devices
+        // Requirements: 7.3
+        // Accept optional sessionId parameter
+        // Return List<String> of distinct devices
+        // Handle empty results gracefully
+        
+        try {
+            List<String> devices;
+            if (sessionId != null) {
+                // Get distinct devices for specific session
+                devices = stageSessionService.getDistinctDevicesForSession(sessionId);
+            } else {
+                // Get distinct devices for all sessions
+                devices = stageSessionService.getAllDistinctDevices();
+            }
+            
+            // Handle empty results gracefully - return empty list if no devices found
+            return ResponseEntity.ok(devices != null ? devices : List.of());
+        } catch (Exception e) {
+            log.error("Error retrieving distinct devices", e);
+            return ResponseEntity.ok(List.of());
+        }
     }
 
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")

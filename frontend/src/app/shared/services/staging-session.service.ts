@@ -1,5 +1,5 @@
 import { computed, inject, Injectable, NgZone, signal } from '@angular/core';
-import { interval, Subscription } from 'rxjs';
+import { interval, Observable, Subscription } from 'rxjs';
 import { distinctUntilChanged, filter, skip } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
@@ -1079,5 +1079,24 @@ export class StagingSessionService {
     }
     const text = String(value).trim();
     return text.length > 0 ? text : null;
+  }
+
+  /**
+   * Get distinct device values for filter dropdowns.
+   *
+   * Calls the backend API to retrieve unique device identifiers. Supports
+   * optional filtering by session ID to get devices for a specific session.
+   *
+   * Validates: Requirements 2.5, 7.3 - Device filter options retrieval
+   *
+   * @param sessionId Optional session ID to filter devices for specific session
+   * @returns Observable<string[]> Array of unique device identifiers
+   */
+  getDistinctDevices(sessionId?: number): Observable<string[]> {
+    const params: any = {};
+    if (sessionId !== undefined && sessionId !== null) {
+      params.sessionId = sessionId;
+    }
+    return this.backend.getDistinctSessionDevices(params);
   }
 }
