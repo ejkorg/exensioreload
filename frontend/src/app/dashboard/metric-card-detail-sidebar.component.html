@@ -1,0 +1,102 @@
+<div class="detail-sidebar">
+  <!-- Header -->
+  <div class="sidebar-header">
+    <div class="header-title">
+      <h2>{{ data.label }} Records</h2>
+      <p class="header-subtitle">{{ data.senderLabel }} @ {{ data.site }}</p>
+    </div>
+    <div class="header-controls">
+      <span class="record-count" aria-label="Total records">{{ totalRecords() }}</span>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading()" class="loading-state">
+    <mat-progress-bar mode="indeterminate" aria-label="Loading records"></mat-progress-bar>
+    <p>Loading records...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error() && !loading()" class="error-state">
+    <mat-icon>error_outline</mat-icon>
+    <p>{{ error() }}</p>
+    <button mat-stroked-button (click)="loadRecords()">
+      <mat-icon>refresh</mat-icon>
+      Try Again
+    </button>
+  </div>
+
+  <!-- Records Table -->
+  <div *ngIf="!loading() && !error() && displayedRecords().length > 0" class="records-container">
+    <table mat-table [dataSource]="displayedRecords()" class="records-table">
+      <!-- Status Column -->
+      <ng-container matColumnDef="status">
+        <th mat-header-cell>Status</th>
+        <td mat-cell *matCellDef="let record">
+          <span
+            class="status-badge"
+            [style.background-color]="getStatusColor(record.status)"
+            [attr.aria-label]="'Status: ' + record.status"
+          >
+            {{ record.status | uppercase }}
+          </span>
+        </td>
+      </ng-container>
+
+      <!-- Filename Column -->
+      <ng-container matColumnDef="filename">
+        <th mat-header-cell>Filename</th>
+        <td mat-cell *matCellDef="let record">
+          <span class="filename-text" [title]="record.filename">{{ record.filename }}</span>
+        </td>
+      </ng-container>
+
+      <!-- Lot Column -->
+      <ng-container matColumnDef="lot">
+        <th mat-header-cell>Lot</th>
+        <td mat-cell *matCellDef="let record">
+          <span class="lot-text">{{ record.lot }}</span>
+        </td>
+      </ng-container>
+
+      <!-- Wafer Column -->
+      <ng-container matColumnDef="wafer">
+        <th mat-header-cell>Wafer</th>
+        <td mat-cell *matCellDef="let record">
+          <span class="wafer-text">{{ record.wafer }}</span>
+        </td>
+      </ng-container>
+
+      <!-- Updated Column -->
+      <ng-container matColumnDef="updated">
+        <th mat-header-cell>Updated</th>
+        <td mat-cell *matCellDef="let record">
+          <span class="updated-text" [title]="formatDate(record.updated || record.updatedAt)">
+            {{ formatDate(record.updated || record.updatedAt) }}
+          </span>
+        </td>
+      </ng-container>
+
+      <!-- Table Header -->
+      <tr mat-header-row *matHeaderRowDef="displayColumns"></tr>
+
+      <!-- Table Rows -->
+      <tr mat-row *matRowDef="let row; columns: displayColumns" class="record-row"></tr>
+    </table>
+
+    <!-- Pagination -->
+    <mat-paginator
+      [length]="totalRecords()"
+      [pageSize]="pageSize()"
+      [pageSizeOptions]="[5, 10, 20]"
+      (page)="onPageChange($event)"
+      aria-label="Page navigation for records"
+    ></mat-paginator>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading() && !error() && displayedRecords().length === 0" class="empty-state">
+    <mat-icon>inbox</mat-icon>
+    <p>No records found for this state</p>
+  </div>
+</div>

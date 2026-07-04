@@ -2,6 +2,7 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -300,6 +301,105 @@ public class CpLogMonitor {
         for (StageRecord record : stuck) {
             totalRecordsProcessed.incrementAndGet();
             tryExensioDirectLookup(record, record.requestId(), record.id(), reason);
+        }
+    }
+
+    /**
+     * Detects records stuck in ENRICHMENT status exceeding the enrichmentTimeoutMinutes threshold.
+     * For each stuck record, emits an alert event and attempts auto-remediation via markDoneManualVerify.
+     * 
+     * <p>Requirements: 4, 8</p>
+     */
+    public void detectStuckEnrichmentRecords() {
+        int timeoutMinutes = props.getEnrichmentTimeoutMinutes();
+        
+        List<StageRecord> stuckRecords;
+        try {
+            stuckRecords = refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE);
+        } catch (Exception e) {
+            log.warn("detectStuckEnrichmentRecords: failed to load ENRICHMENT records: {}", e.getMessage());
+            return;
+        }
+
+        if (stuckRecords.isEmpty()) {
+            log.debug("detectStuckEnrichmentRecords: no records in ENRICHMENT status");
+            return;
+        }
+
+        List<StageRecord> stuck = new ArrayList<>();
+        Instant now = Instant.now();
+
+        // Identify records that exceeded the timeout threshold
+        for (StageRecord record : stuckRecords) {
+            Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+            if (enrichmentStartedAt == null) {
+                continue;
+            }
+            
+            Instant timeoutDeadline = enrichmentStartedAt.plus(Duration.ofMinutes(timeoutMinutes));
+            if (timeoutDeadline.isBefore(now)) {
+                stuck.add(record);
+            }
+        }
+
+        if (stuck.isEmpty()) {
+            log.debug("detectStuckEnrichmentRecords: no records exceeded timeout threshold of {} minutes", timeoutMinutes);
+            return;
+        }
+
+        log.info("detectStuckEnrichmentRecords: detected {} record(s) stuck in ENRICHMENT for > {} minutes", 
+                stuck.size(), timeoutMinutes);
+
+        // Process each stuck record
+        for (StageRecord record : stuck) {
+            Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+            long minutesStuck = Duration.between(enrichmentStartedAt, now).toMinutes();
+
+            log.warn("Stuck record detected: id={}, lot={}, minutes_stuck={}", 
+                    record.id(), record.lot(), minutesStuck);
+
+            // Emit alert event via SSE
+            emitStuckRecordAlert(record, minutesStuck);
+
+            // Auto-remediate by marking DONE with manual-verify
+            String message = String.format(
+                    "[Stuck in Enrichment] lot=%s, idFile=%s, minutes_stuck=%d, timeout_threshold=%d minutes",
+                    record.lot(), record.metadataId(), minutesStuck, timeoutMinutes);
+            
+            try {
+                refDbService.markDoneManualVerify(record, message);
+                log.info("Auto-remediated stuck record: id={}, lot={}", record.id(), record.lot());
+            } catch (Exception e) {
+                log.error("Failed to auto-remediate stuck record id={}: {}", record.id(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Emits a SSE alert event for a stuck enrichment record.
+     * Requirements: 4.2
+     */
+    private void emitStuckRecordAlert(StageRecord record, long minutesStuck) {
+        if (record.requestId() == null) {
+            log.debug("emitStuckRecordAlert: record has no requestId, skipping SSE emit");
+            return;
+        }
+
+        Map<String, Object> alertEvent = new java.util.HashMap<>();
+        alertEvent.put("recordId", record.id());
+        alertEvent.put("lot", record.lot());
+        alertEvent.put("minutesStuck", minutesStuck);
+        alertEvent.put("metadataId", record.metadataId());
+        alertEvent.put("filename", record.filename());
+        alertEvent.put("site", record.site());
+        alertEvent.put("senderId", record.senderId());
+        alertEvent.put("senderName", record.senderName());
+
+        try {
+            stageMonitorService.sendEvent(record.requestId(), "STUCK_RECORD_ALERT", alertEvent);
+            log.debug("Emitted STUCK_RECORD_ALERT for record id={}", record.id());
+        } catch (Exception e) {
+            log.warn("Failed to emit STUCK_RECORD_ALERT for record id={}: {}", record.id(), e.getMessage());
         }
     }
 

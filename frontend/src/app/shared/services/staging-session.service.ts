@@ -495,6 +495,20 @@ export class StagingSessionService {
         this.loadSnapshot(sessionId);
       });
     });
+
+    // STATE_AGGREGATION: Aggregated state changes for real-time dashboard updates
+    // This event contains batched state transitions (e.g., PENDING->ENQUEUED, ENRICHMENT->DONE, etc.)
+    // enabling efficient real-time updates without overwhelming the UI with individual file events.
+    this.eventSource.addEventListener('STATE_AGGREGATION', (event: MessageEvent) => {
+      this.zone.run(() => {
+        try {
+          const aggregation = JSON.parse(event.data);
+          this.handleStateAggregationEvent(aggregation, sessionId);
+        } catch (err) {
+          console.error('[StagingSession] Failed to parse STATE_AGGREGATION event:', err);
+        }
+      });
+    });
   }
 
   private schedulePostConnectRefresh(sessionId: string): void {
@@ -652,6 +666,114 @@ export class StagingSessionService {
   }
 
   /**
+   * Handle STATE_AGGREGATION event from SSE stream.
+   * Updates session metrics based on aggregated state changes.
+   *
+   * This event is broadcast when multiple records change state during a bulk operation
+   * (e.g., bulk cancel, bulk enqueue). Rather than individual FILE_UPDATE events,
+   * we receive a single aggregated event with totals for each state.
+   *
+   * @param aggregation The aggregated state change event
+   * @param sessionId The session ID (for validation)
+   */
+  private handleStateAggregationEvent(aggregation: any, sessionId: string): void {
+    const current = this.currentSession();
+    if (!current) {
+      return; // No session loaded yet
+    }
+
+    // Extract totals from the aggregation event
+    // The event should contain a 'totals' map with keys like 'pending', 'ENQUEUED', 'ENRICHMENT', etc.
+    const totals = aggregation.totals || {};
+
+    // Map backend state names to session metric field names
+    const stateToFieldMap: {
+      [key: string]: keyof Omit<
+        StagingSessionDetail,
+        | 'sessionId'
+        | 'site'
+        | 'senderId'
+        | 'senderName'
+        | 'status'
+        | 'progress'
+        | 'createdAt'
+        | 'updatedAt'
+        | 'username'
+        | 'integration'
+      >;
+    } = {
+      pending: 'filesStaged',
+      ENQUEUED: 'filesEnqueued',
+      ENRICHMENT: 'filesEnqueued', // ENRICHMENT counts as "enqueued" (in-progress)
+      EXENSIO_LOADING: 'filesEnqueued', // EXENSIO_LOADING also counts as "enqueued"
+      DONE: 'filesDone',
+      FAILED: 'filesFailed',
+      CANCELLED: 'filesDone', // CANCELLED records are filtered from active counts
+    };
+
+    // Update session metrics from totals
+    let hasChanges = false;
+    const updatedSession: StagingSessionDetail = { ...current };
+
+    // Process known state totals
+    for (const [stateName, fieldName] of Object.entries(stateToFieldMap)) {
+      if (stateName in totals) {
+        const newValue = totals[stateName];
+        // Skip update if it's a filtered state
+        if (stateName === 'CANCELLED') {
+          continue; // Cancelled records don't update session metrics directly
+        }
+        // For ENRICHMENT and EXENSIO_LOADING, only update filesEnqueued once
+        if ((stateName === 'ENRICHMENT' || stateName === 'EXENSIO_LOADING') && fieldName === 'filesEnqueued') {
+          // Both ENRICHMENT and EXENSIO_LOADING contribute to filesEnqueued
+          // But since we get separate totals, we need to handle this carefully
+          // For now, prioritize ENRICHMENT count if available
+          if (stateName === 'ENRICHMENT' && 'ENRICHMENT' in totals) {
+            const enrichingValue = totals['ENRICHMENT'];
+            const exensioValue = totals['EXENSIO_LOADING'] || 0;
+            const totalEnqueued = enrichingValue + exensioValue;
+            if (updatedSession.filesEnqueued !== totalEnqueued) {
+              updatedSession.filesEnqueued = totalEnqueued;
+              hasChanges = true;
+            }
+          }
+          continue;
+        }
+
+        if (updatedSession[fieldName] !== newValue) {
+          updatedSession[fieldName] = newValue;
+          hasChanges = true;
+        }
+      }
+    }
+
+    // Update progress based on new totals
+    if (updatedSession.totalFiles && updatedSession.totalFiles > 0) {
+      const processed = updatedSession.filesDone + updatedSession.filesFailed;
+      const newProgress = Math.round((processed / updatedSession.totalFiles) * 100);
+      if (updatedSession.progress !== newProgress) {
+        updatedSession.progress = newProgress;
+        hasChanges = true;
+      }
+    }
+
+    // If metrics changed, update the session signal and track activity
+    if (hasChanges) {
+      this.currentSession.set(updatedSession);
+      this.debugLog('[StagingSession] Session metrics updated from STATE_AGGREGATION:', updatedSession);
+
+      // Add an activity event summarizing the changes
+      const changesSummary = (aggregation.changes || [])
+        .map((change: any) => `${change.state}: ${change.previousCount} → ${change.newCount}`)
+        .join(', ');
+
+      if (changesSummary) {
+        this.pushActivity('session', `State changes: ${changesSummary}`, 'sync', 'primary');
+      }
+    }
+  }
+
+  /**
    * Builds and pushes an activity event for a file that has reached a terminal state (COMPLETED or ERROR).
    * The activity message includes a pipeline summary:
    * - For COMPLETED: "[filename] — Enrichment: Done · Exensio: Loaded · [target]"
@@ -727,7 +849,8 @@ export class StagingSessionService {
       const prefix = source ? `${source} — ` : 'ERROR — ';
       const maxLen = 80;
       const available = maxLen - prefix.length;
-      const truncatedError = errorMessage.length > available ? errorMessage.substring(0, available) + '...' : errorMessage;
+      const truncatedError =
+        errorMessage.length > available ? errorMessage.substring(0, available) + '...' : errorMessage;
 
       message = truncatedError ? `${filename} — Failed: ${prefix}${truncatedError}` : `${filename} — Failed`;
     }
@@ -747,17 +870,30 @@ export class StagingSessionService {
   private detectActivityErrorSource(errorMessage: string, file: StageRecordView): string {
     const msg = errorMessage.toLowerCase();
 
-    if (msg.startsWith('[cp ') || msg.includes('cp enrichment') || msg.includes('cp failure') ||
-        msg.includes('cp timeout') || msg.includes('cp pp_log')) {
+    if (
+      msg.startsWith('[cp ') ||
+      msg.includes('cp enrichment') ||
+      msg.includes('cp failure') ||
+      msg.includes('cp timeout') ||
+      msg.includes('cp pp_log')
+    ) {
       return 'CP';
     }
-    if (msg.startsWith('[exensio ') || msg.includes('exensio load') || msg.includes('exensio failure') ||
-        msg.includes('exensio api') || msg.includes('dead letter queue')) {
+    if (
+      msg.startsWith('[exensio ') ||
+      msg.includes('exensio load') ||
+      msg.includes('exensio failure') ||
+      msg.includes('exensio api') ||
+      msg.includes('dead letter queue')
+    ) {
       return 'Exensio';
     }
 
-    if (file.cpIntegrationStatus === 'failure' || file.cpIntegrationStatus === 'timeout' ||
-        file.cpIntegrationStatus === 'error') {
+    if (
+      file.cpIntegrationStatus === 'failure' ||
+      file.cpIntegrationStatus === 'timeout' ||
+      file.cpIntegrationStatus === 'error'
+    ) {
       return 'CP';
     }
     if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {

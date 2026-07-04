@@ -24,6 +24,29 @@ import { BulkActionsComponent, SelectableItem } from './bulk-actions.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
 import { SiteDetailModalComponent } from './site-detail-modal.component';
 
+/**
+ * Represents an aggregated state change event broadcast via SSE.
+ * Contains list of state changes and updated totals for real-time dashboard updates.
+ */
+interface StateAggregationEvent {
+  timestamp: string;
+  changes: StateChange[];
+  totals: {
+    [key: string]: number;
+  };
+  requestId: string;
+}
+
+/**
+ * Represents a single state change within an aggregation event.
+ * Shows the previous and new counts for a specific state.
+ */
+interface StateChange {
+  state: string;
+  previousCount: number;
+  newCount: number;
+}
+
 interface MetricCard {
   key?: keyof MetricSnapshot;
   label: string;
@@ -88,6 +111,7 @@ interface DashboardErrorDetails {
     SparklineComponent,
     BulkActionsComponent,
     GlassCheckboxComponent,
+    StateLegendTooltipComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
@@ -102,10 +126,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   formatUtcTimestamp(value: string | Date | null | undefined): string {
     if (!value) return '-';
     const d = new Date(value);
-    return isNaN(d.getTime()) ? '-' : d.toLocaleString([], {
-      year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
-    });
+    return isNaN(d.getTime())
+      ? '-'
+      : d.toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'UTC',
+        });
   }
 
   snapshot = signal<DashboardSnapshot | null>(null);
@@ -212,49 +242,50 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return senders.sort((a, b) => b.backlog - a.backlog).slice(0, 6);
   });
 
-  /** Computed KPI cards — memoized via signal */
+  /** Computed KPI cards — memoized via signal (7 state cards) */
   primaryMetrics = computed<MetricCard[]>(() => {
     const s = this.snapshot();
     if (!s) return [];
     const trends = this.metricTrends();
     return [
       {
-        key: 'backlog',
-        label: 'Backlog Pending',
-        abbrev: 'BCK',
-        value: s.global.backlog,
-        icon: 'hourglass_bottom',
-        color: s.global.backlog > 5000 ? 'danger' : s.global.backlog > 1000 ? 'warning' : 'secondary',
-        accentColor: s.global.backlog > 5000 ? '#ef4444' : '#f59e0b',
-        alert: s.global.backlog > 1000,
-        subtext: 'items waiting to be staged',
-        trend: trends.backlog,
-      },
-      {
-        key: 'ready',
-        label: 'Ready to Send',
-        abbrev: 'RDY',
+        label: 'Staged',
+        abbrev: 'STG',
         value: s.global.ready,
-        icon: 'play_arrow',
-        color: 'primary',
-        accentColor: '#818cf8',
-        subtext: 'prepared payloads ready',
-        trend: trends.ready,
+        icon: 'inbox',
+        color: 'secondary',
+        accentColor: '#8b5cf6',
+        subtext: 'ready to dispatch',
       },
       {
-        key: 'enqueued',
-        label: 'In Queue',
+        label: 'Queued for CP',
         abbrev: 'QUE',
-        value: s.global.enqueued,
+        value: s.global.queued,
         icon: 'schedule',
         color: 'info',
         accentColor: '#3b82f6',
-        subtext: 'actively being dispatched',
-        trend: trends.enqueued,
+        subtext: 'waiting in queue',
       },
       {
-        key: 'completed',
-        label: 'Completed Today',
+        label: 'In Enrichment',
+        abbrev: 'ENR',
+        value: s.global.enriching,
+        icon: 'auto_awesome',
+        color: 'primary',
+        accentColor: '#818cf8',
+        subtext: 'actively enriching',
+      },
+      {
+        label: 'Exensio Loading',
+        abbrev: 'EXL',
+        value: s.global.exensioLoading,
+        icon: 'cloud_download',
+        color: 'info',
+        accentColor: '#06b6d4',
+        subtext: 'exensio verification',
+      },
+      {
+        label: 'Completed',
         abbrev: 'CPL',
         value: s.global.completed,
         icon: 'check_circle',
@@ -262,6 +293,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
         accentColor: '#10b981',
         subtext: 'successful operations',
         trend: trends.completed,
+      },
+      {
+        label: 'Failed',
+        abbrev: 'FAL',
+        value: s.global.failed,
+        icon: 'error_outline',
+        color: 'danger',
+        accentColor: '#ef4444',
+        subtext: 'encountered errors',
+      },
+      {
+        label: 'Cancelled',
+        abbrev: 'CAN',
+        value: s.global.cancelled,
+        icon: 'block',
+        color: 'danger',
+        accentColor: '#f97316',
+        subtext: 'paused or deleted',
       },
     ];
   });
@@ -310,9 +359,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return active ? `Resume active session ${active.sessionId}` : 'Start a new monitoring session';
   });
 
-  primaryMonitoringActionIcon = computed<string>(() =>
-    this.activeMonitoringSession() ? 'play_circle' : 'play_arrow',
-  );
+  primaryMonitoringActionIcon = computed<string>(() => (this.activeMonitoringSession() ? 'play_circle' : 'play_arrow'));
 
   // ── Freshness / error computeds ─────────────────────────────────
 
@@ -376,6 +423,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
+    protected legendService: StateLegendService,
   ) {
     this.toast = inject(ToastService);
   }
@@ -444,6 +492,43 @@ export class DashboardComponent implements OnInit, OnDestroy {
       panelClass: 'alert-settings-dialog',
       width: '480px',
       maxWidth: '90vw',
+    });
+  }
+
+  openMetricCardDetail(metric: MetricCard): void {
+    const stateMap: { [key: string]: string } = {
+      Staged: 'pending',
+      'Queued for CP': 'ENQUEUED',
+      'In Enrichment': 'ENRICHMENT',
+      'Exensio Loading': 'EXENSIO_LOADING',
+      Completed: 'DONE',
+      Failed: 'FAILED',
+      Cancelled: 'CANCELLED',
+    };
+
+    const state = stateMap[metric.label] || metric.label.toUpperCase();
+
+    // Use first site and sender for context, or defaults
+    const snap = this.snapshot();
+    const firstSite = snap?.sites?.[0];
+    const firstSender = firstSite?.senders?.[0];
+    const site = firstSite?.site ?? 'ALL';
+    const senderId = firstSender?.senderId ?? 0;
+    const senderLabel = firstSender?.senderLabel ?? 'All Senders';
+
+    this.dialog.open(MetricCardDetailSidebarComponent, {
+      data: {
+        state,
+        label: metric.label,
+        site,
+        senderId,
+        senderLabel,
+      },
+      panelClass: 'metric-detail-sidebar-dialog',
+      width: '90vw',
+      maxWidth: '900px',
+      height: '90vh',
+      maxHeight: '90vh',
     });
   }
 
@@ -624,14 +709,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   getMetricChangeKey(metricLabel: string): string {
     switch (metricLabel) {
-      case 'Backlog Pending':
-        return 'metric-backlog';
-      case 'Ready to Send':
+      case 'Staged':
         return 'metric-ready';
-      case 'In Queue':
-        return 'metric-enqueued';
-      case 'Completed Today':
+      case 'Queued for CP':
+        return 'metric-queued';
+      case 'In Enrichment':
+        return 'metric-enriching';
+      case 'Exensio Loading':
+        return 'metric-exensioLoading';
+      case 'Completed':
         return 'metric-completed';
+      case 'Failed':
+        return 'metric-failed';
+      case 'Cancelled':
+        return 'metric-cancelled';
       default:
         return `metric-${metricLabel.toLowerCase().replace(/\s+/g, '-')}`;
     }
@@ -797,7 +888,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!previous || !current) return changed;
 
     const trackedMetrics: Array<keyof DashboardSnapshot['global']> = [
-      'backlog', 'ready', 'enqueued', 'completed', 'activeSenders',
+      'ready',
+      'queued',
+      'enriching',
+      'exensioLoading',
+      'completed',
+      'failed',
+      'cancelled',
+      'activeSenders',
     ];
     trackedMetrics.forEach((metric) => {
       if (previous.global[metric] !== current.global[metric]) {
@@ -813,10 +911,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         return;
       }
       if (
-        previousSite.metrics.backlog !== site.metrics.backlog ||
-        previousSite.metrics.completed !== site.metrics.completed ||
         previousSite.metrics.ready !== site.metrics.ready ||
-        previousSite.metrics.enqueued !== site.metrics.enqueued
+        previousSite.metrics.completed !== site.metrics.completed ||
+        previousSite.metrics.failed !== site.metrics.failed ||
+        previousSite.metrics.cancelled !== site.metrics.cancelled
       ) {
         changed.add(`site-${site.site}`);
       }
@@ -828,10 +926,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
           return;
         }
         if (
-          previousSender.metrics.backlog !== sender.metrics.backlog ||
+          previousSender.metrics.ready !== sender.metrics.ready ||
           previousSender.metrics.completed !== sender.metrics.completed ||
-          previousSender.metrics.enqueued !== sender.metrics.enqueued ||
-          previousSender.metrics.failed !== sender.metrics.failed
+          previousSender.metrics.failed !== sender.metrics.failed ||
+          previousSender.metrics.cancelled !== sender.metrics.cancelled
         ) {
           changed.add(`sender-${sender.senderId}`);
         }

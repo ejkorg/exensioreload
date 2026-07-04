@@ -1,27 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import jakarta.servlet.http.HttpServletRequest;
-
 import java.io.BufferedWriter;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -38,6 +16,39 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardBucketTotals;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardDateBucket;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardLink;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardLotBreakdown;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardMetricTotals;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardSenderSnapshot;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardSiteSnapshot;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardSnapshot;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardWaferBreakdown;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
+import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/dashboard")
@@ -496,13 +507,17 @@ public class DashboardController {
 
     private DashboardMetricTotals toMetrics(StageStatus status, List<StageUserStatus> users) {
         long ready = status.ready();
-        long enqueued = status.enqueued();
+        long queued = status.queued();
+        long enriching = status.enriching();
+        long exensioLoading = status.exensioLoading();
         long failed = status.failed();
         long completed = status.completed();
-        long backlog = ready + enqueued;
+        long cancelled = status.cancelled();
+        long backlog = status.backlog();
         long total = status.total();
         long activeUsers = users == null ? 0 : users.size();
-        return new DashboardMetricTotals(total, ready, enqueued, failed, completed, backlog, 1, activeUsers);
+        return new DashboardMetricTotals(total, ready, queued, enriching, exensioLoading, failed, completed, 
+                cancelled, backlog, 1, activeUsers);
     }
 
     private String normalizeSite(String site) {
@@ -596,9 +611,12 @@ public class DashboardController {
     private static class DashboardTotalsAccumulator {
         private long total;
         private long ready;
-        private long enqueued;
+        private long queued;
+        private long enriching;
+        private long exensioLoading;
         private long failed;
         private long completed;
+        private long cancelled;
         private long backlog;
         private long activeSenders;
         private long activeUsers;
@@ -606,17 +624,20 @@ public class DashboardController {
         void add(DashboardMetricTotals metrics) {
             this.total += metrics.total();
             this.ready += metrics.ready();
-            this.enqueued += metrics.enqueued();
+            this.queued += metrics.queued();
+            this.enriching += metrics.enriching();
+            this.exensioLoading += metrics.exensioLoading();
             this.failed += metrics.failed();
             this.completed += metrics.completed();
+            this.cancelled += metrics.cancelled();
             this.backlog += metrics.backlog();
             this.activeSenders += metrics.activeSenders();
             this.activeUsers += metrics.activeUsers();
         }
 
         DashboardMetricTotals toTotals() {
-            return new DashboardMetricTotals(total, ready, enqueued, failed, completed, backlog, activeSenders,
-                    activeUsers);
+            return new DashboardMetricTotals(total, ready, queued, enriching, exensioLoading, failed, completed,
+                    cancelled, backlog, activeSenders, activeUsers);
         }
     }
 }

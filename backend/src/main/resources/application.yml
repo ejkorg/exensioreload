@@ -106,7 +106,13 @@ cp:
     #   EXTERNAL-QA: service_country
     #   PHM-TARLAC-PROD: service.country
     poll-interval-ms: 60000
-    enrichment-timeout-minutes: 15 # Max wait in ENRICHMENT before Exensio fallback (minutes)
+    # enrichment-timeout-minutes: Timeout threshold for records stuck in ENRICHMENT state.
+    # When a record remains in ENRICHMENT status for longer than this duration (in minutes),
+    # the system considers it "stuck" and either routes to Exensio (if enabled) or marks
+    # it DONE with manual-verify flag for operator review. Default: 15 minutes.
+    # IMPORTANT: Must be >= 1 minute. No upper limit, but recommend 5-60 minutes in practice.
+    # This setting does NOT retroactively affect previously stuck records—only new detections.
+    enrichment-timeout-minutes: 5
     logRequestPayloads: true # Set to false in production profiles
 
 reloader:

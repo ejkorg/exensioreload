@@ -32,6 +32,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageUserStatus;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StateAggregationBatcher;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StatusMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -56,6 +57,7 @@ public class RefDbService {
     private final com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties;
     private final com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties;
     private final IntegrationStatusService integrationStatusService;
+    private final StateAggregationBatcher stateAggregationBatcher;
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
@@ -64,12 +66,14 @@ public class RefDbService {
                         com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService,
                         com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties,
                         com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties,
-                        IntegrationStatusService integrationStatusService) {
+                        IntegrationStatusService integrationStatusService,
+                        StateAggregationBatcher stateAggregationBatcher) {
         this.properties = properties;
         this.monitorService = monitorService;
         this.elasticsearchProperties = elasticsearchProperties;
         this.exensioProperties = exensioProperties;
         this.integrationStatusService = integrationStatusService;
+        this.stateAggregationBatcher = stateAggregationBatcher;
         this.isOracle = properties.getHost() != null && !properties.getHost().isBlank();
         HikariConfig config = new HikariConfig();
         if (isOracle) {
@@ -537,6 +541,8 @@ public class RefDbService {
             evt.put("filename", record.filename());
             evt.put("displayStatus", StatusMapper.getDisplayStatus("FAILED", false));
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "FAILED");
             broadcastStats(record.requestId());
         }
     }
@@ -691,6 +697,8 @@ public class RefDbService {
                     evt.put("msg", "Consumed by CP (processing)");
                     monitorService.sendEvent(reqId, "ROW_UPDATE", evt);
                 }
+                // Record state change to batcher for aggregation event
+                recordStateChangeForBatcher(reqId, "ENRICHMENT");
                 broadcastStats(reqId);
             });
         }
@@ -777,6 +785,8 @@ public class RefDbService {
             evt.put("cpOutputPath", outputPath);
             evt.put("cpOutputTarget", outputTarget);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "DONE");
             broadcastStats(record.requestId());
         }
     }
@@ -809,6 +819,8 @@ public class RefDbService {
             evt.put("msg", "Completed — manual verification needed: " + truncate(message, 60));
             evt.put("errorMessage", message);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "DONE");
             broadcastStats(record.requestId());
         }
     }
@@ -881,6 +893,8 @@ public class RefDbService {
             evt.put("exensioWaferKey", exensioWaferKey);
             evt.put("exensioPgKey", exensioPgKey);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "DONE");
             broadcastStats(record.requestId());
         }
     }
@@ -939,9 +953,12 @@ public class RefDbService {
         List<StageStatus> statuses = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) " +
+                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM ").append(table).append(" WHERE 1=1 ");
         List<Object> params = new ArrayList<>();
         if (requestId != null && !requestId.isBlank()) {
@@ -966,11 +983,14 @@ public class RefDbService {
                                 site,
                                 senderId,
                                 senderName,
-                                rs.getLong(4),
-                                rs.getLong(5),
-                                rs.getLong(6),
-                                rs.getLong(7),
-                                rs.getLong(8),
+                                rs.getLong(4),      // total
+                                rs.getLong(5),      // ready (pending)
+                                rs.getLong(6),      // queued (ENQUEUED)
+                                rs.getLong(7),      // enriching (ENRICHMENT)
+                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(9),      // failed
+                                rs.getLong(10),     // completed (DONE)
+                                rs.getLong(11),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -988,9 +1008,12 @@ public class RefDbService {
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) " +
+                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM " + table + where + " GROUP BY site, sender_id";
         List<StageStatus> statuses = new ArrayList<>();
         try (Connection connection = dataSource.getConnection()) {
@@ -1010,11 +1033,14 @@ public class RefDbService {
                                 rowSite,
                                 rowSender,
                                 senderName,
-                                rs.getLong(4),
-                                rs.getLong(5),
-                                rs.getLong(6),
-                                rs.getLong(7),
-                                rs.getLong(8),
+                                rs.getLong(4),      // total
+                                rs.getLong(5),      // ready (pending)
+                                rs.getLong(6),      // queued (ENQUEUED)
+                                rs.getLong(7),      // enriching (ENRICHMENT)
+                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(9),      // failed
+                                rs.getLong(10),     // completed (DONE)
+                                rs.getLong(11),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1038,9 +1064,12 @@ public class RefDbService {
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) " +
+                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM " + table + where + " GROUP BY site, sender_id";
         List<StageStatus> statuses = new ArrayList<>();
         try (Connection connection = dataSource.getConnection()) {
@@ -1061,11 +1090,14 @@ public class RefDbService {
                                 rowSite,
                                 rowSender,
                                 senderName,
-                                rs.getLong(4),
-                                rs.getLong(5),
-                                rs.getLong(6),
-                                rs.getLong(7),
-                                rs.getLong(8),
+                                rs.getLong(4),      // total
+                                rs.getLong(5),      // ready (pending)
+                                rs.getLong(6),      // queued (ENQUEUED)
+                                rs.getLong(7),      // enriching (ENRICHMENT)
+                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(9),      // failed
+                                rs.getLong(10),     // completed (DONE)
+                                rs.getLong(11),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1834,6 +1866,8 @@ public class RefDbService {
      * Bulk-cancel staged records for a given sender that are in one of the specified statuses.
      * Used by the dashboard bulk-delete action (marks NEW/FAILED records as CANCELLED).
      *
+     * After cancellation, emits aggregation events for all affected sessions to update dashboard counts.
+     *
      * @return Number of rows updated.
      */
     public int bulkCancelBySender(int senderId, List<String> fromStatuses) {
@@ -1844,6 +1878,9 @@ public class RefDbService {
         String inClause = String.join(",", fromStatuses.stream().map(s -> "?").toList());
         String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Bulk cancelled via dashboard', updated_at = " + timestampExpr()
                 + " WHERE sender_id = ? AND status IN (" + inClause + ")";
+        int rowsUpdated = 0;
+        Set<String> affectedRequestIds = new HashSet<>();
+        
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             int idx = 1;
@@ -1851,11 +1888,41 @@ public class RefDbService {
             for (String s : fromStatuses) {
                 ps.setString(idx++, s);
             }
-            return ps.executeUpdate();
+            rowsUpdated = ps.executeUpdate();
+            
+            // Query for affected request IDs so we can emit aggregation events
+            if (rowsUpdated > 0) {
+                String requestIdsQuery = "SELECT DISTINCT request_id FROM " + table 
+                        + " WHERE sender_id = ? AND status = 'CANCELLED' AND request_id IS NOT NULL";
+                try (PreparedStatement psReqIds = connection.prepareStatement(requestIdsQuery)) {
+                    psReqIds.setInt(1, senderId);
+                    try (ResultSet rs = psReqIds.executeQuery()) {
+                        while (rs.next()) {
+                            String requestId = rs.getString(1);
+                            if (requestId != null && !requestId.isBlank()) {
+                                affectedRequestIds.add(requestId);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (SQLException ex) {
             log.error("Failed bulk-cancelling records for sender {}: {}", senderId, ex.getMessage(), ex);
             throw new IllegalStateException("Failed bulk-cancelling records", ex);
         }
+        
+        // Emit aggregation events for each affected session
+        // This batches the cancellations across 1-second window to reduce SSE traffic
+        if (rowsUpdated > 0 && stateAggregationBatcher != null) {
+            for (String requestId : affectedRequestIds) {
+                recordStateChangeForBatcher(requestId, "CANCELLED");
+                if (monitorService != null) {
+                    broadcastStats(requestId);
+                }
+            }
+        }
+        
+        return rowsUpdated;
     }
 
     /**
@@ -3647,6 +3714,40 @@ public class RefDbService {
                 log.warn("Failed broadcasting SSE event for record {}: {}",
                         update.recordId(), ex.getMessage());
             }
+        }
+    }
+
+    /**
+     * Helper method to record a state change to the aggregation batcher.
+     * Fetches current state count for the given state and records it to the batcher.
+     * This enables batched SSE STATE_AGGREGATION events instead of per-record ROW_UPDATE events.
+     *
+     * @param requestId the session/request ID
+     * @param state the state that changed (ENRICHMENT, EXENSIO_LOADING, DONE, FAILED, CANCELLED, etc.)
+     */
+    private void recordStateChangeForBatcher(String requestId, String state) {
+        if (requestId == null || requestId.isBlank() || stateAggregationBatcher == null) {
+            return;
+        }
+
+        try {
+            // Query current count for this state
+            String table = properties.getStagingTable();
+            String sql = "SELECT COUNT(*) FROM " + table + " WHERE status = ? AND request_id = ?";
+            try (Connection connection = dataSource.getConnection();
+                 PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, state);
+                ps.setString(2, requestId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        long currentCount = rs.getLong(1);
+                        // Record to batcher — it will handle aggregation and batching
+                        stateAggregationBatcher.recordStateChange(requestId, state, -1, currentCount);
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("Failed recording state change to batcher for state {}: {}", state, ex.getMessage());
         }
     }
 }

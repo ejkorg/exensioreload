@@ -56,7 +56,9 @@
   border: 1px solid var(--border-color);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: 0 8px 32px var(--shadow-start), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 32px var(--shadow-start),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -65,7 +67,9 @@
     background: var(--card-hover-bg);
     border-color: var(--border-glow);
     transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 16px 48px var(--shadow-start), 0 0 20px rgba(99, 102, 241, 0.15),
+    box-shadow:
+      0 16px 48px var(--shadow-start),
+      0 0 20px rgba(99, 102, 241, 0.15),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 }
@@ -386,10 +390,21 @@
 }
 
 /* ── KPI Metrics Grid ──────────────────────────────────────── */
+/* ── KPI Metrics Grid (7 Pipeline States) ──────────────────── */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* Responsive grid: 4 cols on desktop, 2 cols on tablet, 1 col on mobile */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.25rem;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
 
   @media (max-width: 480px) {
     grid-template-columns: 1fr;
@@ -584,6 +599,23 @@
     background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02));
   }
 
+  /* Terminal states (Completed, Failed, Cancelled) get different background color */
+  &.terminal {
+    border-color: rgba(139, 92, 246, 0.25);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(139, 92, 246, 0.01));
+
+    .metric-icon-wrapper {
+      &.color-success {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(16, 185, 129, 0.08));
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+      &.color-danger {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.08));
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+    }
+  }
+
   @media (max-width: 768px) {
     .metric-value {
       font-size: 1.8rem;
@@ -717,7 +749,9 @@
 
   &.bulk-selected {
     border-color: rgba(129, 140, 248, 0.6);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4), 0 8px 24px var(--shadow-start);
+    box-shadow:
+      0 0 0 2px rgba(99, 102, 241, 0.4),
+      0 8px 24px var(--shadow-start);
     background: var(--card-hover-bg);
   }
 
@@ -851,7 +885,12 @@
       height: 100%;
       min-width: 2px;
       border-radius: inherit;
-      background: linear-gradient(90deg, var(--accent-success) 0%, var(--accent-warning) 50%, var(--accent-danger) 100%);
+      background: linear-gradient(
+        90deg,
+        var(--accent-success) 0%,
+        var(--accent-warning) 50%,
+        var(--accent-danger) 100%
+      );
       box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
       transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
@@ -1156,13 +1195,19 @@
 
 @keyframes cardPulse {
   0% {
-    box-shadow: 0 8px 32px var(--shadow-start), 0 0 0 0 rgba(16, 185, 129, 0.4);
+    box-shadow:
+      0 8px 32px var(--shadow-start),
+      0 0 0 0 rgba(16, 185, 129, 0.4);
   }
   50% {
-    box-shadow: 0 8px 32px var(--shadow-start), 0 0 0 16px rgba(16, 185, 129, 0);
+    box-shadow:
+      0 8px 32px var(--shadow-start),
+      0 0 0 16px rgba(16, 185, 129, 0);
   }
   100% {
-    box-shadow: 0 8px 32px var(--shadow-start), 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow:
+      0 8px 32px var(--shadow-start),
+      0 0 0 0 rgba(16, 185, 129, 0);
   }
 }
 
@@ -1296,7 +1341,10 @@ button:focus-visible {
   border: 1px solid rgba(99, 102, 241, 0.5);
   background: rgba(99, 102, 241, 0.12);
   color: #a5b4fc;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
   visibility: visible;
   opacity: 1;
 
@@ -1386,4 +1434,26 @@ button:focus-visible {
   .section-title {
     font-size: 1.2rem;
   }
+}
+
+/* ── State Legend Tooltip Styles ──────────────────────────── */
+app-state-legend-tooltip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.metric-label {
+  app-state-legend-tooltip {
+    // Inherits flex layout from parent
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+}
+
+:host-context(body.light-theme) app-state-legend-tooltip {
+  --text-color: rgba(15, 23, 42, 0.9);
+  --text-secondary: rgba(51, 65, 85, 0.7);
+  --bg-tooltip: rgba(248, 250, 252, 0.98);
+  --border-color-light: rgba(15, 23, 42, 0.15);
 }
