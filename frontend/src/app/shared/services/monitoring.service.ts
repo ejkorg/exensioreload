@@ -229,7 +229,7 @@ export class MonitoringService {
 
     const processed = completed + failed;
     const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
-    const successRate = processed > 0 ? Math.round((completed / processed) * 100) : 100;
+    const successRate = processed > 0 ? Math.round((completed / processed) * 100) : 0;
 
     // Calculate throughput and ETA
     const currentStats = this.stats();

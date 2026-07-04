@@ -120,13 +120,22 @@ import { GlassIconComponent } from './glass-icon.component';
             <app-glass-icon name="dashboard" [size]="16" color="muted"></app-glass-icon>
             {{ stats.throughput }} files/min
           </span>
-          <span class="detail-item" [class.success]="stats.successRate >= 95" [class.warning]="stats.successRate < 95">
+          <span
+            class="detail-item"
+            *ngIf="stats.completed + stats.failed > 0"
+            [class.success]="stats.successRate >= 95"
+            [class.warning]="stats.successRate < 95"
+          >
             <app-glass-icon
               [name]="stats.successRate >= 95 ? 'check_circle' : 'warning'"
               [size]="16"
               [color]="stats.successRate >= 95 ? 'success' : 'warning'"
             ></app-glass-icon>
             {{ stats.successRate }}% success
+          </span>
+          <span class="detail-item" *ngIf="stats.completed + stats.failed === 0" class="muted">
+            <app-glass-icon name="pending_actions" [size]="16" color="muted"></app-glass-icon>
+            No results yet
           </span>
         </div>
       </div>

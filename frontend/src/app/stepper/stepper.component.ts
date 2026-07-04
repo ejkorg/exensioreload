@@ -737,7 +737,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
     const processed = completed + failed;
     const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
-    const successRate = processed > 0 ? Math.round((completed / processed) * 100) : 100;
+    const successRate = processed > 0 ? Math.round((completed / processed) * 100) : 0;
 
     // Calculate throughput and ETA
     const startTime = session?.createdAt ? new Date(session.createdAt) : null;
