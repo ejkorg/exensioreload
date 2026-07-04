@@ -7,9 +7,12 @@ export interface MonitoringStats {
   total: number;
   ready: number;
   enqueued: number;
-  processing: number;
+  enriching: number;
+  exensioLoading: number;
+  processing: number; // deprecated: kept for backward compatibility, equals enriching + exensioLoading
   completed: number;
   failed: number;
+  cancelled: number;
   progress: number; // 0-100
   throughput: number; // files per minute
   eta: string;

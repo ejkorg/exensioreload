@@ -10,7 +10,7 @@ import { GlassIconComponent } from './glass-icon.component';
   imports: [CommonModule, GlassIconComponent],
   template: `
     <div class="monitoring-stats">
-      <!-- Overview Cards -->
+      <!-- Overview Cards - 7 State Pipeline -->
       <div class="stats-grid">
         <div class="stat-card glass-panel">
           <div class="stat-icon total">
@@ -38,17 +38,27 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.enqueued }}</div>
-            <div class="stat-label">In Queue (pending CP)</div>
+            <div class="stat-label">Queued for CP</div>
           </div>
         </div>
 
         <div class="stat-card glass-panel">
-          <div class="stat-icon processing">
+          <div class="stat-icon enriching">
             <app-glass-icon name="refresh" [size]="24" color="primary"></app-glass-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ stats.processing }}</div>
-            <div class="stat-label">Enrichment / Translation</div>
+            <div class="stat-value">{{ stats.enriching }}</div>
+            <div class="stat-label">In Enrichment</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel">
+          <div class="stat-icon exensio">
+            <app-glass-icon name="cloud_upload" [size]="24" color="primary"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.exensioLoading }}</div>
+            <div class="stat-label">Exensio Loading</div>
           </div>
         </div>
 
@@ -62,13 +72,23 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
         </div>
 
-        <div class="stat-card glass-panel" *ngIf="stats.failed > 0">
+        <div class="stat-card glass-panel" [class.has-errors]="stats.failed > 0">
           <div class="stat-icon failed">
             <app-glass-icon name="error" [size]="24" color="error"></app-glass-icon>
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.failed }}</div>
             <div class="stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel" *ngIf="stats.cancelled > 0">
+          <div class="stat-icon cancelled">
+            <app-glass-icon name="cancel" [size]="24" color="warning"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.cancelled }}</div>
+            <div class="stat-label">Cancelled</div>
           </div>
         </div>
       </div>
@@ -139,12 +159,19 @@ import { GlassIconComponent } from './glass-icon.component';
             </div>
             <div class="bar-value">{{ stats.completed }}</div>
           </div>
-          <div class="distribution-bar" *ngIf="stats.processing > 0">
-            <div class="bar-label">Enrichment / Translation</div>
+          <div class="distribution-bar" *ngIf="stats.enriching > 0">
+            <div class="bar-label">In Enrichment</div>
             <div class="bar-track">
-              <div class="bar-fill processing" [style.width.%]="getPercentage(stats.processing)"></div>
+              <div class="bar-fill enriching" [style.width.%]="getPercentage(stats.enriching)"></div>
             </div>
-            <div class="bar-value">{{ stats.processing }}</div>
+            <div class="bar-value">{{ stats.enriching }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.exensioLoading > 0">
+            <div class="bar-label">Exensio Loading</div>
+            <div class="bar-track">
+              <div class="bar-fill exensio" [style.width.%]="getPercentage(stats.exensioLoading)"></div>
+            </div>
+            <div class="bar-value">{{ stats.exensioLoading }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.ready > 0">
             <div class="bar-label">Staged</div>
@@ -154,7 +181,7 @@ import { GlassIconComponent } from './glass-icon.component';
             <div class="bar-value">{{ stats.ready }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.enqueued > 0">
-            <div class="bar-label">In Queue (pending CP)</div>
+            <div class="bar-label">Queued for CP</div>
             <div class="bar-track">
               <div class="bar-fill queued" [style.width.%]="getPercentage(stats.enqueued)"></div>
             </div>
@@ -166,6 +193,13 @@ import { GlassIconComponent } from './glass-icon.component';
               <div class="bar-fill failed" [style.width.%]="getPercentage(stats.failed)"></div>
             </div>
             <div class="bar-value">{{ stats.failed }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.cancelled > 0">
+            <div class="bar-label">Cancelled</div>
+            <div class="bar-track">
+              <div class="bar-fill cancelled" [style.width.%]="getPercentage(stats.cancelled)"></div>
+            </div>
+            <div class="bar-value">{{ stats.cancelled }}</div>
           </div>
         </div>
       </div>
@@ -216,14 +250,20 @@ import { GlassIconComponent } from './glass-icon.component';
       .stat-icon.queued {
         background: rgba(245, 158, 11, 0.15);
       }
-      .stat-icon.processing {
+      .stat-icon.enriching {
         background: rgba(129, 140, 248, 0.15);
+      }
+      .stat-icon.exensio {
+        background: rgba(99, 102, 241, 0.15);
       }
       .stat-icon.completed {
         background: rgba(16, 185, 129, 0.15);
       }
       .stat-icon.failed {
         background: rgba(239, 68, 68, 0.15);
+      }
+      .stat-icon.cancelled {
+        background: rgba(245, 158, 11, 0.15);
       }
 
       .stat-content {
@@ -428,7 +468,8 @@ import { GlassIconComponent } from './glass-icon.component';
       }
 
       @keyframes pulse-integration {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
         }
         50% {
@@ -437,7 +478,8 @@ import { GlassIconComponent } from './glass-icon.component';
       }
 
       @keyframes pulse-icon {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
           transform: scale(1);
         }
@@ -505,8 +547,11 @@ import { GlassIconComponent } from './glass-icon.component';
       .bar-fill.completed {
         background: #10b981;
       }
-      .bar-fill.processing {
+      .bar-fill.enriching {
         background: var(--accent-color);
+      }
+      .bar-fill.exensio {
+        background: #6366f1;
       }
       .bar-fill.staged {
         background: #818cf8;
@@ -516,6 +561,9 @@ import { GlassIconComponent } from './glass-icon.component';
       }
       .bar-fill.failed {
         background: #ef4444;
+      }
+      .bar-fill.cancelled {
+        background: #f59e0b;
       }
 
       .bar-value {

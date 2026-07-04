@@ -759,9 +759,12 @@ export class StepperComponent implements OnInit, OnDestroy {
       total,
       ready,
       enqueued: inQueueCount,
+      enriching: enrichmentCount,
+      exensioLoading: exensioLoadingCount,
       processing,
       completed,
       failed,
+      cancelled: 0, // Note: cancelled records are computed separately; would need additional tracking
       progress,
       throughput,
       eta,
