@@ -34,6 +34,9 @@ public class StateAccountingReport {
         private Map<String, Long> states;
         private long sumOfStates;
         private List<Discrepancy> discrepancies;
+        // Explicit fields for timeout states (in addition to generic states map)
+        private long enrichmentTimeout;
+        private long exensioTimeout;
 
         public DatabaseStateCounts() {}
 
@@ -42,26 +45,42 @@ public class StateAccountingReport {
             this.states = states;
             this.sumOfStates = sumOfStates;
             this.discrepancies = discrepancies;
+            // Extract timeout values from states map
+            this.enrichmentTimeout = states != null ? states.getOrDefault("ENRICHMENT_TIMEOUT", 0L) : 0L;
+            this.exensioTimeout = states != null ? states.getOrDefault("EXENSIO_TIMEOUT", 0L) : 0L;
         }
 
         public long getTotalCount() { return totalCount; }
         public void setTotalCount(long totalCount) { this.totalCount = totalCount; }
 
         public Map<String, Long> getStates() { return states; }
-        public void setStates(Map<String, Long> states) { this.states = states; }
+        public void setStates(Map<String, Long> states) { 
+            this.states = states;
+            // Update timeout fields when states map is set
+            this.enrichmentTimeout = states != null ? states.getOrDefault("ENRICHMENT_TIMEOUT", 0L) : 0L;
+            this.exensioTimeout = states != null ? states.getOrDefault("EXENSIO_TIMEOUT", 0L) : 0L;
+        }
 
         public long getSumOfStates() { return sumOfStates; }
         public void setSumOfStates(long sumOfStates) { this.sumOfStates = sumOfStates; }
 
         public List<Discrepancy> getDiscrepancies() { return discrepancies; }
         public void setDiscrepancies(List<Discrepancy> discrepancies) { this.discrepancies = discrepancies; }
+
+        public long getEnrichmentTimeout() { return enrichmentTimeout; }
+        public void setEnrichmentTimeout(long enrichmentTimeout) { this.enrichmentTimeout = enrichmentTimeout; }
+
+        public long getExensioTimeout() { return exensioTimeout; }
+        public void setExensioTimeout(long exensioTimeout) { this.exensioTimeout = exensioTimeout; }
     }
 
     public static class DashboardCardCounts {
         private long staged;
         private long queued;
         private long enriching;
+        private long enrichmentTimeout;
         private long exensioLoading;
+        private long exensioTimeout;
         private long failed;
         private long completed;
         private long cancelled;
@@ -69,12 +88,15 @@ public class StateAccountingReport {
 
         public DashboardCardCounts() {}
 
-        public DashboardCardCounts(long staged, long queued, long enriching, long exensioLoading,
+        public DashboardCardCounts(long staged, long queued, long enriching, long enrichmentTimeout, 
+                                    long exensioLoading, long exensioTimeout,
                                     long failed, long completed, long cancelled, long sum) {
             this.staged = staged;
             this.queued = queued;
             this.enriching = enriching;
+            this.enrichmentTimeout = enrichmentTimeout;
             this.exensioLoading = exensioLoading;
+            this.exensioTimeout = exensioTimeout;
             this.failed = failed;
             this.completed = completed;
             this.cancelled = cancelled;
@@ -90,8 +112,14 @@ public class StateAccountingReport {
         public long getEnriching() { return enriching; }
         public void setEnriching(long enriching) { this.enriching = enriching; }
 
+        public long getEnrichmentTimeout() { return enrichmentTimeout; }
+        public void setEnrichmentTimeout(long enrichmentTimeout) { this.enrichmentTimeout = enrichmentTimeout; }
+
         public long getExensioLoading() { return exensioLoading; }
         public void setExensioLoading(long exensioLoading) { this.exensioLoading = exensioLoading; }
+
+        public long getExensioTimeout() { return exensioTimeout; }
+        public void setExensioTimeout(long exensioTimeout) { this.exensioTimeout = exensioTimeout; }
 
         public long getFailed() { return failed; }
         public void setFailed(long failed) { this.failed = failed; }

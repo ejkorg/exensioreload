@@ -825,6 +825,89 @@ public class RefDbService {
         }
     }
 
+    /**
+     * Mark record with enrichment timeout.
+     * Called when ES, pp_log, and Exensio direct lookup all return NotFound after timeout.
+     * Transitions the record from ENRICHMENT to ENRICHMENT_TIMEOUT status with diagnostic information.
+     * Emits SSE state change event via StateAggregationBatcher.
+     *
+     * @param record The stage record that timed out
+     * @param diagnosticSummary Detailed diagnostic from all enrichment sources
+     *
+     * Requirements: 1.1, 1.2, 1.3
+     */
+    public void markEnrichmentTimeout(StageRecord record, String diagnosticSummary) {
+        if (record == null) return;
+        
+        String errorMessage = "[Enrichment Timeout] " + diagnosticSummary +
+                " No definitive enrichment result found after " +
+                elasticsearchProperties.getEnrichmentTimeoutMinutes() + " minutes. " +
+                "Needs manual verification or retry.";
+        
+        updateStatus(List.of(record.id()), "ENRICHMENT_TIMEOUT", errorMessage);
+        
+        if (monitorService != null && record.requestId() != null) {
+            Map<String, Object> evt = new HashMap<>();
+            evt.put("id", record.id());
+            evt.put("status", "ENRICHMENT_TIMEOUT");
+            evt.put("msg", "Enrichment timeout - " + truncate(diagnosticSummary, 40));
+            evt.put("errorMessage", errorMessage);
+            evt.put("metadataId", record.metadataId());
+            evt.put("dataId", record.dataId());
+            evt.put("lot", record.lot());
+            evt.put("wafer", record.wafer());
+            evt.put("filename", record.filename());
+            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "ENRICHMENT_TIMEOUT");
+            broadcastStats(record.requestId());
+        }
+        
+        log.info("Marked record {} as ENRICHMENT_TIMEOUT: {}", record.id(), diagnosticSummary);
+    }
+
+    /**
+     * Mark record with Exensio timeout.
+     * Called when Exensio API returns NotFound after configured timeout period.
+     * Transitions the record from EXENSIO_LOADING to EXENSIO_TIMEOUT status.
+     * Emits SSE state change event via StateAggregationBatcher.
+     *
+     * @param record The stage record that timed out
+     * @param reason Description of timeout condition
+     *
+     * Requirements: 2.1, 2.2, 2.3
+     */
+    public void markExensioTimeout(StageRecord record, String reason) {
+        if (record == null) return;
+        
+        String errorMessage = "[Exensio Timeout] " + reason +
+                " Wafer not found after " + exensioProperties.getTimeoutMinutes() + " minutes. " +
+                "May need manual verification or retry.";
+        
+        updateStatus(List.of(record.id()), "EXENSIO_TIMEOUT", errorMessage);
+        
+        if (monitorService != null && record.requestId() != null) {
+            Map<String, Object> evt = new HashMap<>();
+            evt.put("id", record.id());
+            evt.put("status", "EXENSIO_TIMEOUT");
+            evt.put("msg", "Exensio timeout - " + truncate(reason, 40));
+            evt.put("errorMessage", errorMessage);
+            evt.put("metadataId", record.metadataId());
+            evt.put("dataId", record.dataId());
+            evt.put("lot", record.lot());
+            evt.put("wafer", record.wafer());
+            evt.put("filename", record.filename());
+            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            
+            // Record state change to batcher for aggregation event
+            recordStateChangeForBatcher(record.requestId(), "EXENSIO_TIMEOUT");
+            broadcastStats(record.requestId());
+        }
+        
+        log.info("Marked record {} as EXENSIO_TIMEOUT: {}", record.id(), reason);
+    }
+
     private void applyExensioLoading(long recordId, String outputPath, String outputTarget) {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
@@ -955,7 +1038,9 @@ public class RefDbService {
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
@@ -987,10 +1072,12 @@ public class RefDbService {
                                 rs.getLong(5),      // ready (pending)
                                 rs.getLong(6),      // queued (ENQUEUED)
                                 rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(9),      // failed
-                                rs.getLong(10),     // completed (DONE)
-                                rs.getLong(11),     // cancelled (CANCELLED)
+                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
+                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
+                                rs.getLong(11),     // failed
+                                rs.getLong(12),     // completed (DONE)
+                                rs.getLong(13),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1010,7 +1097,9 @@ public class RefDbService {
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
@@ -1037,10 +1126,12 @@ public class RefDbService {
                                 rs.getLong(5),      // ready (pending)
                                 rs.getLong(6),      // queued (ENQUEUED)
                                 rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(9),      // failed
-                                rs.getLong(10),     // completed (DONE)
-                                rs.getLong(11),     // cancelled (CANCELLED)
+                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
+                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
+                                rs.getLong(11),     // failed
+                                rs.getLong(12),     // completed (DONE)
+                                rs.getLong(13),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1066,7 +1157,9 @@ public class RefDbService {
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
@@ -1094,10 +1187,12 @@ public class RefDbService {
                                 rs.getLong(5),      // ready (pending)
                                 rs.getLong(6),      // queued (ENQUEUED)
                                 rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(9),      // failed
-                                rs.getLong(10),     // completed (DONE)
-                                rs.getLong(11),     // cancelled (CANCELLED)
+                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
+                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
+                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
+                                rs.getLong(11),     // failed
+                                rs.getLong(12),     // completed (DONE)
+                                rs.getLong(13),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }

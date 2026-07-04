@@ -731,9 +731,11 @@ export class StepperComponent implements OnInit, OnDestroy {
         ? waferRows.filter((w: WaferMonitoringRow) => w.status === 'ENQUEUED').length
         : session?.filesEnqueued || 0;
     const enrichmentCount = hasFileBreakdown ? files.filter((f) => f.status === 'ENRICHMENT').length : 0;
+    const enrichmentTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'ENRICHMENT_TIMEOUT').length : 0;
     const exensioLoadingCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_LOADING').length : 0;
+    const exensioTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_TIMEOUT').length : 0;
 
-    const processing = enrichmentCount + exensioLoadingCount;
+    const processing = enrichmentCount + enrichmentTimeoutCount + exensioLoadingCount + exensioTimeoutCount;
 
     const processed = completed + failed;
     const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
@@ -760,7 +762,9 @@ export class StepperComponent implements OnInit, OnDestroy {
       ready,
       enqueued: inQueueCount,
       enriching: enrichmentCount,
+      enrichmentTimeout: enrichmentTimeoutCount,
       exensioLoading: exensioLoadingCount,
+      exensioTimeout: exensioTimeoutCount,
       processing,
       completed,
       failed,

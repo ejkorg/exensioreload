@@ -23,7 +23,9 @@ describe('StateLegendService', () => {
       'Staged',
       'Queued for CP',
       'In Enrichment',
+      'Enrichment Timeout',
       'Exensio Loading',
+      'Exensio Timeout',
       'Completed',
       'Failed',
       'Cancelled',
@@ -63,7 +65,14 @@ describe('StateLegendService', () => {
   });
 
   it('Property 2b: non-terminal states have at least one next state', () => {
-    const nonTerminalStates = ['Staged', 'Queued for CP', 'In Enrichment', 'Exensio Loading'];
+    const nonTerminalStates = [
+      'Staged',
+      'Queued for CP',
+      'In Enrichment',
+      'Enrichment Timeout',
+      'Exensio Loading',
+      'Exensio Timeout',
+    ];
 
     nonTerminalStates.forEach((label) => {
       const definition = service.getStateByLabel(label);
@@ -102,7 +111,9 @@ describe('StateLegendService', () => {
       'Staged',
       'Queued for CP',
       'In Enrichment',
+      'Enrichment Timeout',
       'Exensio Loading',
+      'Exensio Timeout',
       'Completed',
       'Failed',
       'Cancelled',
@@ -312,5 +323,126 @@ describe('StateLegendService', () => {
 
       expect(isTerminal).toBe(isEmpty);
     });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Tests for Timeout State Definitions (Requirement 11)
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Validates: Requirements 6.1, 6.2
+   */
+  it('Requirement 6.1: Enrichment Timeout state is defined with description', () => {
+    const state = service.getStateByLabel('Enrichment Timeout');
+    expect(state).toBeDefined();
+    expect(state?.statusValue).toBe('ENRICHMENT_TIMEOUT');
+    expect(state?.description).toContain('No enrichment confirmation');
+    expect(state?.description).toContain('ES or pp_log after timeout');
+  });
+
+  /**
+   * Validates: Requirements 6.2
+   */
+  it('Requirement 6.2: Exensio Timeout state is defined with description', () => {
+    const state = service.getStateByLabel('Exensio Timeout');
+    expect(state).toBeDefined();
+    expect(state?.statusValue).toBe('EXENSIO_TIMEOUT');
+    expect(state?.description).toContain('Wafer not found in Exensio after timeout');
+  });
+
+  /**
+   * Validates: Requirements 6.3
+   */
+  it('Requirement 6.3: Enrichment Timeout legend indicates uncertainty vs failure', () => {
+    const state = service.getStateByLabel('Enrichment Timeout');
+    expect(state?.tooltip).toContain('NOT a failure');
+    expect(state?.tooltip).toContain('enrichment status is uncertain');
+    expect(state?.tooltip).toContain('manual verification');
+  });
+
+  /**
+   * Validates: Requirements 6.3
+   */
+  it('Requirement 6.3: Exensio Timeout legend indicates uncertainty vs failure', () => {
+    const state = service.getStateByLabel('Exensio Timeout');
+    expect(state?.tooltip).toContain('NOT a failure');
+    expect(state?.tooltip).toContain('wafer existence is uncertain');
+    expect(state?.tooltip).toContain('manual verification');
+  });
+
+  /**
+   * Validates: Requirements 6.4
+   */
+  it('Requirement 6.4: Enrichment Timeout defines possible transitions', () => {
+    const state = service.getStateByLabel('Enrichment Timeout');
+    expect(state?.nextStates).toContain('Completed');
+    expect(state?.nextStates).toContain('Failed');
+    expect(state?.nextStates).toContain('In Enrichment');
+  });
+
+  /**
+   * Validates: Requirements 6.4
+   */
+  it('Requirement 6.4: Exensio Timeout defines possible transitions', () => {
+    const state = service.getStateByLabel('Exensio Timeout');
+    expect(state?.nextStates).toContain('Completed');
+    expect(state?.nextStates).toContain('Failed');
+    expect(state?.nextStates).toContain('Exensio Loading');
+  });
+
+  /**
+   * Validates: Requirements 6.1, 6.2
+   */
+  it('Requirement 6.1 & 6.2: Timeout states use warning color to indicate uncertainty', () => {
+    const enrichmentTimeout = service.getStateByLabel('Enrichment Timeout');
+    const exensioTimeout = service.getStateByLabel('Exensio Timeout');
+
+    expect(enrichmentTimeout?.color).toBe('warning');
+    expect(exensioTimeout?.color).toBe('warning');
+  });
+
+  /**
+   * Validates: Requirements 6.1, 6.2
+   */
+  it('Requirement 6.1 & 6.2: Timeout states use schedule icon', () => {
+    const enrichmentTimeout = service.getStateByLabel('Enrichment Timeout');
+    const exensioTimeout = service.getStateByLabel('Exensio Timeout');
+
+    expect(enrichmentTimeout?.icon).toBe('schedule');
+    expect(exensioTimeout?.icon).toBe('schedule');
+  });
+
+  /**
+   * Validates: Requirements 6.5
+   */
+  it('Requirement 6.5: Enrichment Timeout notes explain need for manual verification', () => {
+    const state = service.getStateByLabel('Enrichment Timeout');
+    expect(state?.tooltip).toContain('Operator should verify');
+    expect(state?.tooltip).toContain('May be automatically retried');
+    expect(state?.tooltip).toContain('Records requiring manual verification');
+  });
+
+  /**
+   * Validates: Requirements 6.5
+   */
+  it('Requirement 6.5: Exensio Timeout notes explain wafer may appear later', () => {
+    const state = service.getStateByLabel('Exensio Timeout');
+    expect(state?.tooltip).toContain('May appear later');
+    expect(state?.tooltip).toContain('delayed loading');
+    expect(state?.tooltip).toContain('Needs manual verification or retry');
+  });
+
+  /**
+   * Validates: Requirements 6.1, 6.2, 6.3, 6.4
+   * All timeout states reachable from their upstream states
+   */
+  it('Requirement 6.1, 6.2, 6.3, 6.4: Timeout states are valid transitions from their upstream states', () => {
+    // Enrichment Timeout should be reachable from In Enrichment
+    const inEnrichment = service.getStateByLabel('In Enrichment');
+    expect(inEnrichment?.nextStates).toContain('Enrichment Timeout');
+
+    // Exensio Timeout should be reachable from Exensio Loading
+    const exensioLoading = service.getStateByLabel('Exensio Loading');
+    expect(exensioLoading?.nextStates).toContain('Exensio Timeout');
   });
 });

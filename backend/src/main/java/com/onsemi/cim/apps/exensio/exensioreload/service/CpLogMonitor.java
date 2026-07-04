@@ -263,12 +263,20 @@ public class CpLogMonitor {
         // --- Step 3: Both ES and pp_log returned NotFound ---
         if (isTimedOut(record)) {
             timeoutCount.incrementAndGet();
-            String timeoutMsg = "CP enrichment timeout — no log found in ES or pp_log after "
-                    + props.getEnrichmentTimeoutMinutes() + " minutes";
-            log.info("{} for record id={} dataId={}, trying Exensio direct lookup", timeoutMsg, record.id(), record.dataId());
+            
+            // Build diagnostic summary of what was checked
+            String diagnosticSummary = buildTimeoutDiagnosticSummary(record);
+            
+            log.info("CP enrichment timeout for record id={} dataId={}: {}", record.id(), record.dataId(), diagnosticSummary);
 
-            // Try Exensio direct lookup before giving up
-            tryExensioDirectLookup(record, requestId, stageRecordId, timeoutMsg);
+            // Mark as ENRICHMENT_TIMEOUT (uncertain enrichment status)
+            // This is honest accounting: we don't know if enrichment succeeded, failed, or needs retry
+            refDbService.markEnrichmentTimeout(record, diagnosticSummary);
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", 
+                    "CP enrichment timeout — no log found in ES or pp_log after " 
+                    + props.getEnrichmentTimeoutMinutes() + " minutes");
+            integrationStatusService.updateElasticsearch(requestId, "timeout", diagnosticSummary);
+            emitRowUpdateSse(record, requestId);
         } else {
             log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
                     record.id(), record.dataId());
@@ -526,6 +534,25 @@ public class CpLogMonitor {
         }
 
         stageMonitorService.sendEvent(requestId, "ROW_UPDATE", evt);
+    }
+
+    /**
+     * Builds a diagnostic summary of what was checked during enrichment timeout detection.
+     * Captures which data sources were queried and their responses.
+     * Requirements: 10.1, 10.2
+     */
+    private String buildTimeoutDiagnosticSummary(StageRecord record) {
+        Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant esLookbackTime = lookbackTime.minusSeconds(120);
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("ES: idData=").append(record.dataId()).append(" since=").append(esLookbackTime);
+        sb.append(" result=NotFound; ");
+        sb.append("pp_log: lot=").append(record.lot()).append(" idFile=").append(record.metadataId());
+        sb.append(" result=NotFound; ");
+        sb.append("Exensio direct lookup: not attempted (will retry via background process)");
+        
+        return sb.toString();
     }
 
     /**

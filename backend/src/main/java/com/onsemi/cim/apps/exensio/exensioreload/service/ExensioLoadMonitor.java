@@ -364,10 +364,15 @@ public class ExensioLoadMonitor {
                     if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
                         StageRecord record = findRecord(apiRecords, update.recordId());
                         if (record != null && isTimedOut(record)) {
+                            // Record timed out with NOT_FOUND - mark as EXENSIO_TIMEOUT
+                            // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
-                                    update.recordId(), BatchResult.UpdateType.FAILED, null, null,
+                                    update.recordId(),
+                                    BatchResult.UpdateType.EXENSIO_TIMEOUT,
+                                    null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes", null, null, null, traceId));
+                                            + props.getTimeoutMinutes() + " minutes. May need retry.",
+                                    null, null, null, traceId));
                         } else {
                             updates.add(update);
                         }
@@ -462,6 +467,27 @@ public class ExensioLoadMonitor {
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", msg);
                     integrationStatusService.updateExensio(requestId, "not_found", msg);
+                }
+                case EXENSIO_TIMEOUT -> {
+                    // Record timed out with no definitive result
+                    // Requirements: 2.1, 2.2, 2.3
+                    String errorMsg = processedUpdate.errorMessage() != null ? processedUpdate.errorMessage() 
+                            : "Exensio load timeout";
+                    String traceMsg = String.format("%s (traceId=%s)", errorMsg,
+                            update.traceId() != null ? update.traceId() : "N/A");
+                    log.info("Record {} EXENSIO_TIMEOUT - {}", record.id(), traceMsg);
+                    // Update per-record status
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "timeout", traceMsg);
+                    integrationStatusService.updateExensio(requestId, "timeout", traceMsg);
+                    // Mark record with EXENSIO_TIMEOUT status and diagnostic message
+                    refDbService.markExensioTimeout(record, errorMsg);
+                }
+                case ENRICHMENT_TIMEOUT -> {
+                    // ENRICHMENT_TIMEOUT should only be created by CpLogMonitor, not ExensioLoadMonitor
+                    // This is a defensive case to handle if it somehow appears in results
+                    log.warn("Record {} received unexpected ENRICHMENT_TIMEOUT from Exensio batch - treating as error", record.id());
+                    integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", "Unexpected enrichment timeout state");
+                    integrationStatusService.updateExensio(requestId, "error", "Unexpected enrichment timeout state");
                 }
                 case FAILED -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed";
@@ -578,10 +604,15 @@ public class ExensioLoadMonitor {
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
                         if (isTimedOut(record)) {
+                            // Record timed out with NOT_FOUND - mark as EXENSIO_TIMEOUT
+                            // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
-                                    record.id(), BatchResult.UpdateType.FAILED, null, null,
+                                    record.id(),
+                                    BatchResult.UpdateType.EXENSIO_TIMEOUT,
+                                    null, null,
                                     "Exensio load timeout — wafer not found after "
-                                            + props.getTimeoutMinutes() + " minutes", null, null, null, traceId));
+                                            + props.getTimeoutMinutes() + " minutes. May need retry.",
+                                    null, null, null, traceId));
                         } else {
                             // Still within timeout — skip (retry next cycle)
                             updates.add(new BatchResult.RecordUpdate(
@@ -673,6 +704,7 @@ public class ExensioLoadMonitor {
 
     /**
      * Build a BatchResult from a list of updates, computing counts and elapsed time.
+     * Note: ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT are counted as failed for backlog metrics.
      */
     private BatchResult buildBatchResult(List<BatchResult.RecordUpdate> updates, Instant start) {
         int done = 0, failed = 0, notFound = 0;
@@ -680,6 +712,8 @@ public class ExensioLoadMonitor {
             switch (u.type()) {
                 case DONE -> done++;
                 case FAILED -> failed++;
+                case EXENSIO_TIMEOUT -> failed++;  // Timeout is treated as failed for backlog
+                case ENRICHMENT_TIMEOUT -> failed++;  // Timeout is treated as failed for backlog
                 case NOT_FOUND -> notFound++;
                 default -> { /* ERROR — no status change */ }
             }
@@ -724,7 +758,17 @@ public class ExensioLoadMonitor {
             return update;
         }
 
-        // For NOT_FOUND, ERROR, and FAILED (we treat all non-DONE as failure for counting)
+        // For NOT_FOUND, ERROR, FAILED, and timeout states (we treat all non-DONE as failure for counting)
+        // Note: ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT are created by ExensioLoadMonitor with state updates,
+        // so they don't need DLQ processing here - they're handled as expected timeout conditions.
+        // However, we still increment failure count for other non-DONE types.
+        if (update.type() == BatchResult.UpdateType.ENRICHMENT_TIMEOUT || 
+            update.type() == BatchResult.UpdateType.EXENSIO_TIMEOUT) {
+            // Timeout states don't accumulate as "failures" for DLQ purposes - they're expected conditions
+            // that should be handled by RefDbService.markExensioTimeout / markEnrichmentTimeout
+            return update;
+        }
+
         AtomicInteger failureCount = failureCounts.computeIfAbsent(recordId, k -> new AtomicInteger(0));
         int currentCount = failureCount.incrementAndGet();
 

@@ -54,15 +54,42 @@ Example transition: ENQUEUED → ENRICHMENT → EXENSIO_LOADING → DONE`,
         statusValue: 'ENRICHMENT',
         color: 'primary',
         icon: 'auto_awesome',
-        nextStates: ['Exensio Loading', 'Failed'],
+        nextStates: ['Exensio Loading', 'Enrichment Timeout', 'Failed'],
         isTerminal: false,
         tooltip: `In Enrichment (ENRICHMENT)
 Currently being enriched and translated by Coverage Point.
-Stuck records: If enrichment exceeds timeout (5 min), marked for manual review.
+Stuck records: If enrichment exceeds timeout (15 min), marked for manual review.
 Example transitions:
   → EXENSIO_LOADING (if Exensio verification enabled)
+  → ENRICHMENT_TIMEOUT (if enrichment times out with no result)
   → DONE (enrichment successful)
   → FAILED (enrichment failed)`,
+      },
+    ],
+    [
+      'Enrichment Timeout',
+      {
+        label: 'Enrichment Timeout',
+        description: 'No enrichment confirmation from ES or pp_log after timeout',
+        statusValue: 'ENRICHMENT_TIMEOUT',
+        color: 'warning',
+        icon: 'schedule',
+        nextStates: ['Completed', 'Failed', 'In Enrichment'],
+        isTerminal: false,
+        tooltip: `Enrichment Timeout (ENRICHMENT_TIMEOUT)
+No enrichment confirmation from Elasticsearch or pp_log after timeout (15 min default).
+Exensio direct lookup also returned NotFound.
+This is NOT a failure — enrichment status is uncertain.
+
+Possible actions:
+  → Completed (if verified enrichment occurred)
+  → Failed (if confirmed no enrichment available)
+  → In Enrichment (if manual retry is triggered)
+
+Notes:
+  • Operator should verify if enrichment actually occurred
+  • May be automatically retried after cooldown period
+  • Records requiring manual verification or retry`,
       },
     ],
     [
@@ -73,12 +100,41 @@ Example transitions:
         statusValue: 'EXENSIO_LOADING',
         color: 'info',
         icon: 'cloud_download',
-        nextStates: ['Completed', 'Failed'],
+        nextStates: ['Completed', 'Exensio Timeout', 'Failed'],
         isTerminal: false,
         tooltip: `Exensio Loading (EXENSIO_LOADING)
 Record is undergoing Exensio verification and enrichment.
 Only appears if Exensio integration is enabled.
-Example transition: EXENSIO_LOADING → DONE → Completed`,
+Example transitions:
+  → DONE (wafer found and verified)
+  → EXENSIO_TIMEOUT (wafer not found after timeout)
+  → FAILED (Exensio verification failed)`,
+      },
+    ],
+    [
+      'Exensio Timeout',
+      {
+        label: 'Exensio Timeout',
+        description: 'Wafer not found in Exensio after timeout',
+        statusValue: 'EXENSIO_TIMEOUT',
+        color: 'warning',
+        icon: 'schedule',
+        nextStates: ['Completed', 'Failed', 'Exensio Loading'],
+        isTerminal: false,
+        tooltip: `Exensio Timeout (EXENSIO_TIMEOUT)
+Wafer not found in Exensio after timeout (60 min default).
+May appear later or may genuinely not exist.
+This is NOT a failure — wafer existence is uncertain.
+
+Possible actions:
+  → Completed (if wafer verified to exist)
+  → Failed (if confirmed wafer doesn't exist)
+  → Exensio Loading (if manual retry is triggered)
+
+Notes:
+  • Wafer may appear in Exensio later (delayed loading)
+  • Wafer may not exist in Exensio at all
+  • Needs manual verification or retry`,
       },
     ],
     [

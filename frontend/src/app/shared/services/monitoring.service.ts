@@ -8,8 +8,10 @@ export interface MonitoringStats {
   ready: number;
   enqueued: number;
   enriching: number;
+  enrichmentTimeout: number;
   exensioLoading: number;
-  processing: number; // deprecated: kept for backward compatibility, equals enriching + exensioLoading
+  exensioTimeout: number;
+  processing: number; // deprecated: kept for backward compatibility, equals enriching + enrichmentTimeout + exensioLoading + exensioTimeout
   completed: number;
   failed: number;
   cancelled: number;
@@ -28,7 +30,15 @@ export interface MonitoringFile {
   filename: string;
   lot: string;
   wafer: string;
-  status: 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR';
+  status:
+    | 'READY'
+    | 'ENQUEUED'
+    | 'ENRICHMENT'
+    | 'ENRICHMENT_TIMEOUT'
+    | 'EXENSIO_LOADING'
+    | 'EXENSIO_TIMEOUT'
+    | 'COMPLETED'
+    | 'ERROR';
   message: string;
   errorMessage?: string;
   startTime?: Date;
@@ -70,7 +80,9 @@ export class MonitoringService {
     ready: 0,
     enqueued: 0,
     enriching: 0,
+    enrichmentTimeout: 0,
     exensioLoading: 0,
+    exensioTimeout: 0,
     processing: 0,
     completed: 0,
     failed: 0,
@@ -221,8 +233,10 @@ export class MonitoringService {
     const ready = data.ready || 0;
     const enqueued = data.enqueued || 0;
     const enriching = data.enriching || 0;
+    const enrichmentTimeout = data.enrichmentTimeout || 0;
     const exensioLoading = data.exensioLoading || 0;
-    const processing = enriching + exensioLoading;
+    const exensioTimeout = data.exensioTimeout || 0;
+    const processing = enriching + enrichmentTimeout + exensioLoading + exensioTimeout;
     const completed = data.completed || 0;
     const failed = data.failed || 0;
     const cancelled = data.cancelled || 0;
@@ -253,7 +267,9 @@ export class MonitoringService {
       ready,
       enqueued,
       enriching,
+      enrichmentTimeout,
       exensioLoading,
+      exensioTimeout,
       processing,
       completed,
       failed,
@@ -374,7 +390,9 @@ export class MonitoringService {
       ready: 0,
       enqueued: 0,
       enriching: 0,
+      enrichmentTimeout: 0,
       exensioLoading: 0,
+      exensioTimeout: 0,
       processing: 0,
       completed: 0,
       failed: 0,
@@ -444,8 +462,12 @@ export class MonitoringService {
         return `In Queue (pending CP): ${file.filename}`;
       case 'ENRICHMENT':
         return `Enrichment / Translation: ${file.filename}`;
+      case 'ENRICHMENT_TIMEOUT':
+        return `Enrichment Timeout: ${file.filename}`;
       case 'EXENSIO_LOADING':
         return `Exensio Loading: ${file.filename}`;
+      case 'EXENSIO_TIMEOUT':
+        return `Exensio Timeout: ${file.filename}`;
       case 'COMPLETED':
         return `Completed: ${file.filename}`;
       case 'ERROR':

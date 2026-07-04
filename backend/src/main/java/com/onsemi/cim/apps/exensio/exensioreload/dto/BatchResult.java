@@ -56,7 +56,17 @@ public record BatchResult(
         /**
          * Record encountered an error during processing.
          */
-        ERROR
+        ERROR,
+        /**
+         * Enrichment timeout - uncertainty about enrichment status after timeout.
+         * Requirements: 2.1
+         */
+        ENRICHMENT_TIMEOUT,
+        /**
+         * Exensio timeout - wafer not found in Exensio after timeout.
+         * Requirements: 2.1
+         */
+        EXENSIO_TIMEOUT
     }
 
     /**

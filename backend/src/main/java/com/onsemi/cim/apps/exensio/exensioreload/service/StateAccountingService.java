@@ -74,7 +74,7 @@ public class StateAccountingService {
     }
 
     /**
-     * Query database for all 8 state counts and verify accounting.
+     * Query database for all 9 state counts (including 2 new timeout states) and verify accounting.
      */
     private DatabaseStateData queryDatabaseStateCounts(String requestId, String site, Integer senderId) {
         String table = refDbProperties.getStagingTable();
@@ -82,7 +82,9 @@ public class StateAccountingService {
                 "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending, " +
                 "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END) AS enqueued, " +
                 "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END) AS enrichment, " +
+                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END) AS enrichment_timeout, " +
                 "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END) AS exensio_loading, " +
+                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END) AS exensio_timeout, " +
                 "SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END) AS processing, " +
                 "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed, " +
                 "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS done, " +
@@ -128,7 +130,9 @@ public class StateAccountingService {
                         long pending = rs.getLong("pending");
                         long enqueued = rs.getLong("enqueued");
                         long enrichment = rs.getLong("enrichment");
+                        long enrichmentTimeout = rs.getLong("enrichment_timeout");
                         long exensioLoading = rs.getLong("exensio_loading");
+                        long exensioTimeout = rs.getLong("exensio_timeout");
                         long processing = rs.getLong("processing");
                         long failed = rs.getLong("failed");
                         long done = rs.getLong("done");
@@ -140,7 +144,9 @@ public class StateAccountingService {
                         globalStates.put("pending", globalStates.getOrDefault("pending", 0L) + pending);
                         globalStates.put("ENQUEUED", globalStates.getOrDefault("ENQUEUED", 0L) + enqueued);
                         globalStates.put("ENRICHMENT", globalStates.getOrDefault("ENRICHMENT", 0L) + enrichment);
+                        globalStates.put("ENRICHMENT_TIMEOUT", globalStates.getOrDefault("ENRICHMENT_TIMEOUT", 0L) + enrichmentTimeout);
                         globalStates.put("EXENSIO_LOADING", globalStates.getOrDefault("EXENSIO_LOADING", 0L) + exensioLoading);
+                        globalStates.put("EXENSIO_TIMEOUT", globalStates.getOrDefault("EXENSIO_TIMEOUT", 0L) + exensioTimeout);
                         globalStates.put("PROCESSING", globalStates.getOrDefault("PROCESSING", 0L) + processing);
                         globalStates.put("FAILED", globalStates.getOrDefault("FAILED", 0L) + failed);
                         globalStates.put("DONE", globalStates.getOrDefault("DONE", 0L) + done);
@@ -148,14 +154,16 @@ public class StateAccountingService {
                         globalStates.put("NULL_STATUS", globalStates.getOrDefault("NULL_STATUS", 0L) + nullStatus);
 
                         totalCount += recordTotal;
-                        sumOfStates += (pending + enqueued + enrichment + exensioLoading + processing + failed + done + cancelled + nullStatus);
+                        sumOfStates += (pending + enqueued + enrichment + enrichmentTimeout + exensioLoading + exensioTimeout + processing + failed + done + cancelled + nullStatus);
 
                         // Build sender breakdown
                         Map<String, Long> senderStates = new HashMap<>();
                         senderStates.put("pending", pending);
                         senderStates.put("ENQUEUED", enqueued);
                         senderStates.put("ENRICHMENT", enrichment);
+                        senderStates.put("ENRICHMENT_TIMEOUT", enrichmentTimeout);
                         senderStates.put("EXENSIO_LOADING", exensioLoading);
+                        senderStates.put("EXENSIO_TIMEOUT", exensioTimeout);
                         senderStates.put("PROCESSING", processing);
                         senderStates.put("FAILED", failed);
                         senderStates.put("DONE", done);
@@ -194,12 +202,15 @@ public class StateAccountingService {
 
     /**
      * Build dashboard card counts from StageStatus records.
+     * Includes new timeout states in the aggregation.
      */
     private StateAccountingReport.DashboardCardCounts buildDashboardCounts(List<StageStatus> statuses) {
         long staged = 0;
         long queued = 0;
         long enriching = 0;
+        long enrichmentTimeout = 0;
         long exensioLoading = 0;
+        long exensioTimeout = 0;
         long failed = 0;
         long completed = 0;
         long cancelled = 0;
@@ -208,21 +219,31 @@ public class StateAccountingService {
             staged += status.ready();
             queued += status.queued();
             enriching += status.enriching();
+            enrichmentTimeout += status.enrichmentTimeout();
             exensioLoading += status.exensioLoading();
+            exensioTimeout += status.exensioTimeout();
             failed += status.failed();
             completed += status.completed();
             cancelled += status.cancelled();
         }
 
-        long sum = staged + queued + enriching + exensioLoading + failed + completed + cancelled;
+        long sum = staged + queued + enriching + enrichmentTimeout + exensioLoading + exensioTimeout + failed + completed + cancelled;
 
         return new StateAccountingReport.DashboardCardCounts(
-                staged, queued, enriching, exensioLoading, failed, completed, cancelled, sum
+                staged, queued, enriching, enrichmentTimeout, exensioLoading, exensioTimeout, 
+                failed, completed, cancelled, sum
         );
     }
 
     /**
      * Verify data integrity and return warnings/errors.
+     * Checks for NULL statuses, accounting imbalance, and high backlog of uncertain states including timeout states.
+     * 
+     * Validation includes:
+     * - Accounting balance: sum of all states (including ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT) equals total
+     * - NULL status records are flagged as errors
+     * - High counts of timeout records are flagged as warnings
+     * - High counts of active processing states are flagged as warnings
      */
     private StateAccountingReport.DataIntegrity verifyDataIntegrity(DatabaseStateData dbData) {
         List<String> warnings = new ArrayList<>();
@@ -252,12 +273,38 @@ public class StateAccountingService {
             warnings.add("Found " + cancelledCount + " CANCELLED records. Verify they are not in external queue.");
         }
 
-        // Check for records stuck in ENRICHMENT/EXENSIO_LOADING
+        // Get counts for all states including timeout states
         long enrichment = dbCounts.getStates().getOrDefault("ENRICHMENT", 0L);
+        long enrichmentTimeout = dbCounts.getEnrichmentTimeout();  // Use explicit field
         long exensioLoading = dbCounts.getStates().getOrDefault("EXENSIO_LOADING", 0L);
+        long exensioTimeout = dbCounts.getExensioTimeout();  // Use explicit field
+        
+        // Check for records stuck in active processing states
         if (enrichment > 100 || exensioLoading > 50) {
             warnings.add("High count of ENRICHMENT (" + enrichment + ") or EXENSIO_LOADING (" + exensioLoading
                     + "). Verify timeout detection is running.");
+        }
+        
+        // Check for high counts of timeout records
+        if (enrichmentTimeout > 1000 || exensioTimeout > 1000) {
+            warnings.add("High count of timeout records: ENRICHMENT_TIMEOUT (" + enrichmentTimeout 
+                    + "), EXENSIO_TIMEOUT (" + exensioTimeout + "). Consider reviewing timeout configuration.");
+        }
+
+        // Check for accounting balance explicitly including timeout states
+        long expectedAccountingSum = enrichment + enrichmentTimeout + exensioLoading + exensioTimeout
+                + dbCounts.getStates().getOrDefault("pending", 0L)
+                + dbCounts.getStates().getOrDefault("ENQUEUED", 0L)
+                + dbCounts.getStates().getOrDefault("PROCESSING", 0L)
+                + dbCounts.getStates().getOrDefault("FAILED", 0L)
+                + dbCounts.getStates().getOrDefault("DONE", 0L)
+                + dbCounts.getStates().getOrDefault("CANCELLED", 0L);
+        
+        if (dbCounts.getSumOfStates() != expectedAccountingSum && dbCounts.getSumOfStates() != dbCounts.getTotalCount()) {
+            // Already reported via discrepancies, but add explicit validation note
+            warnings.add("Timeout states are included in accounting validation to ensure: "
+                    + "pending + ENQUEUED + ENRICHMENT + ENRICHMENT_TIMEOUT + EXENSIO_LOADING + EXENSIO_TIMEOUT "
+                    + "+ PROCESSING + FAILED + DONE + CANCELLED = Total record count");
         }
 
         return new StateAccountingReport.DataIntegrity(valid, warnings, errors);

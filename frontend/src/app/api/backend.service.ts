@@ -13,13 +13,29 @@ export interface DashboardMetricTotals {
   enqueued: number;
   queued: number; // NEW: ENQUEUED only (separate from enriching)
   enriching: number; // NEW: ENRICHMENT only (separate from queued)
+  enrichmentTimeout: number; // NEW: ENRICHMENT_TIMEOUT state
   exensioLoading: number; // NEW: EXENSIO_LOADING state
+  exensioTimeout: number; // NEW: EXENSIO_TIMEOUT state
   cancelled: number; // NEW: CANCELLED state
   failed: number;
   completed: number;
   backlog: number;
   activeSenders: number;
   activeUsers?: number;
+}
+
+/**
+ * Represents an SSE state change event for timeout state transitions.
+ * Emitted by backend when a record transitions to ENRICHMENT_TIMEOUT or EXENSIO_TIMEOUT.
+ * Validates: Requirements 7.1, 7.2
+ */
+export interface StateChangeEvent {
+  timestamp: string;
+  requestId: string;
+  beforeState: string; // e.g., "ENRICHMENT" or "EXENSIO_LOADING"
+  afterState: string; // e.g., "ENRICHMENT_TIMEOUT" or "EXENSIO_TIMEOUT"
+  count: number; // Number of records transitioning in this batch
+  recordIds?: string[];
 }
 
 export interface DashboardSenderSnapshot {
@@ -1190,6 +1206,65 @@ export class BackendService {
   }): Observable<CoveragePoint[]> {
     return this.http.get<CoveragePoint[]>(`${this.apiUrl}/stage/records/coverage`, {
       params: this.toParams(params as any),
+    });
+  }
+
+  // ========================================================================
+  // Dashboard State Stream (Real-time Timeout State Updates)
+  // ========================================================================
+
+  /**
+   * Connect to the dashboard state stream for real-time timeout state updates.
+   * Emits StateChangeEvent for ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT transitions.
+   *
+   * Validates: Requirements 7.1, 7.2, 7.3, 7.4
+   * Property 9: Frontend SSE Event Handling
+   *
+   * @returns Observable that emits StateChangeEvent for timeout state transitions
+   */
+  connectDashboardStateStream(): Observable<StateChangeEvent> {
+    return new Observable<StateChangeEvent>((observer) => {
+      const url = `${this.apiUrl}/dashboard/states`;
+
+      try {
+        const eventSource = new EventSource(url);
+
+        eventSource.addEventListener('ENRICHMENT_TIMEOUT', (event: any) => {
+          try {
+            const data: StateChangeEvent = JSON.parse(event.data);
+            observer.next(data);
+          } catch (e) {
+            console.error('Failed to parse ENRICHMENT_TIMEOUT event:', e);
+          }
+        });
+
+        eventSource.addEventListener('EXENSIO_TIMEOUT', (event: any) => {
+          try {
+            const data: StateChangeEvent = JSON.parse(event.data);
+            observer.next(data);
+          } catch (e) {
+            console.error('Failed to parse EXENSIO_TIMEOUT event:', e);
+          }
+        });
+
+        eventSource.addEventListener('error', () => {
+          console.error('Dashboard state stream error');
+          eventSource.close();
+          observer.error(new Error('Dashboard state stream closed'));
+        });
+
+        eventSource.onopen = () => {
+          console.log('Dashboard state stream connected');
+        };
+
+        // Cleanup function
+        return () => {
+          eventSource.close();
+        };
+      } catch (error) {
+        console.error('Failed to connect to dashboard state stream:', error);
+        observer.error(error);
+      }
     });
   }
 }

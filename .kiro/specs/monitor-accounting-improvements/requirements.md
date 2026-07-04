@@ -61,7 +61,7 @@ This feature aims to close accounting gaps and provide complete visibility into 
 
 #### Acceptance Criteria
 
-1. WHEN a record remains in ENRICHMENT status for longer than the enrichment timeout (default 15 minutes), THE System SHALL track it as "stuck"
+1. WHEN a record remains in ENRICHMENT status for longer than the enrichment timeout (default 5 minutes), THE System SHALL track it as "stuck"
 2. WHEN viewing the monitor page, THE Dashboard SHALL display a card or badge showing count of stuck records
 3. WHEN stuck records are automatically resolved (marked DONE with manual-verify), THE stuck count SHALL decrease
 4. WHEN a stuck record is detected, THE System SHALL emit an alert via SSE with details (record_id, lot, duration_in_enrichment)
@@ -147,7 +147,7 @@ This feature aims to close accounting gaps and provide complete visibility into 
 
 ### Configuration Points
 
-- Enrichment timeout: configurable in `CpElasticsearchProperties.enrichmentTimeoutMinutes` (default: 15)
+- Enrichment timeout: configurable in `CpElasticsearchProperties.enrichmentTimeoutMinutes` (default: 5)
 - Exensio enabled: configurable in `ExensioProperties.enabled`
 - SSE update batching: can be controlled in `EventBatcher`
 

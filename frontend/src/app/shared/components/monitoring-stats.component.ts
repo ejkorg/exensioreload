@@ -52,6 +52,16 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
         </div>
 
+        <div class="stat-card glass-panel" *ngIf="stats.enrichmentTimeout > 0">
+          <div class="stat-icon enrichment-timeout">
+            <app-glass-icon name="schedule" [size]="24" color="warning"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.enrichmentTimeout }}</div>
+            <div class="stat-label">Enrichment Timeout</div>
+          </div>
+        </div>
+
         <div class="stat-card glass-panel">
           <div class="stat-icon exensio">
             <app-glass-icon name="cloud_upload" [size]="24" color="primary"></app-glass-icon>
@@ -59,6 +69,16 @@ import { GlassIconComponent } from './glass-icon.component';
           <div class="stat-content">
             <div class="stat-value">{{ stats.exensioLoading }}</div>
             <div class="stat-label">Exensio Loading</div>
+          </div>
+        </div>
+
+        <div class="stat-card glass-panel" *ngIf="stats.exensioTimeout > 0">
+          <div class="stat-icon exensio-timeout">
+            <app-glass-icon name="schedule" [size]="24" color="warning"></app-glass-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.exensioTimeout }}</div>
+            <div class="stat-label">Exensio Timeout</div>
           </div>
         </div>
 
@@ -175,12 +195,26 @@ import { GlassIconComponent } from './glass-icon.component';
             </div>
             <div class="bar-value">{{ stats.enriching }}</div>
           </div>
+          <div class="distribution-bar" *ngIf="stats.enrichmentTimeout > 0">
+            <div class="bar-label">Enrichment Timeout</div>
+            <div class="bar-track">
+              <div class="bar-fill enrichment-timeout" [style.width.%]="getPercentage(stats.enrichmentTimeout)"></div>
+            </div>
+            <div class="bar-value">{{ stats.enrichmentTimeout }}</div>
+          </div>
           <div class="distribution-bar" *ngIf="stats.exensioLoading > 0">
             <div class="bar-label">Exensio Loading</div>
             <div class="bar-track">
               <div class="bar-fill exensio" [style.width.%]="getPercentage(stats.exensioLoading)"></div>
             </div>
             <div class="bar-value">{{ stats.exensioLoading }}</div>
+          </div>
+          <div class="distribution-bar" *ngIf="stats.exensioTimeout > 0">
+            <div class="bar-label">Exensio Timeout</div>
+            <div class="bar-track">
+              <div class="bar-fill exensio-timeout" [style.width.%]="getPercentage(stats.exensioTimeout)"></div>
+            </div>
+            <div class="bar-value">{{ stats.exensioTimeout }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.ready > 0">
             <div class="bar-label">Staged</div>
@@ -262,8 +296,14 @@ import { GlassIconComponent } from './glass-icon.component';
       .stat-icon.enriching {
         background: rgba(129, 140, 248, 0.15);
       }
+      .stat-icon.enrichment-timeout {
+        background: rgba(245, 158, 11, 0.15);
+      }
       .stat-icon.exensio {
         background: rgba(99, 102, 241, 0.15);
+      }
+      .stat-icon.exensio-timeout {
+        background: rgba(245, 158, 11, 0.15);
       }
       .stat-icon.completed {
         background: rgba(16, 185, 129, 0.15);
@@ -559,8 +599,14 @@ import { GlassIconComponent } from './glass-icon.component';
       .bar-fill.enriching {
         background: var(--accent-color);
       }
+      .bar-fill.enrichment-timeout {
+        background: #f59e0b;
+      }
       .bar-fill.exensio {
         background: #6366f1;
+      }
+      .bar-fill.exensio-timeout {
+        background: #f59e0b;
       }
       .bar-fill.staged {
         background: #818cf8;

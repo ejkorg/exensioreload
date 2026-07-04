@@ -243,7 +243,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return senders.sort((a, b) => b.backlog - a.backlog).slice(0, 6);
   });
 
-  /** Computed KPI cards — memoized via signal (7 state cards) */
+  /** Computed KPI cards — memoized via signal (9 state cards including 2 timeout states) */
   primaryMetrics = computed<MetricCard[]>(() => {
     const s = this.snapshot();
     if (!s) return [];
@@ -277,6 +277,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
         subtext: 'actively enriching',
       },
       {
+        label: 'Enrichment Timeout',
+        abbrev: 'ENT',
+        value: s.global.enrichmentTimeout,
+        icon: 'schedule',
+        color: 'warning',
+        accentColor: '#f59e0b',
+        subtext: 'timed out — needs verification',
+      },
+      {
         label: 'Exensio Loading',
         abbrev: 'EXL',
         value: s.global.exensioLoading,
@@ -284,6 +293,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: 'info',
         accentColor: '#06b6d4',
         subtext: 'exensio verification',
+      },
+      {
+        label: 'Exensio Timeout',
+        abbrev: 'EXT',
+        value: s.global.exensioTimeout,
+        icon: 'schedule',
+        color: 'warning',
+        accentColor: '#f59e0b',
+        subtext: 'wafer not found — may appear later',
       },
       {
         label: 'Completed',
@@ -412,6 +430,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private freshnessPollInterval?: ReturnType<typeof setInterval>;
   private pollSub?: Subscription;
+  private stateStreamSub?: Subscription;
   private retryAttempts = 0;
   private readonly maxRetries = 5;
   private readonly retryBaseDelayMs = 5000;
@@ -443,10 +462,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadActiveMonitoringSessionContext();
     this.pollSub = timer(10000, 10000).subscribe(() => this.loadSnapshot(false));
     this.setupFreshnessMonitor();
+
+    // Connect to dashboard state stream for real-time timeout state updates
+    // Requirements 7.1, 7.2, 7.3, 7.4
+    this.connectDashboardStateStream();
   }
 
   ngOnDestroy() {
     this.pollSub?.unsubscribe();
+    this.stateStreamSub?.unsubscribe();
     if (this.freshnessPollInterval) {
       clearInterval(this.freshnessPollInterval);
     }
@@ -501,7 +525,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       Staged: 'pending',
       'Queued for CP': 'ENQUEUED',
       'In Enrichment': 'ENRICHMENT',
+      'Enrichment Timeout': 'ENRICHMENT_TIMEOUT',
       'Exensio Loading': 'EXENSIO_LOADING',
+      'Exensio Timeout': 'EXENSIO_TIMEOUT',
       Completed: 'DONE',
       Failed: 'FAILED',
       Cancelled: 'CANCELLED',
@@ -716,8 +742,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         return 'metric-queued';
       case 'In Enrichment':
         return 'metric-enriching';
+      case 'Enrichment Timeout':
+        return 'metric-enrichmentTimeout';
       case 'Exensio Loading':
         return 'metric-exensioLoading';
+      case 'Exensio Timeout':
+        return 'metric-exensioTimeout';
       case 'Completed':
         return 'metric-completed';
       case 'Failed':
@@ -892,7 +922,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       'ready',
       'queued',
       'enriching',
+      'enrichmentTimeout',
       'exensioLoading',
+      'exensioTimeout',
       'completed',
       'failed',
       'cancelled',
@@ -995,5 +1027,106 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } catch {
       // no-op
     }
+  }
+
+  /**
+   * Connect to dashboard state stream and handle timeout state events.
+   * Updates dashboard card counts in real-time when records transition to timeout states.
+   * Validates: Requirements 7.1, 7.2, 7.3, 7.4
+   * Property 9: Frontend SSE Event Handling
+   */
+  private connectDashboardStateStream(): void {
+    this.stateStreamSub = this.backend.connectDashboardStateStream().subscribe({
+      next: (event: any) => {
+        this.handleStateChangeEvent(event);
+      },
+      error: (err: unknown) => {
+        console.warn('Dashboard state stream error (non-fatal, dashboard will use polling):', err);
+        // Non-fatal error - dashboard continues to work with polling updates
+      },
+      complete: () => {
+        console.log('Dashboard state stream closed');
+      },
+    });
+  }
+
+  /**
+   * Handle a single state change event from the SSE stream.
+   * Updates dashboard metrics when records transition to ENRICHMENT_TIMEOUT or EXENSIO_TIMEOUT.
+   *
+   * @param event The state change event containing before/after states and count
+   */
+  private handleStateChangeEvent(event: any): void {
+    const currentSnap = this.snapshot();
+    if (!currentSnap) {
+      return; // No snapshot loaded yet
+    }
+
+    const afterState = event.afterState || '';
+    const count = event.count || 0;
+
+    if (count <= 0) {
+      return; // No records changed
+    }
+
+    // Create updated snapshot with incremented timeout counts
+    const updated: DashboardSnapshot = {
+      ...currentSnap,
+      global: { ...currentSnap.global },
+      sites: currentSnap.sites.map((site) => ({
+        ...site,
+        metrics: { ...site.metrics },
+        senders: site.senders.map((sender) => ({
+          ...sender,
+          metrics: { ...sender.metrics },
+        })),
+      })),
+    };
+
+    // Update global metrics based on state transition
+    // ENRICHMENT → ENRICHMENT_TIMEOUT: decrement enriching, increment enrichmentTimeout
+    if (afterState === 'ENRICHMENT_TIMEOUT') {
+      updated.global.enriching = Math.max(0, (updated.global.enriching || 0) - count);
+      updated.global.enrichmentTimeout = (updated.global.enrichmentTimeout || 0) + count;
+
+      // Update per-site and per-sender metrics
+      updated.sites.forEach((site) => {
+        site.metrics.enriching = Math.max(0, (site.metrics.enriching || 0) - count);
+        site.metrics.enrichmentTimeout = (site.metrics.enrichmentTimeout || 0) + count;
+        site.senders.forEach((sender) => {
+          sender.metrics.enriching = Math.max(0, (sender.metrics.enriching || 0) - count);
+          sender.metrics.enrichmentTimeout = (sender.metrics.enrichmentTimeout || 0) + count;
+        });
+      });
+
+      // Mark metrics as changed for visual feedback
+      this.changedMetrics.set(new Set(['metric-enrichmentTimeout']));
+      setTimeout(() => this.changedMetrics.set(new Set<string>()), 600);
+    }
+    // EXENSIO_LOADING → EXENSIO_TIMEOUT: decrement exensioLoading, increment exensioTimeout
+    else if (afterState === 'EXENSIO_TIMEOUT') {
+      updated.global.exensioLoading = Math.max(0, (updated.global.exensioLoading || 0) - count);
+      updated.global.exensioTimeout = (updated.global.exensioTimeout || 0) + count;
+
+      // Update per-site and per-sender metrics
+      updated.sites.forEach((site) => {
+        site.metrics.exensioLoading = Math.max(0, (site.metrics.exensioLoading || 0) - count);
+        site.metrics.exensioTimeout = (site.metrics.exensioTimeout || 0) + count;
+        site.senders.forEach((sender) => {
+          sender.metrics.exensioLoading = Math.max(0, (sender.metrics.exensioLoading || 0) - count);
+          sender.metrics.exensioTimeout = (sender.metrics.exensioTimeout || 0) + count;
+        });
+      });
+
+      // Mark metrics as changed for visual feedback
+      this.changedMetrics.set(new Set(['metric-exensioTimeout']));
+      setTimeout(() => this.changedMetrics.set(new Set<string>()), 600);
+    }
+
+    // Update snapshot with new metrics
+    this.snapshot.set(updated);
+    this.lastUpdated.set(new Date());
+    this.lastUpdatePulse.set(true);
+    setTimeout(() => this.lastUpdatePulse.set(false), 300);
   }
 }

@@ -313,9 +313,9 @@ public class StateAccountingIntegrationTest {
      * Test 6: All recorded states count toward accounting sum
      * 
      * Validates:
-     * - Every state (including EXENSIO_LOADING) is counted
+     * - Every state (including EXENSIO_LOADING, ENRICHMENT_TIMEOUT, EXENSIO_TIMEOUT) is counted
      * - No state is hidden or uncounted
-     * - Requirements 1, 3, 6
+     * - Requirements 1, 3, 4, 6
      */
     @Test
     public void testAllStatesCountedInAccounting() throws SQLException {
@@ -323,13 +323,15 @@ public class StateAccountingIntegrationTest {
         insertRecords(1, "pending");
         insertRecords(1, "ENQUEUED");
         insertRecords(1, "ENRICHMENT");
+        insertRecords(1, "ENRICHMENT_TIMEOUT");
         insertRecords(1, "EXENSIO_LOADING");
+        insertRecords(1, "EXENSIO_TIMEOUT");
         insertRecords(1, "PROCESSING");
         insertRecords(1, "DONE");
         insertRecords(1, "FAILED");
         insertRecords(1, "CANCELLED");
 
-        int expectedTotal = 8;
+        int expectedTotal = 10;
 
         // Get status
         StageStatus status = refDbService.fetchStatuses(TEST_REQUEST_ID)
@@ -339,13 +341,15 @@ public class StateAccountingIntegrationTest {
                 .orElse(null);
 
         assertNotNull(status);
-        assertEquals(expectedTotal, status.total(), "Total should be 8");
+        assertEquals(expectedTotal, status.total(), "Total should be 10");
 
         // Verify each state is counted
         assertEquals(1, status.ready(), "Staged (pending) count");
         assertEquals(1, status.queued(), "Queued (ENQUEUED) count");
         assertEquals(1, status.enriching(), "Enriching count");
+        assertEquals(1, status.enrichmentTimeout(), "Enrichment timeout count");
         assertEquals(1, status.exensioLoading(), "Exensio loading count");
+        assertEquals(1, status.exensioTimeout(), "Exensio timeout count");
         assertEquals(1, status.failed(), "Failed count");
         assertEquals(1, status.completed(), "Completed (DONE) count");
         assertEquals(1, status.cancelled(), "Cancelled count");
@@ -354,6 +358,174 @@ public class StateAccountingIntegrationTest {
         long accountingSum = status.accountingSum();
         assertEquals(expectedTotal, accountingSum,
                 "All states should be counted in accounting sum");
+    }
+
+    /**
+     * Test 7: Timeout states are segregated from completion states
+     * 
+     * Validates:
+     * - ENRICHMENT_TIMEOUT records counted separately from DONE
+     * - EXENSIO_TIMEOUT records counted separately from FAILED
+     * - Dashboard correctly reports timeout states
+     * - Requirements 1.4, 2.4, 4.1, 4.2
+     */
+    @Test
+    public void testTimeoutStatesSegregated() throws SQLException {
+        // Insert records in timeout states and completion states
+        insertRecords(5, "ENRICHMENT_TIMEOUT");
+        insertRecords(3, "EXENSIO_TIMEOUT");
+        insertRecords(7, "DONE");
+        insertRecords(4, "FAILED");
+
+        int totalExpected = 5 + 3 + 7 + 4;
+
+        // Get status
+        StageStatus status = refDbService.fetchStatuses(TEST_REQUEST_ID)
+                .stream()
+                .filter(s -> s.site().equals(TEST_SITE))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(status);
+        assertEquals(totalExpected, status.total());
+        
+        // Verify timeout states are segregated
+        assertEquals(5, status.enrichmentTimeout(), "Should have 5 enrichment timeouts");
+        assertEquals(3, status.exensioTimeout(), "Should have 3 exensio timeouts");
+        assertEquals(7, status.completed(), "Should have 7 completed (DONE)");
+        assertEquals(4, status.failed(), "Should have 4 failed");
+
+        // Verify accounting includes timeout states
+        long accountingSum = status.accountingSum();
+        assertEquals(totalExpected, accountingSum,
+                "Accounting sum should include all timeout states");
+    }
+
+    /**
+     * Test 8: StateAccountingService queries include timeout states
+     * 
+     * Validates:
+     * - StateAccountingService database query counts ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT
+     * - Timeout state counts appear in DatabaseStateCounts
+     * - Requirements 4.1, 4.2
+     */
+    @Test
+    public void testStateAccountingServiceIncludesTimeoutStates() throws SQLException {
+        // Stage records including timeout states
+        insertRecords(2, "pending");
+        insertRecords(3, "ENRICHMENT_TIMEOUT");
+        insertRecords(2, "EXENSIO_TIMEOUT");
+        insertRecords(1, "DONE");
+        insertRecords(1, "FAILED");
+
+        int totalExpected = 2 + 3 + 2 + 1 + 1;
+
+        // Generate accounting report
+        StateAccountingReport report = stateAccountingService.generateReport(TEST_REQUEST_ID, TEST_SITE, TEST_SENDER_ID);
+
+        assertNotNull(report);
+        assertNotNull(report.getDatabase());
+
+        // Verify database state counts include timeout states
+        long dbTotal = report.getDatabase().getTotalCount();
+        assertEquals(totalExpected, dbTotal);
+
+        // Verify timeout states are in the states map
+        java.util.Map<String, Long> dbStates = report.getDatabase().getStates();
+        assertEquals(3, dbStates.get("ENRICHMENT_TIMEOUT").longValue(),
+                "Should have 3 ENRICHMENT_TIMEOUT records");
+        assertEquals(2, dbStates.get("EXENSIO_TIMEOUT").longValue(),
+                "Should have 2 EXENSIO_TIMEOUT records");
+    }
+
+    /**
+     * Test 9: DashboardCardCounts includes timeout state fields
+     * 
+     * Validates:
+     * - DashboardCardCounts has enrichmentTimeout and exensioTimeout fields
+     * - Timeout counts are aggregated from StageStatus
+     * - Total sum includes timeout states
+     * - Requirements 4.1, 4.2, 5.1, 5.2
+     */
+    @Test
+    public void testDashboardCardCountsIncludesTimeoutStates() throws SQLException {
+        // Stage records
+        insertRecords(2, "ENRICHMENT_TIMEOUT");
+        insertRecords(1, "EXENSIO_TIMEOUT");
+        insertRecords(3, "DONE");
+
+        int totalExpected = 2 + 1 + 3;
+
+        // Generate accounting report
+        StateAccountingReport report = stateAccountingService.generateReport(TEST_REQUEST_ID, TEST_SITE, TEST_SENDER_ID);
+
+        assertNotNull(report);
+        assertNotNull(report.getDashboardCards());
+
+        StateAccountingReport.DashboardCardCounts cards = report.getDashboardCards();
+
+        // Verify timeout fields exist and have correct values
+        assertEquals(2, cards.getEnrichmentTimeout(),
+                "DashboardCardCounts should have enrichmentTimeout = 2");
+        assertEquals(1, cards.getExensioTimeout(),
+                "DashboardCardCounts should have exensioTimeout = 1");
+        assertEquals(3, cards.getCompleted(),
+                "DashboardCardCounts should have completed = 3");
+
+        // Verify sum includes timeout states
+        long cardSum = cards.getStaged() + cards.getQueued() + cards.getEnriching()
+                + cards.getEnrichmentTimeout() + cards.getExensioLoading() + cards.getExensioTimeout()
+                + cards.getFailed() + cards.getCompleted() + cards.getCancelled();
+        
+        assertEquals(totalExpected, cardSum,
+                "Dashboard sum should equal total and include timeout states");
+    }
+
+    /**
+     * Test 10: Accounting balance with timeout states
+     * 
+     * Validates:
+     * - isAccountingBalanced() includes timeout states in sum
+     * - Complex state distributions maintain balance
+     * - Requirements 4.3, 4.4
+     */
+    @Test
+    public void testAccountingBalanceWithTimeoutStates() throws SQLException {
+        // Create diverse record distribution including timeout states
+        insertRecords(3, "pending");
+        insertRecords(2, "ENQUEUED");
+        insertRecords(4, "ENRICHMENT");
+        insertRecords(2, "ENRICHMENT_TIMEOUT");
+        insertRecords(1, "EXENSIO_LOADING");
+        insertRecords(1, "EXENSIO_TIMEOUT");
+        insertRecords(2, "DONE");
+        insertRecords(1, "FAILED");
+        insertRecords(1, "CANCELLED");
+
+        int totalExpected = 3 + 2 + 4 + 2 + 1 + 1 + 2 + 1 + 1;
+
+        // Get status
+        StageStatus status = refDbService.fetchStatuses(TEST_REQUEST_ID)
+                .stream()
+                .filter(s -> s.site().equals(TEST_SITE))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(status);
+        assertEquals(totalExpected, status.total());
+
+        // Verify accounting balance
+        long accountingSum = status.accountingSum();
+        assertEquals(status.total(), accountingSum,
+                "Accounting sum should equal total with timeout states");
+        
+        // Verify balance calculation includes timeout states
+        long manualSum = status.ready() + status.queued() + status.enriching()
+                + status.enrichmentTimeout() + status.exensioLoading() + status.exensioTimeout()
+                + status.failed() + status.completed() + status.cancelled();
+        
+        assertEquals(totalExpected, manualSum,
+                "Manual sum of all states should equal total");
     }
 
     // Helper methods

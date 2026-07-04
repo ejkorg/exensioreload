@@ -383,5 +383,7 @@
     <include file="db.changelog-9.5-data-type-test-phase.xml" relativeToChangelogFile="true" />
     <!-- Rename NEW → pending, update constraint and column default -->
     <include file="db.changelog-9.6-rename-new-to-pending.xml" relativeToChangelogFile="true" />
+    <!-- Add ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT states for honest accounting -->
+    <include file="db.changelog-9.8-timeout-states.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>
