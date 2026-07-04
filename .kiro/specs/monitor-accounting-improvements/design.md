@@ -346,7 +346,7 @@ public record DataIntegrityReport(
 
 ### Stuck Enrichment Records
 
-- **Detection**: Records in ENRICHMENT for > timeout (default 15 mins)
+- **Detection**: Records in ENRICHMENT for > timeout (default 5 mins)
 - **Response**: Log to integrationStatusService, emit alert via SSE
 - **Recovery**: Auto-remediate by marking DONE with manual-verify flag
 
@@ -451,7 +451,7 @@ A property is a characteristic or behavior that should hold true across all vali
 
 ### Configuration
 
-- `enrichmentTimeoutMinutes`: How long before ENRICHMENT records are considered stuck (default: 15)
+- `enrichmentTimeoutMinutes`: How long before ENRICHMENT records are considered stuck (default: 5)
 - `integrityCheckCron`: Schedule for data integrity job (default: hourly)
 - `sseUpdateBatchWindowMs`: Window for batching aggregation updates (default: 1000ms)
 
