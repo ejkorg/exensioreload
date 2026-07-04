@@ -69,9 +69,12 @@ export class MonitoringService {
     total: 0,
     ready: 0,
     enqueued: 0,
+    enriching: 0,
+    exensioLoading: 0,
     processing: 0,
     completed: 0,
     failed: 0,
+    cancelled: 0,
     progress: 0,
     throughput: 0,
     eta: 'Calculating...',
@@ -217,9 +220,12 @@ export class MonitoringService {
     const total = data.total || 0;
     const ready = data.ready || 0;
     const enqueued = data.enqueued || 0;
-    const processing = data.processing || 0;
+    const enriching = data.enriching || 0;
+    const exensioLoading = data.exensioLoading || 0;
+    const processing = enriching + exensioLoading;
     const completed = data.completed || 0;
     const failed = data.failed || 0;
+    const cancelled = data.cancelled || 0;
 
     const processed = completed + failed;
     const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
@@ -246,9 +252,12 @@ export class MonitoringService {
       total,
       ready,
       enqueued,
+      enriching,
+      exensioLoading,
       processing,
       completed,
       failed,
+      cancelled,
       progress,
       throughput,
       eta,
@@ -364,9 +373,12 @@ export class MonitoringService {
       total: 0,
       ready: 0,
       enqueued: 0,
+      enriching: 0,
+      exensioLoading: 0,
       processing: 0,
       completed: 0,
       failed: 0,
+      cancelled: 0,
       progress: 0,
       throughput: 0,
       eta: 'Calculating...',
