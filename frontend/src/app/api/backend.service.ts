@@ -11,6 +11,10 @@ export interface DashboardMetricTotals {
   total: number;
   ready: number;
   enqueued: number;
+  queued: number; // NEW: ENQUEUED only (separate from enriching)
+  enriching: number; // NEW: ENRICHMENT only (separate from queued)
+  exensioLoading: number; // NEW: EXENSIO_LOADING state
+  cancelled: number; // NEW: CANCELLED state
   failed: number;
   completed: number;
   backlog: number;

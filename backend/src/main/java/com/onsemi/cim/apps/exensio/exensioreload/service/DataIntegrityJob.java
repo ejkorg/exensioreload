@@ -364,7 +364,9 @@ public class DataIntegrityJob {
         // Future: Send email, Slack message, or other alert mechanism
         if (auditService != null) {
             try {
-                auditService.logAdminAction("DATA_INTEGRITY_ALERT", message, null);
+                // Log to audit service for admin tracking
+                auditService.logAction(null, "DATA_INTEGRITY_ALERT", "SYSTEM", "data-integrity", 
+                    java.util.Map.of("message", message));
             } catch (Exception ex) {
                 log.error("Failed logging admin alert to audit service", ex);
             }

@@ -21,8 +21,11 @@ import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
 import { BulkActionsComponent, SelectableItem } from './bulk-actions.component';
+import { MetricCardDetailSidebarComponent } from './metric-card-detail-sidebar.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
 import { SiteDetailModalComponent } from './site-detail-modal.component';
+import { StateLegendTooltipComponent } from './state-legend-tooltip.component';
+import { StateLegendService } from './state-legend.service';
 
 /**
  * Represents an aggregated state change event broadcast via SSE.
@@ -112,6 +115,7 @@ interface DashboardErrorDetails {
     BulkActionsComponent,
     GlassCheckboxComponent,
     StateLegendTooltipComponent,
+    MetricCardDetailSidebarComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],

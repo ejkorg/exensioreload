@@ -488,7 +488,7 @@ All 8 properties are implemented as specified in the design document:
 
 **Test Count:** 6 main tests + variations
 
-**Compiler Status:** ✓ No diagnostics found
+**Compiler Status:** ✓ All diagnostics cleared (DataIntegrityJob.alertAdmin() fixed)
 
 **Ready to Run:**
 
