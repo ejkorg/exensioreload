@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, effect, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { StagingSessionService } from '../services/staging-session.service';
 import { GlassSelectComponent } from './glass-select.component';
 
@@ -22,7 +22,7 @@ import { GlassSelectComponent } from './glass-select.component';
       [placeholder]="placeholder"
       [multiple]="true"
       [options]="deviceOptions()"
-      [(value)]="selectedDevices"
+      [value]="selectedDevices()"
       (valueChange)="onDeviceChange($event)"
       [disabled]="disabled"
       prefixIcon="devices"
@@ -46,10 +46,8 @@ export class GlassDeviceFilterComponent {
   readonly selectedDevices = signal<string[]>([]);
 
   constructor() {
-    // Load devices when component initializes or sessionId changes
-    effect(() => {
-      this.loadDevices();
-    });
+    // Load devices when component initializes
+    this.loadDevices();
   }
 
   /**
@@ -75,9 +73,10 @@ export class GlassDeviceFilterComponent {
    *
    * @param devices Array of selected device identifiers
    */
-  onDeviceChange(devices: string[]): void {
-    this.selectedDevices.set(devices || []);
-    this.deviceChange.emit(devices || []);
+  onDeviceChange(devices: string[] | string): void {
+    const deviceArray = Array.isArray(devices) ? devices : devices ? [devices] : [];
+    this.selectedDevices.set(deviceArray);
+    this.deviceChange.emit(deviceArray);
   }
 
   /**

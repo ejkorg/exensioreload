@@ -86,6 +86,7 @@ export interface DiscoveryPreviewRequest {
 export interface DiscoveryPreviewRow {
   metadataId: string;
   dataId?: string | null;
+  device?: string | null;
   lot: string;
   wafer: string;
   filename: string;
@@ -930,6 +931,7 @@ export class BackendService {
       sessionId?: string | null;
       site?: string | null;
       status?: string | null;
+      devices?: string[];
     },
   ): Observable<StagingSessionPage> {
     const params: any = { page, size, ...(filters || {}) };
@@ -1287,6 +1289,10 @@ export class BackendService {
       } catch (error) {
         console.error('Failed to connect to dashboard state stream:', error);
         observer.error(error);
+        return () => {};
+      }
+    });
+  }
       }
     });
   }

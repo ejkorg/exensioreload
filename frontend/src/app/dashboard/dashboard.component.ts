@@ -16,6 +16,7 @@ import {
   StagingSessionDetail,
 } from '../api/backend.service';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
+import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';

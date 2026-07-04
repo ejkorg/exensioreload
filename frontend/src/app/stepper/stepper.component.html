@@ -155,18 +155,18 @@
             </app-glass-date-range>
 
             <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-device-filter
+              <app-glass-select
                 label="Device (Admin)"
                 placeholder="Enter device or pattern (e.g. FNB7*)"
-                browseTooltip="Browse devices for site, data type, and tester type"
-                [ngModel]="deviceFilter()"
-                (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
+                [editable]="true"
+                [multiple]="false"
                 [options]="deviceOptions()"
-                [optionsLoading]="devicesLoading()"
-                [canBrowseOptions]="!!selectedDataType() && !!selectedSite()"
+                [value]="deviceFilter()"
+                (valueChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
                 [disabled]="!selectedDataType()"
+                prefixIcon="devices"
               >
-              </app-glass-device-filter>
+              </app-glass-select>
               <div class="device-hint">
                 Type freely, or use the search icon to pick from loaded devices. Use * as a wildcard.
               </div>

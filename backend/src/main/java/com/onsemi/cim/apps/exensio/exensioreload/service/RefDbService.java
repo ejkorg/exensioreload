@@ -185,6 +185,7 @@ public class RefDbService {
                         site, senderId, normalizedUser, normalizedSenderName, payloads.size(), forceDuplicates);
             } catch (Exception _e) {
                 // ignore logging failures
+            }
         }
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);

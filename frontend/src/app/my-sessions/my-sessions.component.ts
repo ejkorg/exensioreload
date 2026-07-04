@@ -23,6 +23,7 @@ import {
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
+import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
