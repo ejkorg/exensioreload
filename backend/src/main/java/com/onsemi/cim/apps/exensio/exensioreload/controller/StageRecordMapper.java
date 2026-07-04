@@ -28,34 +28,33 @@ public class StageRecordMapper {
     public StageRecordView toView(StageRecord record) {
         if (record == null) {
             return new StageRecordView(
-                    0L,
-                    null,
-                    0,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    "unknown",
-                    "unknown",
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
+                    0L,                    // id
+                    null,                  // site
+                    0,                     // senderId
+                    null,                  // senderName
+                    null,                  // metadataId
+                    null,                  // dataId
+                    null,                  // lot
+                    null,                  // wafer
+                    null,                  // device
+                    null,                  // filename
+                    null,                  // endTime
+                    null,                  // status
+                    null,                  // errorMessage
+                    null,                  // createdAt
+                    null,                  // updatedAt
+                    null,                  // processedAt
+                    "unknown",             // stagedBy
+                    "unknown",             // lastRequestedBy
+                    null,                  // lastRequestedAt
+                    null,                  // cpOutputPath
+                    null,                  // cpOutputTarget
+                    null,                  // exensioWaferKey
+                    null,                  // exensioPgKey
+                    null,                  // cpIntegrationStatus
+                    null,                  // cpIntegrationMessage
+                    null,                  // exensioIntegrationStatus
+                    null                   // exensioIntegrationMessage
             );
         }
         String lot = normalizeDisplayValue(record.lot(), "-");
