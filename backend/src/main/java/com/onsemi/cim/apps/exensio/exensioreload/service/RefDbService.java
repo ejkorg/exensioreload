@@ -2753,7 +2753,7 @@ public class RefDbService {
             nameBase = nameBase.substring(0, nameBase.lastIndexOf("."));
         }
 
-        String sql = "SELECT log_message FROM refdb.pp_log WHERE lot = ? AND filename = ? AND LOWER(log_message) LIKE '%sandbox%' ORDER BY log_time DESC";
+        String sql = "SELECT log_message FROM refdb.pp_log WHERE lot = ? AND FILE_NAME = ? AND LOWER(log_message) LIKE '%sandbox%' ORDER BY PROCESS_DATETIME DESC NULLS LAST";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
