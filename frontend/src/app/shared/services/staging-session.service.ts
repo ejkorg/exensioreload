@@ -740,8 +740,9 @@ export class StagingSessionService {
           continue;
         }
 
-        if (updatedSession[fieldName] !== newValue) {
-          updatedSession[fieldName] = newValue;
+        const currentValue = (updatedSession as any)[fieldName];
+        if (currentValue !== newValue) {
+          (updatedSession as any)[fieldName] = newValue;
           hasChanges = true;
         }
       }

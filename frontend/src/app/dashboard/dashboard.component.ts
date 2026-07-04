@@ -16,7 +16,6 @@ import {
   StagingSessionDetail,
 } from '../api/backend.service';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
-import { SparklineComponent } from '../shared/components/sparkline.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
@@ -111,11 +110,9 @@ interface DashboardErrorDetails {
     MatTooltipModule,
     MatProgressBarModule,
     RouterModule,
-    SparklineComponent,
     BulkActionsComponent,
     GlassCheckboxComponent,
     StateLegendTooltipComponent,
-    MetricCardDetailSidebarComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],

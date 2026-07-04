@@ -61,7 +61,7 @@ export class MetricCardDetailSidebarComponent implements OnInit {
     this.loadRecords();
   }
 
-  private loadRecords() {
+  loadRecords() {
     this.loading.set(true);
     this.error.set(null);
 
