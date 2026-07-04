@@ -163,7 +163,7 @@ class CpLogMonitorTimeoutTest {
         // Setup: ES returns success
         when(elasticsearchLogService.findCpLog(
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
-        )).thenReturn(new CpLogResult.Success("path", "target", "trace-123"));
+        )).thenReturn(new CpLogResult.Success("trace-123", "path", "target", Instant.now()));
 
         // Setup pp_log is not needed since ES succeeded
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
@@ -202,7 +202,7 @@ class CpLogMonitorTimeoutTest {
         // Setup: ES returns failure
         when(elasticsearchLogService.findCpLog(
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
-        )).thenReturn(new CpLogResult.Failure("Connection timeout", "trace-123"));
+        )).thenReturn(new CpLogResult.Failure("trace-123", "Connection timeout", Instant.now()));
 
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
