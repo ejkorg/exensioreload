@@ -16,7 +16,7 @@ spring:
     # Override base exclusion: re-enable Liquibase auto-configuration in this profile
     exclude: []
   liquibase:
-    enabled: false
+    enabled: true
   jpa:
     properties:
       hibernate.dialect: org.hibernate.dialect.OracleDialect
