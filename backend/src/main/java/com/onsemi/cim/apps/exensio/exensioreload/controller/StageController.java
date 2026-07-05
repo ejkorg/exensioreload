@@ -617,12 +617,13 @@ public class StageController {
             @RequestParam(required = false) Integer senderId,
             @RequestParam(required = false, defaultValue = "day") String granularity,
             @RequestParam(required = false) String endTimeFrom,
-            @RequestParam(required = false) String endTimeTo) {
+            @RequestParam(required = false) String endTimeTo,
+            @RequestParam(required = false) List<String> devices) {
         if (site == null || site.isBlank()) {
             throw new IllegalArgumentException("site is required");
         }
         List<com.onsemi.cim.apps.exensio.exensioreload.dto.CoveragePoint> points =
-                refDbService.getCoverage(site, senderId, granularity, endTimeFrom, endTimeTo);
+                refDbService.getCoverage(site, senderId, granularity, endTimeFrom, endTimeTo, devices);
         return ResponseEntity.ok(points);
     }
 

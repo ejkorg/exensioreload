@@ -3128,7 +3128,8 @@ public class RefDbService {
             Integer senderId,
             String granularity,
             String endTimeFrom,
-            String endTimeTo) {
+            String endTimeTo,
+            List<String> devices) {
 
         String table = properties.getStagingTable();
 
@@ -3173,6 +3174,15 @@ public class RefDbService {
             params.add(java.sql.Timestamp.valueOf(endTimeTo.trim().length() == 10
                     ? endTimeTo.trim() + " 23:59:59"
                     : endTimeTo.trim().replace('T', ' ').replace('Z', ' ').trim()));
+        }
+        if (devices != null && !devices.isEmpty()) {
+            sql.append(" AND device IN (");
+            for (int i = 0; i < devices.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append("?");
+            }
+            sql.append(")");
+            params.addAll(devices);
         }
 
         sql.append(" GROUP BY " + bucketExpr + ", sender_id, site ORDER BY bucket, sender_id");

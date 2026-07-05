@@ -7,7 +7,11 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { BackendService, CoveragePoint, DashboardSnapshot, DashboardSiteSnapshot } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
-import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
+import { SiteNamePipe, formatSiteName } from '../shared/pipes/site-name.pipe';
+import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
+import { GlassSelectComponent, GlassOption } from '../shared/components/glass-select.component';
+import { GlassDatepickerComponent } from '../shared/components/glass-datepicker.component';
+import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import * as echarts from 'echarts';
 import type { ECharts } from 'echarts';
 
@@ -18,7 +22,11 @@ interface SenderOption { id: number; label: string; }
 @Component({
     selector: 'app-coverage',
     standalone: true,
-    imports: [CommonModule, FormsModule, RouterModule, SiteNamePipe],
+    imports: [
+        CommonModule, FormsModule, RouterModule, SiteNamePipe,
+        GlassDeviceFilterComponent, GlassSelectComponent,
+        GlassDatepickerComponent, GlassButtonComponent
+    ],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
 <div class="cov-shell">
@@ -39,56 +47,74 @@ interface SenderOption { id: number; label: string; }
   <section class="cov-filters glass-panel">
     <div class="filter-row">
       <!-- Environment selector: admin only, defaults to PROD -->
-      <label class="filter-label" *ngIf="authService.isAdminSignal()">
-        Environment
-        <select class="cov-select" [ngModel]="selectedEnv()" (ngModelChange)="onEnvChange($event)">
-          <option value="PROD">PROD</option>
-          <option value="QA">QA</option>
-        </select>
-      </label>
+      <app-glass-select
+        *ngIf="authService.isAdminSignal()"
+        label="Environment"
+        [options]="['PROD', 'QA']"
+        [ngModel]="selectedEnv()"
+        (ngModelChange)="onEnvChange($event)"
+      ></app-glass-select>
 
-      <label class="filter-label">
-        Site
-        <select class="cov-select" [(ngModel)]="selectedSite" (ngModelChange)="onSiteChange($event)">
-          <option value="">— select site —</option>
-          <option *ngFor="let s of sites()" [value]="s">{{ s | siteName }}</option>
-        </select>
-      </label>
+      <app-glass-select
+        label="Site"
+        placeholder="Select site"
+        [options]="siteOptions()"
+        [(ngModel)]="selectedSite"
+        (ngModelChange)="onSiteChange($event)"
+      ></app-glass-select>
 
-      <label class="filter-label">
-        Sender
-        <select class="cov-select" [(ngModel)]="selectedSenderId">
-          <option [ngValue]="null">All Senders</option>
-          <option *ngFor="let s of senderOptions()" [ngValue]="s.id">{{ s.id }}{{ s.label ? ' · ' + s.label : '' }}</option>
-        </select>
-      </label>
+      <app-glass-select
+        label="Sender"
+        placeholder="All senders"
+        [options]="glassSenderOptions()"
+        [(ngModel)]="selectedSenderId"
+      ></app-glass-select>
 
-      <label class="filter-label">
-        Granularity
-        <select class="cov-select" [(ngModel)]="granularity">
-          <option value="day">Day</option>
-          <option value="week">Week</option>
-          <option value="month">Month</option>
-        </select>
-      </label>
+      <app-glass-device-filter
+        label="Device"
+        placeholder="All devices"
+        (deviceChange)="onDeviceFilterChange($event)"
+      ></app-glass-device-filter>
 
-      <label class="filter-label">
-        End-Time From
-        <input class="cov-input" type="date" [(ngModel)]="endTimeFrom" />
-      </label>
+      <app-glass-select
+        label="Granularity"
+        [options]="[
+          { value: 'day', label: 'Day' },
+          { value: 'week', label: 'Week' },
+          { value: 'month', label: 'Month' }
+        ]"
+        [(ngModel)]="granularity"
+      ></app-glass-select>
 
-      <label class="filter-label">
-        End-Time To
-        <input class="cov-input" type="date" [(ngModel)]="endTimeTo" />
-      </label>
+      <app-glass-datepicker
+        label="End-Time From"
+        [includeTime]="false"
+        [(ngModel)]="endTimeFrom"
+      ></app-glass-datepicker>
+
+      <app-glass-datepicker
+        label="End-Time To"
+        [includeTime]="false"
+        [(ngModel)]="endTimeTo"
+      ></app-glass-datepicker>
 
       <div class="filter-actions">
-        <button class="cov-btn cov-btn--primary" (click)="load()" [disabled]="!selectedSite || loading()">
-          <span *ngIf="loading()" class="mini-spinner"></span>
-          {{ loading() ? 'Loading…' : 'Run Report' }}
-        </button>
-        <button class="cov-btn cov-btn--secondary" (click)="reset()">Reset</button>
-        <button class="cov-btn cov-btn--secondary" (click)="exportCsv()" [disabled]="points().length === 0">Export CSV</button>
+        <app-glass-button
+          variant="primary"
+          [disabled]="!selectedSite"
+          [loading]="loading()"
+          (clicked)="load()"
+        >
+          Run Report
+        </app-glass-button>
+        <app-glass-button variant="secondary" (clicked)="reset()">Reset</app-glass-button>
+        <app-glass-button
+          variant="secondary"
+          [disabled]="points().length === 0"
+          (clicked)="exportCsv()"
+        >
+          Export CSV
+        </app-glass-button>
       </div>
     </div>
   </section>
@@ -207,6 +233,13 @@ interface SenderOption { id: number; label: string; }
     .subtitle { margin:0.15rem 0 0; color:var(--text-muted); font-size:0.82rem; }
     .cov-filters { padding:0.9rem 1.1rem; border-radius:14px; }
     .filter-row { display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; }
+    .filter-row app-glass-select,
+    .filter-row app-glass-datepicker,
+    .filter-row app-glass-device-filter {
+      flex: 1 1 200px;
+      min-width: 180px;
+      max-width: 280px;
+    }
     .filter-label { display:flex; flex-direction:column; gap:0.3rem; font-size:0.74rem; font-weight:600; color:rgba(167,139,250,0.85); text-transform:uppercase; letter-spacing:0.05em; }
     .filter-label.inline { flex-direction:row; align-items:center; gap:0.5rem; text-transform:none; font-size:0.82rem; }
     .cov-select, .cov-input { height:34px; border-radius:9px; border:1px solid rgba(167,139,250,0.26); background:rgba(20,16,44,0.65) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a78bfa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 0.55rem center; color:rgba(226,232,255,0.94); padding:0 2rem 0 0.65rem; font-size:0.82rem; appearance:none; -webkit-appearance:none; min-width:130px; }
@@ -269,10 +302,12 @@ interface SenderOption { id: number; label: string; }
 })
 export class CoverageComponent implements OnInit, OnDestroy {
     @ViewChild('chartRef') chartRef?: ElementRef<HTMLDivElement>;
+    @ViewChild(GlassDeviceFilterComponent) deviceFilterComponent?: GlassDeviceFilterComponent;
 
     // filter state
     selectedSite = '';
     selectedSenderId: number | null = null;
+    selectedDevices = signal<string[]>([]);
     granularity: Granularity = 'day';
     endTimeFrom = '';
     endTimeTo = '';
@@ -296,6 +331,22 @@ export class CoverageComponent implements OnInit, OnDestroy {
         const env = this.selectedEnv();
         const suffix = env === 'PROD' ? '-PROD' : '-QA';
         return this.allSites().filter((s: string) => s.endsWith(suffix));
+    });
+
+    siteOptions = computed((): GlassOption[] => {
+        const isAdmin = this.authService.isAdminSignal();
+        return this.sites().map(site => ({
+            value: site,
+            label: formatSiteName(site, isAdmin)
+        }));
+    });
+
+    glassSenderOptions = computed((): GlassOption[] => {
+        const base = this.senderOptions().map(s => ({
+            value: s.id,
+            label: `${s.id}${s.label ? ' · ' + s.label : ''}`
+        }));
+        return [{ value: null, label: 'All Senders' }, ...base];
     });
 
     private chart?: ECharts;
@@ -397,6 +448,10 @@ export class CoverageComponent implements OnInit, OnDestroy {
         });
     }
 
+    onDeviceFilterChange(devices: string[]): void {
+        this.selectedDevices.set(devices);
+    }
+
     /** Convert a local date string (YYYY-MM-DD) to a UTC ISO instant (YYYY-MM-DDT00:00:00Z). */
     private toUtcIso(dateStr: string): string {
         if (!dateStr) return '';
@@ -414,7 +469,8 @@ export class CoverageComponent implements OnInit, OnDestroy {
             senderId: this.selectedSenderId ?? undefined,
             granularity: this.granularity,
             endTimeFrom: this.toUtcIso(this.endTimeFrom) || undefined,
-            endTimeTo: this.toUtcIso(this.endTimeTo) || undefined
+            endTimeTo: this.toUtcIso(this.endTimeTo) || undefined,
+            devices: this.selectedDevices().length > 0 ? this.selectedDevices() : undefined
         }).subscribe({
             next: (pts: CoveragePoint[]) => {
                 this.points.set(pts || []);
@@ -431,6 +487,8 @@ export class CoverageComponent implements OnInit, OnDestroy {
     reset(): void {
         this.selectedSite = '';
         this.selectedSenderId = null;
+        this.selectedDevices.set([]);
+        this.deviceFilterComponent?.clearSelection();
         this.granularity = 'day';
         this.endTimeFrom = '';
         this.endTimeTo = '';

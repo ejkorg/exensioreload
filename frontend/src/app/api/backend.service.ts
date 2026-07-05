@@ -1229,9 +1229,16 @@ export class BackendService {
     granularity?: 'day' | 'week' | 'month';
     endTimeFrom?: string | null;
     endTimeTo?: string | null;
+    devices?: string[] | null;
   }): Observable<CoveragePoint[]> {
+    let httpParams = this.toParams(params as any);
+    if (params.devices && params.devices.length > 0) {
+      params.devices.forEach((device) => {
+        httpParams = httpParams.append('devices', device);
+      });
+    }
     return this.http.get<CoveragePoint[]>(`${this.apiUrl}/stage/records/coverage`, {
-      params: this.toParams(params as any),
+      params: httpParams,
     });
   }
 
