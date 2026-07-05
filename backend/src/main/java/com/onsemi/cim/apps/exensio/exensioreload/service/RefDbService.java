@@ -997,24 +997,38 @@ public class RefDbService {
         long total = 0;
         long ready = 0;
         long enqueued = 0;
+        long enriching = 0;
+        long enrichmentTimeout = 0;
+        long exensioLoading = 0;
+        long exensioTimeout = 0;
         long failed = 0;
         long completed = 0;
+        long cancelled = 0;
 
         for (StageStatus s : statuses) {
             total += s.total();
             ready += s.ready();
-            enqueued += s.enqueued();
+            enqueued += s.queued();
+            enriching += s.enriching();
+            enrichmentTimeout += s.enrichmentTimeout();
+            exensioLoading += s.exensioLoading();
+            exensioTimeout += s.exensioTimeout();
             failed += s.failed();
             completed += s.completed();
+            cancelled += s.cancelled();
         }
 
         Map<String, Object> evt = new HashMap<>();
         evt.put("total", total);
         evt.put("ready", ready);
-        evt.put("enqueued", enqueued);   // canonical field name
-        evt.put("processing", enqueued); // legacy alias kept for compatibility
+        evt.put("enqueued", enqueued);
+        evt.put("enriching", enriching);
+        evt.put("enrichmentTimeout", enrichmentTimeout);
+        evt.put("exensioLoading", exensioLoading);
+        evt.put("exensioTimeout", exensioTimeout);
         evt.put("failed", failed);
         evt.put("completed", completed);
+        evt.put("cancelled", cancelled);
         evt.put("errorCount", failed);
 
         double progress = total > 0 ? ((completed + failed) * 100.0 / total) : 0;
