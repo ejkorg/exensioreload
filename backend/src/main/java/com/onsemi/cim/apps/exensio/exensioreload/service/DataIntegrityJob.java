@@ -167,7 +167,7 @@ public class DataIntegrityJob {
                 "FROM " + table + " ss " +
                 "WHERE ss.status = 'CANCELLED' " +
                 "AND EXISTS ( " +
-                "  SELECT 1 FROM DTP_SENDER_QUEUE_ITEM q WHERE q.record_id = ss.id " +
+                "  SELECT 1 FROM DTP_SENDER_QUEUE_ITEM q WHERE q.id_metadata = ss.metadata_id AND q.id_data = ss.data_id AND q.id_sender = ss.sender_id " +
                 ") " +
                 "FETCH FIRST 100 ROWS ONLY";
 
@@ -198,13 +198,14 @@ public class DataIntegrityJob {
                 "lot, wafer, filename, status, created_at, updated_at, request_id " +
                 "FROM " + table + " " +
                 "WHERE (status = 'ENRICHMENT' OR status = 'EXENSIO_LOADING') " +
-                "AND DATEDIFF(MINUTE, updated_at, GETDATE()) > ? " +
+                "AND updated_at < ? " +
                 "FETCH FIRST 100 ROWS ONLY";
 
         List<StageRecord> stuckRecords = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, enrichmentTimeoutMinutes);
+            java.time.Instant threshold = java.time.Instant.now().minus(enrichmentTimeoutMinutes, java.time.temporal.ChronoUnit.MINUTES);
+            ps.setTimestamp(1, java.sql.Timestamp.from(threshold));
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     stuckRecords.add(mapRecordFromResultSet(rs));
