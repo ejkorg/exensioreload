@@ -45,43 +45,47 @@ interface SenderOption { id: number; label: string; }
 
   <!-- Filters -->
   <section class="cov-filters glass-panel">
-    <!-- Row 1: Core Selection -->
-    <div class="filter-row">
-      <!-- Environment selector: admin only, defaults to PROD -->
+    <div class="filter-grid">
+      <!-- Environment (admin only) -->
       <app-glass-select
         *ngIf="authService.isAdminSignal()"
         label="Environment"
+        prefixIcon="public"
         [options]="['PROD', 'QA']"
         [ngModel]="selectedEnv()"
         (ngModelChange)="onEnvChange($event)"
       ></app-glass-select>
 
+      <!-- Site -->
       <app-glass-select
         label="Site"
+        prefixIcon="location_on"
         placeholder="Select site"
         [options]="siteOptions()"
         [(ngModel)]="selectedSite"
         (ngModelChange)="onSiteChange($event)"
       ></app-glass-select>
 
+      <!-- Sender -->
       <app-glass-select
         label="Sender"
+        prefixIcon="send"
         placeholder="All senders"
         [options]="glassSenderOptions()"
         [(ngModel)]="selectedSenderId"
       ></app-glass-select>
 
+      <!-- Device -->
       <app-glass-device-filter
         label="Device"
         placeholder="All devices"
         (deviceChange)="onDeviceFilterChange($event)"
       ></app-glass-device-filter>
-    </div>
 
-    <!-- Row 2: Settings & Dates -->
-    <div class="filter-row">
+      <!-- Granularity -->
       <app-glass-select
         label="Granularity"
+        prefixIcon="timeline"
         [options]="[
           { value: 'day', label: 'Day' },
           { value: 'week', label: 'Week' },
@@ -90,35 +94,34 @@ interface SenderOption { id: number; label: string; }
         [(ngModel)]="granularity"
       ></app-glass-select>
 
+      <!-- End-Time From -->
       <app-glass-datepicker
         label="End-Time From"
         [includeTime]="false"
         [(ngModel)]="endTimeFrom"
       ></app-glass-datepicker>
 
+      <!-- End-Time To -->
       <app-glass-datepicker
         label="End-Time To"
         [includeTime]="false"
         [(ngModel)]="endTimeTo"
       ></app-glass-datepicker>
 
+      <!-- Actions -->
       <div class="filter-actions">
         <app-glass-button
           variant="primary"
           [disabled]="!selectedSite"
           [loading]="loading()"
           (clicked)="load()"
-        >
-          Run Report
-        </app-glass-button>
+        >Run Report</app-glass-button>
         <app-glass-button variant="secondary" (clicked)="reset()">Reset</app-glass-button>
         <app-glass-button
           variant="secondary"
           [disabled]="points().length === 0"
           (clicked)="exportCsv()"
-        >
-          Export CSV
-        </app-glass-button>
+        >Export CSV</app-glass-button>
       </div>
     </div>
   </section>
@@ -235,15 +238,32 @@ interface SenderOption { id: number; label: string; }
     .cov-header h1 { margin:0; font-size:1.1rem; font-weight:700; letter-spacing:-0.01em; }
     .accent { color:#a78bfa; }
     .subtitle { margin:0.15rem 0 0; color:var(--text-muted); font-size:0.82rem; }
-    .cov-filters { padding:1.1rem; border-radius:14px; display:flex; flex-direction:column; gap:1rem; }
-    .filter-row { display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; }
-    .filter-row app-glass-select,
-    .filter-row app-glass-datepicker,
-    .filter-row app-glass-device-filter {
-      flex: 1 1 200px;
-      min-width: 180px;
-      max-width: 280px;
+    .cov-filters { padding:1.25rem; border-radius:14px; }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      align-items: end;
     }
+    @media (max-width: 1200px) {
+      .filter-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 860px) {
+      .filter-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .filter-grid { grid-template-columns: 1fr; }
+    }
+    .filter-grid app-glass-select,
+    .filter-grid app-glass-datepicker,
+    .filter-grid app-glass-device-filter { width: 100%; }
+    .filter-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      align-self: end;
+    }
+    .filter-actions app-glass-button { width: 100%; }
     .filter-label { display:flex; flex-direction:column; gap:0.3rem; font-size:0.74rem; font-weight:600; color:rgba(167,139,250,0.85); text-transform:uppercase; letter-spacing:0.05em; }
     .filter-label.inline { flex-direction:row; align-items:center; gap:0.5rem; text-transform:none; font-size:0.82rem; }
     .cov-select, .cov-input { height:34px; border-radius:9px; border:1px solid rgba(167,139,250,0.26); background:rgba(20,16,44,0.65) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a78bfa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 0.55rem center; color:rgba(226,232,255,0.94); padding:0 2rem 0 0.65rem; font-size:0.82rem; appearance:none; -webkit-appearance:none; min-width:130px; }

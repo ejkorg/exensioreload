@@ -115,11 +115,11 @@ export interface GlassOption {
 
     .floating-label {
       font-size: 0.6875rem; // 11px - matches input component
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.05em; // Increased for better readability
+      font-weight: 700;
+      color: rgba(167, 139, 250, 0.85);
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      margin-bottom: 4px; // Increased from 2px
+      margin-bottom: 4px;
     }
 
     .select-trigger {
@@ -196,15 +196,16 @@ export interface GlassOption {
     }
 
     .prefix-icon, .chevron-icon {
-      color: var(--text-muted);
-      font-size: 1.25rem;
-      width: 1.25rem;
-      height: 1.25rem;
+      color: rgba(167, 139, 250, 0.7);
+      font-size: 1.1rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      flex-shrink: 0;
     }
 
     .is-open .chevron-icon {
       transform: rotate(180deg);
-      color: var(--accent-color);
+      color: #a78bfa;
     }
 
     .editable-trigger {

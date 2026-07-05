@@ -9,6 +9,7 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import * as echarts from 'echarts';
 import { forkJoin } from 'rxjs';
@@ -26,6 +27,7 @@ import { GlassButtonComponent } from '../shared/components/glass-button.componen
 import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
+import { GlassSelectComponent, GlassOption } from '../shared/components/glass-select.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
 import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '../shared/utils/datetime.util';
 
@@ -35,10 +37,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
+    FormsModule,
     GlassButtonComponent,
     GlassDeviceFilterComponent,
     GlassIconComponent,
     GlassLoadingOverlayComponent,
+    GlassSelectComponent,
     SiteNamePipe,
   ],
   template: `
@@ -57,49 +61,57 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       </div>
 
       <div class="session-filters">
-        <div class="filter-search-wrap">
-          <app-glass-icon name="search" [size]="15" class="filter-search-icon"></app-glass-icon>
-          <input
-            class="filter-input filter-input--search"
-            type="text"
-            placeholder="Search sessions…"
-            [value]="searchText()"
-            (input)="onSearchTextChange($event)"
-          />
-        </div>
-        <select class="filter-select" [value]="senderIdFilter() ?? ''" (change)="onSenderIdFilterChange($event)">
-          <option value="">All Senders</option>
-          <option *ngFor="let sender of senderFilterOptions()" [value]="sender.id">
-            {{ sender.id }}{{ sender.name ? ' · ' + sender.name : '' }}
-          </option>
-        </select>
-        <select
-          *ngIf="showUserColumn()"
-          class="filter-select"
-          [value]="usernameFilter()"
-          (change)="onUsernameFilterChange($event)"
-        >
-          <option value="">All Users</option>
-          <option *ngFor="let user of userFilterOptions()" [value]="user">{{ user }}</option>
-        </select>
-        <select class="filter-select" [value]="statusFilter()" (change)="onStatusFilterChange($event)">
-          <option value="">All Status</option>
-          <option value="STAGING">STAGING</option>
-          <option value="DISPATCHING">DISPATCHING</option>
-          <option value="MONITORING">MONITORING</option>
-          <option value="COMPLETED">COMPLETED</option>
-          <option value="PARTIALLY_FAILED">PARTIALLY_FAILED</option>
-          <option value="CANCELLED">CANCELLED</option>
-        </select>
-        <app-glass-device-filter
-          label="Device"
-          placeholder="All devices"
-          [disabled]="false"
-          (deviceChange)="onDeviceFilterChange($event)"
-        ></app-glass-device-filter>
-        <div class="filter-actions">
-          <app-glass-button variant="primary" size="small" (clicked)="applySessionFilters()">Apply</app-glass-button>
-          <app-glass-button variant="secondary" size="small" (clicked)="clearSessionFilters()">Clear</app-glass-button>
+        <div class="filter-grid">
+          <div class="filter-search-wrap">
+            <app-glass-icon name="search" [size]="15" class="filter-search-icon"></app-glass-icon>
+            <input
+              class="filter-input filter-input--search"
+              type="text"
+              placeholder="Search sessions…"
+              [value]="searchText()"
+              (input)="onSearchTextChange($event)"
+            />
+          </div>
+
+          <app-glass-select
+            label="Sender"
+            prefixIcon="send"
+            placeholder="All Senders"
+            [options]="glassSenderFilterOptions()"
+            [ngModel]="senderIdFilter()"
+            (ngModelChange)="onSenderSelectChange($event)"
+          ></app-glass-select>
+
+          <app-glass-select
+            *ngIf="showUserColumn()"
+            label="User"
+            prefixIcon="person"
+            placeholder="All Users"
+            [options]="glassUserFilterOptions()"
+            [ngModel]="usernameFilter()"
+            (ngModelChange)="onUsernameSelectChange($event)"
+          ></app-glass-select>
+
+          <app-glass-select
+            label="Status"
+            prefixIcon="flag"
+            placeholder="All Status"
+            [options]="statusSelectOptions"
+            [ngModel]="statusFilter()"
+            (ngModelChange)="onStatusSelectChange($event)"
+          ></app-glass-select>
+
+          <app-glass-device-filter
+            label="Device"
+            placeholder="All devices"
+            [disabled]="false"
+            (deviceChange)="onDeviceFilterChange($event)"
+          ></app-glass-device-filter>
+
+          <div class="filter-actions">
+            <app-glass-button variant="primary" (clicked)="applySessionFilters()">Apply</app-glass-button>
+            <app-glass-button variant="secondary" (clicked)="clearSessionFilters()">Clear</app-glass-button>
+          </div>
         </div>
       </div>
 
@@ -631,15 +643,25 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         backdrop-filter: blur(8px);
       }
       .session-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-        padding: 0.75rem 1rem;
+        padding: 1rem;
         background: rgba(30, 22, 68, 0.5);
         border: 1px solid rgba(167, 139, 250, 0.16);
         border-radius: 14px;
       }
+      .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        align-items: end;
+      }
+      @media (max-width: 1100px) {
+        .filter-grid { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (max-width: 640px) {
+        .filter-grid { grid-template-columns: 1fr; }
+      }
+      .filter-grid app-glass-select,
+      .filter-grid app-glass-device-filter { width: 100%; }
       .filter-search-wrap {
         position: relative;
         display: flex;
@@ -647,53 +669,42 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .filter-search-icon {
         position: absolute;
-        left: 0.6rem;
+        left: 0.85rem;
         pointer-events: none;
         opacity: 0.55;
-      }
-      .filter-input,
-      .filter-select {
-        height: 34px;
-        border-radius: 10px;
-        border: 1px solid rgba(167, 139, 250, 0.24);
-        background: rgba(20, 16, 44, 0.65)
-          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a78bfa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-          no-repeat right 0.6rem center;
-        color: rgba(226, 232, 255, 0.94);
-        padding: 0 2rem 0 0.6rem;
-        min-width: 140px;
-        font-size: 0.82rem;
-        appearance: none;
-        -webkit-appearance: none;
-        cursor: pointer;
-        transition:
-          border-color 0.18s ease,
-          box-shadow 0.18s ease;
+        z-index: 1;
       }
       .filter-input {
-        background-image: none;
-        padding-right: 0.6rem;
+        height: 56px;
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(16px);
+        color: rgba(226, 232, 255, 0.94);
+        padding: 0 1rem;
+        font-size: 0.9375rem;
         cursor: text;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
       }
       .filter-input--search {
-        padding-left: 2rem;
-        min-width: 200px;
+        padding-left: 2.5rem;
       }
-      .filter-select:focus,
       .filter-input:focus {
-        outline: none;
-        border-color: rgba(167, 139, 250, 0.5);
-        box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
+        border-color: rgba(167, 139, 250, 0.65);
+        box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
       }
-      .filter-select option {
-        background: #1a1240;
-        color: rgba(226, 232, 255, 0.94);
+      .filter-input:hover {
+        border-color: rgba(255, 255, 255, 0.15);
       }
       .filter-actions {
         display: flex;
-        gap: 0.4rem;
-        margin-left: auto;
+        gap: 0.5rem;
+        align-self: end;
       }
+      .filter-actions app-glass-button { flex: 1; }
       .table-meta-bar {
         display: flex;
         align-items: center;
@@ -2276,6 +2287,29 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     );
     return (users as string[]).sort((a: string, b: string) => a.localeCompare(b));
   });
+
+  glassSenderFilterOptions = computed((): GlassOption[] => {
+    const base = this.senderFilterOptions().map(s => ({
+      value: s.id,
+      label: `${s.id}${s.name ? ' · ' + s.name : ''}`
+    }));
+    return [{ value: null, label: 'All Senders' }, ...base];
+  });
+
+  glassUserFilterOptions = computed((): GlassOption[] => {
+    const base = this.userFilterOptions().map(u => ({ value: u, label: u }));
+    return [{ value: '', label: 'All Users' }, ...base];
+  });
+
+  readonly statusSelectOptions: GlassOption[] = [
+    { value: '', label: 'All Status' },
+    { value: 'STAGING', label: 'Staging' },
+    { value: 'DISPATCHING', label: 'Dispatching' },
+    { value: 'MONITORING', label: 'Monitoring' },
+    { value: 'COMPLETED', label: 'Completed' },
+    { value: 'PARTIALLY_FAILED', label: 'Partially Failed' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+  ];
   private readonly statusOrder = ['DONE', 'ENQUEUED', 'FAILED', 'CANCELLED', 'NEW'];
 
   dailyStatusRows = computed(() => {
@@ -2473,12 +2507,24 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     this.senderIdFilter.set(parsed && parsed > 0 ? parsed : null);
   }
 
+  onSenderSelectChange(val: any) {
+    this.senderIdFilter.set(val != null && val !== '' ? Number(val) : null);
+  }
+
   onUsernameFilterChange(event: Event) {
     this.usernameFilter.set(((event.target as HTMLSelectElement)?.value || '').trim());
   }
 
+  onUsernameSelectChange(val: string) {
+    this.usernameFilter.set(val || '');
+  }
+
   onStatusFilterChange(event: Event) {
     this.statusFilter.set(((event.target as HTMLSelectElement)?.value || '').trim());
+  }
+
+  onStatusSelectChange(val: string) {
+    this.statusFilter.set(val || '');
   }
 
   onDeviceFilterChange(devices: string[]): void {
