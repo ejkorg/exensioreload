@@ -214,6 +214,7 @@ export interface StageRecordView {
   id?: number;
   lot: string;
   wafer: string;
+  device?: string | null;
   filename: string;
   status: string;
   updated?: string | null;
@@ -1290,9 +1291,6 @@ export class BackendService {
         console.error('Failed to connect to dashboard state stream:', error);
         observer.error(error);
         return () => {};
-      }
-    });
-  }
       }
     });
   }

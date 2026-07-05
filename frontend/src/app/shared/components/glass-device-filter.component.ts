@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { StagingSessionService } from '../services/staging-session.service';
 import { GlassSelectComponent } from './glass-select.component';
 
@@ -15,15 +16,15 @@ import { GlassSelectComponent } from './glass-select.component';
 @Component({
   selector: 'app-glass-device-filter',
   standalone: true,
-  imports: [CommonModule, GlassSelectComponent],
+  imports: [CommonModule, FormsModule, GlassSelectComponent],
   template: `
     <app-glass-select
       [label]="label"
       [placeholder]="placeholder"
       [multiple]="true"
       [options]="deviceOptions()"
-      [value]="selectedDevices()"
-      (valueChange)="onDeviceChange($event)"
+      [ngModel]="selectedDevices()"
+      (ngModelChange)="onDeviceChange($event)"
       [disabled]="disabled"
       prefixIcon="devices"
     />

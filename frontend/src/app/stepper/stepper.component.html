@@ -161,8 +161,8 @@
                 [editable]="true"
                 [multiple]="false"
                 [options]="deviceOptions()"
-                [value]="deviceFilter()"
-                (valueChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
+                [ngModel]="deviceFilter()"
+                (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
                 [disabled]="!selectedDataType()"
                 prefixIcon="devices"
               >

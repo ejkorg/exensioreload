@@ -19,7 +19,6 @@ import { ActivityFeedComponent } from '../shared/components/activity-feed.compon
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { DateRange, GlassDateRangeComponent } from '../shared/components/glass-date-range.component';
-import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
@@ -114,7 +113,6 @@ interface DuplicateStageContext {
     ActivityFeedComponent,
     GlassSenderSelectorComponent,
     GlassLoadingOverlayComponent,
-    GlassDeviceFilterComponent,
     SiteNamePipe,
   ],
   templateUrl: './stepper.component.html',
