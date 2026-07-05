@@ -34,7 +34,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
               (click)="statusFilter.set('ENRICHMENT')"
             >
               <app-glass-icon name="refresh" [size]="14"></app-glass-icon>
-              Enrichment
+              Enrichment Processing
             </button>
             <button
               class="filter-chip"
@@ -759,11 +759,11 @@ export class MonitoringFileListComponent {
       case 'success':
         return 'Enrichment: Done';
       case 'pending':
-        return 'Enrichment: In Progress';
+        return 'Enrichment: Processing';
       case 'failure':
         return 'Enrichment: Failed';
       case 'timeout':
-        return 'Enrichment: Timeout';
+        return 'Enrichment: Monitoring Timeout';
       case 'not_found':
         return 'Enrichment: Not Found';
       case 'error':
