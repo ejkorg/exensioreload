@@ -1,4 +1,4 @@
-import { Component, Input, forwardRef, signal, computed } from '@angular/core';
+import { Component, Input, forwardRef, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -20,24 +20,26 @@ import { MatIconModule } from '@angular/material/icon';
 
       <div class="date-input-group">
         <input
+          #dateInputEl
           type="date"
           class="date-input"
           [value]="getDateInputValue()"
           (change)="onDateChange($event)"
           [disabled]="disabled"
         />
-        <mat-icon class="calendar-icon">calendar_today</mat-icon>
+        <mat-icon class="calendar-icon" (click)="openDatePicker()">calendar_today</mat-icon>
       </div>
 
       <div class="time-input-group" *ngIf="includeTime">
         <input
+          #timeInputEl
           type="time"
           class="time-input"
           [value]="getTimeInputValue()"
           (change)="onTimeChange($event)"
           [disabled]="disabled"
         />
-        <mat-icon class="time-icon">schedule</mat-icon>
+        <mat-icon class="time-icon" (click)="openTimePicker()">schedule</mat-icon>
       </div>
 
       <p class="helper-text" *ngIf="helperText">{{ helperText }}</p>
@@ -52,16 +54,15 @@ import { MatIconModule } from '@angular/material/icon';
     .glass-datepicker-container {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.4rem;
     }
 
     .floating-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.02em;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: rgba(167,139,250,0.85);
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      margin-bottom: 2px;
     }
 
     .date-input-group,
@@ -74,68 +75,74 @@ import { MatIconModule } from '@angular/material/icon';
     .date-input,
     .time-input {
       width: 100%;
-      padding: 0.75rem 1rem 0.75rem 2.5rem;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      color: #fff;
-      font-size: 1rem;
+      padding: 0 1rem 0 2.75rem;
+      background: rgba(15, 12, 35, 0.6);
+      border: 1px solid rgba(167, 139, 250, 0.2);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text-main, #e2e8f0);
+      font-size: 0.9rem;
       outline: none;
-      transition: all 0.3s ease;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
       height: 52px;
       box-sizing: border-box;
+      cursor: pointer;
     }
 
     .date-input:hover,
     .time-input:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.15);
+      border-color: rgba(167, 139, 250, 0.4);
     }
 
     .date-input:focus,
     .time-input:focus {
-      border-color: var(--accent-color);
-      box-shadow: 0 0 20px rgba(129, 140, 248, 0.15);
-      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(167, 139, 250, 0.65);
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
     }
 
     .date-input:disabled,
     .time-input:disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       cursor: not-allowed;
     }
 
-    /* Style the calendar and time picker inputs */
+    /* Hide the default browser calendar icon — we supply our own */
     .date-input::-webkit-calendar-picker-indicator,
     .time-input::-webkit-calendar-picker-indicator {
-      display: none;
+      opacity: 0;
+      position: absolute;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
     }
 
     .calendar-icon,
     .time-icon {
       position: absolute;
       left: 0.75rem;
-      color: var(--text-muted);
-      font-size: 1.25rem;
-      width: 1.25rem;
-      height: 1.25rem;
-      pointer-events: none;
+      color: rgba(167, 139, 250, 0.7);
+      font-size: 1.1rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: color 0.2s ease;
+    }
+
+    .calendar-icon:hover,
+    .time-icon:hover {
+      color: #a78bfa;
     }
 
     .helper-text {
       font-size: 0.75rem;
       color: var(--text-muted);
       margin: 0;
-      margin-top: 0.25rem;
     }
 
-    /* Webkit specific styling for calendar input */
-    .date-input {
-      color-scheme: dark;
-    }
-
+    .date-input,
     .time-input {
       color-scheme: dark;
     }
@@ -146,11 +153,28 @@ export class GlassDatepickerComponent implements ControlValueAccessor {
   @Input() helperText: string = '';
   @Input() includeTime: boolean = true;
 
+  @ViewChild('dateInputEl') dateInputEl?: ElementRef<HTMLInputElement>;
+  @ViewChild('timeInputEl') timeInputEl?: ElementRef<HTMLInputElement>;
+
   value = signal<string | null>(null);
   disabled: boolean = false;
 
   onChange: any = () => { };
   onTouched: any = () => { };
+
+  openDatePicker() {
+    const el = this.dateInputEl?.nativeElement;
+    if (el && typeof el.showPicker === 'function') {
+      try { el.showPicker(); } catch (e) { /* fallback: el.click() */ el.click(); }
+    }
+  }
+
+  openTimePicker() {
+    const el = this.timeInputEl?.nativeElement;
+    if (el && typeof el.showPicker === 'function') {
+      try { el.showPicker(); } catch (e) { el.click(); }
+    }
+  }
 
   onDateChange(event: Event) {
     const input = event.target as HTMLInputElement;

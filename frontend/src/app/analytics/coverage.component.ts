@@ -45,6 +45,7 @@ interface SenderOption { id: number; label: string; }
 
   <!-- Filters -->
   <section class="cov-filters glass-panel">
+    <!-- Row 1: Core Selection -->
     <div class="filter-row">
       <!-- Environment selector: admin only, defaults to PROD -->
       <app-glass-select
@@ -75,7 +76,10 @@ interface SenderOption { id: number; label: string; }
         placeholder="All devices"
         (deviceChange)="onDeviceFilterChange($event)"
       ></app-glass-device-filter>
+    </div>
 
+    <!-- Row 2: Settings & Dates -->
+    <div class="filter-row">
       <app-glass-select
         label="Granularity"
         [options]="[
@@ -231,7 +235,7 @@ interface SenderOption { id: number; label: string; }
     .cov-header h1 { margin:0; font-size:1.1rem; font-weight:700; letter-spacing:-0.01em; }
     .accent { color:#a78bfa; }
     .subtitle { margin:0.15rem 0 0; color:var(--text-muted); font-size:0.82rem; }
-    .cov-filters { padding:0.9rem 1.1rem; border-radius:14px; }
+    .cov-filters { padding:1.1rem; border-radius:14px; display:flex; flex-direction:column; gap:1rem; }
     .filter-row { display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; }
     .filter-row app-glass-select,
     .filter-row app-glass-datepicker,
