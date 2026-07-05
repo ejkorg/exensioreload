@@ -107,22 +107,22 @@ interface SenderOption { id: number; label: string; }
         [includeTime]="false"
         [(ngModel)]="endTimeTo"
       ></app-glass-datepicker>
+    </div>
 
-      <!-- Actions -->
-      <div class="filter-actions">
-        <app-glass-button
-          variant="primary"
-          [disabled]="!selectedSite"
-          [loading]="loading()"
-          (clicked)="load()"
-        >Run Report</app-glass-button>
-        <app-glass-button variant="secondary" (clicked)="reset()">Reset</app-glass-button>
-        <app-glass-button
-          variant="secondary"
-          [disabled]="points().length === 0"
-          (clicked)="exportCsv()"
-        >Export CSV</app-glass-button>
-      </div>
+    <!-- Actions -->
+    <div class="filter-actions">
+      <app-glass-button variant="secondary" (clicked)="reset()">Reset</app-glass-button>
+      <app-glass-button
+        variant="secondary"
+        [disabled]="points().length === 0"
+        (clicked)="exportCsv()"
+      >Export CSV</app-glass-button>
+      <app-glass-button
+        variant="primary"
+        [disabled]="!selectedSite"
+        [loading]="loading()"
+        (clicked)="load()"
+      >Run Report</app-glass-button>
     </div>
   </section>
 
@@ -259,11 +259,13 @@ interface SenderOption { id: number; label: string; }
     .filter-grid app-glass-device-filter { width: 100%; }
     .filter-actions {
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      align-self: end;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(167, 139, 250, 0.15);
     }
-    .filter-actions app-glass-button { width: 100%; }
     .filter-label { display:flex; flex-direction:column; gap:0.3rem; font-size:0.74rem; font-weight:600; color:rgba(167,139,250,0.85); text-transform:uppercase; letter-spacing:0.05em; }
     .filter-label.inline { flex-direction:row; align-items:center; gap:0.5rem; text-transform:none; font-size:0.82rem; }
     .cov-select, .cov-input { height:34px; border-radius:9px; border:1px solid rgba(167,139,250,0.26); background:rgba(20,16,44,0.65) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a78bfa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 0.55rem center; color:rgba(226,232,255,0.94); padding:0 2rem 0 0.65rem; font-size:0.82rem; appearance:none; -webkit-appearance:none; min-width:130px; }
@@ -271,7 +273,7 @@ interface SenderOption { id: number; label: string; }
     .cov-input--search { min-width:220px; }
     .cov-select:focus, .cov-input:focus { outline:none; border-color:rgba(167,139,250,0.55); box-shadow:0 0 0 2px rgba(129,140,248,0.15); }
     .cov-select option { background:#1a1240; }
-    .filter-actions { display:flex; gap:0.45rem; align-items:flex-end; padding-bottom:1px; }
+
     .cov-btn { height:34px; padding:0 1rem; border-radius:9px; border:1px solid transparent; font-size:0.82rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; transition:all 0.18s ease; }
     .cov-btn--primary { background:linear-gradient(135deg,rgba(99,102,241,0.85),rgba(139,92,246,0.85)); border-color:rgba(167,139,250,0.4); color:#fff; }
     .cov-btn--primary:hover:not(:disabled) { background:linear-gradient(135deg,rgba(99,102,241,1),rgba(139,92,246,1)); }

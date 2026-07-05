@@ -107,11 +107,11 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
             [disabled]="false"
             (deviceChange)="onDeviceFilterChange($event)"
           ></app-glass-device-filter>
+        </div>
 
-          <div class="filter-actions">
-            <app-glass-button variant="primary" (clicked)="applySessionFilters()">Apply</app-glass-button>
-            <app-glass-button variant="secondary" (clicked)="clearSessionFilters()">Clear</app-glass-button>
-          </div>
+        <div class="filter-actions">
+          <app-glass-button variant="secondary" (clicked)="clearSessionFilters()">Clear</app-glass-button>
+          <app-glass-button variant="primary" (clicked)="applySessionFilters()">Apply</app-glass-button>
         </div>
       </div>
 
@@ -701,10 +701,13 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .filter-actions {
         display: flex;
-        gap: 0.5rem;
-        align-self: end;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid rgba(167, 139, 250, 0.15);
       }
-      .filter-actions app-glass-button { flex: 1; }
       .table-meta-bar {
         display: flex;
         align-items: center;
