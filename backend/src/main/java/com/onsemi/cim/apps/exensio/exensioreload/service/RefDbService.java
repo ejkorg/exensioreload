@@ -3301,6 +3301,24 @@ public class RefDbService {
             log.debug("Batch marked ERROR: {} records", errorCount);
         }
 
+        // Process EXENSIO_TIMEOUT updates
+        // Requirements: 2.1, 2.2, 2.3 — wafer not found in Exensio after configured timeout
+        List<BatchResult.RecordUpdate> exensioTimeoutUpdates = grouped.get(BatchResult.UpdateType.EXENSIO_TIMEOUT);
+        if (exensioTimeoutUpdates != null && !exensioTimeoutUpdates.isEmpty()) {
+            int exensioTimeoutCount = batchMarkExensioTimeout(exensioTimeoutUpdates);
+            totalUpdated += exensioTimeoutCount;
+            log.debug("Batch marked EXENSIO_TIMEOUT: {} records", exensioTimeoutCount);
+        }
+
+        // Process ENRICHMENT_TIMEOUT updates
+        // Requirements: 1.1, 1.2, 1.3 — enrichment not confirmed after configured timeout
+        List<BatchResult.RecordUpdate> enrichmentTimeoutUpdates = grouped.get(BatchResult.UpdateType.ENRICHMENT_TIMEOUT);
+        if (enrichmentTimeoutUpdates != null && !enrichmentTimeoutUpdates.isEmpty()) {
+            int enrichmentTimeoutCount = batchMarkEnrichmentTimeout(enrichmentTimeoutUpdates);
+            totalUpdated += enrichmentTimeoutCount;
+            log.debug("Batch marked ENRICHMENT_TIMEOUT: {} records", enrichmentTimeoutCount);
+        }
+
         long elapsedMs = Duration.between(startTime, Instant.now()).toMillis();
         log.info("Batch update completed: {} records updated in {}ms", totalUpdated, elapsedMs);
 
@@ -3564,6 +3582,130 @@ public class RefDbService {
             log.error("Failed batch marking ERROR: {}", ex.getMessage(), ex);
             // Retry failed records individually
             totalUpdated += retryIndividualErrorUpdates(updates);
+        }
+
+        return totalUpdated;
+    }
+
+    /**
+     * Batch mark records as EXENSIO_TIMEOUT.
+     * Wafer not found in Exensio after the configured monitoring timeout.
+     * This is NOT a failure — the record may have loaded but was not detected.
+     * Operators should manually verify in Exensio before taking corrective action.
+     *
+     * Requirements: 2.1, 2.2, 2.3
+     */
+    private int batchMarkExensioTimeout(List<BatchResult.RecordUpdate> updates) {
+        if (updates == null || updates.isEmpty()) {
+            return 0;
+        }
+
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET status = 'EXENSIO_TIMEOUT', error_message = ?," +
+                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+                " WHERE id = ?";
+
+        int totalUpdated = 0;
+        int batchCount = 0;
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                for (BatchResult.RecordUpdate update : updates) {
+                    String errorMsg = update.errorMessage() != null ?
+                            truncate(update.errorMessage()) :
+                            "[Exensio Timeout] Wafer not found after " +
+                            exensioProperties.getTimeoutMinutes() +
+                            " minutes. May need manual verification or retry.";
+                    ps.setString(1, errorMsg);
+                    ps.setLong(2, update.recordId());
+                    ps.addBatch();
+                    batchCount++;
+
+                    if (batchCount % 100 == 0) {
+                        int[] counts = ps.executeBatch();
+                        connection.commit();
+                        totalUpdated += counts.length;
+                        log.debug("Committed EXENSIO_TIMEOUT batch: {} records", counts.length);
+                    }
+                }
+
+                if (batchCount % 100 != 0) {
+                    int[] counts = ps.executeBatch();
+                    connection.commit();
+                    totalUpdated += counts.length;
+                    log.debug("Committed final EXENSIO_TIMEOUT batch: {} records", counts.length);
+                }
+            }
+
+            broadcastBatchEvents(updates, "EXENSIO_TIMEOUT", "Exensio monitoring timeout — verify manually");
+
+        } catch (SQLException ex) {
+            log.error("Failed batch marking EXENSIO_TIMEOUT: {}", ex.getMessage(), ex);
+        }
+
+        return totalUpdated;
+    }
+
+    /**
+     * Batch mark records as ENRICHMENT_TIMEOUT.
+     * No enrichment log found in ES/pp_log within the monitoring window.
+     * This is NOT a failure — enrichment may have occurred but was not detected.
+     * Operators should manually verify before taking corrective action.
+     *
+     * Requirements: 1.1, 1.2, 1.3
+     */
+    private int batchMarkEnrichmentTimeout(List<BatchResult.RecordUpdate> updates) {
+        if (updates == null || updates.isEmpty()) {
+            return 0;
+        }
+
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET status = 'ENRICHMENT_TIMEOUT', error_message = ?," +
+                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+                " WHERE id = ?";
+
+        int totalUpdated = 0;
+        int batchCount = 0;
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                for (BatchResult.RecordUpdate update : updates) {
+                    String errorMsg = update.errorMessage() != null ?
+                            truncate(update.errorMessage()) :
+                            "[Enrichment Timeout] No enrichment log found after " +
+                            elasticsearchProperties.getEnrichmentTimeoutMinutes() +
+                            " minutes. Needs manual verification or retry.";
+                    ps.setString(1, errorMsg);
+                    ps.setLong(2, update.recordId());
+                    ps.addBatch();
+                    batchCount++;
+
+                    if (batchCount % 100 == 0) {
+                        int[] counts = ps.executeBatch();
+                        connection.commit();
+                        totalUpdated += counts.length;
+                        log.debug("Committed ENRICHMENT_TIMEOUT batch: {} records", counts.length);
+                    }
+                }
+
+                if (batchCount % 100 != 0) {
+                    int[] counts = ps.executeBatch();
+                    connection.commit();
+                    totalUpdated += counts.length;
+                    log.debug("Committed final ENRICHMENT_TIMEOUT batch: {} records", counts.length);
+                }
+            }
+
+            broadcastBatchEvents(updates, "ENRICHMENT_TIMEOUT", "Enrichment monitoring timeout — verify manually");
+
+        } catch (SQLException ex) {
+            log.error("Failed batch marking ENRICHMENT_TIMEOUT: {}", ex.getMessage(), ex);
         }
 
         return totalUpdated;
