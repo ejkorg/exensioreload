@@ -459,15 +459,15 @@ export class MonitoringService {
       case 'READY':
         return `File staged: ${file.filename}`;
       case 'ENQUEUED':
-        return `In Queue (pending CP): ${file.filename}`;
+        return `Queued for Enrichment: ${file.filename}`;
       case 'ENRICHMENT':
-        return `Enrichment / Translation: ${file.filename}`;
+        return `Enrichment Processing: ${file.filename}`;
       case 'ENRICHMENT_TIMEOUT':
-        return `Enrichment Timeout: ${file.filename}`;
+        return `Enrichment Monitoring Timeout: ${file.filename}`;
       case 'EXENSIO_LOADING':
-        return `Exensio Loading: ${file.filename}`;
+        return `Exensio Monitoring: ${file.filename}`;
       case 'EXENSIO_TIMEOUT':
-        return `Exensio Timeout: ${file.filename}`;
+        return `Completed — Verify in Exensio: ${file.filename}`;
       case 'COMPLETED':
         return `Completed: ${file.filename}`;
       case 'ERROR':

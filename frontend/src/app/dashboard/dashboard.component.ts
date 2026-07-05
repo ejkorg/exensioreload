@@ -262,7 +262,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         subtext: 'ready to dispatch',
       },
       {
-        label: 'Queued for CP',
+        label: 'Queued for Enrichment',
         abbrev: 'QUE',
         value: s.global.queued,
         icon: 'schedule',
@@ -271,7 +271,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         subtext: 'waiting in queue',
       },
       {
-        label: 'In Enrichment',
+        label: 'Enrichment Processing',
         abbrev: 'ENR',
         value: s.global.enriching,
         icon: 'auto_awesome',
@@ -280,31 +280,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
         subtext: 'actively enriching',
       },
       {
-        label: 'Enrichment Timeout',
+        label: 'Enrichment Monitoring Timeout',
         abbrev: 'ENT',
         value: s.global.enrichmentTimeout,
         icon: 'schedule',
         color: 'warning',
         accentColor: '#f59e0b',
-        subtext: 'timed out — needs verification',
+        subtext: 'no log found — verify manually',
       },
       {
-        label: 'Exensio Loading',
+        label: 'Exensio Monitoring',
         abbrev: 'EXL',
         value: s.global.exensioLoading,
         icon: 'cloud_download',
         color: 'info',
         accentColor: '#06b6d4',
-        subtext: 'exensio verification',
+        subtext: 'monitoring exensio load',
       },
       {
-        label: 'Exensio Timeout',
+        label: 'Completed — Verify in Exensio',
         abbrev: 'EXT',
         value: s.global.exensioTimeout,
         icon: 'schedule',
         color: 'warning',
         accentColor: '#f59e0b',
-        subtext: 'wafer not found — may appear later',
+        subtext: 'not confirmed — verify in exensio',
       },
       {
         label: 'Completed',
@@ -536,11 +536,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   openMetricCardDetail(metric: MetricCard): void {
     const stateMap: { [key: string]: string } = {
       Staged: 'pending',
-      'Queued for CP': 'ENQUEUED',
-      'In Enrichment': 'ENRICHMENT',
-      'Enrichment Timeout': 'ENRICHMENT_TIMEOUT',
-      'Exensio Loading': 'EXENSIO_LOADING',
-      'Exensio Timeout': 'EXENSIO_TIMEOUT',
+      'Queued for Enrichment': 'ENQUEUED',
+      'Enrichment Processing': 'ENRICHMENT',
+      'Enrichment Monitoring Timeout': 'ENRICHMENT_TIMEOUT',
+      'Exensio Monitoring': 'EXENSIO_LOADING',
+      'Completed — Verify in Exensio': 'EXENSIO_TIMEOUT',
       Completed: 'DONE',
       Failed: 'FAILED',
       Cancelled: 'CANCELLED',
@@ -751,15 +751,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     switch (metricLabel) {
       case 'Staged':
         return 'metric-ready';
-      case 'Queued for CP':
+      case 'Queued for Enrichment':
         return 'metric-queued';
-      case 'In Enrichment':
+      case 'Enrichment Processing':
         return 'metric-enriching';
-      case 'Enrichment Timeout':
+      case 'Enrichment Monitoring Timeout':
         return 'metric-enrichmentTimeout';
-      case 'Exensio Loading':
+      case 'Exensio Monitoring':
         return 'metric-exensioLoading';
-      case 'Exensio Timeout':
+      case 'Completed — Verify in Exensio':
         return 'metric-exensioTimeout';
       case 'Completed':
         return 'metric-completed';

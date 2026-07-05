@@ -24,117 +24,115 @@ export class StateLegendService {
         statusValue: 'pending',
         color: 'secondary',
         icon: 'inbox',
-        nextStates: ['Queued for CP'],
+        nextStates: ['Queued for Enrichment'],
         isTerminal: false,
         tooltip: `Staged (pending)
-Ready for dispatch to the CP pipeline.
+Ready for dispatch to the enrichment pipeline.
 Example transition: pending → ENQUEUED → ENRICHMENT → DONE`,
       },
     ],
     [
-      'Queued for CP',
+      'Queued for Enrichment',
       {
-        label: 'Queued for CP',
-        description: 'Waiting to enter CP pipeline',
+        label: 'Queued for Enrichment',
+        description: 'Waiting to enter enrichment pipeline',
         statusValue: 'ENQUEUED',
         color: 'info',
         icon: 'schedule',
-        nextStates: ['In Enrichment'],
+        nextStates: ['Enrichment Processing'],
         isTerminal: false,
-        tooltip: `Queued for CP (ENQUEUED)
-Waiting to enter the Coverage Point (CP) enrichment pipeline.
+        tooltip: `Queued for Enrichment (ENQUEUED)
+Record has been inserted into the send queue and is waiting to be picked up for enrichment processing.
 Example transition: ENQUEUED → ENRICHMENT → EXENSIO_LOADING → DONE`,
       },
     ],
     [
-      'In Enrichment',
+      'Enrichment Processing',
       {
-        label: 'In Enrichment',
-        description: 'Currently being processed by CP',
+        label: 'Enrichment Processing',
+        description: 'Actively being enriched from Elasticsearch and pp_log',
         statusValue: 'ENRICHMENT',
         color: 'primary',
         icon: 'auto_awesome',
-        nextStates: ['Exensio Loading', 'Enrichment Timeout', 'Failed'],
+        nextStates: ['Exensio Monitoring', 'Enrichment Monitoring Timeout', 'Failed'],
         isTerminal: false,
-        tooltip: `In Enrichment (ENRICHMENT)
-Currently being enriched and translated by Coverage Point.
-Stuck records: If enrichment exceeds timeout (15 min), marked for manual review.
+        tooltip: `Enrichment Processing (ENRICHMENT)
+Record has been consumed from the send queue and is actively being enriched.
+Elasticsearch and pp_log are being queried for matching records.
 Example transitions:
-  → EXENSIO_LOADING (if Exensio verification enabled)
-  → ENRICHMENT_TIMEOUT (if enrichment times out with no result)
-  → DONE (enrichment successful)
-  → FAILED (enrichment failed)`,
+  → EXENSIO_LOADING (enrichment found, Exensio verification enabled)
+  → ENRICHMENT_TIMEOUT (no enrichment log found within 15 min)
+  → DONE (enrichment successful, no Exensio step needed)
+  → FAILED (enrichment failed with a concrete error)`,
       },
     ],
     [
-      'Enrichment Timeout',
+      'Enrichment Monitoring Timeout',
       {
-        label: 'Enrichment Timeout',
-        description: 'No enrichment confirmation from ES or pp_log after timeout',
+        label: 'Enrichment Monitoring Timeout',
+        description: 'No enrichment log found in ES or pp_log within monitoring window',
         statusValue: 'ENRICHMENT_TIMEOUT',
         color: 'warning',
         icon: 'schedule',
-        nextStates: ['Completed', 'Failed', 'In Enrichment'],
+        nextStates: ['Completed', 'Failed', 'Enrichment Processing'],
         isTerminal: false,
-        tooltip: `Enrichment Timeout (ENRICHMENT_TIMEOUT)
-No enrichment confirmation from Elasticsearch or pp_log after timeout (15 min default).
-Exensio direct lookup also returned NotFound.
-This is NOT a failure — enrichment status is uncertain.
+        tooltip: `Enrichment Monitoring Timeout (ENRICHMENT_TIMEOUT)
+No enrichment confirmation found in Elasticsearch or pp_log within the monitoring window (15 min default).
+This is NOT a failure — the enrichment may have occurred but was not detected by the monitoring process.
 
 Possible actions:
-  → Completed (if verified enrichment occurred)
+  → Completed (if manually verified that enrichment occurred)
   → Failed (if confirmed no enrichment available)
-  → In Enrichment (if manual retry is triggered)
+  → Enrichment Processing (if manual retry is triggered)
 
 Notes:
-  • Operator should verify if enrichment actually occurred
-  • May be automatically retried after cooldown period
-  • Records requiring manual verification or retry`,
+  • Operator should verify the lot/file in the enrichment system before taking corrective action
+  • May be automatically retried after cooldown period`,
       },
     ],
     [
-      'Exensio Loading',
+      'Exensio Monitoring',
       {
-        label: 'Exensio Loading',
-        description: 'Undergoing Exensio verification',
+        label: 'Exensio Monitoring',
+        description: 'Monitoring Exensio load status',
         statusValue: 'EXENSIO_LOADING',
         color: 'info',
         icon: 'cloud_download',
-        nextStates: ['Completed', 'Exensio Timeout', 'Failed'],
+        nextStates: ['Completed', 'Completed — Verify in Exensio', 'Failed'],
         isTerminal: false,
-        tooltip: `Exensio Loading (EXENSIO_LOADING)
-Record is undergoing Exensio verification and enrichment.
+        tooltip: `Exensio Monitoring (EXENSIO_LOADING)
+Enrichment is complete. Record is now being monitored for confirmation of load into Exensio.
 Only appears if Exensio integration is enabled.
 Example transitions:
-  → DONE (wafer found and verified)
-  → EXENSIO_TIMEOUT (wafer not found after timeout)
-  → FAILED (Exensio verification failed)`,
+  → DONE (wafer confirmed loaded in Exensio)
+  → EXENSIO_TIMEOUT (wafer not found within monitoring timeout — manual verification required)
+  → FAILED (Exensio load failure detected)`,
       },
     ],
     [
-      'Exensio Timeout',
+      'Completed — Verify in Exensio',
       {
-        label: 'Exensio Timeout',
-        description: 'Wafer not found in Exensio after timeout',
+        label: 'Completed — Verify in Exensio',
+        description: 'Exensio record not found within monitoring window; requires manual verification',
         statusValue: 'EXENSIO_TIMEOUT',
         color: 'warning',
         icon: 'schedule',
-        nextStates: ['Completed', 'Failed', 'Exensio Loading'],
+        nextStates: ['Completed', 'Failed', 'Exensio Monitoring'],
         isTerminal: false,
-        tooltip: `Exensio Timeout (EXENSIO_TIMEOUT)
-Wafer not found in Exensio after timeout (60 min default).
-May appear later or may genuinely not exist.
-This is NOT a failure — wafer existence is uncertain.
+        tooltip: `Completed — Verify in Exensio (EXENSIO_TIMEOUT)
+The enrichment was consumed and no load failure was detected, but the record could not be confirmed in Exensio within the monitoring window.
+This is NOT a failure — the record may have loaded successfully but was not detected by the monitoring process.
+
+Operations should manually verify the lot/file in Exensio before taking corrective action.
 
 Possible actions:
-  → Completed (if wafer verified to exist)
-  → Failed (if confirmed wafer doesn't exist)
-  → Exensio Loading (if manual retry is triggered)
+  → Completed (if manually verified that Exensio load occurred)
+  → Failed (if confirmed wafer does not exist in Exensio)
+  → Exensio Monitoring (if manual retry of monitoring is triggered)
 
 Notes:
-  • Wafer may appear in Exensio later (delayed loading)
-  • Wafer may not exist in Exensio at all
-  • Needs manual verification or retry`,
+  • Wafer may appear in Exensio later (delayed indexing)
+  • Do not mark as failed until manual verification is complete`,
       },
     ],
     [

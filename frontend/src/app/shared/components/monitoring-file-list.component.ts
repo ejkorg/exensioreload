@@ -42,7 +42,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
               (click)="statusFilter.set('EXENSIO_LOADING')"
             >
               <app-glass-icon name="cloud_upload" [size]="14"></app-glass-icon>
-              Exensio Loading
+              Exensio Monitoring
             </button>
             <button
               class="filter-chip"
@@ -115,9 +115,13 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
               <div class="error-details" *ngIf="file.errorMessage">
                 <app-glass-icon name="error" [size]="18" color="error"></app-glass-icon>
                 <div class="error-content">
-                  <span class="error-source-badge" *ngIf="detectErrorSourceForDisplay(file) as src"
-                        [class.source-cp]="src === 'CP'"
-                        [class.source-exensio]="src === 'Exensio'">{{ src }}</span>
+                  <span
+                    class="error-source-badge"
+                    *ngIf="detectErrorSourceForDisplay(file) as src"
+                    [class.source-cp]="src === 'CP'"
+                    [class.source-exensio]="src === 'Exensio'"
+                    >{{ src }}</span
+                  >
                   <div class="error-message">{{ file.errorMessage }}</div>
                 </div>
               </div>
@@ -641,13 +645,17 @@ export class MonitoringFileListComponent {
       case 'READY':
         return 'Staged';
       case 'ENQUEUED':
-        return 'In Queue (pending CP)';
+        return 'Queued for Enrichment';
       case 'ENRICHMENT':
-        return 'Enrichment / Translation';
+        return 'Enrichment Processing';
+      case 'ENRICHMENT_TIMEOUT':
+        return 'Enrichment Monitoring Timeout';
       case 'EXENSIO_LOADING':
-        return 'Exensio Loading';
+        return 'Exensio Monitoring';
+      case 'EXENSIO_TIMEOUT':
+        return 'Completed — Verify in Exensio';
       case 'PROCESSING':
-        return 'Enrichment / Translation'; // legacy compat
+        return 'Enrichment Processing'; // legacy compat
       case 'COMPLETED':
         return 'Completed';
       case 'ERROR':
@@ -877,17 +885,30 @@ export class MonitoringFileListComponent {
   private detectErrorSource(errorMessage: string, file: MonitoringFile): string {
     const msg = errorMessage.toLowerCase();
 
-    if (msg.startsWith('[cp ') || msg.includes('cp enrichment') || msg.includes('cp failure') ||
-        msg.includes('cp timeout') || msg.includes('cp pp_log')) {
+    if (
+      msg.startsWith('[cp ') ||
+      msg.includes('cp enrichment') ||
+      msg.includes('cp failure') ||
+      msg.includes('cp timeout') ||
+      msg.includes('cp pp_log')
+    ) {
       return 'CP';
     }
-    if (msg.startsWith('[exensio ') || msg.includes('exensio load') || msg.includes('exensio failure') ||
-        msg.includes('exensio api') || msg.includes('dead letter queue')) {
+    if (
+      msg.startsWith('[exensio ') ||
+      msg.includes('exensio load') ||
+      msg.includes('exensio failure') ||
+      msg.includes('exensio api') ||
+      msg.includes('dead letter queue')
+    ) {
       return 'Exensio';
     }
 
-    if (file.cpIntegrationStatus === 'failure' || file.cpIntegrationStatus === 'timeout' ||
-        file.cpIntegrationStatus === 'error') {
+    if (
+      file.cpIntegrationStatus === 'failure' ||
+      file.cpIntegrationStatus === 'timeout' ||
+      file.cpIntegrationStatus === 'error'
+    ) {
       return 'CP';
     }
     if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {

@@ -67,7 +67,7 @@ import { GlassInputComponent } from './glass-input.component';
         <button class="filter-chip"
                 [class.active]="statusFilter() === 'EXENSIO_LOADING'"
                 (click)="statusFilter.set('EXENSIO_LOADING')">
-          Exensio Loading
+          Exensio Monitoring
         </button>
         </button>
         <button class="filter-chip"
@@ -786,13 +786,17 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
       case 'READY':
         return 'Staged';
       case 'ENQUEUED':
-        return 'In Queue (pending CP)';
+        return 'Queued for Enrichment';
       case 'ENRICHMENT':
-        return 'Enrichment / Translation';
+        return 'Enrichment Processing';
+      case 'ENRICHMENT_TIMEOUT':
+        return 'Enrichment Monitoring Timeout';
       case 'EXENSIO_LOADING':
-        return 'Exensio Loading';
+        return 'Exensio Monitoring';
+      case 'EXENSIO_TIMEOUT':
+        return 'Completed — Verify in Exensio';
       case 'PROCESSING':
-        return 'Enrichment / Translation'; // legacy compat
+        return 'Enrichment Processing'; // legacy compat
       case 'COMPLETED':
         return 'Completed';
       case 'ERROR':
@@ -936,19 +940,29 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   getDetailLine(file: MonitoringFileItem): string {
     const { status, errorMessage } = file;
 
-    // File in READY/ENQUEUED: show "Queued" label (Requirement 7.1)
+    // File in READY/ENQUEUED: show "Queued for Enrichment" label (Requirement 7.1)
     if (status === 'READY' || status === 'ENQUEUED') {
-      return 'Queued';
+      return 'Queued for Enrichment';
     }
 
-    // File in ENRICHMENT: show "Enrichment: In Progress" (Requirement 7.2)
+    // File in ENRICHMENT: show "Enrichment: Processing" (Requirement 7.2)
     if (status === 'ENRICHMENT') {
-      return 'Enrichment: In Progress';
+      return 'Enrichment: Processing';
     }
 
-    // File in EXENSIO_LOADING: show "Enrichment: Done · Exensio: Loading" (Requirement 7.3)
+    // File in ENRICHMENT_TIMEOUT: show timeout label
+    if (status === 'ENRICHMENT_TIMEOUT') {
+      return 'Enrichment: Monitoring Timeout — verify manually';
+    }
+
+    // File in EXENSIO_LOADING: show "Enrichment: Done · Exensio: Monitoring" (Requirement 7.3)
     if (status === 'EXENSIO_LOADING') {
-      return 'Enrichment: Done · Exensio: Loading';
+      return 'Enrichment: Done · Exensio: Monitoring';
+    }
+
+    // File in EXENSIO_TIMEOUT: show verify label
+    if (status === 'EXENSIO_TIMEOUT') {
+      return 'Enrichment: Done · Exensio: Not confirmed — verify in Exensio';
     }
 
     // File COMPLETED: show full pipeline summary (Requirements 7.4, 2.1-2.7, 3.1-3.4, 4.1-4.6)
@@ -1010,7 +1024,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
     // Requirement 2.3: Pending
     if (status === 'pending') {
-      return 'Enrichment: In Progress';
+      return 'Enrichment: Processing';
     }
 
     // Requirement 2.4: Failure
@@ -1020,7 +1034,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
     // Requirement 2.5: Timeout
     if (status === 'timeout') {
-      return 'Enrichment: Timeout';
+      return 'Enrichment: Monitoring Timeout';
     }
 
     // Requirement 2.6: Not found
@@ -1055,17 +1069,17 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
     // Requirement 4.2: Pending
     if (status === 'pending') {
-      return 'Exensio: Loading';
+      return 'Exensio: Monitoring';
     }
 
     // Requirement 4.3: Failure
     if (status === 'failure') {
-      return 'Exensio: Failed';
+      return 'Exensio: Load Failed';
     }
 
     // Requirement 4.4: Not found
     if (status === 'not_found') {
-      return 'Exensio: Not Found';
+      return 'Exensio: Not confirmed — verify manually';
     }
 
     // Requirement 4.5: Error
@@ -1141,18 +1155,31 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     const msg = errorMessage.toLowerCase();
 
     // Check backend-prefixed error messages
-    if (msg.startsWith('[cp ') || msg.includes('cp enrichment') || msg.includes('cp failure') ||
-        msg.includes('cp timeout') || msg.includes('cp pp_log')) {
+    if (
+      msg.startsWith('[cp ') ||
+      msg.includes('cp enrichment') ||
+      msg.includes('cp failure') ||
+      msg.includes('cp timeout') ||
+      msg.includes('cp pp_log')
+    ) {
       return 'CP';
     }
-    if (msg.startsWith('[exensio ') || msg.includes('exensio load') || msg.includes('exensio failure') ||
-        msg.includes('exensio api') || msg.includes('dead letter queue')) {
+    if (
+      msg.startsWith('[exensio ') ||
+      msg.includes('exensio load') ||
+      msg.includes('exensio failure') ||
+      msg.includes('exensio api') ||
+      msg.includes('dead letter queue')
+    ) {
       return 'Exensio';
     }
 
     // Fall back to integration status fields
-    if (file.cpIntegrationStatus === 'failure' || file.cpIntegrationStatus === 'timeout' ||
-        file.cpIntegrationStatus === 'error') {
+    if (
+      file.cpIntegrationStatus === 'failure' ||
+      file.cpIntegrationStatus === 'timeout' ||
+      file.cpIntegrationStatus === 'error'
+    ) {
       return 'CP';
     }
     if (file.exensioIntegrationStatus === 'failure' || file.exensioIntegrationStatus === 'error') {

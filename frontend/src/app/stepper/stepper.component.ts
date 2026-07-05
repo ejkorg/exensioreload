@@ -940,9 +940,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     const normalized = (status || '').toUpperCase();
     if (normalized === 'DONE' || normalized === 'COMPLETED') return 'Completed';
     if (normalized === 'FAILED' || normalized === 'ERROR') return 'Failed';
-    if (normalized === 'ENQUEUED') return 'In Queue (pending CP)';
-    if (normalized === 'ENRICHMENT' || normalized === 'PROCESSING') return 'Enrichment / Translation';
-    if (normalized === 'EXENSIO_LOADING') return 'Exensio Loading';
+    if (normalized === 'ENQUEUED') return 'Queued for Enrichment';
+    if (normalized === 'ENRICHMENT' || normalized === 'PROCESSING') return 'Enrichment Processing';
+    if (normalized === 'ENRICHMENT_TIMEOUT') return 'Enrichment Monitoring Timeout';
+    if (normalized === 'EXENSIO_LOADING') return 'Exensio Monitoring';
+    if (normalized === 'EXENSIO_TIMEOUT') return 'Completed — Verify in Exensio';
     if (normalized === 'STAGED') return 'Staged';
     return 'Unknown';
   }

@@ -38,7 +38,7 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.enqueued }}</div>
-            <div class="stat-label">Queued for CP</div>
+            <div class="stat-label">Queued for Enrichment</div>
           </div>
         </div>
 
@@ -48,7 +48,7 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.enriching }}</div>
-            <div class="stat-label">In Enrichment</div>
+            <div class="stat-label">Enrichment Processing</div>
           </div>
         </div>
 
@@ -58,7 +58,7 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.enrichmentTimeout }}</div>
-            <div class="stat-label">Enrichment Timeout</div>
+            <div class="stat-label">Enrichment Monitoring Timeout</div>
           </div>
         </div>
 
@@ -68,7 +68,7 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.exensioLoading }}</div>
-            <div class="stat-label">Exensio Loading</div>
+            <div class="stat-label">Exensio Monitoring</div>
           </div>
         </div>
 
@@ -78,7 +78,7 @@ import { GlassIconComponent } from './glass-icon.component';
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ stats.exensioTimeout }}</div>
-            <div class="stat-label">Exensio Timeout</div>
+            <div class="stat-label">Completed — Verify in Exensio</div>
           </div>
         </div>
 
@@ -189,28 +189,28 @@ import { GlassIconComponent } from './glass-icon.component';
             <div class="bar-value">{{ stats.completed }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.enriching > 0">
-            <div class="bar-label">In Enrichment</div>
+            <div class="bar-label">Enrichment Processing</div>
             <div class="bar-track">
               <div class="bar-fill enriching" [style.width.%]="getPercentage(stats.enriching)"></div>
             </div>
             <div class="bar-value">{{ stats.enriching }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.enrichmentTimeout > 0">
-            <div class="bar-label">Enrichment Timeout</div>
+            <div class="bar-label">Enrichment Monitoring Timeout</div>
             <div class="bar-track">
               <div class="bar-fill enrichment-timeout" [style.width.%]="getPercentage(stats.enrichmentTimeout)"></div>
             </div>
             <div class="bar-value">{{ stats.enrichmentTimeout }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.exensioLoading > 0">
-            <div class="bar-label">Exensio Loading</div>
+            <div class="bar-label">Exensio Monitoring</div>
             <div class="bar-track">
               <div class="bar-fill exensio" [style.width.%]="getPercentage(stats.exensioLoading)"></div>
             </div>
             <div class="bar-value">{{ stats.exensioLoading }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.exensioTimeout > 0">
-            <div class="bar-label">Exensio Timeout</div>
+            <div class="bar-label">Completed — Verify in Exensio</div>
             <div class="bar-track">
               <div class="bar-fill exensio-timeout" [style.width.%]="getPercentage(stats.exensioTimeout)"></div>
             </div>
@@ -224,7 +224,7 @@ import { GlassIconComponent } from './glass-icon.component';
             <div class="bar-value">{{ stats.ready }}</div>
           </div>
           <div class="distribution-bar" *ngIf="stats.enqueued > 0">
-            <div class="bar-label">Queued for CP</div>
+            <div class="bar-label">Queued for Enrichment</div>
             <div class="bar-track">
               <div class="bar-fill queued" [style.width.%]="getPercentage(stats.enqueued)"></div>
             </div>
