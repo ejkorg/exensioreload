@@ -267,16 +267,24 @@ public class CpLogMonitor {
             // Build diagnostic summary of what was checked
             String diagnosticSummary = buildTimeoutDiagnosticSummary(record);
             
-            log.info("CP enrichment timeout for record id={} dataId={}: {}", record.id(), record.dataId(), diagnosticSummary);
+            if (exensioProperties.isConfigured()) {
+                log.info("CP enrichment timeout for record id={} dataId={} — assuming success and verifying in Exensio", record.id(), record.dataId());
+                refDbService.markExensioLoadingPending(List.of(record));
+                integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", "CP enrichment timeout — assuming success and verifying in Exensio");
+                integrationStatusService.updateElasticsearch(requestId, "timeout", diagnosticSummary);
+                emitRowUpdateSse(record, requestId);
+            } else {
+                log.info("CP enrichment timeout for record id={} dataId={}: {}", record.id(), record.dataId(), diagnosticSummary);
 
-            // Mark as ENRICHMENT_TIMEOUT (uncertain enrichment status)
-            // This is honest accounting: we don't know if enrichment succeeded, failed, or needs retry
-            refDbService.markEnrichmentTimeout(record, diagnosticSummary);
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", 
-                    "CP enrichment timeout — no log found in ES or pp_log after " 
-                    + props.getEnrichmentTimeoutMinutes() + " minutes");
-            integrationStatusService.updateElasticsearch(requestId, "timeout", diagnosticSummary);
-            emitRowUpdateSse(record, requestId);
+                // Mark as ENRICHMENT_TIMEOUT (uncertain enrichment status)
+                // This is honest accounting: we don't know if enrichment succeeded, failed, or needs retry
+                refDbService.markEnrichmentTimeout(record, diagnosticSummary);
+                integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", 
+                        "CP enrichment timeout — no log found in ES or pp_log after " 
+                        + props.getEnrichmentTimeoutMinutes() + " minutes");
+                integrationStatusService.updateElasticsearch(requestId, "timeout", diagnosticSummary);
+                emitRowUpdateSse(record, requestId);
+            }
         } else {
             log.debug("No CP log yet for record id={} dataId={} — will retry next cycle",
                     record.id(), record.dataId());
