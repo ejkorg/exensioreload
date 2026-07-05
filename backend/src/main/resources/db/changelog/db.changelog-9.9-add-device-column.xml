@@ -5,6 +5,15 @@
                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
     <changeSet id="9.9-add-device-column" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="LOAD_SESSION_PAYLOAD"/>
+                <not>
+                    <columnExists tableName="LOAD_SESSION_PAYLOAD" columnName="device"/>
+                </not>
+            </and>
+        </preConditions>
+
         <comment>
             Add device column to load_session_payload table for device-based filtering.
             
@@ -25,15 +34,6 @@
             - 6.5: Rollback SHALL remove device column and index safely
         </comment>
 
-        <preConditions onFail="MARK_RAN" onError="HALT">
-            <and>
-                <tableExists tableName="LOAD_SESSION_PAYLOAD"/>
-                <not>
-                    <columnExists tableName="LOAD_SESSION_PAYLOAD" columnName="device"/>
-                </not>
-            </and>
-        </preConditions>
-
         <!-- Add device column to load_session_payload table -->
         <!-- Nullable to support legacy records and missing device data -->
         <addColumn tableName="LOAD_SESSION_PAYLOAD">
@@ -49,6 +49,16 @@
     </changeSet>
 
     <changeSet id="9.9-add-device-index" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="LOAD_SESSION_PAYLOAD"/>
+                <columnExists tableName="LOAD_SESSION_PAYLOAD" columnName="device"/>
+                <not>
+                    <indexExists indexName="idx_load_session_payload_device" tableName="LOAD_SESSION_PAYLOAD"/>
+                </not>
+            </and>
+        </preConditions>
+
         <comment>
             Create index on device column for efficient device-based filtering.
             
@@ -63,18 +73,8 @@
             - System SHALL create an index on the device column for query performance
         </comment>
 
-        <preConditions onFail="MARK_RAN" onError="HALT">
-            <and>
-                <tableExists tableName="LOAD_SESSION_PAYLOAD"/>
-                <columnExists tableName="LOAD_SESSION_PAYLOAD" columnName="device"/>
-                <not>
-                    <indexExists indexName="idx_load_session_payload_device" tableName="LOAD_SESSION_PAYLOAD"/>
-                </not>
-            </and>
-        </preConditions>
-
         <!-- Create index on device column -->
-        <createIndex indexName="idx_load_session_payload_device" tableName="LOAD_SESSION_PAYLOAD" dbms="oracle,h2">
+        <createIndex indexName="idx_load_session_payload_device" tableName="LOAD_SESSION_PAYLOAD">
             <column name="device"/>
         </createIndex>
 

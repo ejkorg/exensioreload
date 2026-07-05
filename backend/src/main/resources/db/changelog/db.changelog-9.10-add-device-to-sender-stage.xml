@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.18.xsd">
+
+    <changeSet id="9.10-add-device-to-sender-stage" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="device"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add device column to SENDER_STAGE for device filtering support</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="device" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="9.10-add-device-index-sender-stage" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <columnExists tableName="SENDER_STAGE" columnName="device"/>
+                <not>
+                    <indexExists indexName="idx_sender_stage_device" tableName="SENDER_STAGE"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Index device column on SENDER_STAGE for efficient filtering</comment>
+        <createIndex indexName="idx_sender_stage_device" tableName="SENDER_STAGE">
+            <column name="device"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

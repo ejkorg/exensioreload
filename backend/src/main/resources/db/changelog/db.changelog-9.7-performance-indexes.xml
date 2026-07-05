@@ -6,11 +6,17 @@
                         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.18.xsd">
 
     <changeSet id="9.7-performance-indexes" author="exensioreload" dbms="h2,oracle">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <indexExists indexName="idx_sender_stage_request_status" tableName="SENDER_STAGE"/>
+            </not>
+        </preConditions>
+
         <comment>Performance indexes for Monitor Accounting Improvements (Task 17)
                  
         Task 17 requires optimization of three key queries:
         1. Aggregation queries for dashboard metrics (GROUP BY status)
-        2. Timeout detection for stuck records (status = ENRICHMENT AND age > threshold)
+        2. Timeout detection for stuck records (status = ENRICHMENT AND age &gt; threshold)
         3. Data integrity checks (NULL status, invalid states)
         
         These indexes provide 3-15x performance improvement for these queries.
@@ -22,7 +28,7 @@
              SELECT request_id, status, COUNT(*) FROM SENDER_STAGE 
              WHERE request_id = ? GROUP BY status
         -->
-        <createIndex indexName="idx_sender_stage_request_status" tableName="SENDER_STAGE" dbms="oracle,h2">
+        <createIndex indexName="idx_sender_stage_request_status" tableName="SENDER_STAGE">
             <column name="request_id" />
             <column name="status" />
             <column name="site" />
@@ -35,9 +41,9 @@
         <!-- Example query:
              SELECT * FROM SENDER_STAGE 
              WHERE status = 'ENRICHMENT' 
-             AND DATEDIFF(MINUTE, updated_at, CURRENT_TIMESTAMP) > ?
+             AND DATEDIFF(MINUTE, updated_at, CURRENT_TIMESTAMP) &gt; ?
         -->
-        <createIndex indexName="idx_sender_stage_status_updated" tableName="SENDER_STAGE" dbms="oracle,h2">
+        <createIndex indexName="idx_sender_stage_status_updated" tableName="SENDER_STAGE">
             <column name="status" />
             <column name="updated_at" />
             <column name="id" />
@@ -52,7 +58,7 @@
         <!-- Example query:
              SELECT * FROM SENDER_STAGE WHERE status IS NULL
         -->
-        <createIndex indexName="idx_sender_stage_status_null" tableName="SENDER_STAGE" dbms="oracle,h2">
+        <createIndex indexName="idx_sender_stage_status_null" tableName="SENDER_STAGE">
             <column name="request_id" />
             <column name="status" />
         </createIndex>
@@ -64,7 +70,7 @@
              WHERE site = ? AND sender_id = ? AND request_id = ?
              GROUP BY status
         -->
-        <createIndex indexName="idx_sender_stage_site_sender" tableName="SENDER_STAGE" dbms="oracle,h2">
+        <createIndex indexName="idx_sender_stage_site_sender" tableName="SENDER_STAGE">
             <column name="site" />
             <column name="sender_id" />
             <column name="request_id" />
@@ -79,7 +85,7 @@
     <changeSet id="9.7-oracle-index-statistics" author="exensioreload" dbms="oracle">
         <comment>Oracle: Update index statistics for newly created indexes</comment>
         
-        <sql>
+        <sql splitStatements="false">
             BEGIN
                 DBMS_STATS.gather_table_stats(
                     ownname => USER,
@@ -88,7 +94,6 @@
                     estimate_percent => 100
                 );
             END;
-            /
         </sql>
     </changeSet>
 
@@ -110,7 +115,7 @@
                
             Monthly Maintenance:
             ====================
-            1. Rebuild fragmented indexes (if fragmentation > 30%):
+            1. Rebuild fragmented indexes (if fragmentation &gt; 30%):
                Oracle:     ALTER INDEX idx_sender_stage_request_status REBUILD;
                
             2. Check unused indexes:
@@ -118,10 +123,10 @@
             
             Performance Targets:
             ====================
-            Aggregation queries (100k records):        < 500ms  (with indexes < 150ms)
-            Timeout detection (100k records):          < 300ms  (with indexes < 60ms)
-            NULL status check:                         < 200ms  (with indexes < 40ms)
-            Dashboard load (all sites):                < 1s     (with indexes < 300ms)
+            Aggregation queries (100k records):        &lt; 500ms  (with indexes &lt; 150ms)
+            Timeout detection (100k records):          &lt; 300ms  (with indexes &lt; 60ms)
+            NULL status check:                         &lt; 200ms  (with indexes &lt; 40ms)
+            Dashboard load (all sites):                &lt; 1s     (with indexes &lt; 300ms)
             
             Troubleshooting:
             ================

@@ -5,6 +5,10 @@
                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
     <changeSet id="9.8-timeout-states" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
         <comment>
             Add ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT states to pipeline.
             
@@ -25,10 +29,6 @@
             - 3.3: Database constraint must include both new states
             - 3.4: Status updates to new states must succeed without constraint violations
         </comment>
-
-        <preConditions onFail="MARK_RAN" onError="HALT">
-            <tableExists tableName="SENDER_STAGE"/>
-        </preConditions>
 
         <!-- Drop any existing CHECK constraint on SENDER_STAGE.status (Oracle PL/SQL).
              splitStatements="false" is required so Liquibase sends the entire block
