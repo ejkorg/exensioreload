@@ -750,7 +750,7 @@ public class RefDbService {
      * Transitions records to {@code EXENSIO_LOADING} after CP queue consumption when Elasticsearch
      * is disabled but the Exensio API monitor is enabled. CP output paths are not yet known.
      */
-    public void markExensioLoadingPending(List<StageRecord> records) {
+    public void markExensioMonitoringPending(List<StageRecord> records) {
         if (records == null || records.isEmpty()) {
             return;
         }
