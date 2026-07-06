@@ -55,18 +55,18 @@ import { GlassInputComponent } from './glass-input.component';
           Ready
         </button>
         <button class="filter-chip"
-                [class.active]="statusFilter() === 'ENQUEUED'"
-                (click)="statusFilter.set('ENQUEUED')">
+                [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
+                (click)="statusFilter.set('QUEUED_FOR_CP')">
           In Queue
         </button>
         <button class="filter-chip"
-                [class.active]="statusFilter() === 'ENRICHMENT'"
-                (click)="statusFilter.set('ENRICHMENT')">
+                [class.active]="statusFilter() === 'ELASTICSEARCH_MONITORING'"
+                (click)="statusFilter.set('ELASTICSEARCH_MONITORING')">
           Enrichment
         </button>
         <button class="filter-chip"
-                [class.active]="statusFilter() === 'EXENSIO_LOADING'"
-                (click)="statusFilter.set('EXENSIO_LOADING')">
+                [class.active]="statusFilter() === 'EXENSIO_MONITORING'"
+                (click)="statusFilter.set('EXENSIO_MONITORING')">
           Exensio Monitoring
         </button>
         </button>
@@ -98,8 +98,8 @@ import { GlassInputComponent } from './glass-input.component';
                *cdkVirtualFor="let file of filteredFiles()">
             <div class="table-row"
                [class.status-ready]="file.status === 'READY'"
-               [class.status-enqueued]="file.status === 'ENQUEUED'"
-               [class.status-processing]="file.status === 'ENRICHMENT' || file.status === 'EXENSIO_LOADING'"
+               [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
+               [class.status-processing]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
                [class.status-completed]="file.status === 'COMPLETED'"
                [class.status-error]="file.status === 'ERROR'"
                [class.recently-updated]="file.isRecentlyUpdated"
@@ -695,7 +695,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   protected paginationService = inject(MonitoringPaginationService);
 
   // Signals for UI
-  statusFilter = signal<'all' | 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR'>('all');
+  statusFilter = signal<'all' | 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED'>('all');
   searchText = signal('');
   expandedFiles = signal<Set<number | string>>(new Set());
 
@@ -705,10 +705,10 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   // Computed: Count files by status
   allCount = this.countByStatus('all');
   readyCount = this.countByStatus('READY');
-  enqueuedCount = this.countByStatus('ENQUEUED');
-  enrichmentCount = this.countByStatus('ENRICHMENT');
-  exensioLoadingCount = this.countByStatus('EXENSIO_LOADING');
-  processingCount = this.countByStatus('ENRICHMENT'); // legacy alias
+  enqueuedCount = this.countByStatus('QUEUED_FOR_CP');
+  enrichmentCount = this.countByStatus('ELASTICSEARCH_MONITORING');
+  exensioLoadingCount = this.countByStatus('EXENSIO_MONITORING');
+  processingCount = this.countByStatus('ELASTICSEARCH_MONITORING'); // legacy alias
   completedCount = this.countByStatus('COMPLETED');
   errorCount = this.countByStatus('ERROR');
 
@@ -747,7 +747,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
   // Helper: Count files by status
   private countByStatus(
-    status: 'all' | 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR',
+    status: 'all' | 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED',
   ) {
     return computed(() => {
       const items = this.state().items;
@@ -785,15 +785,15 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'READY':
         return 'Staged';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'Queued for Enrichment';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'Enrichment Processing';
-      case 'ENRICHMENT_TIMEOUT':
+      case 'CP_TIMEOUT':
         return 'Enrichment Monitoring Timeout';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'Exensio Monitoring';
-      case 'EXENSIO_TIMEOUT':
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
         return 'Completed — Verify in Exensio';
       case 'PROCESSING':
         return 'Enrichment Processing'; // legacy compat
@@ -810,11 +810,11 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'READY':
         return 'schedule';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'schedule_send';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'hourglass_empty';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'cloud_upload';
       case 'PROCESSING':
         return 'hourglass_empty';
@@ -831,11 +831,11 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'READY':
         return 'muted';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'warning';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'primary';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'primary';
       case 'PROCESSING':
         return 'primary';
@@ -941,27 +941,27 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     const { status, errorMessage } = file;
 
     // File in READY/ENQUEUED: show "Queued for Enrichment" label (Requirement 7.1)
-    if (status === 'READY' || status === 'ENQUEUED') {
+    if (status === 'READY' || status === 'QUEUED_FOR_CP') {
       return 'Queued for Enrichment';
     }
 
     // File in ENRICHMENT: show "Enrichment: Processing" (Requirement 7.2)
-    if (status === 'ENRICHMENT') {
+    if (status === 'ELASTICSEARCH_MONITORING') {
       return 'Enrichment: Processing';
     }
 
     // File in ENRICHMENT_TIMEOUT: show timeout label
-    if (status === 'ENRICHMENT_TIMEOUT') {
+    if (status === 'CP_TIMEOUT') {
       return 'Enrichment: Monitoring Timeout — verify manually';
     }
 
     // File in EXENSIO_LOADING: show "Enrichment: Done · Exensio: Monitoring" (Requirement 7.3)
-    if (status === 'EXENSIO_LOADING') {
+    if (status === 'EXENSIO_MONITORING') {
       return 'Enrichment: Done · Exensio: Monitoring';
     }
 
     // File in EXENSIO_TIMEOUT: show verify label
-    if (status === 'EXENSIO_TIMEOUT') {
+    if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
       return 'Enrichment: Done · Exensio: Not confirmed — verify in Exensio';
     }
 
@@ -1243,11 +1243,11 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (status === 'ENRICHMENT') {
+    if (status === 'ELASTICSEARCH_MONITORING') {
       return 'hourglass_empty';
     }
 
-    if (status === 'EXENSIO_LOADING') {
+    if (status === 'EXENSIO_MONITORING') {
       return 'cloud_upload';
     }
 
@@ -1261,12 +1261,12 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     const { status, errorMessage } = file;
 
     // Files in READY/ENQUEUED show "Queued" - should be muted
-    if (status === 'READY' || status === 'ENQUEUED') {
+    if (status === 'READY' || status === 'QUEUED_FOR_CP') {
       return 'muted';
     }
 
     // Files in ENRICHMENT/EXENSIO_LOADING show status text - should be warning
-    if (status === 'ENRICHMENT' || status === 'EXENSIO_LOADING') {
+    if (status === 'ELASTICSEARCH_MONITORING' || status === 'EXENSIO_MONITORING') {
       return 'warning';
     }
 

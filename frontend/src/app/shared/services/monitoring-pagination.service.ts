@@ -19,7 +19,7 @@ export interface MonitoringFileItem {
   filename: string;
   lot: string;
   wafer?: string;
-  status: 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR';
+  status: 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED';
   message: string;
   errorMessage?: string | null;
   updatedAt?: string;
@@ -378,14 +378,20 @@ export class MonitoringPaginationService implements OnDestroy {
    */
   private mapBackendStatus(
     status: string,
-  ): 'READY' | 'ENQUEUED' | 'ENRICHMENT' | 'EXENSIO_LOADING' | 'COMPLETED' | 'ERROR' {
+  ): 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED' {
     const normalized = (status || '').toUpperCase();
-    if (normalized === 'DONE' || normalized === 'COMPLETED') return 'COMPLETED';
-    if (normalized === 'ENRICHMENT' || normalized === 'DISPATCHING') return 'ENRICHMENT';
-    if (normalized === 'EXENSIO_LOADING') return 'EXENSIO_LOADING';
-    if (normalized === 'PROCESSING') return 'ENRICHMENT'; // legacy compat
-    if (normalized === 'FAILED' || normalized === 'ERROR') return 'ERROR';
-    if (normalized === 'ENQUEUED' || normalized === 'QUEUED') return 'ENQUEUED';
+    if (normalized === 'COMPLETED' || normalized === 'DONE') return 'COMPLETED';
+    if (normalized === 'ELASTICSEARCH_MONITORING' || normalized === 'DISPATCHING') return 'ELASTICSEARCH_MONITORING';
+    if (normalized === 'CP_TIMEOUT') return 'CP_TIMEOUT';
+    if (normalized === 'EXENSIO_MONITORING') return 'EXENSIO_MONITORING';
+    if (normalized === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') return 'COMPLETED_MANUAL_VERIFICATION_REQUIRED';
+    if (normalized === 'PROCESSING') return 'ELASTICSEARCH_MONITORING'; // legacy compat
+    if (normalized === 'CP_FAILED' || normalized === 'FAILED') return 'CP_FAILED';
+    if (normalized === 'LOAD_FAILED') return 'LOAD_FAILED';
+    if (normalized === 'ERROR') return 'ERROR';
+    if (normalized === 'CANCELLED') return 'CANCELLED';
+    if (normalized === 'QUEUED_FOR_CP' || normalized === 'QUEUED' || normalized === 'ENQUEUED') return 'QUEUED_FOR_CP';
+    if (normalized === 'STAGED_TO_REFDB' || normalized === 'PENDING' || normalized === 'READY') return 'READY';
     return 'READY';
   }
 }

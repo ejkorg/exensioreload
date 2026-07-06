@@ -25,11 +25,11 @@ public class NaturalLanguageSearchService {
     private static final Map<String, String> STATUS_KEYWORDS = Map.ofEntries(
         Map.entry("failed", "FAILED"),
         Map.entry("error", "FAILED"),
-        Map.entry("success", "DONE"),
-        Map.entry("completed", "DONE"),
+        Map.entry("success", "COMPLETED"),
+        Map.entry("completed", "COMPLETED"),
         Map.entry("pending", "ENQUEUED_LOCAL"),
-        Map.entry("processing", "EXENSIO_LOADING"),
-        Map.entry("staging", "ENRICHMENT")
+        Map.entry("processing", "EXENSIO_MONITORING"),
+        Map.entry("staging", "ELASTICSEARCH_MONITORING")
     );
 
     private static final Map<String, String> TIME_KEYWORDS = Map.ofEntries(
@@ -112,7 +112,7 @@ public class NaturalLanguageSearchService {
             
             Example:
             Input: "show me all failed lots from fab A yesterday"
-            Output: "SEARCH lots WHERE site='FAB_A' AND status='FAILED' AND date='yesterday'"
+            Output: "SEARCH lots WHERE site='FAB_A' AND status='COMPLETED' AND date='yesterday'"
             
             Input: """ + query + """
             Output:

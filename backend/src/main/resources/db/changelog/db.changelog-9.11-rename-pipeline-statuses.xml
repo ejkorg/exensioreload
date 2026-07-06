@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="9.11-rename-pipeline-statuses" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <comment>
+            Rename pipeline status values to the v3.0 state machine.
+
+            Old → New mapping:
+            - pending → STAGED_TO_REFDB
+            - ENQUEUED → QUEUED_FOR_CP
+            - ENRICHMENT → ELASTICSEARCH_MONITORING
+            - ENRICHMENT_TIMEOUT → CP_TIMEOUT
+            - EXENSIO_LOADING → EXENSIO_MONITORING
+            - EXENSIO_TIMEOUT → COMPLETED_MANUAL_VERIFICATION_REQUIRED
+            - DONE → COMPLETED
+            - FAILED → CP_FAILED (CP/ES failures) or LOAD_FAILED (Exensio load failures)
+
+            FAILED split heuristic:
+            - error_message contains '[ES Failure]', '[pp_log Failure]', 'CP', 'enrichment' → CP_FAILED
+            - error_message contains '[Exensio Failure]', 'Exensio', 'load fail', 'Dead Letter' → LOAD_FAILED
+            - Any remaining FAILED without clear indicator → CP_FAILED (safe default)
+        </comment>
+
+        <!-- Drop existing CHECK constraint on SENDER_STAGE.status -->
+        <sql splitStatements="false">
+            DECLARE
+            v_name VARCHAR2(200);
+            BEGIN
+            FOR r IN (
+            SELECT constraint_name
+            FROM user_constraints
+            WHERE table_name = 'SENDER_STAGE'
+            AND constraint_type = 'C'
+            ) LOOP
+            BEGIN
+            EXECUTE IMMEDIATE 'ALTER TABLE SENDER_STAGE DROP CONSTRAINT "' || r.constraint_name || '"';
+            EXCEPTION WHEN OTHERS THEN
+            NULL;
+            END;
+            END LOOP;
+            END;
+        </sql>
+
+        <!-- Rename existing data in place -->
+        <sql>UPDATE SENDER_STAGE SET status = 'STAGED_TO_REFDB' WHERE status = 'pending'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'QUEUED_FOR_CP' WHERE status = 'ENQUEUED'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'ELASTICSEARCH_MONITORING' WHERE status = 'ENRICHMENT'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'CP_TIMEOUT' WHERE status = 'ENRICHMENT_TIMEOUT'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'EXENSIO_MONITORING' WHERE status = 'EXENSIO_LOADING'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' WHERE status = 'EXENSIO_TIMEOUT'</sql>
+        <sql>UPDATE SENDER_STAGE SET status = 'COMPLETED' WHERE status = 'DONE'</sql>
+
+        <!-- Split FAILED → CP_FAILED (ES/CP enrichment failures) -->
+        <sql>
+            UPDATE SENDER_STAGE SET status = 'CP_FAILED'
+            WHERE status = 'FAILED'
+            AND (UPPER(error_message) LIKE '%[ES FAILURE]%'
+                 OR UPPER(error_message) LIKE '%[PP_LOG FAILURE]%'
+                 OR UPPER(error_message) LIKE '%CP%FAILURE%'
+                 OR UPPER(error_message) LIKE '%ENRICHMENT%FAIL%'
+                 OR UPPER(error_message) LIKE '%[CP %')
+        </sql>
+
+        <!-- Split FAILED → LOAD_FAILED (Exensio load failures) -->
+        <sql>
+            UPDATE SENDER_STAGE SET status = 'LOAD_FAILED'
+            WHERE status = 'FAILED'
+            AND (UPPER(error_message) LIKE '%[EXENSIO FAILURE]%'
+                 OR UPPER(error_message) LIKE '%[EXENSIO %'
+                 OR UPPER(error_message) LIKE '%EXENSIO%FAIL%'
+                 OR UPPER(error_message) LIKE '%LOAD FAIL%'
+                 OR UPPER(error_message) LIKE '%DEAD LETTER%')
+        </sql>
+
+        <!-- Any remaining FAILED → CP_FAILED (safe default) -->
+        <sql>UPDATE SENDER_STAGE SET status = 'CP_FAILED' WHERE status = 'FAILED'</sql>
+
+        <!-- Add new CHECK constraint with all 12 status values -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+            CHECK (status IN (
+                'DISCOVERED',
+                'STAGED_TO_REFDB',
+                'QUEUED_FOR_CP',
+                'CP_CONSUMED',
+                'ELASTICSEARCH_MONITORING',
+                'CP_TIMEOUT',
+                'EXENSIO_MONITORING',
+                'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
+                'COMPLETED',
+                'CP_FAILED',
+                'LOAD_FAILED',
+                'CANCELLED'
+            ))
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DECLARE
+                v_name VARCHAR2(200);
+                BEGIN
+                FOR r IN (
+                SELECT constraint_name
+                FROM user_constraints
+                WHERE table_name = 'SENDER_STAGE'
+                AND constraint_type = 'C'
+                ) LOOP
+                BEGIN
+                EXECUTE IMMEDIATE 'ALTER TABLE SENDER_STAGE DROP CONSTRAINT "' || r.constraint_name || '"';
+                EXCEPTION WHEN OTHERS THEN
+                NULL;
+                END;
+                END LOOP;
+                END;
+            </sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'pending' WHERE status = 'STAGED_TO_REFDB'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'ENQUEUED' WHERE status = 'QUEUED_FOR_CP'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'ENRICHMENT' WHERE status = 'ELASTICSEARCH_MONITORING'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'ENRICHMENT_TIMEOUT' WHERE status = 'CP_TIMEOUT'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'EXENSIO_LOADING' WHERE status = 'EXENSIO_MONITORING'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'EXENSIO_TIMEOUT' WHERE status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'DONE' WHERE status = 'COMPLETED'</sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'FAILED' WHERE status IN ('CP_FAILED', 'LOAD_FAILED')</sql>
+            <sql splitStatements="false">
+                ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+                CHECK (status IN ('pending','ENQUEUED','ENRICHMENT','ENRICHMENT_TIMEOUT','EXENSIO_LOADING','EXENSIO_TIMEOUT','DONE','FAILED','CANCELLED'))
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

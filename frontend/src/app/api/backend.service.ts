@@ -9,15 +9,38 @@ import { environment } from '../../environments/environment';
 // ============================================================================
 export interface DashboardMetricTotals {
   total: number;
-  ready: number;
-  enqueued: number;
-  queued: number; // NEW: ENQUEUED only (separate from enriching)
-  enriching: number; // NEW: ENRICHMENT only (separate from queued)
-  enrichmentTimeout: number; // NEW: ENRICHMENT_TIMEOUT state
-  exensioLoading: number; // NEW: EXENSIO_LOADING state
-  exensioTimeout: number; // NEW: EXENSIO_TIMEOUT state
-  cancelled: number; // NEW: CANCELLED state
-  failed: number;
+  stagedToRefdb: number;
+  queuedForCp: number;
+  elasticsearchMonitoring: number;
+  cpTimeout: number;
+  exensioMonitoring: number;
+  completedManualVerification: number;
+  cpFailed: number;
+  loadFailed: number;
+  completed: number;
+  cancelled: number;
+  backlog: number;
+  activeSenders: number;
+  activeUsers?: number;
+
+  // Backward-compatible accessors for old field names
+  /** @deprecated Use stagedToRefdb */
+  ready?: number;
+  /** @deprecated Use queuedForCp */
+  queued?: number;
+  /** @deprecated Use elasticsearchMonitoring */
+  enriching?: number;
+  /** @deprecated Use cpTimeout */
+  enrichmentTimeout?: number;
+  /** @deprecated Use exensioMonitoring */
+  exensioLoading?: number;
+  /** @deprecated Use completedManualVerification */
+  exensioTimeout?: number;
+  /** @deprecated Use cpFailed + loadFailed */
+  failed?: number;
+  /** @deprecated Use queuedForCp + elasticsearchMonitoring + exensioMonitoring */
+  enqueued?: number;
+}
   completed: number;
   backlog: number;
   activeSenders: number;
@@ -1262,7 +1285,7 @@ export class BackendService {
       try {
         const eventSource = new EventSource(url);
 
-        eventSource.addEventListener('ENRICHMENT_TIMEOUT', (event: any) => {
+        eventSource.addEventListener('CP_TIMEOUT', (event: any) => {
           try {
             const data: StateChangeEvent = JSON.parse(event.data);
             observer.next(data);
@@ -1271,7 +1294,7 @@ export class BackendService {
           }
         });
 
-        eventSource.addEventListener('EXENSIO_TIMEOUT', (event: any) => {
+        eventSource.addEventListener('COMPLETED_MANUAL_VERIFICATION_REQUIRED', (event: any) => {
           try {
             const data: StateChangeEvent = JSON.parse(event.data);
             observer.next(data);

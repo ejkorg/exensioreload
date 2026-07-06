@@ -30,16 +30,16 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             </button>
             <button
               class="filter-chip"
-              [class.active]="statusFilter() === 'ENRICHMENT'"
-              (click)="statusFilter.set('ENRICHMENT')"
+              [class.active]="statusFilter() === 'ELASTICSEARCH_MONITORING'"
+              (click)="statusFilter.set('ELASTICSEARCH_MONITORING')"
             >
               <app-glass-icon name="refresh" [size]="14"></app-glass-icon>
               Enrichment Processing
             </button>
             <button
               class="filter-chip"
-              [class.active]="statusFilter() === 'EXENSIO_LOADING'"
-              (click)="statusFilter.set('EXENSIO_LOADING')"
+              [class.active]="statusFilter() === 'EXENSIO_MONITORING'"
+              (click)="statusFilter.set('EXENSIO_MONITORING')"
             >
               <app-glass-icon name="cloud_upload" [size]="14"></app-glass-icon>
               Exensio Monitoring
@@ -88,8 +88,8 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             class="table-row"
             *ngFor="let file of paginatedFiles()"
             [class.status-ready]="file.status === 'READY'"
-            [class.status-enqueued]="file.status === 'ENQUEUED'"
-            [class.status-processing]="file.status === 'ENRICHMENT' || file.status === 'EXENSIO_LOADING'"
+            [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
+            [class.status-processing]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
             [class.status-completed]="file.status === 'COMPLETED'"
             [class.status-error]="file.status === 'ERROR'"
             (click)="toggleExpand(file)"
@@ -644,15 +644,15 @@ export class MonitoringFileListComponent {
     switch (status) {
       case 'READY':
         return 'Staged';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'Queued for Enrichment';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'Enrichment Processing';
-      case 'ENRICHMENT_TIMEOUT':
+      case 'CP_TIMEOUT':
         return 'Enrichment Monitoring Timeout';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'Exensio Monitoring';
-      case 'EXENSIO_TIMEOUT':
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
         return 'Completed — Verify in Exensio';
       case 'PROCESSING':
         return 'Enrichment Processing'; // legacy compat
@@ -669,11 +669,11 @@ export class MonitoringFileListComponent {
     switch (status) {
       case 'READY':
         return 'check';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'clock';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'refresh';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'cloud_upload';
       case 'PROCESSING':
         return 'refresh';
@@ -690,11 +690,11 @@ export class MonitoringFileListComponent {
     switch (status) {
       case 'READY':
         return 'muted';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return 'warning';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return 'primary';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return 'primary';
       case 'PROCESSING':
         return 'primary';
@@ -926,12 +926,12 @@ export class MonitoringFileListComponent {
     const segments: string[] = [];
 
     // Handle queued status
-    if (file.status === 'READY' || file.status === 'ENQUEUED') {
+    if (file.status === 'READY' || file.status === 'QUEUED_FOR_CP') {
       return { text: 'Queued', hasError: false };
     }
 
     // Handle enrichment status
-    if (file.status === 'ENRICHMENT') {
+    if (file.status === 'ELASTICSEARCH_MONITORING') {
       const enrichment = this.getEnrichmentSegment(file);
       if (enrichment) {
         segments.push(enrichment);
@@ -942,7 +942,7 @@ export class MonitoringFileListComponent {
     }
 
     // Handle Exensio loading status
-    if (file.status === 'EXENSIO_LOADING') {
+    if (file.status === 'EXENSIO_MONITORING') {
       const enrichment = this.getEnrichmentSegment(file);
       const exensio = this.getExensioSegment(file);
 

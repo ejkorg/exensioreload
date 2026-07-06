@@ -659,7 +659,7 @@ export class StagingSessionService {
           totalFiles: lotUpdate.totalWafers || lotUpdate.totalFiles || 0,
           doneFiles: lotUpdate.completedWafers || lotUpdate.doneFiles || 0,
           failedFiles: lotUpdate.failedWafers || lotUpdate.failedFiles || 0,
-          status: 'ENRICHMENT',
+          status: 'ELASTICSEARCH_MONITORING',
         },
       ]);
     }
@@ -683,7 +683,7 @@ export class StagingSessionService {
     }
 
     // Extract totals from the aggregation event
-    // The event should contain a 'totals' map with keys like 'pending', 'ENQUEUED', 'ENRICHMENT', etc.
+    // The event should contain a 'totals' map with keys like 'pending', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', etc.
     const totals = aggregation.totals || {};
 
     // Map backend state names to session metric field names
@@ -724,13 +724,13 @@ export class StagingSessionService {
           continue; // Cancelled records don't update session metrics directly
         }
         // For ENRICHMENT and EXENSIO_LOADING, only update filesEnqueued once
-        if ((stateName === 'ENRICHMENT' || stateName === 'EXENSIO_LOADING') && fieldName === 'filesEnqueued') {
+        if ((stateName === 'ELASTICSEARCH_MONITORING' || stateName === 'EXENSIO_MONITORING') && fieldName === 'filesEnqueued') {
           // Both ENRICHMENT and EXENSIO_LOADING contribute to filesEnqueued
           // But since we get separate totals, we need to handle this carefully
           // For now, prioritize ENRICHMENT count if available
-          if (stateName === 'ENRICHMENT' && 'ENRICHMENT' in totals) {
-            const enrichingValue = totals['ENRICHMENT'];
-            const exensioValue = totals['EXENSIO_LOADING'] || 0;
+          if (stateName === 'ELASTICSEARCH_MONITORING' && 'ELASTICSEARCH_MONITORING' in totals) {
+            const enrichingValue = totals['ELASTICSEARCH_MONITORING'];
+            const exensioValue = totals['EXENSIO_MONITORING'] || 0;
             const totalEnqueued = enrichingValue + exensioValue;
             if (updatedSession.filesEnqueued !== totalEnqueued) {
               updatedSession.filesEnqueued = totalEnqueued;

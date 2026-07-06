@@ -1,235 +1,95 @@
 package com.onsemi.cim.apps.exensio.exensioreload.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.onsemi.cim.apps.exensio.exensioreload.stage.PipelineStatus;
+
 /**
- * Unit tests for SENDER_STAGE status constraint validation.
- * 
- * This test class validates that the database schema migration correctly
- * adds ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT to the status constraint.
- * 
- * These tests verify:
- * - Both new timeout states are valid status values (Requirements 3.1, 3.2)
- * - The constraint includes all 9 status values (Requirement 3.3)
- * - The constraint is properly ordered and formatted (Requirement 3.4)
- * 
- * Note: Full constraint testing requires database execution (Integration Test).
- * These unit tests validate the logic and allowed values.
+ * Validates that PipelineStatus contains all expected v3.0 pipeline states.
  */
-@DisplayName("SENDER_STAGE Status Constraint Tests")
+@DisplayName("SENDER_STAGE Status Constraint Tests (v3.0)")
 class SenderStageStatusConstraintTest {
 
-    private static final String[] VALID_STATUS_VALUES = {
-        "pending",
-        "ENQUEUED",
-        "ENRICHMENT",
-        "ENRICHMENT_TIMEOUT",    // NEW timeout state
-        "EXENSIO_LOADING",
-        "EXENSIO_TIMEOUT",       // NEW timeout state
-        "DONE",
-        "FAILED",
-        "CANCELLED"
-    };
-
-    private static final String[] INVALID_STATUS_VALUES = {
-        "PROCESSING",     // Deprecated - should have been migrated to ENRICHMENT
-        "PENDING",        // Case-sensitive: should be lowercase 'pending'
-        "Unknown",        // Invalid status
-        "TIMEOUT",        // Too generic, must be specific
-        "",               // Empty string
-        null              // Null value
-    };
+    private static final List<String> ALL_STATUS_DB_VALUES = PipelineStatus.allDbValues();
 
     @Test
-    @DisplayName("Requirement 3.1: ENRICHMENT_TIMEOUT is valid status value")
-    void testEnrichmentTimeoutIsValidStatus() {
-        // Verify that ENRICHMENT_TIMEOUT is included in valid status values
-        assertContains(VALID_STATUS_VALUES, "ENRICHMENT_TIMEOUT",
-            "ENRICHMENT_TIMEOUT must be a valid status value per Requirement 3.1");
+    @DisplayName("All 12 status values are defined")
+    void testAllStatusesDefined() {
+        assertEquals(12, ALL_STATUS_DB_VALUES.size(),
+            "Must have exactly 12 status values in v3.0");
+        assertFalse(ALL_STATUS_DB_VALUES.contains("pending"),
+            "Deprecated status 'pending' must not be present");
+        assertFalse(ALL_STATUS_DB_VALUES.contains("DONE"),
+            "Deprecated status 'DONE' must not be present");
     }
 
     @Test
-    @DisplayName("Requirement 3.2: EXENSIO_TIMEOUT is valid status value")
-    void testExensioTimeoutIsValidStatus() {
-        // Verify that EXENSIO_TIMEOUT is included in valid status values
-        assertContains(VALID_STATUS_VALUES, "EXENSIO_TIMEOUT",
-            "EXENSIO_TIMEOUT must be a valid status value per Requirement 3.2");
-    }
-
-    @Test
-    @DisplayName("Requirement 3.3: Database constraint includes all 9 status values")
-    void testConstraintIncludesAllNineStatuses() {
-        // Verify count is exactly 9
-        assertEquals(9, VALID_STATUS_VALUES.length,
-            "Constraint must include exactly 9 status values per Requirement 3.3");
-
-        // Verify all expected states are present
-        assertContains(VALID_STATUS_VALUES, "pending", "Must include pending state");
-        assertContains(VALID_STATUS_VALUES, "ENQUEUED", "Must include ENQUEUED state");
-        assertContains(VALID_STATUS_VALUES, "ENRICHMENT", "Must include ENRICHMENT state");
-        assertContains(VALID_STATUS_VALUES, "ENRICHMENT_TIMEOUT", "Must include ENRICHMENT_TIMEOUT state");
-        assertContains(VALID_STATUS_VALUES, "EXENSIO_LOADING", "Must include EXENSIO_LOADING state");
-        assertContains(VALID_STATUS_VALUES, "EXENSIO_TIMEOUT", "Must include EXENSIO_TIMEOUT state");
-        assertContains(VALID_STATUS_VALUES, "DONE", "Must include DONE state");
-        assertContains(VALID_STATUS_VALUES, "FAILED", "Must include FAILED state");
-        assertContains(VALID_STATUS_VALUES, "CANCELLED", "Must include CANCELLED state");
-    }
-
-    @Test
-    @DisplayName("Requirement 3.4: Deprecated PROCESSING status is not included")
-    void testDeprecatedProcessingStatusNotIncluded() {
-        // PROCESSING was renamed to ENRICHMENT in an earlier migration
-        assertNotContains(VALID_STATUS_VALUES, "PROCESSING",
-            "PROCESSING (deprecated) must not be in valid status values. Use ENRICHMENT instead.");
-    }
-
-    @Test
-    @DisplayName("Requirement 3.1-3.2: New timeout states have uppercase naming")
-    void testTimeoutStatesHaveConsistentNaming() {
-        // Verify naming convention consistency
-        assertTrue(isValidConstantName("ENRICHMENT_TIMEOUT"),
-            "ENRICHMENT_TIMEOUT follows uppercase constant naming convention");
-        assertTrue(isValidConstantName("EXENSIO_TIMEOUT"),
-            "EXENSIO_TIMEOUT follows uppercase constant naming convention");
-    }
-
-    @Test
-    @DisplayName("Case sensitivity: Status values use correct casing")
-    void testStatusCaseSensitivity() {
-        // Status values should be case-sensitive per database constraint
-        // pending, ENQUEUED, ENRICHMENT, etc. are exact values
-        assertNotContains(INVALID_STATUS_VALUES, "pending",
-            "pending (lowercase) must be exact match - PENDING (uppercase) would be invalid");
-    }
-
-    @Test
-    @DisplayName("Backward compatibility: Old timeout detection would mark as ENRICHMENT_TIMEOUT")
-    void testBackwardCompatibilityScenario() {
-        // Simulate scenario: Record was in ENRICHMENT for 15+ minutes with ES/pp_log NotFound
-        // Old system would mark as DONE with manual_verify flag
-        // New system should mark as ENRICHMENT_TIMEOUT
-        String oldApproach = "DONE";      // misleading
-        String newApproach = "ENRICHMENT_TIMEOUT"; // honest accounting
-
-        // New approach is now valid
-        assertContains(VALID_STATUS_VALUES, newApproach,
-            "New ENRICHMENT_TIMEOUT approach must be valid status value");
-        
-        // Both represent different states, but new is more accurate
-        assertNotEquals(oldApproach, newApproach,
-            "New timeout states provide distinct accounting from DONE");
-    }
-
-    @Test
-    @DisplayName("State accounting: All 9 states can be counted separately")
-    void testAllStatesCanBeCountedSeparately() {
-        // For state accounting to work (Requirement 4.x), all states must be distinct
-        // Verify no duplicates in the allowed values
-        java.util.Set<String> uniqueStates = new java.util.HashSet<>(
-            java.util.Arrays.asList(VALID_STATUS_VALUES)
-        );
-        assertEquals(9, uniqueStates.size(),
-            "All 9 status values must be unique for state accounting");
-    }
-
-    @Test
-    @DisplayName("Backward compatibility: Existing states remain valid")
-    void testExistingStatesRemainValid() {
-        // Requirement 3.3: Migration should not break existing states
-        String[] existingStates = {
-            "pending",
-            "ENQUEUED",
-            "ENRICHMENT",
-            "EXENSIO_LOADING",
-            "DONE",
-            "FAILED",
-            "CANCELLED"
-        };
-        
-        for (String state : existingStates) {
-            assertContains(VALID_STATUS_VALUES, state,
-                "Existing state '" + state + "' must remain valid after migration");
+    @DisplayName("Each defined status is valid via fromDbValue")
+    void testAllStatusesResolveCorrectly() {
+        for (String dbValue : ALL_STATUS_DB_VALUES) {
+            PipelineStatus ps = PipelineStatus.fromDbValue(dbValue);
+            assertTrue(ps != null, "PipelineStatus.fromDbValue('" + dbValue + "') must succeed");
+            assertEquals(dbValue, ps.dbValue(),
+                "Round-trip: dbValue() must match the input");
         }
     }
 
     @Test
-    @DisplayName("Requirement 3.4: Migration is reversible")
-    void testMigrationIsReversible() {
-        // Requirement 3.4: Old records should not be affected and migration should be reversible
-        // The constraint now includes the new states, but existing records with old states are untouched
-        // Rollback would restore the old constraint without the new states
-        
-        String[] preExistingStates = {
-            "pending",
-            "ENQUEUED",
-            "ENRICHMENT",
-            "EXENSIO_LOADING",
-            "DONE",
-            "FAILED",
-            "CANCELLED"
-        };
-        
-        // Verify all pre-existing states are still in the new constraint
-        for (String state : preExistingStates) {
-            assertContains(VALID_STATUS_VALUES, state,
-                "Pre-existing state '" + state + "' must survive rollback scenario");
-        }
+    @DisplayName("Key new and renamed states are present")
+    void testKeyStatesPresent() {
+        assertTrue(ALL_STATUS_DB_VALUES.contains("STAGED_TO_REFDB"),
+            "Must include STAGED_TO_REFDB (replaces pending)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("QUEUED_FOR_CP"),
+            "Must include QUEUED_FOR_CP (replaces ENQUEUED)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("ELASTICSEARCH_MONITORING"),
+            "Must include ELASTICSEARCH_MONITORING (replaces ENRICHMENT)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("CP_TIMEOUT"),
+            "Must include CP_TIMEOUT (replaces ENRICHMENT_TIMEOUT)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("EXENSIO_MONITORING"),
+            "Must include EXENSIO_MONITORING (replaces EXENSIO_LOADING)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("COMPLETED_MANUAL_VERIFICATION_REQUIRED"),
+            "Must include COMPLETED_MANUAL_VERIFICATION_REQUIRED (replaces EXENSIO_TIMEOUT)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("COMPLETED"),
+            "Must include COMPLETED (replaces DONE)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("CP_FAILED"),
+            "Must include CP_FAILED (replaces CP-path FAILED)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("LOAD_FAILED"),
+            "Must include LOAD_FAILED (replaces Exensio-path FAILED)");
     }
 
     @Test
-    @DisplayName("Constraint coverage: All 9 states are accounted for")
-    void testAllNineStatesAccountedFor() {
-        // Requirement 3.1, 3.2, 3.3, 3.4: All states must be documented and tested
-        String[] allStates = {
-            "pending",              // pending state (ready for processing)
-            "ENQUEUED",             // queued in coverage point queue
-            "ENRICHMENT",           // actively enriching from ES/pp_log
-            "ENRICHMENT_TIMEOUT",   // enrichment timed out (NEW)
-            "EXENSIO_LOADING",      // being verified in Exensio
-            "EXENSIO_TIMEOUT",      // Exensio verification timed out (NEW)
-            "DONE",                 // successfully completed
-            "FAILED",               // failed with error
-            "CANCELLED"             // cancelled by user
-        };
-        
-        // Count should match requirements
-        assertEquals(9, allStates.length,
-            "Constraint must support exactly 9 states (7 existing + 2 new timeout states)");
-        
-        // All should be in valid status values
-        for (String state : allStates) {
-            assertContains(VALID_STATUS_VALUES, state,
-                "State '" + state + "' must be in valid status values");
+    @DisplayName("Terminal state classification is correct")
+    void testTerminalStates() {
+        for (PipelineStatus ps : Arrays.asList(
+                PipelineStatus.COMPLETED,
+                PipelineStatus.CP_FAILED,
+                PipelineStatus.LOAD_FAILED,
+                PipelineStatus.COMPLETED_MANUAL_VERIFICATION_REQUIRED,
+                PipelineStatus.CANCELLED)) {
+            assertTrue(ps.isTerminal(), ps.dbValue() + " must be terminal");
         }
+        assertFalse(PipelineStatus.ELASTICSEARCH_MONITORING.isTerminal(),
+            "ELASTICSEARCH_MONITORING must NOT be terminal");
+        assertFalse(PipelineStatus.EXENSIO_MONITORING.isTerminal(),
+            "EXENSIO_MONITORING must NOT be terminal");
     }
 
-    // Helper methods
-
-    private void assertContains(String[] array, String value, String message) {
-        for (String item : array) {
-            if (item != null && item.equals(value)) {
-                return; // Found
-            }
+    @Test
+    @DisplayName("Invalid status values return null")
+    void testInvalidStatusReturnsNull() {
+        for (String invalid : Arrays.asList("pending", "ENQUEUED", "DONE", "FAILED", "ENRICHMENT_TIMEOUT",
+                "EXENSIO_TIMEOUT", "EXENSIO_LOADING", "ENRICHMENT", "PROCESSING", "", null)) {
+            PipelineStatus ps = PipelineStatus.fromDbValue(invalid);
+            assertTrue(ps == null,
+                "Deprecated/invalid status '" + invalid + "' must return null from fromDbValue()");
         }
-        fail(message + " — Expected '" + value + "' in array");
-    }
-
-    private void assertNotContains(String[] array, String value, String message) {
-        for (String item : array) {
-            if (item != null && item.equals(value)) {
-                fail(message + " — Did not expect '" + value + "' in array");
-            }
-        }
-    }
-
-    private boolean isValidConstantName(String name) {
-        // Valid constant name: UPPERCASE with underscores, no lowercase
-        return name.matches("^[A-Z_]+$");
     }
 }

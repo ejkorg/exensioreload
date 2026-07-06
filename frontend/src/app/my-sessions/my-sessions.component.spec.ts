@@ -75,7 +75,7 @@ const SESSION_STATUSES = [
 ] as const;
 
 /** File-level statuses as defined in the design document (Requirements 6.3). */
-const FILE_STATUSES = ['READY', 'ENQUEUED', 'ENRICHMENT', 'EXENSIO_LOADING', 'COMPLETED', 'ERROR', 'CANCELLED'] as const;
+const FILE_STATUSES = ['READY', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', 'EXENSIO_MONITORING', 'COMPLETED', 'ERROR', 'CANCELLED'] as const;
 
 const arbDetail = (): fc.Arbitrary<StagingSessionDetail> =>
   fc.record({

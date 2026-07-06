@@ -198,7 +198,7 @@ public class ExensioLoadMonitor {
         // 1. Load records (single query)
         List<StageRecord> records;
         try {
-            records = refDbService.listRecords(null, null, "EXENSIO_LOADING", Integer.MAX_VALUE);
+            records = refDbService.listRecords(null, null, "EXENSIO_MONITORING", Integer.MAX_VALUE);
         } catch (Exception e) {
             log.warn("Failed to load EXENSIO_LOADING records — skipping poll cycle: {}", e.getMessage());
             return;
@@ -499,7 +499,7 @@ public class ExensioLoadMonitor {
                     integrationStatusService.updateExensio(requestId, "failure", traceMsg);
                     // Add Exensio-specific failure context for UI display
                     String contextMessage = "[Exensio Failure] " + traceMsg;
-                    refDbService.markFailed(record, contextMessage);
+                    refDbService.markLoadFailed(record, contextMessage);
                 }
                 case ERROR -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup error";

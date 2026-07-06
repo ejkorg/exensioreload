@@ -30,7 +30,7 @@ public class IntegrationStatusService {
     private final AtomicLong accessCounter = new AtomicLong(0);
 
     // Terminal states that trigger TTL-based eviction
-    private static final List<String> TERMINAL_STATES = List.of("DONE", "FAILED", "COMPLETED", "ERROR");
+    private static final List<String> TERMINAL_STATES = List.of("success", "failure", "error");
 
     private final IntegrationStatusProperties properties;
 
@@ -124,7 +124,7 @@ public class IntegrationStatusService {
      * logic updated:
      * - If the status is NOT terminal (e.g. 'not_found', 'pending', 'error'),
      *   evict it after the standard TTL to clean up records that disappeared.
-     * - If the status IS terminal ('DONE', 'FAILED'), we preserve it much longer
+     * - If the status IS terminal ('COMPLETED', 'COMPLETED'), we preserve it much longer
      *   (10x TTL) so the user can see the final result after the session ends.
      */
     private void evictExpiredFromMap(ConcurrentHashMap<Long, IntegrationStatus> map, long ttlMillis, long now) {

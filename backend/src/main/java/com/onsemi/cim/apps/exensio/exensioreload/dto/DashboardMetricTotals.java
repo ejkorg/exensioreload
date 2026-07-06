@@ -1,12 +1,17 @@
 package com.onsemi.cim.apps.exensio.exensioreload.dto;
 
+import com.onsemi.cim.apps.exensio.exensioreload.stage.PipelineStatus;
+
 public record DashboardMetricTotals(
         long total,
-        long ready,
-        long queued,
-        long enriching,
-        long exensioLoading,
-        long failed,
+        long stagedToRefdb,
+        long queuedForCp,
+        long elasticsearchMonitoring,
+        long cpTimeout,
+        long exensioMonitoring,
+        long completedManualVerification,
+        long cpFailed,
+        long loadFailed,
         long completed,
         long cancelled,
         long backlog,
@@ -14,22 +19,22 @@ public record DashboardMetricTotals(
         long activeUsers
 ) {
     public static DashboardMetricTotals empty() {
-        return new DashboardMetricTotals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        return new DashboardMetricTotals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    /**
-     * Backward compatibility: compute enqueued as queued + enriching + exensioLoading
-     * This allows existing frontend code to continue working with the old field.
-     */
+    /** All failure states combined (for backward-compatible display). */
+    public long failed() {
+        return cpFailed + loadFailed;
+    }
+
+    /** All in-flight monitoring states (for backward-compatible display). */
     public long enqueued() {
-        return queued + enriching + exensioLoading;
+        return queuedForCp + elasticsearchMonitoring + exensioMonitoring;
     }
 
-    /**
-     * Calculate the sum of all state counts for accounting verification.
-     * Should equal total if all records are in valid states.
-     */
     public long accountingSum() {
-        return ready + queued + enriching + exensioLoading + failed + completed + cancelled;
+        return stagedToRefdb + queuedForCp + elasticsearchMonitoring
+            + cpTimeout + exensioMonitoring + completedManualVerification
+            + cpFailed + loadFailed + completed + cancelled;
     }
 }

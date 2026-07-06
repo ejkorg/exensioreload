@@ -90,7 +90,7 @@ public class DailySummaryService {
 
         // Status breakdown
         Map<String, Integer> statusBreakdown = new HashMap<>();
-        statusBreakdown.put("DONE", 1454);
+        statusBreakdown.put("COMPLETED", 1454);
         statusBreakdown.put("FAILED", 52);
         statusBreakdown.put("PROCESSING", 41);
         metrics.put("statusBreakdown", statusBreakdown);

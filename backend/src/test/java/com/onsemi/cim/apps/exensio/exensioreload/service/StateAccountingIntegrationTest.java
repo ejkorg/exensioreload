@@ -557,7 +557,7 @@ public class StateAccountingIntegrationTest {
         String sql = "UPDATE " + table +
                 " SET status = 'CANCELLED' " +
                 "WHERE site = ? AND sender_id = ? AND request_id = ? " +
-                "AND status = 'ENRICHMENT' " +
+                "AND status = 'ELASTICSEARCH_MONITORING' " +
                 "AND rownum <= ?";
 
         try (Connection conn = dataSource.getConnection();
@@ -573,9 +573,9 @@ public class StateAccountingIntegrationTest {
     private void markRecordsDone(int count) throws SQLException {
         String table = refDbProperties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE' " +
+                " SET status = 'COMPLETED' " +
                 "WHERE site = ? AND sender_id = ? AND request_id = ? " +
-                "AND status = 'ENRICHMENT' " +
+                "AND status = 'ELASTICSEARCH_MONITORING' " +
                 "AND rownum <= ?";
 
         try (Connection conn = dataSource.getConnection();

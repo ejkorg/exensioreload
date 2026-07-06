@@ -535,13 +535,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   openMetricCardDetail(metric: MetricCard): void {
     const stateMap: { [key: string]: string } = {
-      Staged: 'pending',
-      'Queued for Enrichment': 'ENQUEUED',
-      'Enrichment Processing': 'ENRICHMENT',
-      'Enrichment Monitoring Timeout': 'ENRICHMENT_TIMEOUT',
-      'Exensio Monitoring': 'EXENSIO_LOADING',
-      'Completed — Verify in Exensio': 'EXENSIO_TIMEOUT',
-      Completed: 'DONE',
+      Staged: 'STAGED_TO_REFDB',
+      'Queued for Enrichment': 'QUEUED_FOR_CP',
+      'Enrichment Processing': 'ELASTICSEARCH_MONITORING',
+      'Enrichment Monitoring Timeout': 'CP_TIMEOUT',
+      'Exensio Monitoring': 'EXENSIO_MONITORING',
+      'Completed — Verify in Exensio': 'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
+      Completed: 'COMPLETED',
       Failed: 'FAILED',
       Cancelled: 'CANCELLED',
     };
@@ -1110,7 +1110,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     // Update global metrics based on state transition
     // ENRICHMENT → ENRICHMENT_TIMEOUT: decrement enriching, increment enrichmentTimeout
-    if (afterState === 'ENRICHMENT_TIMEOUT') {
+    if (afterState === 'CP_TIMEOUT') {
       updated.global.enriching = Math.max(0, (updated.global.enriching || 0) - count);
       updated.global.enrichmentTimeout = (updated.global.enrichmentTimeout || 0) + count;
 
@@ -1129,7 +1129,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       setTimeout(() => this.changedMetrics.set(new Set<string>()), 600);
     }
     // EXENSIO_LOADING → EXENSIO_TIMEOUT: decrement exensioLoading, increment exensioTimeout
-    else if (afterState === 'EXENSIO_TIMEOUT') {
+    else if (afterState === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
       updated.global.exensioLoading = Math.max(0, (updated.global.exensioLoading || 0) - count);
       updated.global.exensioTimeout = (updated.global.exensioTimeout || 0) + count;
 

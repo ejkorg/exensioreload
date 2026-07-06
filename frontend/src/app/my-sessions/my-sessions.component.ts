@@ -2313,7 +2313,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     { value: 'PARTIALLY_FAILED', label: 'Partially Failed' },
     { value: 'CANCELLED', label: 'Cancelled' },
   ];
-  private readonly statusOrder = ['DONE', 'ENQUEUED', 'FAILED', 'CANCELLED', 'NEW'];
+  private readonly statusOrder = ['DONE', 'QUEUED_FOR_CP', 'FAILED', 'CANCELLED', 'NEW'];
 
   dailyStatusRows = computed(() => {
     const analytics = this.sessionAnalytics();
@@ -2329,7 +2329,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     return points.map((p: SessionDailyStatusPoint) => {
       const dayMap = new Map<string, number>([
         ['DONE', p.done || 0],
-        ['ENQUEUED', p.enqueued || 0],
+        ['QUEUED_FOR_CP', p.enqueued || 0],
         ['FAILED', p.failed || 0],
         ['CANCELLED', p.cancelled || 0],
         ['NEW', p.staged || 0],
@@ -2793,7 +2793,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
       const entry = byDay.get(day) || { done: 0, enqueued: 0, failed: 0, cancelled: 0, staged: 0, total: 0 };
       const normalized = this.normalizeStatus(r.status);
       if (normalized === 'DONE') entry.done += 1;
-      else if (normalized === 'ENQUEUED') entry.enqueued += 1;
+      else if (normalized === 'QUEUED_FOR_CP') entry.enqueued += 1;
       else if (normalized === 'CANCELLED') entry.cancelled += 1;
       else if (normalized === 'FAILED') entry.failed += 1;
       else entry.staged += 1;
@@ -2846,17 +2846,17 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     };
   }
 
-  private normalizeStatus(status?: string | null): 'DONE' | 'ENQUEUED' | 'FAILED' | 'CANCELLED' | 'NEW' {
+  private normalizeStatus(status?: string | null): 'DONE' | 'QUEUED_FOR_CP' | 'FAILED' | 'CANCELLED' | 'NEW' {
     const value = (status || '').toUpperCase();
     if (value.includes('COMPLETE') || value === 'DONE') return 'DONE';
     if (
       value.includes('QUEUE') ||
-      value === 'ENQUEUED' ||
+      value === 'QUEUED_FOR_CP' ||
       value === 'PROCESSING' ||
-      value === 'ENRICHMENT' ||
-      value === 'EXENSIO_LOADING'
+      value === 'ELASTICSEARCH_MONITORING' ||
+      value === 'EXENSIO_MONITORING'
     )
-      return 'ENQUEUED';
+      return 'QUEUED_FOR_CP';
     if (value.includes('CANCEL')) return 'CANCELLED';
     if (value.includes('FAIL') || value === 'ERROR') return 'FAILED';
     return 'NEW';
@@ -3125,7 +3125,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
 
     const days = rows.map((r: any) => r.day);
     const doneData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'DONE')?.count || 0);
-    const enqueuedData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'ENQUEUED')?.count || 0);
+    const enqueuedData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'QUEUED_FOR_CP')?.count || 0);
     const failedData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'FAILED')?.count || 0);
     const cancelledData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'CANCELLED')?.count || 0);
     const stagedData = rows.map((r: any) => r.segments.find((s: any) => s.status === 'NEW')?.count || 0);

@@ -117,7 +117,7 @@ public class CpLogMonitor {
         List<StageRecord> enrichmentRecords;
         try {
             // Requirement 2.2: query only ENRICHMENT records
-            enrichmentRecords = refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE);
+            enrichmentRecords = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE);
         } catch (Exception e) {
             log.warn("Failed to load ENRICHMENT records from DB — skipping poll cycle: {}", e.getMessage());
             return;
@@ -239,7 +239,7 @@ public class CpLogMonitor {
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
             integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
             failureCount.incrementAndGet();
-            refDbService.markFailed(record, statusMsg);
+            refDbService.markCpFailed(record, statusMsg);
             emitRowUpdateSse(record, requestId);
             return;
         }
@@ -255,7 +255,7 @@ public class CpLogMonitor {
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "failure", statusMsg);
             integrationStatusService.updateElasticsearch(requestId, "failure", statusMsg);
             failureCount.incrementAndGet();
-            refDbService.markFailed(record, statusMsg);
+            refDbService.markCpFailed(record, statusMsg);
             emitRowUpdateSse(record, requestId);
             return;
         }
@@ -304,7 +304,7 @@ public class CpLogMonitor {
     private void resolveStuckEnrichmentRecords() {
         List<StageRecord> stuck;
         try {
-            stuck = refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE);
+            stuck = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE);
         } catch (Exception e) {
             log.warn("resolveStuckEnrichmentRecords: failed to load ENRICHMENT records: {}", e.getMessage());
             return;
@@ -331,7 +331,7 @@ public class CpLogMonitor {
         
         List<StageRecord> stuckRecords;
         try {
-            stuckRecords = refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE);
+            stuckRecords = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE);
         } catch (Exception e) {
             log.warn("detectStuckEnrichmentRecords: failed to load ENRICHMENT records: {}", e.getMessage());
             return;

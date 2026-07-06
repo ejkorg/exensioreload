@@ -660,7 +660,7 @@ public class MetadataImporterService {
 
             for (com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus s : statuses) {
                 total += s.total();
-                ready += s.ready();
+                ready += s.stagedToRefdb();
                 enqueued += s.enqueued();
                 failed += s.failed();
                 completed += s.completed();

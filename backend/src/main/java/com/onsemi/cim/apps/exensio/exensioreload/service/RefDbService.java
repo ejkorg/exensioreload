@@ -190,7 +190,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
         String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED_TO_REFDB', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -264,7 +264,7 @@ public class RefDbService {
                                 evt.put("id", buildPayloadId(c.metadataId(), c.dataId()));
                                 evt.put("metadataId", c.metadataId());
                                 evt.put("dataId", c.dataId());
-                                evt.put("status", "pending");
+                                evt.put("status", "STAGED_TO_REFDB");
                                 evt.put("stagedBy", normalizedUser);
                                 evt.put("msg", "Staged");
                                 monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
@@ -318,7 +318,7 @@ public class RefDbService {
                             evt.put("id", buildPayloadId(c.metadataId(), c.dataId()));
                             evt.put("metadataId", c.metadataId());
                             evt.put("dataId", c.dataId());
-                            evt.put("status", "pending");
+                            evt.put("status", "STAGED_TO_REFDB");
                             evt.put("stagedBy", normalizedUser);
                             evt.put("msg", "Staged");
                             monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
@@ -348,7 +348,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
         String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED_TO_REFDB', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (PayloadCandidate candidate : batch) {
@@ -459,7 +459,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatch(int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'pending' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -504,7 +504,7 @@ public class RefDbService {
     public void markEnqueued(List<Long> ids) {
         // ENQUEUED is dead code — records go directly NEW → ENRICHMENT on dispatch.
         // Kept for backwards compatibility; delegates to the real transition.
-        updateStatus(ids, "ENRICHMENT", null);
+        updateStatus(ids, "ELASTICSEARCH_MONITORING", null);
     }
 
     /**
@@ -516,23 +516,22 @@ public class RefDbService {
         markEnrichmentRecords(records);
     }
 
-    public void markFailed(long id, String message) {
-        updateStatus(List.of(id), "FAILED", message);
+    public void markCpFailed(long id, String message) {
+        updateStatus(List.of(id), "CP_FAILED", message);
     }
 
-    public void markFailed(StageRecord record, String message) {
+    public void markCpFailed(StageRecord record, String message) {
         if (record == null) return;
-        markFailed(record.id(), message);
+        markCpFailed(record.id(), message);
         if (monitorService != null && record.requestId() != null) {
-            // Determine failure reason and source from message content
             String failureReason = determineFailureReason(message);
             String failureSource = determineFailureSource(record, message);
             
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "FAILED");
+            evt.put("status", "CP_FAILED");
             evt.put("message", message);
-            evt.put("msg", "Failed: " + truncate(message, 30));
+            evt.put("msg", "CP Failed: " + truncate(message, 30));
             evt.put("failureReason", failureReason);
             evt.put("failureSource", failureSource);
             evt.put("updatedAt", record.updatedAt() != null ? record.updatedAt().toString() : null);
@@ -541,10 +540,40 @@ public class RefDbService {
             evt.put("lot", record.lot());
             evt.put("wafer", record.wafer());
             evt.put("filename", record.filename());
-            evt.put("displayStatus", StatusMapper.getDisplayStatus("FAILED", false));
+            evt.put("displayStatus", StatusMapper.getDisplayStatus("CP_FAILED", false));
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
-            // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "FAILED");
+            recordStateChangeForBatcher(record.requestId(), "CP_FAILED");
+            broadcastStats(record.requestId());
+        }
+    }
+
+    public void markLoadFailed(long id, String message) {
+        updateStatus(List.of(id), "LOAD_FAILED", message);
+    }
+
+    public void markLoadFailed(StageRecord record, String message) {
+        if (record == null) return;
+        markLoadFailed(record.id(), message);
+        if (monitorService != null && record.requestId() != null) {
+            String failureReason = determineFailureReason(message);
+            String failureSource = determineFailureSource(record, message);
+            
+            Map<String, Object> evt = new HashMap<>();
+            evt.put("id", record.id());
+            evt.put("status", "LOAD_FAILED");
+            evt.put("message", message);
+            evt.put("msg", "Load Failed: " + truncate(message, 30));
+            evt.put("failureReason", failureReason);
+            evt.put("failureSource", failureSource);
+            evt.put("updatedAt", record.updatedAt() != null ? record.updatedAt().toString() : null);
+            evt.put("metadataId", record.metadataId());
+            evt.put("dataId", record.dataId());
+            evt.put("lot", record.lot());
+            evt.put("wafer", record.wafer());
+            evt.put("filename", record.filename());
+            evt.put("displayStatus", StatusMapper.getDisplayStatus("LOAD_FAILED", false));
+            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            recordStateChangeForBatcher(record.requestId(), "LOAD_FAILED");
             broadcastStats(record.requestId());
         }
     }
@@ -595,7 +624,7 @@ public class RefDbService {
         if (msgLower.contains("cp") && !msgLower.contains("exensio")) {
             return "cp";
         }
-        if (recordStatus.contains("ENRICHMENT") || recordStatus.contains("EXENSIO")) {
+        if (recordStatus.contains("ELASTICSEARCH_MONITORING") || recordStatus.contains("EXENSIO")) {
             // Check if failure is from ES query
             if (msgLower.contains("es ") || msgLower.contains("elasticsearch") || msgLower.contains("query")) {
                 return "cp";
@@ -612,7 +641,7 @@ public class RefDbService {
         }
         
         // Check for preprocessing failures (before enrichment)
-        if (recordStatus.contains("pending") || recordStatus.contains("STAGED")) {
+        if (recordStatus.contains("STAGED_TO_REFDB") || recordStatus.contains("STAGED")) {
             if (msgLower.contains("push") || msgLower.contains("database") || msgLower.contains("sql")) {
                 return "preprocessing";
             }
@@ -636,7 +665,7 @@ public class RefDbService {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Long id : ids) {
-                ps.setString(1, "DONE");
+                ps.setString(1, "COMPLETED");
                 ps.setTimestamp(2, processedTs);
                 ps.setLong(3, id);
                 ps.addBatch();
@@ -663,7 +692,7 @@ public class RefDbService {
                 for (StageRecord r : group) {
                     Map<String, Object> evt = new HashMap<>();
                     evt.put("id", r.id());
-                    evt.put("status", "DONE");
+                    evt.put("status", "COMPLETED");
                     evt.put("msg", "Dispatch completed");
                     monitorService.sendEvent(reqId, "ROW_UPDATE", evt);
                 }
@@ -676,13 +705,13 @@ public class RefDbService {
      * Marks records as ENRICHMENT status when they are consumed from the sender queue by CP.
      * This replaces the incorrect DONE transition — the file has only been picked up for enrichment,
      * not fully processed.
-     * Broadcasts SSE ROW_UPDATE with status "ENRICHMENT" and msg "Consumed by CP (processing)".
+     * Broadcasts SSE ROW_UPDATE with status "ELASTICSEARCH_MONITORING" and msg "Consumed by CP (processing)".
      * Requirements: 1.1, 1.2
      */
     public void markEnrichmentRecords(List<StageRecord> records) {
         if (records == null || records.isEmpty()) return;
         List<Long> ids = records.stream().map(StageRecord::id).toList();
-        updateStatus(ids, "ENRICHMENT", null);
+        updateStatus(ids, "ELASTICSEARCH_MONITORING", null);
 
         if (monitorService != null) {
             Map<String, List<StageRecord>> byRequest = new HashMap<>();
@@ -695,12 +724,12 @@ public class RefDbService {
                 for (StageRecord r : group) {
                     Map<String, Object> evt = new HashMap<>();
                     evt.put("id", r.id());
-                    evt.put("status", "ENRICHMENT");
+                    evt.put("status", "ELASTICSEARCH_MONITORING");
                     evt.put("msg", "Consumed by CP (processing)");
                     monitorService.sendEvent(reqId, "ROW_UPDATE", evt);
                 }
                 // Record state change to batcher for aggregation event
-                recordStateChangeForBatcher(reqId, "ENRICHMENT");
+                recordStateChangeForBatcher(reqId, "ELASTICSEARCH_MONITORING");
                 broadcastStats(reqId);
             });
         }
@@ -727,7 +756,7 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_LOADING', cp_output_path = NULL, cp_output_target = NULL," +
+                " SET status = 'EXENSIO_MONITORING', cp_output_path = NULL, cp_output_target = NULL," +
                 " error_message = NULL, updated_at = " + timestampExpr() + " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -766,7 +795,7 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE', cp_output_path = ?, cp_output_target = ?, error_message = NULL," +
+                " SET status = 'COMPLETED', cp_output_path = ?, cp_output_target = ?, error_message = NULL," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
@@ -782,13 +811,13 @@ public class RefDbService {
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "DONE");
+            evt.put("status", "COMPLETED");
             evt.put("msg", "CP enrichment complete");
             evt.put("cpOutputPath", outputPath);
             evt.put("cpOutputTarget", outputTarget);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "DONE");
+            recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
         }
     }
@@ -802,7 +831,7 @@ public class RefDbService {
         if (record == null) return;
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE', error_message = ?," +
+                " SET status = 'COMPLETED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
@@ -817,12 +846,12 @@ public class RefDbService {
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "DONE");
+            evt.put("status", "COMPLETED");
             evt.put("msg", "Completed — manual verification needed: " + truncate(message, 60));
             evt.put("errorMessage", message);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "DONE");
+            recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
         }
     }
@@ -846,12 +875,12 @@ public class RefDbService {
                 elasticsearchProperties.getEnrichmentTimeoutMinutes() + " minutes. " +
                 "Needs manual verification or retry.";
         
-        updateStatus(List.of(record.id()), "ENRICHMENT_TIMEOUT", errorMessage);
+        updateStatus(List.of(record.id()), "CP_TIMEOUT", errorMessage);
         
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "ENRICHMENT_TIMEOUT");
+            evt.put("status", "CP_TIMEOUT");
             evt.put("msg", "Enrichment timeout - " + truncate(diagnosticSummary, 40));
             evt.put("errorMessage", errorMessage);
             evt.put("metadataId", record.metadataId());
@@ -862,7 +891,7 @@ public class RefDbService {
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             
             // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "ENRICHMENT_TIMEOUT");
+            recordStateChangeForBatcher(record.requestId(), "CP_TIMEOUT");
             broadcastStats(record.requestId());
         }
         
@@ -887,12 +916,12 @@ public class RefDbService {
                 " Wafer not found after " + exensioProperties.getTimeoutMinutes() + " minutes. " +
                 "May need manual verification or retry.";
         
-        updateStatus(List.of(record.id()), "EXENSIO_TIMEOUT", errorMessage);
+        updateStatus(List.of(record.id()), "COMPLETED_MANUAL_VERIFICATION_REQUIRED", errorMessage);
         
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "EXENSIO_TIMEOUT");
+            evt.put("status", "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
             evt.put("msg", "Exensio timeout - " + truncate(reason, 40));
             evt.put("errorMessage", errorMessage);
             evt.put("metadataId", record.metadataId());
@@ -903,7 +932,7 @@ public class RefDbService {
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             
             // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "EXENSIO_TIMEOUT");
+            recordStateChangeForBatcher(record.requestId(), "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
             broadcastStats(record.requestId());
         }
         
@@ -913,7 +942,7 @@ public class RefDbService {
     private void applyExensioLoading(long recordId, String outputPath, String outputTarget) {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_LOADING', cp_output_path = ?, cp_output_target = ?, error_message = NULL, updated_at = "
+                " SET status = 'EXENSIO_MONITORING', cp_output_path = ?, cp_output_target = ?, error_message = NULL, updated_at = "
                 + timestampExpr() + " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -932,7 +961,7 @@ public class RefDbService {
         }
         Map<String, Object> evt = new HashMap<>();
         evt.put("id", record.id());
-        evt.put("status", "EXENSIO_LOADING");
+        evt.put("status", "EXENSIO_MONITORING");
         evt.put("msg", msg);
         if (outputPath != null) {
             evt.put("cpOutputPath", outputPath);
@@ -947,13 +976,13 @@ public class RefDbService {
     /**
      * Marks a record as DONE after Exensio confirms the wafer was loaded.
      * Stores the Exensio wafer_key and pg_key for future results queries.
-     * Broadcasts SSE ROW_UPDATE with status "DONE".
+     * Broadcasts SSE ROW_UPDATE with status "COMPLETED".
      */
     public void markDoneFromExensio(StageRecord record, Long exensioWaferKey, long exensioPgKey) {
         if (record == null) return;
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE', exensio_wafer_key = ?, exensio_pg_key = ?," +
+                " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
@@ -973,13 +1002,13 @@ public class RefDbService {
         if (monitorService != null && record.requestId() != null) {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
-            evt.put("status", "DONE");
+            evt.put("status", "COMPLETED");
             evt.put("msg", "Loaded into Exensio");
             evt.put("exensioWaferKey", exensioWaferKey);
             evt.put("exensioPgKey", exensioPgKey);
             monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
-            recordStateChangeForBatcher(record.requestId(), "DONE");
+            recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
         }
     }
@@ -1007,12 +1036,12 @@ public class RefDbService {
 
         for (StageStatus s : statuses) {
             total += s.total();
-            ready += s.ready();
-            enqueued += s.queued();
-            enriching += s.enriching();
-            enrichmentTimeout += s.enrichmentTimeout();
-            exensioLoading += s.exensioLoading();
-            exensioTimeout += s.exensioTimeout();
+            ready += s.stagedToRefdb();
+            enqueued += s.queuedForCp();
+            enriching += s.elasticsearchMonitoring();
+            enrichmentTimeout += s.cpTimeout();
+            exensioLoading += s.exensioMonitoring();
+            exensioTimeout += s.completedManualVerification();
             failed += s.failed();
             completed += s.completed();
             cancelled += s.cancelled();
@@ -1051,14 +1080,15 @@ public class RefDbService {
         String table = properties.getStagingTable();
         List<StageStatus> statuses = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'LOAD_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM ").append(table).append(" WHERE 1=1 ");
         List<Object> params = new ArrayList<>();
@@ -1085,15 +1115,16 @@ public class RefDbService {
                                 senderId,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // ready (pending)
-                                rs.getLong(6),      // queued (ENQUEUED)
-                                rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
-                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
-                                rs.getLong(11),     // failed
-                                rs.getLong(12),     // completed (DONE)
-                                rs.getLong(13),     // cancelled (CANCELLED)
+                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
+                                rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
+                                rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
+                                rs.getLong(9),      // exensioMonitoring (EXENSIO_MONITORING)
+                                rs.getLong(10),     // completedManualVerification (COMPLETED_MANUAL_VERIFICATION_REQUIRED)
+                                rs.getLong(11),     // cpFailed (CP_FAILED)
+                                rs.getLong(12),     // loadFailed (LOAD_FAILED)
+                                rs.getLong(13),     // completed (COMPLETED)
+                                rs.getLong(14),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1110,14 +1141,15 @@ public class RefDbService {
         String where = " WHERE 1=1" + (site != null ? " AND site = ?" : "") + (senderId != null ? " AND sender_id = ?" : "") +
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'LOAD_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM " + table + where + " GROUP BY site, sender_id";
         List<StageStatus> statuses = new ArrayList<>();
@@ -1139,15 +1171,16 @@ public class RefDbService {
                                 rowSender,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // ready (pending)
-                                rs.getLong(6),      // queued (ENQUEUED)
-                                rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
-                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
-                                rs.getLong(11),     // failed
-                                rs.getLong(12),     // completed (DONE)
-                                rs.getLong(13),     // cancelled (CANCELLED)
+                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
+                                rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
+                                rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
+                                rs.getLong(9),      // exensioMonitoring (EXENSIO_MONITORING)
+                                rs.getLong(10),     // completedManualVerification (COMPLETED_MANUAL_VERIFICATION_REQUIRED)
+                                rs.getLong(11),     // cpFailed (CP_FAILED)
+                                rs.getLong(12),     // loadFailed (LOAD_FAILED)
+                                rs.getLong(13),     // completed (COMPLETED)
+                                rs.getLong(14),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1170,14 +1203,15 @@ public class RefDbService {
                 (userKey != null && !userKey.isBlank() ? " AND LOWER(COALESCE(last_requested_by, staged_by)) = ?" : "") +
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'CP_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'LOAD_FAILED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) " +
                 "FROM " + table + where + " GROUP BY site, sender_id";
         List<StageStatus> statuses = new ArrayList<>();
@@ -1200,15 +1234,16 @@ public class RefDbService {
                                 rowSender,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // ready (pending)
-                                rs.getLong(6),      // queued (ENQUEUED)
-                                rs.getLong(7),      // enriching (ENRICHMENT)
-                                rs.getLong(8),      // enrichmentTimeout (ENRICHMENT_TIMEOUT)
-                                rs.getLong(9),      // exensioLoading (EXENSIO_LOADING)
-                                rs.getLong(10),     // exensioTimeout (EXENSIO_TIMEOUT)
-                                rs.getLong(11),     // failed
-                                rs.getLong(12),     // completed (DONE)
-                                rs.getLong(13),     // cancelled (CANCELLED)
+                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
+                                rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
+                                rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
+                                rs.getLong(9),      // exensioMonitoring (EXENSIO_MONITORING)
+                                rs.getLong(10),     // completedManualVerification (COMPLETED_MANUAL_VERIFICATION_REQUIRED)
+                                rs.getLong(11),     // cpFailed (CP_FAILED)
+                                rs.getLong(12),     // loadFailed (LOAD_FAILED)
+                                rs.getLong(13),     // completed (COMPLETED)
+                                rs.getLong(14),     // cancelled (CANCELLED)
                                 userBreakdown.getOrDefault(key, List.of())
                         ));
                     }
@@ -1222,7 +1257,7 @@ public class RefDbService {
 
     public Set<String> findSitesWithPending() {
         String table = properties.getStagingTable();
-        String sql = "SELECT DISTINCT site FROM " + table + " WHERE status = 'pending'";
+        String sql = "SELECT DISTINCT site FROM " + table + " WHERE status = 'STAGED_TO_REFDB'";
         Set<String> sites = new HashSet<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql);
@@ -1239,7 +1274,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatchForSite(String site, int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'pending' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1259,7 +1294,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatchForSender(String site, int senderId, int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'pending' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1283,7 +1318,7 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') AND processed_at IS NULL ORDER BY updated_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') AND processed_at IS NULL ORDER BY updated_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1354,8 +1389,8 @@ public class RefDbService {
         }
         if (status != null && !status.isBlank()) {
             String normalized = status.trim().toUpperCase();
-            if (normalized.equals("ENQUEUED") || normalized.equals("PROCESSING") || normalized.equals("ENRICHMENT")) {
-                sb.append(" AND status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING')");
+            if (normalized.equals("QUEUED_FOR_CP") || normalized.equals("ELASTICSEARCH_MONITORING") || normalized.equals("PROCESSING")) {
+                sb.append(" AND status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING')");
             } else {
                 sb.append(" AND status = ?");
                 params.add(status);
@@ -1654,10 +1689,10 @@ public class RefDbService {
             String timestampExpr = resolveTimestampExpr(connection, table, dateTimeField);
 
             StringBuilder sb = new StringBuilder("SELECT lot, wafer, MIN(filename) AS filename, COUNT(*) AS total, ")
-                    .append("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS ready, ")
-                    .append("SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END) AS enqueued, ")
-                    .append("SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed, ")
-                    .append("SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS completed ")
+                    .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS ready, ")
+                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
+                    .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
+                    .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
                     .append("FROM ")
                     .append(table)
                     .append(" WHERE site = ? AND sender_id = ?");
@@ -1693,7 +1728,7 @@ public class RefDbService {
             }
 
             sb.append(" GROUP BY lot, wafer");
-            sb.append(" ORDER BY (SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) + SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END)) DESC, COUNT(*) DESC");
+            sb.append(" ORDER BY (SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) + SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END)) DESC, COUNT(*) DESC");
 
             if (limit > 0) {
                 sb.append(" FETCH FIRST ? ROWS ONLY");
@@ -1771,10 +1806,10 @@ public class RefDbService {
             StringBuilder sb = new StringBuilder()
                     .append("SELECT ").append(bucketExpr).append(" AS bucket_date, ")
                     .append("COUNT(*) AS total, ")
-                    .append("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS ready, ")
-                    .append("SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END) AS enqueued, ")
-                    .append("SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed, ")
-                    .append("SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS completed ")
+                    .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS ready, ")
+                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
+                    .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
+                    .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
                     .append("FROM ").append(table)
                     .append(" WHERE site = ? AND sender_id = ?");
 
@@ -2366,7 +2401,7 @@ public class RefDbService {
                     "wafer VARCHAR2(128), " +
                     "filename VARCHAR2(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR2(16) DEFAULT 'pending' NOT NULL, " +
+                    "status VARCHAR2(16) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
                     "error_message VARCHAR2(4000), " +
                     "created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
@@ -2387,7 +2422,7 @@ public class RefDbService {
                     "wafer VARCHAR(128), " +
                     "filename VARCHAR(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR(16) DEFAULT 'pending' NOT NULL, " +
+                    "status VARCHAR(16) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
                     "error_message VARCHAR(4000), " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
@@ -2557,10 +2592,10 @@ public class RefDbService {
                                                                           Integer senderId,
                                                                           String userKeyFilter) throws SQLException {
         StringBuilder sb = new StringBuilder("SELECT site, sender_id, COALESCE(last_requested_by, staged_by) AS user_key, COUNT(*), ")
-                .append("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), ")
-                .append("SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END), ")
-                .append("SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END), ")
-                .append("SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), ")
                 .append("MAX(last_requested_at) FROM ")
                 .append(table)
                 .append(" WHERE 1=1");
@@ -2611,8 +2646,8 @@ public class RefDbService {
 
         for (List<StageUserStatus> list : result.values()) {
             list.sort((a, b) -> {
-                long backlogA = a.ready() + a.enqueued() + a.failed();
-                long backlogB = b.ready() + b.enqueued() + b.failed();
+                long backlogA = a.stagedToRefdb() + a.enqueued() + a.failed();
+                long backlogB = b.stagedToRefdb() + b.enqueued() + b.failed();
                 if (backlogA != backlogB) {
                     return Long.compare(backlogB, backlogA);
                 }
@@ -2641,7 +2676,7 @@ public class RefDbService {
         // Normalize empty strings to null so IS NULL comparisons work correctly
         String candidateLot = (candidate.lot() == null || candidate.lot().isBlank()) ? null : candidate.lot().trim();
         String candidateWafer = (candidate.wafer() == null || candidate.wafer().isBlank()) ? null : candidate.wafer().trim();
-        String sql = "UPDATE " + table + " SET status = 'pending', error_message = NULL, processed_at = NULL, updated_at = " + timestampExpr() + ", " +
+        String sql = "UPDATE " + table + " SET status = 'STAGED_TO_REFDB', error_message = NULL, processed_at = NULL, updated_at = " + timestampExpr() + ", " +
                 "last_requested_by = ?, last_requested_at = " + timestampExpr() + ", sender_name = COALESCE(?, sender_name)" +
                 (requestId != null ? ", request_id = ?" : "") +
                 " WHERE site = ? AND sender_id = ? AND metadata_id = ? AND data_id = ? " +
@@ -3001,14 +3036,15 @@ public class RefDbService {
             return false;
         }
         String status = existing.status().trim();
-        // NEW and ENRICHMENT/EXENSIO_LOADING: still in-flight, same user can re-queue (markRetry resets to NEW)
-        // FAILED / CANCELLED / ERROR: terminal states that are always safe to retry
-        return "NEW".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
-                || "ENQUEUED".equalsIgnoreCase(status)
-                || "ENRICHMENT".equalsIgnoreCase(status)
-                || "EXENSIO_LOADING".equalsIgnoreCase(status)
+        // STAGED_TO_REFDB, QUEUED_FOR_CP, ELASTICSEARCH_MONITORING, EXENSIO_MONITORING: still in-flight
+        // CP_FAILED, LOAD_FAILED, CANCELLED: terminal states that are always safe to retry
+        return "NEW".equalsIgnoreCase(status) || "STAGED_TO_REFDB".equalsIgnoreCase(status)
+                || "QUEUED_FOR_CP".equalsIgnoreCase(status)
+                || "ELASTICSEARCH_MONITORING".equalsIgnoreCase(status)
+                || "EXENSIO_MONITORING".equalsIgnoreCase(status)
                 || "PROCESSING".equalsIgnoreCase(status) // legacy compat
-                || "FAILED".equalsIgnoreCase(status)
+                || "CP_FAILED".equalsIgnoreCase(status)
+                || "LOAD_FAILED".equalsIgnoreCase(status)
                 || "CANCELLED".equalsIgnoreCase(status)
                 || "ERROR".equalsIgnoreCase(status);
     }
@@ -3103,8 +3139,8 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "SELECT " +
                 "COUNT(*) AS total, " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS completed, " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed, " +
+                "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed " +
                 "FROM " + table + " " +
                 "WHERE request_id = ? AND lot = ?";
 
@@ -3164,10 +3200,10 @@ public class RefDbService {
         StringBuilder sql = new StringBuilder(
                 "SELECT " + bucketExpr + " AS bucket, sender_id, site, " +
                         "COUNT(*) AS total, " +
-                        "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS done, " +
-                        "SUM(CASE WHEN status IN ('ENQUEUED','ENRICHMENT','EXENSIO_LOADING') THEN 1 ELSE 0 END) AS enqueued, " +
-                        "SUM(CASE WHEN status IN ('pending','READY') THEN 1 ELSE 0 END) AS staged, " +
-                        "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed " +
+                        "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
+                        "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, " +
+                        "SUM(CASE WHEN status IN ('STAGED_TO_REFDB','READY') THEN 1 ELSE 0 END) AS staged, " +
+                        "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed " +
                         "FROM " + table + " WHERE site = ? AND end_time IS NOT NULL");
 
         List<Object> params = new ArrayList<>();
@@ -3272,7 +3308,7 @@ public class RefDbService {
         // Process DONE updates
         List<BatchResult.RecordUpdate> doneUpdates = grouped.get(BatchResult.UpdateType.DONE);
         if (doneUpdates != null && !doneUpdates.isEmpty()) {
-            int doneCount = batchMarkDone(doneUpdates);
+            int doneCount = batchMarkCompleted(doneUpdates);
             totalUpdated += doneCount;
             log.debug("Batch marked DONE: {} records", doneCount);
         }
@@ -3280,7 +3316,7 @@ public class RefDbService {
         // Process FAILED updates
         List<BatchResult.RecordUpdate> failedUpdates = grouped.get(BatchResult.UpdateType.FAILED);
         if (failedUpdates != null && !failedUpdates.isEmpty()) {
-            int failedCount = batchMarkFailed(failedUpdates);
+            int failedCount = batchMarkLoadFailed(failedUpdates);
             totalUpdated += failedCount;
             log.debug("Batch marked FAILED: {} records", failedCount);
         }
@@ -3305,7 +3341,7 @@ public class RefDbService {
         // Requirements: 2.1, 2.2, 2.3 — wafer not found in Exensio after configured timeout
         List<BatchResult.RecordUpdate> exensioTimeoutUpdates = grouped.get(BatchResult.UpdateType.EXENSIO_TIMEOUT);
         if (exensioTimeoutUpdates != null && !exensioTimeoutUpdates.isEmpty()) {
-            int exensioTimeoutCount = batchMarkExensioTimeout(exensioTimeoutUpdates);
+            int exensioTimeoutCount = batchMarkCompletedManualVerification(exensioTimeoutUpdates);
             totalUpdated += exensioTimeoutCount;
             log.debug("Batch marked EXENSIO_TIMEOUT: {} records", exensioTimeoutCount);
         }
@@ -3314,7 +3350,7 @@ public class RefDbService {
         // Requirements: 1.1, 1.2, 1.3 — enrichment not confirmed after configured timeout
         List<BatchResult.RecordUpdate> enrichmentTimeoutUpdates = grouped.get(BatchResult.UpdateType.ENRICHMENT_TIMEOUT);
         if (enrichmentTimeoutUpdates != null && !enrichmentTimeoutUpdates.isEmpty()) {
-            int enrichmentTimeoutCount = batchMarkEnrichmentTimeout(enrichmentTimeoutUpdates);
+            int enrichmentTimeoutCount = batchMarkCpTimeout(enrichmentTimeoutUpdates);
             totalUpdated += enrichmentTimeoutCount;
             log.debug("Batch marked ENRICHMENT_TIMEOUT: {} records", enrichmentTimeoutCount);
         }
@@ -3336,14 +3372,14 @@ public class RefDbService {
      *
      * Requirements: 5.2, 5.3, 7.7
      */
-    private int batchMarkDone(List<BatchResult.RecordUpdate> updates) {
+    private int batchMarkCompleted(List<BatchResult.RecordUpdate> updates) {
         if (updates == null || updates.isEmpty()) {
             return 0;
         }
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE', exensio_wafer_key = ?, exensio_pg_key = ?," +
+                " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3383,7 +3419,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "DONE", "Loaded into Exensio");
+            broadcastBatchEvents(updates, "COMPLETED", "Loaded into Exensio");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking DONE: {}", ex.getMessage(), ex);
@@ -3404,14 +3440,14 @@ public class RefDbService {
      *
      * Requirements: 5.2, 5.3, 7.7
      */
-    private int batchMarkFailed(List<BatchResult.RecordUpdate> updates) {
+    private int batchMarkLoadFailed(List<BatchResult.RecordUpdate> updates) {
         if (updates == null || updates.isEmpty()) {
             return 0;
         }
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3448,7 +3484,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "FAILED", "Batch processing failed");
+            broadcastBatchEvents(updates, "LOAD_FAILED", "Batch processing failed");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking FAILED: {}", ex.getMessage(), ex);
@@ -3476,7 +3512,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3511,7 +3547,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "FAILED", "Wafer not found in Exensio");
+            broadcastBatchEvents(updates, "LOAD_FAILED", "Wafer not found in Exensio");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking NOT_FOUND: {}", ex.getMessage(), ex);
@@ -3539,7 +3575,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3576,7 +3612,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "FAILED", "Batch processing error");
+            broadcastBatchEvents(updates, "LOAD_FAILED", "Batch processing error");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ERROR: {}", ex.getMessage(), ex);
@@ -3595,14 +3631,14 @@ public class RefDbService {
      *
      * Requirements: 2.1, 2.2, 2.3
      */
-    private int batchMarkExensioTimeout(List<BatchResult.RecordUpdate> updates) {
+    private int batchMarkCompletedManualVerification(List<BatchResult.RecordUpdate> updates) {
         if (updates == null || updates.isEmpty()) {
             return 0;
         }
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_TIMEOUT', error_message = ?," +
+                " SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3640,7 +3676,7 @@ public class RefDbService {
                 }
             }
 
-            broadcastBatchEvents(updates, "EXENSIO_TIMEOUT", "Exensio monitoring timeout — verify manually");
+            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio monitoring timeout — verify manually");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking EXENSIO_TIMEOUT: {}", ex.getMessage(), ex);
@@ -3657,14 +3693,14 @@ public class RefDbService {
      *
      * Requirements: 1.1, 1.2, 1.3
      */
-    private int batchMarkEnrichmentTimeout(List<BatchResult.RecordUpdate> updates) {
+    private int batchMarkCpTimeout(List<BatchResult.RecordUpdate> updates) {
         if (updates == null || updates.isEmpty()) {
             return 0;
         }
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'ENRICHMENT_TIMEOUT', error_message = ?," +
+                " SET status = 'CP_TIMEOUT', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3702,7 +3738,7 @@ public class RefDbService {
                 }
             }
 
-            broadcastBatchEvents(updates, "ENRICHMENT_TIMEOUT", "Enrichment monitoring timeout — verify manually");
+            broadcastBatchEvents(updates, "CP_TIMEOUT", "Enrichment monitoring timeout — verify manually");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ENRICHMENT_TIMEOUT: {}", ex.getMessage(), ex);
@@ -3724,7 +3760,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'DONE', exensio_wafer_key = ?, exensio_pg_key = ?," +
+                " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3749,7 +3785,7 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "DONE");
+                        evt.put("status", "COMPLETED");
                         evt.put("msg", "Loaded into Exensio (retry)");
                         evt.put("exensioWaferKey", update.waferKey());
                         evt.put("exensioPgKey", update.pgKey());
@@ -3781,7 +3817,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3803,7 +3839,7 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "FAILED");
+                        evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Batch processing failed (retry)");
                         monitorService.sendEvent(null, "ROW_UPDATE", evt);
                     }
@@ -3833,7 +3869,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3853,7 +3889,7 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "FAILED");
+                        evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Wafer not found in Exensio (retry)");
                         monitorService.sendEvent(null, "ROW_UPDATE", evt);
                     }
@@ -3883,7 +3919,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'FAILED', error_message = ?," +
+                " SET status = 'LOAD_FAILED', error_message = ?," +
                 " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3905,7 +3941,7 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "FAILED");
+                        evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Batch processing error (retry)");
                         monitorService.sendEvent(null, "ROW_UPDATE", evt);
                     }
@@ -4007,7 +4043,7 @@ public class RefDbService {
                 evt.put("status", status);
                 evt.put("msg", msg);
 
-                if (status.equals("DONE") && update.waferKey() != null && update.pgKey() != null) {
+                if (status.equals("COMPLETED") && update.waferKey() != null && update.pgKey() != null) {
                     evt.put("exensioWaferKey", update.waferKey());
                     evt.put("exensioPgKey", update.pgKey());
                 }

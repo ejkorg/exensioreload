@@ -131,7 +131,7 @@ public class SenderDispatchService {
                             log.error("Failed pushing record {}", record, ex);
                             String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database push failed";
                             String contextMessage = "[Preprocessing Failure] " + errorMsg;
-                            refDbService.markFailed(record.id(), contextMessage);
+                            refDbService.markCpFailed(record.id(), contextMessage);
                         }
                     }
                 }
@@ -141,7 +141,7 @@ public class SenderDispatchService {
             String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database connection failed";
             String contextMessage = "[Preprocessing Failure] " + errorMsg;
             for (StageRecord record : records) {
-                refDbService.markFailed(record.id(), contextMessage);
+                refDbService.markCpFailed(record.id(), contextMessage);
             }
             return;
         }

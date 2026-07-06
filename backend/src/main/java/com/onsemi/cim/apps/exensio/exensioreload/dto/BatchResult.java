@@ -20,7 +20,7 @@ public record BatchResult(
      * Represents a single record update result.
      *
      * @param recordId the ID of the stage record
-     * @param type the type of update (DONE, FAILED, NOT_FOUND, ERROR)
+     * @param type the type of update
      * @param waferKey the Exensio wafer key (if applicable)
      * @param pgKey the Exensio pg key (if applicable)
      * @param errorMessage error message if the update failed
@@ -38,54 +38,23 @@ public record BatchResult(
     ) {}
 
     /**
-     * Type of update applied to a record.
+     * Type of update applied to a record (v3.0 state machine).
      */
     public enum UpdateType {
-        /**
-         * Record was successfully updated with Exensio data.
-         */
-        DONE,
-        /**
-         * Record failed to update.
-         */
-        FAILED,
-        /**
-         * Record not found in Exensio.
-         */
+        COMPLETED,
+        CP_FAILED,
+        LOAD_FAILED,
         NOT_FOUND,
-        /**
-         * Record encountered an error during processing.
-         */
         ERROR,
-        /**
-         * Enrichment timeout - uncertainty about enrichment status after timeout.
-         * Requirements: 2.1
-         */
-        ENRICHMENT_TIMEOUT,
-        /**
-         * Exensio timeout - wafer not found in Exensio after timeout.
-         * Requirements: 2.1
-         */
-        EXENSIO_TIMEOUT
+        CP_TIMEOUT,
+        COMPLETED_MANUAL_VERIFICATION_REQUIRED
     }
 
-    /**
-     * Create a BatchResult with zero counts and empty updates.
-     */
     public static BatchResult empty() {
         return new BatchResult(java.util.Collections.emptyList(), 0, 0, 0, 0);
     }
 
-    /**
-     * Create a BatchResult with skipped processing (e.g., circuit breaker open).
-     */
     public static BatchResult skipped(int recordCount) {
-        return new BatchResult(
-                java.util.Collections.emptyList(),
-                0,
-                recordCount,
-                0,
-                0
-        );
+        return new BatchResult(java.util.Collections.emptyList(), 0, recordCount, 0, 0);
     }
 }

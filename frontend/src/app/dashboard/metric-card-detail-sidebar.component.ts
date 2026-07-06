@@ -113,17 +113,18 @@ export class MetricCardDetailSidebarComponent implements OnInit {
 
   getStatusColor(status: string): string {
     switch (status?.toUpperCase()) {
+      case 'COMPLETED':
       case 'DONE':
         return '#10b981';
       case 'FAILED':
         return '#ef4444';
       case 'CANCELLED':
         return '#f97316';
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return '#818cf8';
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return '#06b6d4';
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return '#3b82f6';
       default:
         return '#6b7280';

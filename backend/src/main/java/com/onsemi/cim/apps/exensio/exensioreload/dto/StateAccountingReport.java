@@ -46,8 +46,8 @@ public class StateAccountingReport {
             this.sumOfStates = sumOfStates;
             this.discrepancies = discrepancies;
             // Extract timeout values from states map
-            this.enrichmentTimeout = states != null ? states.getOrDefault("ENRICHMENT_TIMEOUT", 0L) : 0L;
-            this.exensioTimeout = states != null ? states.getOrDefault("EXENSIO_TIMEOUT", 0L) : 0L;
+            this.enrichmentTimeout = states != null ? states.getOrDefault("CP_TIMEOUT", 0L) : 0L;
+            this.exensioTimeout = states != null ? states.getOrDefault("COMPLETED_MANUAL_VERIFICATION_REQUIRED", 0L) : 0L;
         }
 
         public long getTotalCount() { return totalCount; }
@@ -57,8 +57,8 @@ public class StateAccountingReport {
         public void setStates(Map<String, Long> states) { 
             this.states = states;
             // Update timeout fields when states map is set
-            this.enrichmentTimeout = states != null ? states.getOrDefault("ENRICHMENT_TIMEOUT", 0L) : 0L;
-            this.exensioTimeout = states != null ? states.getOrDefault("EXENSIO_TIMEOUT", 0L) : 0L;
+            this.enrichmentTimeout = states != null ? states.getOrDefault("CP_TIMEOUT", 0L) : 0L;
+            this.exensioTimeout = states != null ? states.getOrDefault("COMPLETED_MANUAL_VERIFICATION_REQUIRED", 0L) : 0L;
         }
 
         public long getSumOfStates() { return sumOfStates; }

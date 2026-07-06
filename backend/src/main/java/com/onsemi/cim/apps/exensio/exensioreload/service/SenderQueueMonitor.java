@@ -60,7 +60,7 @@ public class SenderQueueMonitor {
         while (true) {
             int offset = page * pageSize;
             // ENRICHMENT is the only active intermediate status — ENQUEUED is never written.
-            List<StageRecord> enrichmentPage = refDbService.listRecords(null, null, "ENRICHMENT", offset, pageSize, "updated_at", "asc", null);
+            List<StageRecord> enrichmentPage = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", offset, pageSize, "updated_at", "asc", null);
 
             if (enrichmentPage.isEmpty()) {
                 break;

@@ -114,7 +114,9 @@ public class DataIntegrityJob {
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, " +
                 "status, created_at, updated_at, request_id " +
                 "FROM " + table + " " +
-                "WHERE status NOT IN ('pending', 'ENQUEUED', 'ENRICHMENT', 'EXENSIO_LOADING', 'PROCESSING', 'FAILED', 'DONE', 'CANCELLED') " +
+                "WHERE status NOT IN ('STAGED_TO_REFDB', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', " +
+                "'CP_TIMEOUT', 'EXENSIO_MONITORING', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', " +
+                "'PROCESSING', 'CP_FAILED', 'LOAD_FAILED', 'COMPLETED', 'CANCELLED') " +
                 "FETCH FIRST 100 ROWS ONLY";
 
         List<StageRecord> records = new ArrayList<>();
@@ -197,7 +199,7 @@ public class DataIntegrityJob {
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, " +
                 "lot, wafer, filename, status, created_at, updated_at, request_id " +
                 "FROM " + table + " " +
-                "WHERE (status = 'ENRICHMENT' OR status = 'EXENSIO_LOADING') " +
+                "WHERE (status = 'ELASTICSEARCH_MONITORING' OR status = 'EXENSIO_MONITORING') " +
                 "AND updated_at < ? " +
                 "FETCH FIRST 100 ROWS ONLY";
 
@@ -242,13 +244,15 @@ public class DataIntegrityJob {
     private void verifyAccountingBalance() {
         String table = refDbProperties.getStagingTable();
         String sql = "SELECT COUNT(*) AS total, " +
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending, " +
-                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END) AS enqueued, " +
-                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END) AS enrichment, " +
-                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END) AS exensio_loading, " +
+                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS pending, " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END) AS enqueued, " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END) AS enrichment, " +
+                "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS cp_timeout, " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END) AS exensio_loading, " +
+                "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END) AS manual_verification, " +
                 "SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END) AS processing, " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed, " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS done, " +
+                "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled, " +
                 "SUM(CASE WHEN status IS NULL THEN 1 ELSE 0 END) AS null_status " +
                 "FROM " + table;
@@ -261,20 +265,24 @@ public class DataIntegrityJob {
                     long pending = rs.getLong("pending");
                     long enqueued = rs.getLong("enqueued");
                     long enrichment = rs.getLong("enrichment");
+                    long cpTimeout = rs.getLong("cp_timeout");
                     long exensioLoading = rs.getLong("exensio_loading");
+                    long manualVerification = rs.getLong("manual_verification");
                     long processing = rs.getLong("processing");
                     long failed = rs.getLong("failed");
                     long done = rs.getLong("done");
                     long cancelled = rs.getLong("cancelled");
                     long nullStatus = rs.getLong("null_status");
 
-                    long summedStates = pending + enqueued + enrichment + exensioLoading + 
+                    long summedStates = pending + enqueued + enrichment + cpTimeout +
+                                      exensioLoading + manualVerification +
                                       processing + failed + done + cancelled + nullStatus;
 
                     log.info("Accounting check: total={}, summed={}, pending={}, enqueued={}, enrichment={}, " +
-                             "exensioLoading={}, processing={}, failed={}, done={}, cancelled={}, nullStatus={}",
-                             total, summedStates, pending, enqueued, enrichment, exensioLoading,
-                             processing, failed, done, cancelled, nullStatus);
+                             "cpTimeout={}, exensioLoading={}, manualVerification={}, processing={}, failed={}, " +
+                             "done={}, cancelled={}, nullStatus={}",
+                             total, summedStates, pending, enqueued, enrichment, cpTimeout,
+                             exensioLoading, manualVerification, processing, failed, done, cancelled, nullStatus);
 
                     if (total != summedStates) {
                         log.error("ACCOUNTING IMBALANCE: total {} != summed {}", total, summedStates);

@@ -69,7 +69,7 @@ public class StageRecordMapper {
         String cpIntegrationStatus;
         if (cpStatus != null) {
             cpIntegrationStatus = cpStatus.status();
-        } else if (record.status() != null && record.status().equals("ENRICHMENT") && cpProps.isConfigured()) {
+        } else if (record.status() != null && record.status().equals("ELASTICSEARCH_MONITORING") && cpProps.isConfigured()) {
             cpIntegrationStatus = "pending";
         } else if (!cpProps.isConfigured()) {
             cpIntegrationStatus = "not_configured";
@@ -81,7 +81,7 @@ public class StageRecordMapper {
         String exensioIntegrationStatus;
         if (exensioStatus != null) {
             exensioIntegrationStatus = exensioStatus.status();
-        } else if (record.status() != null && record.status().equals("EXENSIO_LOADING") && exensioProps.isConfigured()) {
+        } else if (record.status() != null && record.status().equals("EXENSIO_MONITORING") && exensioProps.isConfigured()) {
             exensioIntegrationStatus = "pending";
         } else if (!exensioProps.isConfigured()) {
             exensioIntegrationStatus = "not_configured";

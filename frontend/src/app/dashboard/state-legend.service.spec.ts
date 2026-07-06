@@ -335,7 +335,7 @@ describe('StateLegendService', () => {
   it('Requirement 6.1: Enrichment Timeout state is defined with description', () => {
     const state = service.getStateByLabel('Enrichment Timeout');
     expect(state).toBeDefined();
-    expect(state?.statusValue).toBe('ENRICHMENT_TIMEOUT');
+    expect(state?.statusValue).toBe('CP_TIMEOUT');
     expect(state?.description).toContain('No enrichment confirmation');
     expect(state?.description).toContain('ES or pp_log after timeout');
   });
@@ -346,7 +346,7 @@ describe('StateLegendService', () => {
   it('Requirement 6.2: Exensio Timeout state is defined with description', () => {
     const state = service.getStateByLabel('Exensio Timeout');
     expect(state).toBeDefined();
-    expect(state?.statusValue).toBe('EXENSIO_TIMEOUT');
+    expect(state?.statusValue).toBe('COMPLETED_MANUAL_VERIFICATION_REQUIRED');
     expect(state?.description).toContain('Wafer not found in Exensio after timeout');
   });
 

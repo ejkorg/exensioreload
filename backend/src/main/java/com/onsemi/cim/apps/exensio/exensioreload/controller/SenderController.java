@@ -337,7 +337,7 @@ public class SenderController {
 
     @GetMapping("/{id}/queue")
     public List<SenderQueueEntry> getQueue(@PathVariable("id") Integer id,
-                                           @RequestParam(defaultValue = "pending") String status,
+                                           @RequestParam(defaultValue = "STAGED_TO_REFDB") String status,
                                            @RequestParam(defaultValue = "100") int limit) {
         return senderService.getQueue(id, status, limit);
     }

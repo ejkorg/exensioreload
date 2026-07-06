@@ -50,7 +50,7 @@ public class DashboardBulkController {
 
     private static final Logger log = LoggerFactory.getLogger(DashboardBulkController.class);
 
-    private static final List<String> CANCELLABLE_STATUSES = List.of("pending", "FAILED");
+    private static final List<String> CANCELLABLE_STATUSES = List.of("STAGED_TO_REFDB", "CP_FAILED");
 
     private final RefDbService refDbService;
     private final SenderDispatchService senderDispatchService;
@@ -91,7 +91,7 @@ public class DashboardBulkController {
             // Find all sites that have NEW records for this sender
             List<StageStatus> statuses = refDbService.fetchStatusesFor(null, senderId, null);
             List<String> activeSites = statuses.stream()
-                    .filter(s -> s.ready() > 0)   // ready == NEW count
+                    .filter(s -> s.stagedToRefdb() > 0)   // ready == NEW count
                     .map(StageStatus::site)
                     .toList();
 
@@ -152,7 +152,7 @@ public class DashboardBulkController {
         for (int senderId : senderIds) {
             try {
                 // Only cancel NEW; leave PROCESSING/FAILED/DONE untouched
-                refDbService.bulkCancelBySender(senderId, List.of("pending"));
+                refDbService.bulkCancelBySender(senderId, List.of("STAGED_TO_REFDB"));
                 successCount++;
             } catch (Exception ex) {
                 log.error("[BulkPause] failed for sender={}: {}", senderId, ex.getMessage(), ex);

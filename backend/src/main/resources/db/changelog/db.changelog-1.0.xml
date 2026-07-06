@@ -391,5 +391,7 @@
     <include file="db.changelog-9.9-add-device-column.xml" relativeToChangelogFile="true" />
     <!-- Add missing device column to SENDER_STAGE -->
     <include file="db.changelog-9.10-add-device-to-sender-stage.xml" relativeToChangelogFile="true" />
+    <!-- Rename pipeline status values to v3.0 state machine (DISCOVERED, STAGED_TO_REFDB, QUEUED_FOR_CP, CP_CONSUMED, etc.) -->
+    <include file="db.changelog-9.11-rename-pipeline-statuses.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

@@ -159,7 +159,7 @@ public class DashboardController {
                 List<DashboardLink> links = List.of(
                         DashboardLink.of("records", recordsHref, MediaType.APPLICATION_JSON_VALUE),
                         DashboardLink.of("records:csv", recordsHref, "text/csv"));
-                boolean alert = (status.ready() > 0);
+                boolean alert = (status.stagedToRefdb() > 0);
                 senders.add(new DashboardSenderSnapshot(
                         status.senderId(),
                         senderLabel,
@@ -385,7 +385,7 @@ public class DashboardController {
                 .map(agg -> new DashboardDateBucket(
                         agg.bucket(),
                         formatter.format(agg.bucket()),
-                        DashboardBucketTotals.of(agg.ready(), agg.enqueued(), agg.failed(), agg.completed())))
+                        DashboardBucketTotals.of(agg.stagedToRefdb(), agg.enqueued(), agg.failed(), agg.completed())))
                 .toList();
 
         return ResponseEntity.ok(List.copyOf(buckets));
@@ -523,18 +523,22 @@ public class DashboardController {
     }
 
     private DashboardMetricTotals toMetrics(StageStatus status, List<StageUserStatus> users) {
-        long ready = status.ready();
-        long queued = status.queued();
-        long enriching = status.enriching();
-        long exensioLoading = status.exensioLoading();
-        long failed = status.failed();
+        long stagedToRefdb = status.stagedToRefdb();
+        long queuedForCp = status.queuedForCp();
+        long elasticsearchMonitoring = status.elasticsearchMonitoring();
+        long cpTimeout = status.cpTimeout();
+        long exensioMonitoring = status.exensioMonitoring();
+        long completedManualVerification = status.completedManualVerification();
+        long cpFailed = status.cpFailed();
+        long loadFailed = status.loadFailed();
         long completed = status.completed();
         long cancelled = status.cancelled();
         long backlog = status.backlog();
         long total = status.total();
         long activeUsers = users == null ? 0 : users.size();
-        return new DashboardMetricTotals(total, ready, queued, enriching, exensioLoading, failed, completed, 
-                cancelled, backlog, 1, activeUsers);
+        return new DashboardMetricTotals(total, stagedToRefdb, queuedForCp, elasticsearchMonitoring,
+                cpTimeout, exensioMonitoring, completedManualVerification,
+                cpFailed, loadFailed, completed, cancelled, backlog, 1, activeUsers);
     }
 
     private String normalizeSite(String site) {
@@ -602,7 +606,7 @@ public class DashboardController {
         }
 
         void add(RefDbService.LotWaferAggregate aggregate, String wafer) {
-            long rowReady = Math.max(0L, aggregate.ready());
+            long rowReady = Math.max(0L, aggregate.stagedToRefdb());
             long rowEnqueued = Math.max(0L, aggregate.enqueued());
             long rowFailed = Math.max(0L, aggregate.failed());
             long rowCompleted = Math.max(0L, aggregate.completed());
@@ -627,11 +631,14 @@ public class DashboardController {
 
     private static class DashboardTotalsAccumulator {
         private long total;
-        private long ready;
-        private long queued;
-        private long enriching;
-        private long exensioLoading;
-        private long failed;
+        private long stagedToRefdb;
+        private long queuedForCp;
+        private long elasticsearchMonitoring;
+        private long cpTimeout;
+        private long exensioMonitoring;
+        private long completedManualVerification;
+        private long cpFailed;
+        private long loadFailed;
         private long completed;
         private long cancelled;
         private long backlog;
@@ -640,11 +647,14 @@ public class DashboardController {
 
         void add(DashboardMetricTotals metrics) {
             this.total += metrics.total();
-            this.ready += metrics.ready();
-            this.queued += metrics.queued();
-            this.enriching += metrics.enriching();
-            this.exensioLoading += metrics.exensioLoading();
-            this.failed += metrics.failed();
+            this.stagedToRefdb += metrics.stagedToRefdb();
+            this.queuedForCp += metrics.queuedForCp();
+            this.elasticsearchMonitoring += metrics.elasticsearchMonitoring();
+            this.cpTimeout += metrics.cpTimeout();
+            this.exensioMonitoring += metrics.exensioMonitoring();
+            this.completedManualVerification += metrics.completedManualVerification();
+            this.cpFailed += metrics.cpFailed();
+            this.loadFailed += metrics.loadFailed();
             this.completed += metrics.completed();
             this.cancelled += metrics.cancelled();
             this.backlog += metrics.backlog();
@@ -653,8 +663,9 @@ public class DashboardController {
         }
 
         DashboardMetricTotals toTotals() {
-            return new DashboardMetricTotals(total, ready, queued, enriching, exensioLoading, failed, completed,
-                    cancelled, backlog, activeSenders, activeUsers);
+            return new DashboardMetricTotals(total, stagedToRefdb, queuedForCp, elasticsearchMonitoring,
+                    cpTimeout, exensioMonitoring, completedManualVerification,
+                    cpFailed, loadFailed, completed, cancelled, backlog, activeSenders, activeUsers);
         }
     }
 }

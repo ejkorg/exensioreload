@@ -79,15 +79,15 @@ public class StateAccountingService {
     private DatabaseStateData queryDatabaseStateCounts(String requestId, String site, Integer senderId) {
         String table = refDbProperties.getStagingTable();
         String baseQuery = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*) AS total, " +
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending, " +
-                "SUM(CASE WHEN status = 'ENQUEUED' THEN 1 ELSE 0 END) AS enqueued, " +
-                "SUM(CASE WHEN status = 'ENRICHMENT' THEN 1 ELSE 0 END) AS enrichment, " +
-                "SUM(CASE WHEN status = 'ENRICHMENT_TIMEOUT' THEN 1 ELSE 0 END) AS enrichment_timeout, " +
-                "SUM(CASE WHEN status = 'EXENSIO_LOADING' THEN 1 ELSE 0 END) AS exensio_loading, " +
-                "SUM(CASE WHEN status = 'EXENSIO_TIMEOUT' THEN 1 ELSE 0 END) AS exensio_timeout, " +
+                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS pending, " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END) AS enqueued, " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END) AS enrichment, " +
+                "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS enrichment_timeout, " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END) AS exensio_loading, " +
+                "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END) AS exensio_timeout, " +
                 "SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END) AS processing, " +
-                "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed, " +
-                "SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) AS done, " +
+                "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled, " +
                 "SUM(CASE WHEN status IS NULL THEN 1 ELSE 0 END) AS null_status " +
                 "FROM " + table + " WHERE 1=1 ";
@@ -141,15 +141,15 @@ public class StateAccountingService {
                         long recordTotal = rs.getLong("total");
 
                         // Accumulate global state counts
-                        globalStates.put("pending", globalStates.getOrDefault("pending", 0L) + pending);
-                        globalStates.put("ENQUEUED", globalStates.getOrDefault("ENQUEUED", 0L) + enqueued);
-                        globalStates.put("ENRICHMENT", globalStates.getOrDefault("ENRICHMENT", 0L) + enrichment);
-                        globalStates.put("ENRICHMENT_TIMEOUT", globalStates.getOrDefault("ENRICHMENT_TIMEOUT", 0L) + enrichmentTimeout);
-                        globalStates.put("EXENSIO_LOADING", globalStates.getOrDefault("EXENSIO_LOADING", 0L) + exensioLoading);
-                        globalStates.put("EXENSIO_TIMEOUT", globalStates.getOrDefault("EXENSIO_TIMEOUT", 0L) + exensioTimeout);
+                        globalStates.put("STAGED_TO_REFDB", globalStates.getOrDefault("STAGED_TO_REFDB", 0L) + pending);
+                        globalStates.put("QUEUED_FOR_CP", globalStates.getOrDefault("QUEUED_FOR_CP", 0L) + enqueued);
+                        globalStates.put("ELASTICSEARCH_MONITORING", globalStates.getOrDefault("ELASTICSEARCH_MONITORING", 0L) + enrichment);
+                        globalStates.put("CP_TIMEOUT", globalStates.getOrDefault("CP_TIMEOUT", 0L) + enrichmentTimeout);
+                        globalStates.put("EXENSIO_MONITORING", globalStates.getOrDefault("EXENSIO_MONITORING", 0L) + exensioLoading);
+                        globalStates.put("COMPLETED_MANUAL_VERIFICATION_REQUIRED", globalStates.getOrDefault("COMPLETED_MANUAL_VERIFICATION_REQUIRED", 0L) + exensioTimeout);
                         globalStates.put("PROCESSING", globalStates.getOrDefault("PROCESSING", 0L) + processing);
-                        globalStates.put("FAILED", globalStates.getOrDefault("FAILED", 0L) + failed);
-                        globalStates.put("DONE", globalStates.getOrDefault("DONE", 0L) + done);
+                        globalStates.put("CP_FAILED", globalStates.getOrDefault("CP_FAILED", 0L) + failed);
+                        globalStates.put("COMPLETED", globalStates.getOrDefault("COMPLETED", 0L) + done);
                         globalStates.put("CANCELLED", globalStates.getOrDefault("CANCELLED", 0L) + cancelled);
                         globalStates.put("NULL_STATUS", globalStates.getOrDefault("NULL_STATUS", 0L) + nullStatus);
 
@@ -158,15 +158,15 @@ public class StateAccountingService {
 
                         // Build sender breakdown
                         Map<String, Long> senderStates = new HashMap<>();
-                        senderStates.put("pending", pending);
-                        senderStates.put("ENQUEUED", enqueued);
-                        senderStates.put("ENRICHMENT", enrichment);
-                        senderStates.put("ENRICHMENT_TIMEOUT", enrichmentTimeout);
-                        senderStates.put("EXENSIO_LOADING", exensioLoading);
-                        senderStates.put("EXENSIO_TIMEOUT", exensioTimeout);
+                        senderStates.put("STAGED_TO_REFDB", pending);
+                        senderStates.put("QUEUED_FOR_CP", enqueued);
+                        senderStates.put("ELASTICSEARCH_MONITORING", enrichment);
+                        senderStates.put("CP_TIMEOUT", enrichmentTimeout);
+                        senderStates.put("EXENSIO_MONITORING", exensioLoading);
+                        senderStates.put("COMPLETED_MANUAL_VERIFICATION_REQUIRED", exensioTimeout);
                         senderStates.put("PROCESSING", processing);
-                        senderStates.put("FAILED", failed);
-                        senderStates.put("DONE", done);
+                        senderStates.put("CP_FAILED", failed);
+                        senderStates.put("COMPLETED", done);
                         senderStates.put("CANCELLED", cancelled);
                         senderStates.put("NULL_STATUS", nullStatus);
 
@@ -216,12 +216,12 @@ public class StateAccountingService {
         long cancelled = 0;
 
         for (StageStatus status : statuses) {
-            staged += status.ready();
-            queued += status.queued();
-            enriching += status.enriching();
-            enrichmentTimeout += status.enrichmentTimeout();
-            exensioLoading += status.exensioLoading();
-            exensioTimeout += status.exensioTimeout();
+            staged += status.stagedToRefdb();
+            queued += status.queuedForCp();
+            enriching += status.elasticsearchMonitoring();
+            enrichmentTimeout += status.cpTimeout();
+            exensioLoading += status.exensioMonitoring();
+            exensioTimeout += status.completedManualVerification();
             failed += status.failed();
             completed += status.completed();
             cancelled += status.cancelled();
@@ -274,9 +274,9 @@ public class StateAccountingService {
         }
 
         // Get counts for all states including timeout states
-        long enrichment = dbCounts.getStates().getOrDefault("ENRICHMENT", 0L);
+        long enrichment = dbCounts.getStates().getOrDefault("ELASTICSEARCH_MONITORING", 0L);
         long enrichmentTimeout = dbCounts.getEnrichmentTimeout();  // Use explicit field
-        long exensioLoading = dbCounts.getStates().getOrDefault("EXENSIO_LOADING", 0L);
+        long exensioLoading = dbCounts.getStates().getOrDefault("EXENSIO_MONITORING", 0L);
         long exensioTimeout = dbCounts.getExensioTimeout();  // Use explicit field
         
         // Check for records stuck in active processing states
@@ -293,11 +293,11 @@ public class StateAccountingService {
 
         // Check for accounting balance explicitly including timeout states
         long expectedAccountingSum = enrichment + enrichmentTimeout + exensioLoading + exensioTimeout
-                + dbCounts.getStates().getOrDefault("pending", 0L)
-                + dbCounts.getStates().getOrDefault("ENQUEUED", 0L)
+                + dbCounts.getStates().getOrDefault("STAGED_TO_REFDB", 0L)
+                + dbCounts.getStates().getOrDefault("QUEUED_FOR_CP", 0L)
                 + dbCounts.getStates().getOrDefault("PROCESSING", 0L)
-                + dbCounts.getStates().getOrDefault("FAILED", 0L)
-                + dbCounts.getStates().getOrDefault("DONE", 0L)
+                + dbCounts.getStates().getOrDefault("CP_FAILED", 0L)
+                + dbCounts.getStates().getOrDefault("COMPLETED", 0L)
                 + dbCounts.getStates().getOrDefault("CANCELLED", 0L);
         
         if (dbCounts.getSumOfStates() != expectedAccountingSum && dbCounts.getSumOfStates() != dbCounts.getTotalCount()) {

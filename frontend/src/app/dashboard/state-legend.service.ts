@@ -21,14 +21,14 @@ export class StateLegendService {
       {
         label: 'Staged',
         description: 'Ready for dispatch',
-        statusValue: 'pending',
+        statusValue: 'STAGED_TO_REFDB',
         color: 'secondary',
         icon: 'inbox',
         nextStates: ['Queued for Enrichment'],
         isTerminal: false,
-        tooltip: `Staged (pending)
-Ready for dispatch to the enrichment pipeline.
-Example transition: pending → ENQUEUED → ENRICHMENT → DONE`,
+        tooltip: `Staged (STAGED_TO_REFDB)
+Loaded to REFDB. Ready for dispatch to the enrichment pipeline.
+Example transition: STAGED_TO_REFDB → QUEUED_FOR_CP → ELASTICSEARCH_MONITORING → COMPLETED`,
       },
     ],
     [
@@ -36,7 +36,7 @@ Example transition: pending → ENQUEUED → ENRICHMENT → DONE`,
       {
         label: 'Queued for Enrichment',
         description: 'Waiting to enter enrichment pipeline',
-        statusValue: 'ENQUEUED',
+        statusValue: 'QUEUED_FOR_CP',
         color: 'info',
         icon: 'schedule',
         nextStates: ['Enrichment Processing'],
@@ -51,7 +51,7 @@ Example transition: ENQUEUED → ENRICHMENT → EXENSIO_LOADING → DONE`,
       {
         label: 'Enrichment Processing',
         description: 'Actively being enriched from Elasticsearch and pp_log',
-        statusValue: 'ENRICHMENT',
+        statusValue: 'ELASTICSEARCH_MONITORING',
         color: 'primary',
         icon: 'auto_awesome',
         nextStates: ['Exensio Monitoring', 'Enrichment Monitoring Timeout', 'Failed'],
@@ -71,7 +71,7 @@ Example transitions:
       {
         label: 'Enrichment Monitoring Timeout',
         description: 'No enrichment log found in ES or pp_log within monitoring window',
-        statusValue: 'ENRICHMENT_TIMEOUT',
+        statusValue: 'CP_TIMEOUT',
         color: 'warning',
         icon: 'schedule',
         nextStates: ['Completed', 'Failed', 'Enrichment Processing'],
@@ -95,7 +95,7 @@ Notes:
       {
         label: 'Exensio Monitoring',
         description: 'Monitoring Exensio load status',
-        statusValue: 'EXENSIO_LOADING',
+        statusValue: 'EXENSIO_MONITORING',
         color: 'info',
         icon: 'cloud_download',
         nextStates: ['Completed', 'Completed — Verify in Exensio', 'Failed'],
@@ -114,7 +114,7 @@ Example transitions:
       {
         label: 'Completed — Verify in Exensio',
         description: 'Exensio record not found within monitoring window; requires manual verification',
-        statusValue: 'EXENSIO_TIMEOUT',
+        statusValue: 'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
         color: 'warning',
         icon: 'schedule',
         nextStates: ['Completed', 'Failed', 'Exensio Monitoring'],
@@ -140,15 +140,15 @@ Notes:
       {
         label: 'Completed',
         description: 'Successfully processed',
-        statusValue: 'DONE',
+        statusValue: 'COMPLETED',
         color: 'success',
         icon: 'check_circle',
         nextStates: [],
         isTerminal: true,
-        tooltip: `Completed (DONE)
+        tooltip: `Completed (COMPLETED)
 Record was successfully processed through the entire pipeline.
 This is a terminal state — no further transitions.
-Example origin: ENRICHMENT → Completed or EXENSIO_LOADING → Completed`,
+Example origin: ELASTICSEARCH_MONITORING → Completed or EXENSIO_MONITORING → Completed`,
       },
     ],
     [
@@ -156,7 +156,7 @@ Example origin: ENRICHMENT → Completed or EXENSIO_LOADING → Completed`,
       {
         label: 'Failed',
         description: 'Encountered error during processing',
-        statusValue: 'FAILED',
+        statusValue: 'CP_FAILED',
         color: 'danger',
         icon: 'error_outline',
         nextStates: [],

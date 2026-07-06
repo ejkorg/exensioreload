@@ -731,7 +731,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       : session?.filesStaged || 0;
 
     const enqueued = useWaferFallback
-      ? waferRows.filter((w: WaferMonitoringRow) => w.status === 'ENQUEUED').length
+      ? waferRows.filter((w: WaferMonitoringRow) => w.status === 'QUEUED_FOR_CP').length
       : session?.filesEnqueued || 0;
 
     const completed = useWaferFallback
@@ -746,14 +746,14 @@ export class StepperComponent implements OnInit, OnDestroy {
     const files = this.stagingSession.sessionFiles();
     const hasFileBreakdown = files.length > 0;
     const inQueueCount = hasFileBreakdown
-      ? files.filter((f) => f.status === 'ENQUEUED').length
+      ? files.filter((f) => f.status === 'QUEUED_FOR_CP').length
       : useWaferFallback
-        ? waferRows.filter((w: WaferMonitoringRow) => w.status === 'ENQUEUED').length
+        ? waferRows.filter((w: WaferMonitoringRow) => w.status === 'QUEUED_FOR_CP').length
         : session?.filesEnqueued || 0;
-    const enrichmentCount = hasFileBreakdown ? files.filter((f) => f.status === 'ENRICHMENT').length : 0;
-    const enrichmentTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'ENRICHMENT_TIMEOUT').length : 0;
-    const exensioLoadingCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_LOADING').length : 0;
-    const exensioTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_TIMEOUT').length : 0;
+    const enrichmentCount = hasFileBreakdown ? files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING').length : 0;
+    const enrichmentTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'CP_TIMEOUT').length : 0;
+    const exensioLoadingCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_MONITORING').length : 0;
+    const exensioTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED').length : 0;
 
     const processing = enrichmentCount + enrichmentTimeoutCount + exensioLoadingCount + exensioTimeoutCount;
 
@@ -940,11 +940,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     const normalized = (status || '').toUpperCase();
     if (normalized === 'DONE' || normalized === 'COMPLETED') return 'Completed';
     if (normalized === 'FAILED' || normalized === 'ERROR') return 'Failed';
-    if (normalized === 'ENQUEUED') return 'Queued for Enrichment';
-    if (normalized === 'ENRICHMENT' || normalized === 'PROCESSING') return 'Enrichment Processing';
-    if (normalized === 'ENRICHMENT_TIMEOUT') return 'Enrichment Monitoring Timeout';
-    if (normalized === 'EXENSIO_LOADING') return 'Exensio Monitoring';
-    if (normalized === 'EXENSIO_TIMEOUT') return 'Completed — Verify in Exensio';
+    if (normalized === 'QUEUED_FOR_CP') return 'Queued for Enrichment';
+    if (normalized === 'ELASTICSEARCH_MONITORING' || normalized === 'PROCESSING') return 'Enrichment Processing';
+    if (normalized === 'CP_TIMEOUT') return 'Enrichment Monitoring Timeout';
+    if (normalized === 'EXENSIO_MONITORING') return 'Exensio Monitoring';
+    if (normalized === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') return 'Completed — Verify in Exensio';
     if (normalized === 'STAGED') return 'Staged';
     return 'Unknown';
   }
@@ -3349,9 +3349,9 @@ export class StepperComponent implements OnInit, OnDestroy {
   private mapBackendStatus(status: string): MonitoringFile['status'] {
     const normalized = (status || '').toUpperCase();
     if (normalized === 'DONE' || normalized === 'COMPLETED') return 'COMPLETED';
-    if (normalized === 'ENRICHMENT' || normalized === 'DISPATCHING') return 'ENRICHMENT';
-    if (normalized === 'EXENSIO_LOADING') return 'EXENSIO_LOADING';
-    if (normalized === 'PROCESSING' || normalized === 'ENQUEUED') return 'ENRICHMENT'; // legacy compat
+    if (normalized === 'ELASTICSEARCH_MONITORING' || normalized === 'DISPATCHING') return 'ELASTICSEARCH_MONITORING';
+    if (normalized === 'EXENSIO_MONITORING') return 'EXENSIO_MONITORING';
+    if (normalized === 'PROCESSING' || normalized === 'QUEUED_FOR_CP') return 'ELASTICSEARCH_MONITORING'; // legacy compat
     if (normalized === 'FAILED' || normalized === 'ERROR') return 'ERROR';
     return 'READY';
   }

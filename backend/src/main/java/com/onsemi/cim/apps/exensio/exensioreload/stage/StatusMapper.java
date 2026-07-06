@@ -3,50 +3,41 @@ package com.onsemi.cim.apps.exensio.exensioreload.stage;
 import java.util.Set;
 
 /**
- * Helper class for mapping SENDER_STAGE status to display status
+ * Maps SENDER_STAGE database status values to display labels for the UI.
+ * All status values must come from {@link PipelineStatus}.
  */
 public class StatusMapper {
 
-    /**
-     * Map database status + external queue presence to display status
-     *
-     * @param dbStatus Status from SENDER_STAGE table
-     * @param inExternalQueue Whether the file exists in DTP_SENDER_QUEUE_ITEM
-     * @return Display status for UI
-     */
     public static String getDisplayStatus(String dbStatus, boolean inExternalQueue) {
-        if (dbStatus == null) {
-            return "Unknown";
+        if (dbStatus == null) return "Unknown";
+
+        PipelineStatus ps = PipelineStatus.fromDbValue(dbStatus);
+        if (ps == null) {
+            // Legacy fallback for values not yet migrated
+            return dbStatus;
         }
 
-        return switch (dbStatus.toUpperCase()) {
-            case "NEW", "pending" -> "Staged";
-            case "ENRICHMENT" -> inExternalQueue ? "In Queue (pending CP)" : "Enrichment / Translation";
-            case "EXENSIO_LOADING" -> "Exensio Loading";
-            case "PROCESSING" -> inExternalQueue ? "In Queue (pending CP)" : "Enrichment / Translation"; // legacy compat
-            case "DONE" -> "Completed";
-            case "FAILED" -> "Failed";
-            case "CANCELLED" -> "Cancelled";
-            default -> dbStatus;
+        return switch (ps) {
+            case DISCOVERED -> "Discovered";
+            case STAGED_TO_REFDB -> "Loaded to REFDB";
+            case QUEUED_FOR_CP -> inExternalQueue ? "In Queue (pending CP)" : "Queued for CP";
+            case CP_CONSUMED -> "CP Consumed";
+            case ELASTICSEARCH_MONITORING -> inExternalQueue ? "In Queue (pending CP)" : "ES Monitoring";
+            case CP_TIMEOUT -> "CP Timeout";
+            case EXENSIO_MONITORING -> "Exensio Monitoring";
+            case COMPLETED_MANUAL_VERIFICATION_REQUIRED -> "Manual Verification Req'd";
+            case COMPLETED -> "Completed";
+            case CP_FAILED -> "CP Failed";
+            case LOAD_FAILED -> "Load Failed";
+            case CANCELLED -> "Cancelled";
         };
     }
 
-    /**
-     * Determine if a file is in the external queue based on queue keys
-     *
-     * @param metadataId Metadata ID
-     * @param dataId Data ID
-     * @param queueKeys Set of keys currently in external queue
-     * @return true if file is in queue
-     */
     public static boolean isInExternalQueue(String metadataId, String dataId, Set<String> queueKeys) {
         String key = buildKey(metadataId, dataId);
         return queueKeys.contains(key);
     }
 
-    /**
-     * Build a composite key from metadata and data IDs
-     */
     public static String buildKey(String metadataId, String dataId) {
         String left = metadataId == null ? "" : metadataId.trim();
         String right = dataId == null ? "" : dataId.trim();

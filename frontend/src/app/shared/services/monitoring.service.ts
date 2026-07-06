@@ -32,13 +32,18 @@ export interface MonitoringFile {
   wafer: string;
   status:
     | 'READY'
-    | 'ENQUEUED'
-    | 'ENRICHMENT'
-    | 'ENRICHMENT_TIMEOUT'
-    | 'EXENSIO_LOADING'
-    | 'EXENSIO_TIMEOUT'
+  status:
+    | 'READY'
+    | 'QUEUED_FOR_CP'
+    | 'ELASTICSEARCH_MONITORING'
+    | 'CP_TIMEOUT'
+    | 'EXENSIO_MONITORING'
+    | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'
     | 'COMPLETED'
-    | 'ERROR';
+    | 'ERROR'
+    | 'CP_FAILED'
+    | 'LOAD_FAILED'
+    | 'CANCELLED';
   message: string;
   errorMessage?: string;
   startTime?: Date;
@@ -439,8 +444,8 @@ export class MonitoringService {
    */
   private getActivityType(status: string): ActivityEvent['type'] {
     switch (status) {
-      case 'ENRICHMENT':
-      case 'EXENSIO_LOADING':
+      case 'ELASTICSEARCH_MONITORING':
+      case 'EXENSIO_MONITORING':
         return 'FILE_STARTED';
       case 'COMPLETED':
         return 'FILE_COMPLETED';
@@ -458,15 +463,15 @@ export class MonitoringService {
     switch (file.status) {
       case 'READY':
         return `File staged: ${file.filename}`;
-      case 'ENQUEUED':
+      case 'QUEUED_FOR_CP':
         return `Queued for Enrichment: ${file.filename}`;
-      case 'ENRICHMENT':
+      case 'ELASTICSEARCH_MONITORING':
         return `Enrichment Processing: ${file.filename}`;
-      case 'ENRICHMENT_TIMEOUT':
+      case 'CP_TIMEOUT':
         return `Enrichment Monitoring Timeout: ${file.filename}`;
-      case 'EXENSIO_LOADING':
+      case 'EXENSIO_MONITORING':
         return `Exensio Monitoring: ${file.filename}`;
-      case 'EXENSIO_TIMEOUT':
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
         return `Completed — Verify in Exensio: ${file.filename}`;
       case 'COMPLETED':
         return `Completed: ${file.filename}`;
