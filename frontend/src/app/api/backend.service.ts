@@ -24,6 +24,7 @@ export interface DashboardMetricTotals {
   activeUsers?: number;
   // Aliases for code still using old field names
   ready: number;
+  queued: number;
   enqueued: number;
   enriching: number;
   enrichmentTimeout: number;
