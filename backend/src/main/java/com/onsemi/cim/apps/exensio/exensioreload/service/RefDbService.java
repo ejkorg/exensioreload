@@ -789,7 +789,7 @@ public class RefDbService {
     /**
      * Marks {@code DONE} after Elasticsearch confirms CP success when Exensio verification is disabled.
      */
-    public void markDoneFromCpEnrichment(StageRecord record, String outputPath, String outputTarget) {
+    public void markCompletedFromCp(StageRecord record, String outputPath, String outputTarget) {
         if (record == null) {
             return;
         }
@@ -827,7 +827,7 @@ public class RefDbService {
      * pp_log empty, Exensio unresolved). Sets an error_message directing manual verification
      * rather than assuming failure, since the file may have been enriched outside the CP pipeline.
      */
-    public void markDoneManualVerify(StageRecord record, String message) {
+    public void markCompletedManualVerify(StageRecord record, String message) {
         if (record == null) return;
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
@@ -867,7 +867,7 @@ public class RefDbService {
      *
      * Requirements: 1.1, 1.2, 1.3
      */
-    public void markEnrichmentTimeout(StageRecord record, String diagnosticSummary) {
+    public void markCpTimeout(StageRecord record, String diagnosticSummary) {
         if (record == null) return;
         
         String errorMessage = "[Enrichment Timeout] " + diagnosticSummary +
@@ -895,11 +895,18 @@ public class RefDbService {
             broadcastStats(record.requestId());
         }
         
-        log.info("Marked record {} as ENRICHMENT_TIMEOUT: {}", record.id(), diagnosticSummary);
+        log.info("Marked record {} as CP_TIMEOUT: {}", record.id(), diagnosticSummary);
+    }
+
+    /** @deprecated Use {@link #markCpTimeout(StageRecord, String)} */
+    @Deprecated
+    public void markEnrichmentTimeout(StageRecord record, String diagnosticSummary) {
+        log.warn("Deprecated method markEnrichmentTimeout called — delegating to markCpTimeout for record {}", record.id());
+        markCpTimeout(record, diagnosticSummary);
     }
 
     /**
-     * Mark record with Exensio timeout.
+     * Mark record with Exensio timeout — requires manual verification.
      * Called when Exensio API returns NotFound after configured timeout period.
      * Transitions the record from EXENSIO_LOADING to EXENSIO_TIMEOUT status.
      * Emits SSE state change event via StateAggregationBatcher.
@@ -909,7 +916,7 @@ public class RefDbService {
      *
      * Requirements: 2.1, 2.2, 2.3
      */
-    public void markExensioTimeout(StageRecord record, String reason) {
+    public void markCompletedManualVerification(StageRecord record, String reason) {
         if (record == null) return;
         
         String errorMessage = "[Exensio Timeout] " + reason +
@@ -4105,5 +4112,7 @@ public class RefDbService {
         } catch (SQLException ex) {
             log.warn("Failed recording state change to batcher for state {}: {}", state, ex.getMessage());
         }
+    }
+}
     }
 }

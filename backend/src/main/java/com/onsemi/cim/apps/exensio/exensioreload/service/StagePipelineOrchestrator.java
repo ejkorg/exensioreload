@@ -40,7 +40,7 @@ public class StagePipelineOrchestrator {
                         records.size(), site, senderId);
             }
             case EXENSIO_API -> {
-                refDbService.markExensioLoadingPending(records);
+                refDbService.markExensioMonitoringPending(records);
                 log.info("CP consumed {} record(s) for site {} sender {} — awaiting Exensio API verification (ES disabled)",
                         records.size(), site, senderId);
             }
@@ -60,10 +60,10 @@ public class StagePipelineOrchestrator {
             return;
         }
         if (policy.afterCpEnrichmentSuccess() == StageCompletionMonitor.EXENSIO_API) {
-            refDbService.markExensioLoading(record, outputPath, outputTarget);
+            refDbService.markExensioMonitoring(record, outputPath, outputTarget);
             log.info("CP ES success for record id={} — awaiting Exensio API verification", record.id());
         } else {
-            refDbService.markDoneFromCpEnrichment(record, outputPath, outputTarget);
+            refDbService.markCompletedFromCp(record, outputPath, outputTarget);
             log.info("CP ES success for record id={} — marked DONE (Exensio monitor disabled)", record.id());
         }
     }

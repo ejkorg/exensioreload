@@ -479,8 +479,8 @@ public class ExensioLoadMonitor {
                     // Update per-record status
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "timeout", traceMsg);
                     integrationStatusService.updateExensio(requestId, "timeout", traceMsg);
-                    // Mark record with EXENSIO_TIMEOUT status and diagnostic message
-                    refDbService.markExensioTimeout(record, errorMsg);
+                    // Mark record with COMPLETED_MANUAL_VERIFICATION_REQUIRED status and diagnostic message
+                    refDbService.markCompletedManualVerification(record, errorMsg);
                 }
                 case CP_TIMEOUT -> {
                     // ENRICHMENT_TIMEOUT should only be created by CpLogMonitor, not ExensioLoadMonitor

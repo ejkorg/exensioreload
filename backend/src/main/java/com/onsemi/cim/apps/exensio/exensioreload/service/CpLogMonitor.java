@@ -269,7 +269,7 @@ public class CpLogMonitor {
             
             if (exensioProperties.isConfigured()) {
                 log.info("CP enrichment timeout for record id={} dataId={} — assuming success and verifying in Exensio", record.id(), record.dataId());
-                refDbService.markExensioLoadingPending(List.of(record));
+                refDbService.markExensioMonitoringPending(List.of(record));
                 integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", "CP enrichment timeout — assuming success and verifying in Exensio");
                 integrationStatusService.updateElasticsearch(requestId, "timeout", diagnosticSummary);
                 emitRowUpdateSse(record, requestId);
@@ -278,7 +278,7 @@ public class CpLogMonitor {
 
                 // Mark as ENRICHMENT_TIMEOUT (uncertain enrichment status)
                 // This is honest accounting: we don't know if enrichment succeeded, failed, or needs retry
-                refDbService.markEnrichmentTimeout(record, diagnosticSummary);
+                refDbService.markCpTimeout(record, diagnosticSummary);
                 integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", 
                         "CP enrichment timeout — no log found in ES or pp_log after " 
                         + props.getEnrichmentTimeoutMinutes() + " minutes");
@@ -383,7 +383,7 @@ public class CpLogMonitor {
                     record.lot(), record.metadataId(), minutesStuck, timeoutMinutes);
             
             try {
-                refDbService.markDoneManualVerify(record, message);
+                refDbService.markCompletedManualVerify(record, message);
                 log.info("Auto-remediated stuck record: id={}, lot={}", record.id(), record.lot());
             } catch (Exception e) {
                 log.error("Failed to auto-remediate stuck record id={}: {}", record.id(), e.getMessage());
@@ -436,7 +436,7 @@ public class CpLogMonitor {
             log.info("Exensio not configured — marking record id={} as DONE with manual verify", record.id());
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
             integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
-            refDbService.markDoneManualVerify(record,
+            refDbService.markCompletedManualVerify(record,
                     "[Enrichment Unresolved] " + diagnosticSummary + " Exensio not configured. Manual verification required.");
             emitRowUpdateSse(record, requestId);
             return;
@@ -461,14 +461,14 @@ public class CpLogMonitor {
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
                     integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
                     successCount.incrementAndGet();
-                    refDbService.markDoneFromExensio(record, found.waferKey(), found.pgKey());
+                    refDbService.markCompletedFromExensio(record, found.waferKey(), found.pgKey());
                 }
                 case ExensioLotWaferResult.NotFound notFound -> {
                     log.info("Exensio direct lookup also not found for record id={} — marking DONE with manual verify",
                             record.id());
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
                     integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
-                    refDbService.markDoneManualVerify(record,
+                    refDbService.markCompletedManualVerify(record,
                             "[Enrichment Unresolved] " + diagnosticSummary
                             + " Exensio: not found for lot=" + record.lot() + " wafer=" + record.wafer()
                             + ". Manual verification required.");
@@ -477,7 +477,7 @@ public class CpLogMonitor {
                     log.warn("Exensio direct lookup error for record id={}: {}", record.id(), error.message());
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
                     integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
-                    refDbService.markDoneManualVerify(record,
+                    refDbService.markCompletedManualVerify(record,
                             "[Enrichment Unresolved] " + diagnosticSummary
                             + " Exensio: error=" + error.message()
                             + ". Manual verification required.");
@@ -487,7 +487,7 @@ public class CpLogMonitor {
             log.warn("Exensio direct lookup exception for record id={}: {}", record.id(), e.getMessage());
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "timeout", timeoutMsg);
             integrationStatusService.updateElasticsearch(requestId, "timeout", timeoutMsg);
-            refDbService.markDoneManualVerify(record,
+            refDbService.markCompletedManualVerify(record,
                     timeoutMsg + " and Exensio API error: " + e.getMessage() + ". Manual verification required.");
         }
 

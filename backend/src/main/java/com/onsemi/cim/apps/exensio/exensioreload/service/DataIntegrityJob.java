@@ -228,7 +228,7 @@ public class DataIntegrityJob {
                     minutesStuck,
                     stuck.status()
                 );
-                refDbService.markDoneManualVerify(stuck, remediationMsg);
+                refDbService.markCompletedManualVerify(stuck, remediationMsg);
                 log.info("Auto-remediated record id={} (stuck for {} minutes)", stuck.id(), minutesStuck);
                 remediatedCount++;
             } catch (Exception ex) {
