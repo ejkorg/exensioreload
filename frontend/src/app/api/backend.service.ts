@@ -22,29 +22,14 @@ export interface DashboardMetricTotals {
   backlog: number;
   activeSenders: number;
   activeUsers?: number;
-
-  // Backward-compatible accessors for old field names
-  /** @deprecated Use stagedToRefdb */
-  ready?: number;
-  /** @deprecated Use queuedForCp */
-  queued?: number;
-  /** @deprecated Use elasticsearchMonitoring */
-  enriching?: number;
-  /** @deprecated Use cpTimeout */
-  enrichmentTimeout?: number;
-  /** @deprecated Use exensioMonitoring */
-  exensioLoading?: number;
-  /** @deprecated Use completedManualVerification */
-  exensioTimeout?: number;
-  /** @deprecated Use cpFailed + loadFailed */
-  failed?: number;
-  /** @deprecated Use queuedForCp + elasticsearchMonitoring + exensioMonitoring */
-  enqueued?: number;
-}
-  completed: number;
-  backlog: number;
-  activeSenders: number;
-  activeUsers?: number;
+  // Aliases for code still using old field names
+  ready: number;
+  enqueued: number;
+  enriching: number;
+  enrichmentTimeout: number;
+  exensioLoading: number;
+  exensioTimeout: number;
+  failed: number;
 }
 
 /**

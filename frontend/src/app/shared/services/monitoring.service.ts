@@ -32,8 +32,6 @@ export interface MonitoringFile {
   wafer: string;
   status:
     | 'READY'
-  status:
-    | 'READY'
     | 'QUEUED_FOR_CP'
     | 'ELASTICSEARCH_MONITORING'
     | 'CP_TIMEOUT'
