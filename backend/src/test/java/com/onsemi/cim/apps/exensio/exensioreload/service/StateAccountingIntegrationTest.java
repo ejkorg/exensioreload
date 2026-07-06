@@ -68,7 +68,7 @@ public class StateAccountingIntegrationTest {
     public void testAccountingInvariantForStagedRecords() throws SQLException {
         // Stage 10 records
         int recordCount = 10;
-        insertRecords(recordCount, "pending");
+        insertRecords(recordCount, "STAGED_TO_REFDB");
 
         // Query status
         StageStatus status = refDbService.fetchStatuses(TEST_REQUEST_ID)
@@ -97,10 +97,10 @@ public class StateAccountingIntegrationTest {
      */
     @Test
     public void testBulkCancelIncreaseCancelledCount() throws SQLException {
-        // Stage 20 records in ENRICHMENT
+        // Stage 20 records in ELASTICSEARCH_MONITORING
         int totalRecords = 20;
         int cancelCount = 7;
-        insertRecords(totalRecords, "ENRICHMENT");
+        insertRecords(totalRecords, "ELASTICSEARCH_MONITORING");
 
         // Get initial status
         StageStatus initialStatus = refDbService.fetchStatuses(TEST_REQUEST_ID)
@@ -138,20 +138,20 @@ public class StateAccountingIntegrationTest {
     }
 
     /**
-     * Test 3: Mark records DONE, verify transitions and totals
+     * Test 3: Mark records COMPLETED, verify transitions and totals
      * 
      * Validates:
-     * - Records can transition from ENRICHMENT to DONE
+     * - Records can transition from ELASTICSEARCH_MONITORING to COMPLETED
      * - Accounting invariant maintained during transitions
      * - Completed count increases, enriching decreases
      * - Requirements 2, 6
      */
     @Test
     public void testTransitionEnrichmentToDone() throws SQLException {
-        // Stage 15 records in ENRICHMENT
+        // Stage 15 records in ELASTICSEARCH_MONITORING
         int totalRecords = 15;
         int doneCount = 6;
-        insertRecords(totalRecords, "ENRICHMENT");
+        insertRecords(totalRecords, "ELASTICSEARCH_MONITORING");
 
         // Get initial status
         StageStatus initialStatus = refDbService.fetchStatuses(TEST_REQUEST_ID)
@@ -164,7 +164,7 @@ public class StateAccountingIntegrationTest {
         assertEquals(totalRecords, initialStatus.enriching());
         assertEquals(0, initialStatus.completed());
 
-        // Mark 6 records as DONE
+        // Mark 6 records as COMPLETED
         markRecordsDone(doneCount);
 
         // Get updated status
@@ -184,7 +184,7 @@ public class StateAccountingIntegrationTest {
         // Verify accounting balances
         long accountingSum = updatedStatus.accountingSum();
         assertEquals(updatedStatus.total(), accountingSum,
-                "Accounting sum should equal total after transition to DONE");
+                "Accounting sum should equal total after transition to COMPLETED");
     }
 
     /**
@@ -198,10 +198,10 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testComplexTransitionsMaintainAccounting() throws SQLException {
         // Stage records in different states
-        insertRecords(5, "pending");     // 5 staged
+        insertRecords(5, "STAGED_TO_REFDB");     // 5 staged
         insertRecords(8, "ENQUEUED");    // 8 queued
-        insertRecords(10, "ENRICHMENT"); // 10 enriching
-        insertRecords(3, "FAILED");      // 3 failed
+        insertRecords(10, "ELASTICSEARCH_MONITORING"); // 10 enriching
+        insertRecords(3, "CP_FAILED");      // 3 failed
 
         int totalExpected = 5 + 8 + 10 + 3;
 
@@ -222,10 +222,10 @@ public class StateAccountingIntegrationTest {
 
         // Perform multiple transitions:
         // - Move 2 pending -> ENQUEUED
-        // - Move 4 ENRICHMENT -> DONE
+        // - Move 4 ELASTICSEARCH_MONITORING -> COMPLETED
         // - Move 3 ENQUEUED -> CANCELLED
-        transitionRecords(2, "pending", "ENQUEUED");
-        transitionRecords(4, "ENRICHMENT", "DONE");
+        transitionRecords(2, "STAGED_TO_REFDB", "ENQUEUED");
+        transitionRecords(4, "ELASTICSEARCH_MONITORING", "COMPLETED");
         transitionRecords(3, "ENQUEUED", "CANCELLED");
 
         // Get updated status
@@ -262,12 +262,12 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testDebugEndpointMatchesDashboardTotals() throws SQLException {
         // Stage records in various states
-        insertRecords(3, "pending");
+        insertRecords(3, "STAGED_TO_REFDB");
         insertRecords(5, "ENQUEUED");
-        insertRecords(7, "ENRICHMENT");
-        insertRecords(2, "EXENSIO_LOADING");
-        insertRecords(4, "DONE");
-        insertRecords(1, "FAILED");
+        insertRecords(7, "ELASTICSEARCH_MONITORING");
+        insertRecords(2, "EXENSIO_MONITORING");
+        insertRecords(4, "COMPLETED");
+        insertRecords(1, "CP_FAILED");
         insertRecords(6, "CANCELLED");
 
         int totalExpected = 3 + 5 + 7 + 2 + 4 + 1 + 6;
@@ -313,22 +313,22 @@ public class StateAccountingIntegrationTest {
      * Test 6: All recorded states count toward accounting sum
      * 
      * Validates:
-     * - Every state (including EXENSIO_LOADING, ENRICHMENT_TIMEOUT, EXENSIO_TIMEOUT) is counted
+     * - Every state (including EXENSIO_MONITORING, ELASTICSEARCH_MONITORING_TIMEOUT, COMPLETED_MANUAL_VERIFICATION_REQUIRED) is counted
      * - No state is hidden or uncounted
      * - Requirements 1, 3, 4, 6
      */
     @Test
     public void testAllStatesCountedInAccounting() throws SQLException {
         // Insert one record in each valid state
-        insertRecords(1, "pending");
+        insertRecords(1, "STAGED_TO_REFDB");
         insertRecords(1, "ENQUEUED");
-        insertRecords(1, "ENRICHMENT");
-        insertRecords(1, "ENRICHMENT_TIMEOUT");
-        insertRecords(1, "EXENSIO_LOADING");
-        insertRecords(1, "EXENSIO_TIMEOUT");
+        insertRecords(1, "ELASTICSEARCH_MONITORING");
+        insertRecords(1, "CP_TIMEOUT");
+        insertRecords(1, "EXENSIO_MONITORING");
+        insertRecords(1, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
         insertRecords(1, "PROCESSING");
-        insertRecords(1, "DONE");
-        insertRecords(1, "FAILED");
+        insertRecords(1, "COMPLETED");
+        insertRecords(1, "CP_FAILED");
         insertRecords(1, "CANCELLED");
 
         int expectedTotal = 10;
@@ -351,7 +351,7 @@ public class StateAccountingIntegrationTest {
         assertEquals(1, status.exensioLoading(), "Exensio loading count");
         assertEquals(1, status.exensioTimeout(), "Exensio timeout count");
         assertEquals(1, status.failed(), "Failed count");
-        assertEquals(1, status.completed(), "Completed (DONE) count");
+        assertEquals(1, status.completed(), "Completed (COMPLETED) count");
         assertEquals(1, status.cancelled(), "Cancelled count");
 
         // Verify sum
@@ -364,18 +364,18 @@ public class StateAccountingIntegrationTest {
      * Test 7: Timeout states are segregated from completion states
      * 
      * Validates:
-     * - ENRICHMENT_TIMEOUT records counted separately from DONE
-     * - EXENSIO_TIMEOUT records counted separately from FAILED
+     * - ELASTICSEARCH_MONITORING_TIMEOUT records counted separately from COMPLETED
+     * - COMPLETED_MANUAL_VERIFICATION_REQUIRED records counted separately from FAILED
      * - Dashboard correctly reports timeout states
      * - Requirements 1.4, 2.4, 4.1, 4.2
      */
     @Test
     public void testTimeoutStatesSegregated() throws SQLException {
         // Insert records in timeout states and completion states
-        insertRecords(5, "ENRICHMENT_TIMEOUT");
-        insertRecords(3, "EXENSIO_TIMEOUT");
-        insertRecords(7, "DONE");
-        insertRecords(4, "FAILED");
+        insertRecords(5, "CP_TIMEOUT");
+        insertRecords(3, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
+        insertRecords(7, "COMPLETED");
+        insertRecords(4, "CP_FAILED");
 
         int totalExpected = 5 + 3 + 7 + 4;
 
@@ -392,7 +392,7 @@ public class StateAccountingIntegrationTest {
         // Verify timeout states are segregated
         assertEquals(5, status.enrichmentTimeout(), "Should have 5 enrichment timeouts");
         assertEquals(3, status.exensioTimeout(), "Should have 3 exensio timeouts");
-        assertEquals(7, status.completed(), "Should have 7 completed (DONE)");
+        assertEquals(7, status.completed(), "Should have 7 completed (COMPLETED)");
         assertEquals(4, status.failed(), "Should have 4 failed");
 
         // Verify accounting includes timeout states
@@ -405,18 +405,18 @@ public class StateAccountingIntegrationTest {
      * Test 8: StateAccountingService queries include timeout states
      * 
      * Validates:
-     * - StateAccountingService database query counts ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT
+     * - StateAccountingService database query counts ELASTICSEARCH_MONITORING_TIMEOUT and COMPLETED_MANUAL_VERIFICATION_REQUIRED
      * - Timeout state counts appear in DatabaseStateCounts
      * - Requirements 4.1, 4.2
      */
     @Test
     public void testStateAccountingServiceIncludesTimeoutStates() throws SQLException {
         // Stage records including timeout states
-        insertRecords(2, "pending");
-        insertRecords(3, "ENRICHMENT_TIMEOUT");
-        insertRecords(2, "EXENSIO_TIMEOUT");
-        insertRecords(1, "DONE");
-        insertRecords(1, "FAILED");
+        insertRecords(2, "STAGED_TO_REFDB");
+        insertRecords(3, "CP_TIMEOUT");
+        insertRecords(2, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
+        insertRecords(1, "COMPLETED");
+        insertRecords(1, "CP_FAILED");
 
         int totalExpected = 2 + 3 + 2 + 1 + 1;
 
@@ -432,10 +432,10 @@ public class StateAccountingIntegrationTest {
 
         // Verify timeout states are in the states map
         java.util.Map<String, Long> dbStates = report.getDatabase().getStates();
-        assertEquals(3, dbStates.get("ENRICHMENT_TIMEOUT").longValue(),
-                "Should have 3 ENRICHMENT_TIMEOUT records");
-        assertEquals(2, dbStates.get("EXENSIO_TIMEOUT").longValue(),
-                "Should have 2 EXENSIO_TIMEOUT records");
+        assertEquals(3, dbStates.get("CP_TIMEOUT").longValue(),
+                "Should have 3 ELASTICSEARCH_MONITORING_TIMEOUT records");
+        assertEquals(2, dbStates.get("COMPLETED_MANUAL_VERIFICATION_REQUIRED").longValue(),
+                "Should have 2 COMPLETED_MANUAL_VERIFICATION_REQUIRED records");
     }
 
     /**
@@ -450,9 +450,9 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testDashboardCardCountsIncludesTimeoutStates() throws SQLException {
         // Stage records
-        insertRecords(2, "ENRICHMENT_TIMEOUT");
-        insertRecords(1, "EXENSIO_TIMEOUT");
-        insertRecords(3, "DONE");
+        insertRecords(2, "CP_TIMEOUT");
+        insertRecords(1, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
+        insertRecords(3, "COMPLETED");
 
         int totalExpected = 2 + 1 + 3;
 
@@ -492,14 +492,14 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testAccountingBalanceWithTimeoutStates() throws SQLException {
         // Create diverse record distribution including timeout states
-        insertRecords(3, "pending");
+        insertRecords(3, "STAGED_TO_REFDB");
         insertRecords(2, "ENQUEUED");
-        insertRecords(4, "ENRICHMENT");
-        insertRecords(2, "ENRICHMENT_TIMEOUT");
-        insertRecords(1, "EXENSIO_LOADING");
-        insertRecords(1, "EXENSIO_TIMEOUT");
-        insertRecords(2, "DONE");
-        insertRecords(1, "FAILED");
+        insertRecords(4, "ELASTICSEARCH_MONITORING");
+        insertRecords(2, "CP_TIMEOUT");
+        insertRecords(1, "EXENSIO_MONITORING");
+        insertRecords(1, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
+        insertRecords(2, "COMPLETED");
+        insertRecords(1, "CP_FAILED");
         insertRecords(1, "CANCELLED");
 
         int totalExpected = 3 + 2 + 4 + 2 + 1 + 1 + 2 + 1 + 1;

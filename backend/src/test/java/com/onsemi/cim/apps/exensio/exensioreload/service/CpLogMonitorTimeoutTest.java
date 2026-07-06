@@ -31,7 +31,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
  * Unit tests for CpLogMonitor timeout detection behavior.
  * 
  * Tests verify that records timing out with ES NotFound + pp_log NotFound
- * are marked as ENRICHMENT_TIMEOUT instead of attempting Exensio fallback.
+ * are marked as ELASTICSEARCH_MONITORING_TIMEOUT instead of attempting Exensio fallback.
  * 
  * Requirements: 1.1, 1.2, 1.3, 10.1, 10.2
  */
@@ -73,7 +73,7 @@ class CpLogMonitorTimeoutTest {
     }
 
     /**
-     * Test: ES NotFound + pp_log NotFound → calls markEnrichmentTimeout()
+     * Test: ES NotFound + pp_log NotFound → calls markCpTimeout()
      * 
      * This verifies Requirement 1.1: timeout detection triggers correct state transition
      * and Requirement 1.2: diagnostic information is included
@@ -94,10 +94,10 @@ class CpLogMonitorTimeoutTest {
             null,                  // device
             "test.csv",            // filename
             Instant.now(),         // endTime
-            "ENRICHMENT",          // status
+            "ELASTICSEARCH_MONITORING",          // status
             null,                  // errorMessage
             createdAt,             // createdAt
-            createdAt,             // updatedAt (same as createdAt means in ENRICHMENT for 16 min)
+            createdAt,             // updatedAt (same as createdAt means in ELASTICSEARCH_MONITORING for 16 min)
             null,                  // processedAt
             "operator1",           // stagedBy
             null,                  // lastRequestedBy
@@ -119,7 +119,7 @@ class CpLogMonitorTimeoutTest {
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
 
-        when(refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE))
+        when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
 
         // Execute: Run the monitor
@@ -128,7 +128,7 @@ class CpLogMonitorTimeoutTest {
         // Verify: markEnrichmentTimeout was called with the record
         ArgumentCaptor<StageRecord> recordCaptor = ArgumentCaptor.forClass(StageRecord.class);
         ArgumentCaptor<String> diagnosticCaptor = ArgumentCaptor.forClass(String.class);
-        verify(refDbService, times(1)).markEnrichmentTimeout(recordCaptor.capture(), diagnosticCaptor.capture());
+        verify(refDbService, times(1)).markCpTimeout(recordCaptor.capture(), diagnosticCaptor.capture());
 
         // Verify the diagnostic summary contains information about what was checked
         String diagnostic = diagnosticCaptor.getValue();
@@ -155,7 +155,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -169,14 +169,14 @@ class CpLogMonitorTimeoutTest {
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
 
-        when(refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE))
+        when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
 
         // Execute
         cpLogMonitor.monitorEnrichmentRecords();
 
         // Verify: markEnrichmentTimeout was NOT called
-        verify(refDbService, never()).markEnrichmentTimeout(any(), anyString());
+        verify(refDbService, never()).markCpTimeout(any(), anyString());
         
         // Verify: Normal success path was taken
         verify(pipelineOrchestrator, times(1)).onCpEnrichmentSuccess(any(), anyString(), anyString());
@@ -194,7 +194,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -207,15 +207,15 @@ class CpLogMonitorTimeoutTest {
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
 
-        when(refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE))
+        when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
 
         // Execute
         cpLogMonitor.monitorEnrichmentRecords();
 
         // Verify: markFailed was called (not markEnrichmentTimeout)
-        verify(refDbService, times(1)).markFailed(any(), anyString());
-        verify(refDbService, never()).markEnrichmentTimeout(any(), anyString());
+        verify(refDbService, times(1)).markCpFailed(any(), anyString());
+        verify(refDbService, never()).markCpTimeout(any(), anyString());
     }
 
     /**
@@ -230,7 +230,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -243,14 +243,14 @@ class CpLogMonitorTimeoutTest {
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
 
-        when(refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE))
+        when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
 
         // Execute
         cpLogMonitor.monitorEnrichmentRecords();
 
         // Verify: markEnrichmentTimeout was NOT called (not yet timed out)
-        verify(refDbService, never()).markEnrichmentTimeout(any(), anyString());
+        verify(refDbService, never()).markCpTimeout(any(), anyString());
         
         // Verify: Just noted as not found, will retry next cycle
         verify(integrationStatusService, times(1)).updateCpStatusForRecord(
@@ -270,7 +270,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ENRICHMENT", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -283,14 +283,14 @@ class CpLogMonitorTimeoutTest {
         when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn("/output/dir");
         when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
 
-        when(refDbService.listRecords(null, null, "ENRICHMENT", Integer.MAX_VALUE))
+        when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
 
         // Execute
         cpLogMonitor.monitorEnrichmentRecords();
 
         // Verify: markEnrichmentTimeout was NOT called
-        verify(refDbService, never()).markEnrichmentTimeout(any(), anyString());
+        verify(refDbService, never()).markCpTimeout(any(), anyString());
         
         // Verify: Success path was taken via pp_log result
         verify(pipelineOrchestrator, times(1)).onCpEnrichmentSuccess(any(), eq("/output/dir"), eq("PP_LOG"));
