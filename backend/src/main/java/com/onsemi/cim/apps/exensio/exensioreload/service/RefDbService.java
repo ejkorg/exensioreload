@@ -740,7 +740,7 @@ public class RefDbService {
      * and broadcasts an SSE ROW_UPDATE event.
      * Requirements: 3.2, 3.3, 3.5
      */
-    public void markExensioLoading(StageRecord record, String outputPath, String outputTarget) {
+    public void markExensioMonitoring(StageRecord record, String outputPath, String outputTarget) {
         if (record == null) return;
         applyExensioLoading(record.id(), outputPath, outputTarget);
         broadcastExensioLoadingEvent(record, outputPath, outputTarget, "Exensio Loading");
@@ -985,7 +985,7 @@ public class RefDbService {
      * Stores the Exensio wafer_key and pg_key for future results queries.
      * Broadcasts SSE ROW_UPDATE with status "COMPLETED".
      */
-    public void markDoneFromExensio(StageRecord record, Long exensioWaferKey, long exensioPgKey) {
+    public void markCompletedFromExensio(StageRecord record, Long exensioWaferKey, long exensioPgKey) {
         if (record == null) return;
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
