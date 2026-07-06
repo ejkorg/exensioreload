@@ -12,6 +12,9 @@
         <comment>
             Rename pipeline status values to the v3.0 state machine.
 
+            Widen status column first: Oracle has VARCHAR(16) which is too narrow
+            for ELASTICSEARCH_MONITORING (24) and COMPLETED_MANUAL_VERIFICATION_REQUIRED (40).
+
             Old → New mapping:
             - pending → STAGED_TO_REFDB
             - ENQUEUED → QUEUED_FOR_CP
@@ -27,6 +30,9 @@
             - error_message contains '[Exensio Failure]', 'Exensio', 'load fail', 'Dead Letter' → LOAD_FAILED
             - Any remaining FAILED without clear indicator → CP_FAILED (safe default)
         </comment>
+
+        <!-- Widen status column to accommodate longer v3.0 status names -->
+        <modifyDataType tableName="SENDER_STAGE" columnName="status" newDataType="VARCHAR(50)"/>
 
         <!-- Drop existing CHECK constraint on SENDER_STAGE.status -->
         <sql splitStatements="false">
