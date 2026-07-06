@@ -294,7 +294,7 @@ public class ExensioLoadMonitor {
             if (record.lot() == null || record.lot().isBlank()) {
                 log.warn("Record id={} missing lot — marking FAILED (traceId={})", record.id(), traceId);
                 updates.add(new BatchResult.RecordUpdate(
-                        record.id(), BatchResult.UpdateType.FAILED, null, null,
+                        record.id(), BatchResult.UpdateType.LOAD_FAILED, null, null,
                         "Missing lot for Exensio lookup", null, null, null, traceId));
             } else {
                 validRecords.add(record);
@@ -316,7 +316,7 @@ public class ExensioLoadMonitor {
                 if (cached != null) {
                     log.debug("Cache hit for record id={} (traceId={})", record.id(), traceId);
                     updates.add(new BatchResult.RecordUpdate(
-                            record.id(), BatchResult.UpdateType.DONE,
+                            record.id(), BatchResult.UpdateType.COMPLETED,
                             cached.waferKey(), cached.pgKey(), null,
                             record.lot(), record.wafer(), record.filename(), traceId));
                 } else {
@@ -368,7 +368,7 @@ public class ExensioLoadMonitor {
                             // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
                                     update.recordId(),
-                                    BatchResult.UpdateType.EXENSIO_TIMEOUT,
+                                    BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED,
                                     null, null,
                                     "Exensio load timeout — wafer not found after "
                                             + props.getTimeoutMinutes() + " minutes. May need retry.",
@@ -376,7 +376,7 @@ public class ExensioLoadMonitor {
                         } else {
                             updates.add(update);
                         }
-                    } else if (update.type() == BatchResult.UpdateType.DONE) {
+                    } else if (update.type() == BatchResult.UpdateType.COMPLETED) {
                         // Cache the successful result
                         StageRecord record = findRecord(apiRecords, update.recordId());
                         if (record != null && lookupCache != null) {
@@ -445,7 +445,7 @@ public class ExensioLoadMonitor {
             long stageRecordId = record.id();
             String requestId = record.requestId();
             switch (processedUpdate.type()) {
-                case DONE -> {
+                case COMPLETED -> {
                     String msg = String.format("Exensio wafer confirmed: lot=%s, wafer=%s, file=%s, traceId=%s",
                             update.lotId() != null ? update.lotId() : "N/A",
                             update.waferId() != null ? update.waferId() : "N/A",
@@ -468,7 +468,7 @@ public class ExensioLoadMonitor {
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "not_found", msg);
                     integrationStatusService.updateExensio(requestId, "not_found", msg);
                 }
-                case EXENSIO_TIMEOUT -> {
+                case COMPLETED_MANUAL_VERIFICATION_REQUIRED -> {
                     // Record timed out with no definitive result
                     // Requirements: 2.1, 2.2, 2.3
                     String errorMsg = processedUpdate.errorMessage() != null ? processedUpdate.errorMessage() 
@@ -482,14 +482,14 @@ public class ExensioLoadMonitor {
                     // Mark record with EXENSIO_TIMEOUT status and diagnostic message
                     refDbService.markExensioTimeout(record, errorMsg);
                 }
-                case ENRICHMENT_TIMEOUT -> {
+                case CP_TIMEOUT -> {
                     // ENRICHMENT_TIMEOUT should only be created by CpLogMonitor, not ExensioLoadMonitor
                     // This is a defensive case to handle if it somehow appears in results
                     log.warn("Record {} received unexpected ENRICHMENT_TIMEOUT from Exensio batch - treating as error", record.id());
                     integrationStatusService.updateExensioStatusForRecord(stageRecordId, "error", "Unexpected enrichment timeout state");
                     integrationStatusService.updateExensio(requestId, "error", "Unexpected enrichment timeout state");
                 }
-                case FAILED -> {
+                case LOAD_FAILED -> {
                     String errorMsg = update.errorMessage() != null ? update.errorMessage() : "Exensio lookup failed";
                     String traceMsg = String.format("%s (traceId=%s)", errorMsg,
                             update.traceId() != null ? update.traceId() : "N/A");
@@ -599,7 +599,7 @@ public class ExensioLoadMonitor {
                         log.debug("Individual retry found: id={} lot={} wafer={} waferKey={} pgKey={}",
                                 record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
                         updates.add(new BatchResult.RecordUpdate(
-                                record.id(), BatchResult.UpdateType.DONE,
+                                record.id(), BatchResult.UpdateType.COMPLETED,
                                 found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId));
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
@@ -608,7 +608,7 @@ public class ExensioLoadMonitor {
                             // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
                                     record.id(),
-                                    BatchResult.UpdateType.EXENSIO_TIMEOUT,
+                                    BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED,
                                     null, null,
                                     "Exensio load timeout — wafer not found after "
                                             + props.getTimeoutMinutes() + " minutes. May need retry.",
@@ -710,10 +710,10 @@ public class ExensioLoadMonitor {
         int done = 0, failed = 0, notFound = 0;
         for (BatchResult.RecordUpdate u : updates) {
             switch (u.type()) {
-                case DONE -> done++;
-                case FAILED -> failed++;
-                case EXENSIO_TIMEOUT -> failed++;  // Timeout is treated as failed for backlog
-                case ENRICHMENT_TIMEOUT -> failed++;  // Timeout is treated as failed for backlog
+                case COMPLETED -> done++;
+                case LOAD_FAILED -> failed++;
+                case COMPLETED_MANUAL_VERIFICATION_REQUIRED -> failed++;  // Timeout is treated as failed for backlog
+                case CP_TIMEOUT -> failed++;  // Timeout is treated as failed for backlog
                 case NOT_FOUND -> notFound++;
                 default -> { /* ERROR — no status change */ }
             }
@@ -753,7 +753,7 @@ public class ExensioLoadMonitor {
      */
     private BatchResult.RecordUpdate processUpdateWithDLQ(StageRecord record, BatchResult.RecordUpdate update) {
         long recordId = record.id();
-        if (update.type() == BatchResult.UpdateType.DONE) {
+        if (update.type() == BatchResult.UpdateType.COMPLETED) {
             resetFailureCount(recordId);
             return update;
         }
@@ -762,8 +762,8 @@ public class ExensioLoadMonitor {
         // Note: ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT are created by ExensioLoadMonitor with state updates,
         // so they don't need DLQ processing here - they're handled as expected timeout conditions.
         // However, we still increment failure count for other non-DONE types.
-        if (update.type() == BatchResult.UpdateType.ENRICHMENT_TIMEOUT || 
-            update.type() == BatchResult.UpdateType.EXENSIO_TIMEOUT) {
+        if (update.type() == BatchResult.UpdateType.CP_TIMEOUT || 
+            update.type() == BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED) {
             // Timeout states don't accumulate as "failures" for DLQ purposes - they're expected conditions
             // that should be handled by RefDbService.markExensioTimeout / markEnrichmentTimeout
             return update;
@@ -779,7 +779,7 @@ public class ExensioLoadMonitor {
                                 " consecutive failures — moved to dead letter queue";
             return new BatchResult.RecordUpdate(
                     recordId,
-                    BatchResult.UpdateType.FAILED,
+                    BatchResult.UpdateType.LOAD_FAILED,
                     null, null,
                     dlqMessage,
                     null, null, null,

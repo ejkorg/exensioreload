@@ -3015,14 +3015,32 @@ public class RefDbService {
                                     long ready,
                                     long enqueued,
                                     long failed,
-                                    long completed) {}
+                                    long completed) {
+        /** @deprecated Use {@link #ready()} */
+        @Deprecated public long stagedToRefdb() { return ready; }
+        /** @deprecated Use {@link #enqueued()} */
+        @Deprecated public long queuedForCp() { return enqueued; }
+        /** @deprecated Use {@link #failed()} */
+        @Deprecated public long cpFailed() { return failed; }
+        /** @deprecated Use {@link #completed()} */
+        @Deprecated public long completedOld() { return completed; }
+    }
 
     public record TimeBucketAggregate(Instant bucket,
                                       long total,
                                       long ready,
                                       long enqueued,
                                       long failed,
-                                      long completed) {}
+                                      long completed) {
+        /** @deprecated Use {@link #ready()} */
+        @Deprecated public long stagedToRefdb() { return ready; }
+        /** @deprecated Use {@link #enqueued()} */
+        @Deprecated public long queuedForCp() { return enqueued; }
+        /** @deprecated Use {@link #failed()} */
+        @Deprecated public long cpFailed() { return failed; }
+        /** @deprecated Use {@link #completed()} */
+        @Deprecated public long completedOld() { return completed; }
+    }
 
     private record StageStatusKey(String site, int senderId) {}
 
@@ -3305,20 +3323,20 @@ public class RefDbService {
         Map<BatchResult.UpdateType, List<BatchResult.RecordUpdate>> grouped =
                 allUpdates.stream().collect(Collectors.groupingBy(BatchResult.RecordUpdate::type));
 
-        // Process DONE updates
-        List<BatchResult.RecordUpdate> doneUpdates = grouped.get(BatchResult.UpdateType.DONE);
+        // Process COMPLETED updates
+        List<BatchResult.RecordUpdate> doneUpdates = grouped.get(BatchResult.UpdateType.COMPLETED);
         if (doneUpdates != null && !doneUpdates.isEmpty()) {
             int doneCount = batchMarkCompleted(doneUpdates);
             totalUpdated += doneCount;
-            log.debug("Batch marked DONE: {} records", doneCount);
+            log.debug("Batch marked COMPLETED: {} records", doneCount);
         }
 
-        // Process FAILED updates
-        List<BatchResult.RecordUpdate> failedUpdates = grouped.get(BatchResult.UpdateType.FAILED);
+        // Process LOAD_FAILED updates
+        List<BatchResult.RecordUpdate> failedUpdates = grouped.get(BatchResult.UpdateType.LOAD_FAILED);
         if (failedUpdates != null && !failedUpdates.isEmpty()) {
             int failedCount = batchMarkLoadFailed(failedUpdates);
             totalUpdated += failedCount;
-            log.debug("Batch marked FAILED: {} records", failedCount);
+            log.debug("Batch marked LOAD_FAILED: {} records", failedCount);
         }
 
         // Process NOT_FOUND updates
@@ -3337,22 +3355,21 @@ public class RefDbService {
             log.debug("Batch marked ERROR: {} records", errorCount);
         }
 
-        // Process EXENSIO_TIMEOUT updates
+        // Process COMPLETED_MANUAL_VERIFICATION_REQUIRED updates
         // Requirements: 2.1, 2.2, 2.3 — wafer not found in Exensio after configured timeout
-        List<BatchResult.RecordUpdate> exensioTimeoutUpdates = grouped.get(BatchResult.UpdateType.EXENSIO_TIMEOUT);
-        if (exensioTimeoutUpdates != null && !exensioTimeoutUpdates.isEmpty()) {
-            int exensioTimeoutCount = batchMarkCompletedManualVerification(exensioTimeoutUpdates);
-            totalUpdated += exensioTimeoutCount;
-            log.debug("Batch marked EXENSIO_TIMEOUT: {} records", exensioTimeoutCount);
+        List<BatchResult.RecordUpdate> manualVerificationUpdates = grouped.get(BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED);
+        if (manualVerificationUpdates != null && !manualVerificationUpdates.isEmpty()) {
+            int mvCount = batchMarkCompletedManualVerification(manualVerificationUpdates);
+            totalUpdated += mvCount;
+            log.debug("Batch marked COMPLETED_MANUAL_VERIFICATION_REQUIRED: {} records", mvCount);
         }
 
-        // Process ENRICHMENT_TIMEOUT updates
-        // Requirements: 1.1, 1.2, 1.3 — enrichment not confirmed after configured timeout
-        List<BatchResult.RecordUpdate> enrichmentTimeoutUpdates = grouped.get(BatchResult.UpdateType.ENRICHMENT_TIMEOUT);
-        if (enrichmentTimeoutUpdates != null && !enrichmentTimeoutUpdates.isEmpty()) {
-            int enrichmentTimeoutCount = batchMarkCpTimeout(enrichmentTimeoutUpdates);
-            totalUpdated += enrichmentTimeoutCount;
-            log.debug("Batch marked ENRICHMENT_TIMEOUT: {} records", enrichmentTimeoutCount);
+        // Process CP_TIMEOUT updates
+        List<BatchResult.RecordUpdate> cpTimeoutUpdates = grouped.get(BatchResult.UpdateType.CP_TIMEOUT);
+        if (cpTimeoutUpdates != null && !cpTimeoutUpdates.isEmpty()) {
+            int cpTimeoutCount = batchMarkCpTimeout(cpTimeoutUpdates);
+            totalUpdated += cpTimeoutCount;
+            log.debug("Batch marked CP_TIMEOUT: {} records", cpTimeoutCount);
         }
 
         long elapsedMs = Duration.between(startTime, Instant.now()).toMillis();

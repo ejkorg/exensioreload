@@ -167,7 +167,7 @@ public class BatchLookupResult {
                 // Wafer found - mark as DONE
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(),
-                        BatchResult.UpdateType.DONE,
+                        BatchResult.UpdateType.COMPLETED,
                         waferResult.waferKey(),
                         waferResult.pgKey(),
                         null,

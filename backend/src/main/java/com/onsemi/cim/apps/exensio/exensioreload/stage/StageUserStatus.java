@@ -11,4 +11,10 @@ public record StageUserStatus(
         long completed,
         Instant lastRequestedAt
 ) {
+    /** @deprecated Use {@link #ready()} */
+    @Deprecated public long stagedToRefdb() { return ready; }
+    /** @deprecated Use {@link #enqueued()} */
+    @Deprecated public long queuedForCp() { return enqueued; }
+    /** @deprecated Use {@link #failed()} */
+    @Deprecated public long cpFailed() { return failed; }
 }

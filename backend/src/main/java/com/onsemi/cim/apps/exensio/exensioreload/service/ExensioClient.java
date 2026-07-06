@@ -362,7 +362,7 @@ public class ExensioClient {
         if (rawSqlResult.isSuccess()) {
             mergedLots.addAll(rawSqlResult.getLots());
             for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records)) {
-                if (update.type() == BatchResult.UpdateType.DONE) {
+                if (update.type() == BatchResult.UpdateType.COMPLETED) {
                     resolvedRecordIds.add(update.recordId());
                 }
             }
