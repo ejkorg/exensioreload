@@ -2202,6 +2202,9 @@ public class RefDbService {
         String table = properties.getStagingTable();
         if (!tableExists(connection, table)) {
             createTable(connection, table);
+        } else {
+            // Ensure status column is large enough for all status values
+            ensureStatusColumnSize(connection, table);
         }
         ensureProcessedAtColumn(connection, table);
         ensureUserColumns(connection, table);
@@ -2408,7 +2411,7 @@ public class RefDbService {
                     "wafer VARCHAR2(128), " +
                     "filename VARCHAR2(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR2(16) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
+                    "status VARCHAR2(36) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
                     "error_message VARCHAR2(4000), " +
                     "created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
@@ -2429,7 +2432,7 @@ public class RefDbService {
                     "wafer VARCHAR(128), " +
                     "filename VARCHAR(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR(16) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
+                    "status VARCHAR(36) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
                     "error_message VARCHAR(4000), " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
@@ -2477,6 +2480,68 @@ public class RefDbService {
                 : "ALTER TABLE " + table + " ADD (request_id VARCHAR(128))");
         if (requestIdAdded) {
             log.info("Request ID column ensured for {}", table);
+        }
+    }
+
+    /**
+     * Ensures the status column is large enough to hold all status values.
+     * The longest status value is 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' (33 chars).
+     */
+    private void ensureStatusColumnSize(Connection connection, String table) throws SQLException {
+        // For Oracle, check current column size and increase if needed
+        if (isOracle) {
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT DATA_LENGTH FROM USER_TAB_COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = 'STATUS'")) {
+                ps.setString(1, table.toUpperCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        int currentLength = rs.getInt("DATA_LENGTH");
+                        if (currentLength < 36) {
+                            // Need to increase the column size
+                            String ddl = "ALTER TABLE " + table + " MODIFY (STATUS VARCHAR2(36))";
+                            try (Statement stmt = connection.createStatement()) {
+                                stmt.executeUpdate(ddl);
+                                log.info("Increased STATUS column size from {} to 36 for table {}", currentLength, table);
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                // If we can't check the column size, try to alter it anyway (might fail if already large enough)
+                try (Statement stmt = connection.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE " + table + " MODIFY (STATUS VARCHAR2(36))");
+                    log.info("Ensured STATUS column size is 36 for table {}", table);
+                } catch (SQLException ex) {
+                    log.warn("Could not verify/update STATUS column size for table {}: {}", table, ex.getMessage());
+                }
+            }
+        } else {
+            // For H2, check and alter if needed
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = 'STATUS'")) {
+                ps.setString(1, table.toUpperCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        Integer currentLength = rs.getInt("CHARACTER_MAXIMUM_LENGTH");
+                        if (currentLength == 0 || currentLength < 36) {
+                            // Need to increase the column size
+                            String ddl = "ALTER TABLE " + table + " ALTER COLUMN STATUS SET VARCHAR(36)";
+                            try (Statement stmt = connection.createStatement()) {
+                                stmt.executeUpdate(ddl);
+                                log.info("Increased STATUS column size from {} to 36 for table {}", currentLength, table);
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                // If we can't check, try to alter anyway
+                try (Statement stmt = connection.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE " + table + " ALTER COLUMN STATUS SET VARCHAR(36)");
+                    log.info("Ensured STATUS column size is 36 for table {}", table);
+                } catch (SQLException ex) {
+                    log.warn("Could not verify/update STATUS column size for table {}: {}", table, ex.getMessage());
+                }
+            }
         }
     }
 
