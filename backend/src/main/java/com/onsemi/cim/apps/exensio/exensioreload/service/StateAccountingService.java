@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -79,7 +79,7 @@ public class StateAccountingService {
     private DatabaseStateData queryDatabaseStateCounts(String requestId, String site, Integer senderId) {
         String table = refDbProperties.getStagingTable();
         String baseQuery = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*) AS total, " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS pending, " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS pending, " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END) AS enqueued, " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END) AS enrichment, " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS enrichment_timeout, " +
@@ -141,7 +141,7 @@ public class StateAccountingService {
                         long recordTotal = rs.getLong("total");
 
                         // Accumulate global state counts
-                        globalStates.put("STAGED_TO_REFDB", globalStates.getOrDefault("STAGED_TO_REFDB", 0L) + pending);
+                        globalStates.put("STAGED", globalStates.getOrDefault("STAGED", 0L) + pending);
                         globalStates.put("QUEUED_FOR_CP", globalStates.getOrDefault("QUEUED_FOR_CP", 0L) + enqueued);
                         globalStates.put("ELASTICSEARCH_MONITORING", globalStates.getOrDefault("ELASTICSEARCH_MONITORING", 0L) + enrichment);
                         globalStates.put("CP_TIMEOUT", globalStates.getOrDefault("CP_TIMEOUT", 0L) + enrichmentTimeout);
@@ -158,7 +158,7 @@ public class StateAccountingService {
 
                         // Build sender breakdown
                         Map<String, Long> senderStates = new HashMap<>();
-                        senderStates.put("STAGED_TO_REFDB", pending);
+                        senderStates.put("STAGED", pending);
                         senderStates.put("QUEUED_FOR_CP", enqueued);
                         senderStates.put("ELASTICSEARCH_MONITORING", enrichment);
                         senderStates.put("CP_TIMEOUT", enrichmentTimeout);
@@ -293,7 +293,7 @@ public class StateAccountingService {
 
         // Check for accounting balance explicitly including timeout states
         long expectedAccountingSum = enrichment + enrichmentTimeout + exensioLoading + exensioTimeout
-                + dbCounts.getStates().getOrDefault("STAGED_TO_REFDB", 0L)
+                + dbCounts.getStates().getOrDefault("STAGED", 0L)
                 + dbCounts.getStates().getOrDefault("QUEUED_FOR_CP", 0L)
                 + dbCounts.getStates().getOrDefault("PROCESSING", 0L)
                 + dbCounts.getStates().getOrDefault("CP_FAILED", 0L)

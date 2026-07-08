@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 
 export interface StateDefinition {
   label: string;
@@ -21,14 +21,14 @@ export class StateLegendService {
       {
         label: 'Staged',
         description: 'Ready for dispatch',
-        statusValue: 'STAGED_TO_REFDB',
+        statusValue: 'STAGED',
         color: 'secondary',
         icon: 'inbox',
         nextStates: ['Queued for Enrichment'],
         isTerminal: false,
-        tooltip: `Staged (STAGED_TO_REFDB)
+        tooltip: `Staged (STAGED)
 Loaded to REFDB. Ready for dispatch to the enrichment pipeline.
-Example transition: STAGED_TO_REFDB → QUEUED_FOR_CP → ELASTICSEARCH_MONITORING → COMPLETED`,
+Example transition: STAGED → QUEUED_FOR_CP → ELASTICSEARCH_MONITORING → COMPLETED`,
       },
     ],
     [

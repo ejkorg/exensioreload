@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.controller;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
 import com.onsemi.cim.apps.exensio.exensioreload.dto.BulkOperationResult;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.BulkSenderRequest;
@@ -50,7 +50,7 @@ public class DashboardBulkController {
 
     private static final Logger log = LoggerFactory.getLogger(DashboardBulkController.class);
 
-    private static final List<String> CANCELLABLE_STATUSES = List.of("STAGED_TO_REFDB", "CP_FAILED");
+    private static final List<String> CANCELLABLE_STATUSES = List.of("STAGED", "CP_FAILED");
 
     private final RefDbService refDbService;
     private final SenderDispatchService senderDispatchService;
@@ -152,7 +152,7 @@ public class DashboardBulkController {
         for (int senderId : senderIds) {
             try {
                 // Only cancel NEW; leave PROCESSING/FAILED/DONE untouched
-                refDbService.bulkCancelBySender(senderId, List.of("STAGED_TO_REFDB"));
+                refDbService.bulkCancelBySender(senderId, List.of("STAGED"));
                 successCount++;
             } catch (Exception ex) {
                 log.error("[BulkPause] failed for sender={}: {}", senderId, ex.getMessage(), ex);

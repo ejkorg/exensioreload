@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.stage;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.stage;
 
 import java.util.Set;
 
@@ -19,7 +19,7 @@ public class StatusMapper {
 
         return switch (ps) {
             case DISCOVERED -> "Discovered";
-            case STAGED_TO_REFDB -> "Loaded to REFDB";
+            case STAGED -> "Loaded to REFDB";
             case QUEUED_FOR_CP -> inExternalQueue ? "In Queue (pending CP)" : "Queued for CP";
             case CP_CONSUMED -> "CP Consumed";
             case ELASTICSEARCH_MONITORING -> inExternalQueue ? "In Queue (pending CP)" : "ES Monitoring";

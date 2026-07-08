@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.controller;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -337,7 +337,7 @@ public class SenderController {
 
     @GetMapping("/{id}/queue")
     public List<SenderQueueEntry> getQueue(@PathVariable("id") Integer id,
-                                           @RequestParam(defaultValue = "STAGED_TO_REFDB") String status,
+                                           @RequestParam(defaultValue = "STAGED") String status,
                                            @RequestParam(defaultValue = "100") int limit) {
         return senderService.getQueue(id, status, limit);
     }

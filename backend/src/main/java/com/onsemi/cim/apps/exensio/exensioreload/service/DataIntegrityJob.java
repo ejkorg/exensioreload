@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -114,7 +114,7 @@ public class DataIntegrityJob {
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, " +
                 "status, created_at, updated_at, request_id " +
                 "FROM " + table + " " +
-                "WHERE status NOT IN ('STAGED_TO_REFDB', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', " +
+                "WHERE status NOT IN ('STAGED', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', " +
                 "'CP_TIMEOUT', 'EXENSIO_MONITORING', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', " +
                 "'PROCESSING', 'CP_FAILED', 'LOAD_FAILED', 'COMPLETED', 'CANCELLED') " +
                 "FETCH FIRST 100 ROWS ONLY";
@@ -244,7 +244,7 @@ public class DataIntegrityJob {
     private void verifyAccountingBalance() {
         String table = refDbProperties.getStagingTable();
         String sql = "SELECT COUNT(*) AS total, " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS pending, " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS pending, " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END) AS enqueued, " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END) AS enrichment, " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS cp_timeout, " +

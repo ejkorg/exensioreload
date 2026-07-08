@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+﻿import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -535,7 +535,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   openMetricCardDetail(metric: MetricCard): void {
     const stateMap: { [key: string]: string } = {
-      Staged: 'STAGED_TO_REFDB',
+      Staged: 'STAGED',
       'Queued for Enrichment': 'QUEUED_FOR_CP',
       'Enrichment Processing': 'ELASTICSEARCH_MONITORING',
       'Enrichment Monitoring Timeout': 'CP_TIMEOUT',

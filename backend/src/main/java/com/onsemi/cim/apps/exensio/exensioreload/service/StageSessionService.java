@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.Date;
@@ -648,7 +648,7 @@ public class StageSessionService {
             return;
         }
         String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED_TO_REFDB'";
+        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(stageSql)) {
             ps.setString(1, sessionId);
@@ -676,7 +676,7 @@ public class StageSessionService {
             return;
         }
         String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED_TO_REFDB'";
+        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(stageSql)) {
             ps.setString(1, sessionId);
@@ -850,7 +850,7 @@ public class StageSessionService {
     private StatusCounts loadCounts(String sessionId) {
         String table = refDbService.getStagingTable();
         String sql = "SELECT COUNT(*), " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
@@ -878,7 +878,7 @@ public class StageSessionService {
                 .append("SUM(CASE WHEN UPPER(status) IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) NOT LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS failed_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS cancelled_count, ")
-                .append("SUM(CASE WHEN UPPER(status) = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS pending_count, ")
+                .append("SUM(CASE WHEN UPPER(status) = 'STAGED' THEN 1 ELSE 0 END) AS pending_count, ")
                 .append("COUNT(*) AS total_count ")
                 .append("FROM ").append(table).append(" WHERE request_id = ? ");
         List<Object> params = new ArrayList<>();

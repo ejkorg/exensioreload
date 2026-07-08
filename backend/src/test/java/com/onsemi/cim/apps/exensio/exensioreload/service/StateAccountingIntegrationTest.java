@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -68,7 +68,7 @@ public class StateAccountingIntegrationTest {
     public void testAccountingInvariantForStagedRecords() throws SQLException {
         // Stage 10 records
         int recordCount = 10;
-        insertRecords(recordCount, "STAGED_TO_REFDB");
+        insertRecords(recordCount, "STAGED");
 
         // Query status
         StageStatus status = refDbService.fetchStatuses(TEST_REQUEST_ID)
@@ -198,7 +198,7 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testComplexTransitionsMaintainAccounting() throws SQLException {
         // Stage records in different states
-        insertRecords(5, "STAGED_TO_REFDB");     // 5 staged
+        insertRecords(5, "STAGED");     // 5 staged
         insertRecords(8, "ENQUEUED");    // 8 queued
         insertRecords(10, "ELASTICSEARCH_MONITORING"); // 10 enriching
         insertRecords(3, "CP_FAILED");      // 3 failed
@@ -224,7 +224,7 @@ public class StateAccountingIntegrationTest {
         // - Move 2 pending -> ENQUEUED
         // - Move 4 ELASTICSEARCH_MONITORING -> COMPLETED
         // - Move 3 ENQUEUED -> CANCELLED
-        transitionRecords(2, "STAGED_TO_REFDB", "ENQUEUED");
+        transitionRecords(2, "STAGED", "ENQUEUED");
         transitionRecords(4, "ELASTICSEARCH_MONITORING", "COMPLETED");
         transitionRecords(3, "ENQUEUED", "CANCELLED");
 
@@ -262,7 +262,7 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testDebugEndpointMatchesDashboardTotals() throws SQLException {
         // Stage records in various states
-        insertRecords(3, "STAGED_TO_REFDB");
+        insertRecords(3, "STAGED");
         insertRecords(5, "ENQUEUED");
         insertRecords(7, "ELASTICSEARCH_MONITORING");
         insertRecords(2, "EXENSIO_MONITORING");
@@ -320,7 +320,7 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testAllStatesCountedInAccounting() throws SQLException {
         // Insert one record in each valid state
-        insertRecords(1, "STAGED_TO_REFDB");
+        insertRecords(1, "STAGED");
         insertRecords(1, "ENQUEUED");
         insertRecords(1, "ELASTICSEARCH_MONITORING");
         insertRecords(1, "CP_TIMEOUT");
@@ -412,7 +412,7 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testStateAccountingServiceIncludesTimeoutStates() throws SQLException {
         // Stage records including timeout states
-        insertRecords(2, "STAGED_TO_REFDB");
+        insertRecords(2, "STAGED");
         insertRecords(3, "CP_TIMEOUT");
         insertRecords(2, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
         insertRecords(1, "COMPLETED");
@@ -492,7 +492,7 @@ public class StateAccountingIntegrationTest {
     @Test
     public void testAccountingBalanceWithTimeoutStates() throws SQLException {
         // Create diverse record distribution including timeout states
-        insertRecords(3, "STAGED_TO_REFDB");
+        insertRecords(3, "STAGED");
         insertRecords(2, "ENQUEUED");
         insertRecords(4, "ELASTICSEARCH_MONITORING");
         insertRecords(2, "CP_TIMEOUT");

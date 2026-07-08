@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.config;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,8 +45,8 @@ class SenderStageStatusConstraintTest {
     @Test
     @DisplayName("Key new and renamed states are present")
     void testKeyStatesPresent() {
-        assertTrue(ALL_STATUS_DB_VALUES.contains("STAGED_TO_REFDB"),
-            "Must include STAGED_TO_REFDB (replaces pending)");
+        assertTrue(ALL_STATUS_DB_VALUES.contains("STAGED"),
+            "Must include STAGED (replaces pending)");
         assertTrue(ALL_STATUS_DB_VALUES.contains("QUEUED_FOR_CP"),
             "Must include QUEUED_FOR_CP (replaces ENQUEUED)");
         assertTrue(ALL_STATUS_DB_VALUES.contains("ELASTICSEARCH_MONITORING"),

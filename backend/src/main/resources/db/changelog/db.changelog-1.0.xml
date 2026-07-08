@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
@@ -381,7 +381,7 @@
     <include file="db.changelog-9.4-exensio-columns.xml" relativeToChangelogFile="true" />
     <!-- Add data_type and test_phase columns for pgc_key derivation and PPID validation -->
     <include file="db.changelog-9.5-data-type-test-phase.xml" relativeToChangelogFile="true" />
-    <!-- Rename NEW → pending, update constraint and column default -->
+    <!-- Rename NEW â†’ pending, update constraint and column default -->
     <include file="db.changelog-9.6-rename-new-to-pending.xml" relativeToChangelogFile="true" />
     <!-- Add performance indexes -->
     <include file="db.changelog-9.7-performance-indexes.xml" relativeToChangelogFile="true" />
@@ -393,5 +393,7 @@
     <include file="db.changelog-9.10-add-device-to-sender-stage.xml" relativeToChangelogFile="true" />
     <!-- Rename pipeline status values to v3.0 state machine (DISCOVERED, STAGED_TO_REFDB, QUEUED_FOR_CP, CP_CONSUMED, etc.) -->
     <include file="db.changelog-9.11-rename-pipeline-statuses.xml" relativeToChangelogFile="true" />
+    <!-- Rename STAGED_TO_REFDB to STAGED for database-agnostic naming -->
+    <include file="db.changelog-9.12-rename-staged-to-refdb.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

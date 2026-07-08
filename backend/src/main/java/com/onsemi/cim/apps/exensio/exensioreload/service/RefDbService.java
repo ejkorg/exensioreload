@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -190,7 +190,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
         String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED_TO_REFDB', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -264,7 +264,7 @@ public class RefDbService {
                                 evt.put("id", buildPayloadId(c.metadataId(), c.dataId()));
                                 evt.put("metadataId", c.metadataId());
                                 evt.put("dataId", c.dataId());
-                                evt.put("status", "STAGED_TO_REFDB");
+                                evt.put("status", "STAGED");
                                 evt.put("stagedBy", normalizedUser);
                                 evt.put("msg", "Staged");
                                 monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
@@ -318,7 +318,7 @@ public class RefDbService {
                             evt.put("id", buildPayloadId(c.metadataId(), c.dataId()));
                             evt.put("metadataId", c.metadataId());
                             evt.put("dataId", c.dataId());
-                            evt.put("status", "STAGED_TO_REFDB");
+                            evt.put("status", "STAGED");
                             evt.put("stagedBy", normalizedUser);
                             evt.put("msg", "Staged");
                             monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
@@ -348,7 +348,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
         String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED_TO_REFDB', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (PayloadCandidate candidate : batch) {
@@ -459,7 +459,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatch(int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -641,7 +641,7 @@ public class RefDbService {
         }
         
         // Check for preprocessing failures (before enrichment)
-        if (recordStatus.contains("STAGED_TO_REFDB") || recordStatus.contains("STAGED")) {
+        if (recordStatus.contains("STAGED") || recordStatus.contains("STAGED")) {
             if (msgLower.contains("push") || msgLower.contains("database") || msgLower.contains("sql")) {
                 return "preprocessing";
             }
@@ -1087,7 +1087,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         List<StageStatus> statuses = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
@@ -1122,7 +1122,7 @@ public class RefDbService {
                                 senderId,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(5),      // stagedToRefdb (STAGED)
                                 rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
                                 rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
                                 rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
@@ -1148,7 +1148,7 @@ public class RefDbService {
         String where = " WHERE 1=1" + (site != null ? " AND site = ?" : "") + (senderId != null ? " AND sender_id = ?" : "") +
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
@@ -1178,7 +1178,7 @@ public class RefDbService {
                                 rowSender,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(5),      // stagedToRefdb (STAGED)
                                 rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
                                 rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
                                 rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
@@ -1210,7 +1210,7 @@ public class RefDbService {
                 (userKey != null && !userKey.isBlank() ? " AND LOWER(COALESCE(last_requested_by, staged_by)) = ?" : "") +
                 (requestId != null && !requestId.isBlank() ? " AND request_id = ?" : "");
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
-                "SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
@@ -1241,7 +1241,7 @@ public class RefDbService {
                                 rowSender,
                                 senderName,
                                 rs.getLong(4),      // total
-                                rs.getLong(5),      // stagedToRefdb (STAGED_TO_REFDB)
+                                rs.getLong(5),      // stagedToRefdb (STAGED)
                                 rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
                                 rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
                                 rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
@@ -1264,7 +1264,7 @@ public class RefDbService {
 
     public Set<String> findSitesWithPending() {
         String table = properties.getStagingTable();
-        String sql = "SELECT DISTINCT site FROM " + table + " WHERE status = 'STAGED_TO_REFDB'";
+        String sql = "SELECT DISTINCT site FROM " + table + " WHERE status = 'STAGED'";
         Set<String> sites = new HashSet<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql);
@@ -1281,7 +1281,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatchForSite(String site, int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1301,7 +1301,7 @@ public class RefDbService {
     public List<StageRecord> fetchNextBatchForSender(String site, int senderId, int limit) {
         String table = properties.getStagingTable();
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'STAGED_TO_REFDB' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+                "FROM " + table + " WHERE status = 'STAGED' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1696,7 +1696,7 @@ public class RefDbService {
             String timestampExpr = resolveTimestampExpr(connection, table, dateTimeField);
 
             StringBuilder sb = new StringBuilder("SELECT lot, wafer, MIN(filename) AS filename, COUNT(*) AS total, ")
-                    .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS ready, ")
+                    .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS ready, ")
                     .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
                     .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
                     .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
@@ -1735,7 +1735,7 @@ public class RefDbService {
             }
 
             sb.append(" GROUP BY lot, wafer");
-            sb.append(" ORDER BY (SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) + SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END)) DESC, COUNT(*) DESC");
+            sb.append(" ORDER BY (SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) + SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END)) DESC, COUNT(*) DESC");
 
             if (limit > 0) {
                 sb.append(" FETCH FIRST ? ROWS ONLY");
@@ -1813,7 +1813,7 @@ public class RefDbService {
             StringBuilder sb = new StringBuilder()
                     .append("SELECT ").append(bucketExpr).append(" AS bucket_date, ")
                     .append("COUNT(*) AS total, ")
-                    .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END) AS ready, ")
+                    .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS ready, ")
                     .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
                     .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
                     .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
@@ -2411,7 +2411,7 @@ public class RefDbService {
                     "wafer VARCHAR2(128), " +
                     "filename VARCHAR2(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR2(36) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
+                    "status VARCHAR2(36) DEFAULT 'STAGED' NOT NULL, " +
                     "error_message VARCHAR2(4000), " +
                     "created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
@@ -2432,7 +2432,7 @@ public class RefDbService {
                     "wafer VARCHAR(128), " +
                     "filename VARCHAR(512), " +
                     "end_time TIMESTAMP, " +
-                    "status VARCHAR(36) DEFAULT 'STAGED_TO_REFDB' NOT NULL, " +
+                    "status VARCHAR(36) DEFAULT 'STAGED' NOT NULL, " +
                     "error_message VARCHAR(4000), " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
@@ -2664,7 +2664,7 @@ public class RefDbService {
                                                                           Integer senderId,
                                                                           String userKeyFilter) throws SQLException {
         StringBuilder sb = new StringBuilder("SELECT site, sender_id, COALESCE(last_requested_by, staged_by) AS user_key, COUNT(*), ")
-                .append("SUM(CASE WHEN status = 'STAGED_TO_REFDB' THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), ")
                 .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), ")
                 .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END), ")
                 .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), ")
@@ -2748,7 +2748,7 @@ public class RefDbService {
         // Normalize empty strings to null so IS NULL comparisons work correctly
         String candidateLot = (candidate.lot() == null || candidate.lot().isBlank()) ? null : candidate.lot().trim();
         String candidateWafer = (candidate.wafer() == null || candidate.wafer().isBlank()) ? null : candidate.wafer().trim();
-        String sql = "UPDATE " + table + " SET status = 'STAGED_TO_REFDB', error_message = NULL, processed_at = NULL, updated_at = " + timestampExpr() + ", " +
+        String sql = "UPDATE " + table + " SET status = 'STAGED', error_message = NULL, processed_at = NULL, updated_at = " + timestampExpr() + ", " +
                 "last_requested_by = ?, last_requested_at = " + timestampExpr() + ", sender_name = COALESCE(?, sender_name)" +
                 (requestId != null ? ", request_id = ?" : "") +
                 " WHERE site = ? AND sender_id = ? AND metadata_id = ? AND data_id = ? " +
@@ -3126,9 +3126,9 @@ public class RefDbService {
             return false;
         }
         String status = existing.status().trim();
-        // STAGED_TO_REFDB, QUEUED_FOR_CP, ELASTICSEARCH_MONITORING, EXENSIO_MONITORING: still in-flight
+        // STAGED, QUEUED_FOR_CP, ELASTICSEARCH_MONITORING, EXENSIO_MONITORING: still in-flight
         // CP_FAILED, LOAD_FAILED, CANCELLED: terminal states that are always safe to retry
-        return "NEW".equalsIgnoreCase(status) || "STAGED_TO_REFDB".equalsIgnoreCase(status)
+        return "NEW".equalsIgnoreCase(status) || "STAGED".equalsIgnoreCase(status)
                 || "QUEUED_FOR_CP".equalsIgnoreCase(status)
                 || "ELASTICSEARCH_MONITORING".equalsIgnoreCase(status)
                 || "EXENSIO_MONITORING".equalsIgnoreCase(status)
@@ -3292,7 +3292,7 @@ public class RefDbService {
                         "COUNT(*) AS total, " +
                         "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
                         "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, " +
-                        "SUM(CASE WHEN status IN ('STAGED_TO_REFDB','READY') THEN 1 ELSE 0 END) AS staged, " +
+                        "SUM(CASE WHEN status IN ('STAGED','READY') THEN 1 ELSE 0 END) AS staged, " +
                         "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed " +
                         "FROM " + table + " WHERE site = ? AND end_time IS NOT NULL");
 

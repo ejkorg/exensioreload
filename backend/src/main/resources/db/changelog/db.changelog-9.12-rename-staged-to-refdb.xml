@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="9.12-rename-staged-to-refdb" author="exensioreload" dbms="oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <comment>
+            Rename STAGED_TO_REFDB to STAGED for database-agnostic naming.
+            
+            Old -> New:
+            - STAGED_TO_REFDB -> STAGED
+            
+            This avoids coupling status names to a specific database (REFDB).
+            The meaning is identical: the file has been inserted into the staging table.
+        </comment>
+
+        <!-- Drop existing CHECK constraint -->
+        <sql splitStatements="false">
+            DECLARE
+            v_name VARCHAR2(200);
+            BEGIN
+            FOR r IN (
+            SELECT constraint_name
+            FROM user_constraints
+            WHERE table_name = 'SENDER_STAGE'
+            AND constraint_type = 'C'
+            ) LOOP
+            BEGIN
+            EXECUTE IMMEDIATE 'ALTER TABLE SENDER_STAGE DROP CONSTRAINT "' || r.constraint_name || '"';
+            EXCEPTION WHEN OTHERS THEN
+            NULL;
+            END;
+            END LOOP;
+            END;
+        </sql>
+
+        <!-- Rename STAGED_TO_REFDB -> STAGED -->
+        <sql>UPDATE SENDER_STAGE SET status = 'STAGED' WHERE status = 'STAGED_TO_REFDB'</sql>
+
+        <!-- Recreate CHECK constraint with renamed status -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+            CHECK (status IN (
+                'DISCOVERED',
+                'STAGED',
+                'QUEUED_FOR_CP',
+                'CP_CONSUMED',
+                'ELASTICSEARCH_MONITORING',
+                'CP_TIMEOUT',
+                'EXENSIO_MONITORING',
+                'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
+                'COMPLETED',
+                'CP_FAILED',
+                'LOAD_FAILED',
+                'CANCELLED'
+            ))
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DECLARE
+                v_name VARCHAR2(200);
+                BEGIN
+                FOR r IN (
+                SELECT constraint_name
+                FROM user_constraints
+                WHERE table_name = 'SENDER_STAGE'
+                AND constraint_type = 'C'
+                ) LOOP
+                BEGIN
+                EXECUTE IMMEDIATE 'ALTER TABLE SENDER_STAGE DROP CONSTRAINT "' || r.constraint_name || '"';
+                EXCEPTION WHEN OTHERS THEN
+                NULL;
+                END;
+                END LOOP;
+                END;
+            </sql>
+            <sql>UPDATE SENDER_STAGE SET status = 'STAGED_TO_REFDB' WHERE status = 'STAGED'</sql>
+            <sql splitStatements="false">
+                ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+                CHECK (status IN (
+                    'DISCOVERED',
+                    'STAGED_TO_REFDB',
+                    'QUEUED_FOR_CP',
+                    'CP_CONSUMED',
+                    'ELASTICSEARCH_MONITORING',
+                    'CP_TIMEOUT',
+                    'EXENSIO_MONITORING',
+                    'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
+                    'COMPLETED',
+                    'CP_FAILED',
+                    'LOAD_FAILED',
+                    'CANCELLED'
+                ))
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.stage;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.stage;
 
 import java.util.Arrays;
 import java.util.List;
@@ -7,7 +7,7 @@ import java.util.List;
  * Canonical pipeline status enum covering all states in the v3.0 state machine.
  *
  * <pre>
- * DISCOVERED → STAGED_TO_REFDB → QUEUED_FOR_CP → CP_CONSUMED → ELASTICSEARCH_MONITORING
+ * DISCOVERED → STAGED → QUEUED_FOR_CP → CP_CONSUMED → ELASTICSEARCH_MONITORING
  *                                                                  ├─ Failure → CP_FAILED
  *                                                                  ├─ Log found → EXENSIO_MONITORING
  *                                                                  └─ No log >15min → CP_TIMEOUT → EXENSIO_MONITORING
@@ -21,7 +21,7 @@ import java.util.List;
 public enum PipelineStatus {
 
     DISCOVERED("Discovered from DTAPORT"),
-    STAGED_TO_REFDB("Loaded to REFDB"),
+    STAGED("Loaded to REFDB"),
     QUEUED_FOR_CP("Inserted into Send Queue"),
     CP_CONSUMED("Removed from Send Queue by CP"),
     ELASTICSEARCH_MONITORING("Monitoring ES/CP"),

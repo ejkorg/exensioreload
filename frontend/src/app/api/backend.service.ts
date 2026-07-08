@@ -9,7 +9,7 @@ import { environment } from '../../environments/environment';
 // ============================================================================
 export interface DashboardMetricTotals {
   total: number;
-  stagedToRefdb: number;
+  staged: number;
   queuedForCp: number;
   elasticsearchMonitoring: number;
   cpTimeout: number;

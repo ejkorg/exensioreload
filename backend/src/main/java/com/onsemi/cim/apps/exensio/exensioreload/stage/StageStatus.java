@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.stage;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.stage;
 
 import java.util.List;
 
@@ -12,7 +12,7 @@ public record StageStatus(
         int senderId,
         String senderName,
         long total,
-        long stagedToRefdb,                          // STAGED_TO_REFDB
+        long stagedToRefdb,                          // STAGED
         long queuedForCp,                            // QUEUED_FOR_CP
         long elasticsearchMonitoring,                // ELASTICSEARCH_MONITORING
         long cpTimeout,                              // CP_TIMEOUT

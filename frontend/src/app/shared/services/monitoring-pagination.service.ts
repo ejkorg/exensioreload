@@ -1,4 +1,4 @@
-import { computed, effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
+﻿import { computed, effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { StageRecordView } from '../../api/backend.service';
 import { SessionStreamStatus, StagingSessionService } from './staging-session.service';
 
@@ -391,7 +391,7 @@ export class MonitoringPaginationService implements OnDestroy {
     if (normalized === 'ERROR') return 'ERROR';
     if (normalized === 'CANCELLED') return 'CANCELLED';
     if (normalized === 'QUEUED_FOR_CP' || normalized === 'QUEUED' || normalized === 'ENQUEUED') return 'QUEUED_FOR_CP';
-    if (normalized === 'STAGED_TO_REFDB' || normalized === 'PENDING' || normalized === 'READY') return 'READY';
+    if (normalized === 'STAGED' || normalized === 'PENDING' || normalized === 'READY') return 'READY';
     return 'READY';
   }
 }
