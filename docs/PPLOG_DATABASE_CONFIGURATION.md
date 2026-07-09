@@ -110,59 +110,33 @@ if (ppLogDbProperties != null && ppLogDbProperties.isConfigured()) {
 
 ## Query Methods Using pp_log
 
-### 1. Sandbox Reason Query
+### Unified pp_log Query
 
-**Method:** `RefDbService.getSandboxReason()`  
-**Line:** 2737  
+**Method:** `RefDbService.queryPpLog()`  
 **Query:**
 
 ```sql
-SELECT log_message
-FROM refdb.pp_log
-WHERE lot = ? AND filename = ?
-  AND LOWER(log_message) LIKE '%sandbox%'
-ORDER BY log_time DESC
-```
-
-**Purpose:** Find why a payload was sent to sandbox environment
-
-**Uses:** Main datasource (line 2759: `dataSource.getConnection()`)
-
-### 2. CP Success Query
-
-**Method:** `RefDbService.queryPpLogSuccess()`  
-**Line:** 3637  
-**Query:**
-
-```sql
-SELECT output_directory FROM pp_log
+SELECT output_directory, log_message, process_code FROM pp_log
 WHERE lot = ?
   AND (extension LIKE ? OR file_name LIKE ?)
-  AND process_code = 0
+ORDER BY process_datetime DESC
 FETCH FIRST 1 ROWS ONLY
 ```
 
-**Purpose:** Fallback enrichment check when Elasticsearch returns NotFound  
-**Process Code:** 0 = success, non-zero = failure
+**Purpose:** Single-round-trip replacement for the former `queryPpLogSuccess` + `queryPpLogError` pair. Returns all three relevant columns so the caller can inspect `process_code` directly:
 
-**Uses:** `ppLogDataSource` (separate pp_log connection)
+| `process_code` | Meaning | Columns populated |
+|---|---|---|
+| 0 | Success | `output_directory` |
+| non-zero | Failure | `log_message` |
+| no row | NotFound | `null` (no `PpLogRow`) |
 
-### 3. CP Failure Query
+**Uses:** `ppLogDataSource` (separate PRODUCTION connection)
 
-**Method:** `RefDbService.queryPpLogError()`  
-**Line:** 3668  
-**Query:**
-
-```sql
-SELECT log_message FROM pp_log
-WHERE lot = ?
-  AND (extension LIKE ? OR file_name LIKE ?)
-  AND process_code != 0
-FETCH FIRST 1 ROWS ONLY
-```
-
-**Purpose:** Get error details when CP processing failed  
-**Uses:** `ppLogDataSource` (separate pp_log connection)
+**Improvements over the old two-query approach:**
+- 50% fewer round-trips (1 instead of 2)
+- `ORDER BY process_datetime DESC` ensures deterministic latest result
+- Elapsed time logged at DEBUG for performance monitoring
 
 ---
 
@@ -230,7 +204,7 @@ refdb:
 **Result:**
 
 - `RefDbService.fetchStatuses()` → Queries QA database (staging table)
-- `RefDbService.queryPpLogSuccess()` → Queries PRODUCTION database (pp_log table)
+- `RefDbService.queryPpLog()` → Queries PRODUCTION database (pp_log table) via dedicated `ppLogDataSource`
 - `CpLogMonitor` → Can enrich records using PRODUCTION enrichment logs while staging in QA
 
 ---
@@ -289,7 +263,7 @@ WARN  pp_log error query failed for lot=LOT123 idFile=FILE456: [error details]
 | **Default behavior**            | Falls back to main RefDB if `refdb.pplog.host` not configured                          |
 | **Typical use case**            | PRODUCTION database (while staging connection points to QA)                            |
 | **Pool name**                   | `refdb-pplog`                                                                          |
-| **Fallback query methods**      | `queryPpLogSuccess()`, `queryPpLogError()`                                             |
+| **Query method**                | `queryPpLog()` (merged single-round-trip)                                               |
 | **Used in**                     | `CpLogMonitor` for parallel enrichment verification                                    |
 | **Can be disabled**             | Yes, set `refdb.pplog.enabled: false`                                                  |
 
@@ -308,7 +282,7 @@ WARN  pp_log error query failed for lot=LOT123 idFile=FILE456: [error details]
 | Column                      | Type           | Nullable | Purpose                          | Used in Queries               |
 | --------------------------- | -------------- | -------- | -------------------------------- | ----------------------------- |
 | **PP_LOG_ID**               | RAW            | No       | Primary key (SYS_GUID())         | No                            |
-| **LOT**                     | VARCHAR2(32)   | Yes      | Lot identifier                   | ✅ Yes (all 3 queries)        |
+| **LOT**                     | VARCHAR2(32)   | Yes      | Lot identifier                   | ✅ queryPpLog()               |
 | **ENVIRONMENT**             | VARCHAR2(32)   | Yes      | PRODUCTION / SANDBOX / etc       | Analysis only                 |
 | **PROCESS_DATETIME**        | DATE           | Yes      | When CP processed the file       | ✅ Sort key (implicit)        |
 | **PROCESS_CODE**            | NUMBER(38,0)   | Yes      | 0 = success, non-zero = failure  | ✅ Success/error filter       |
@@ -333,202 +307,74 @@ WARN  pp_log error query failed for lot=LOT123 idFile=FILE456: [error details]
 
 ## Current Query Analysis
 
-### Query 1: Sandbox Reason
+### Unified Query: queryPpLog()
 
-**Method:** `RefDbService.getSandboxReason()` (line 2737)
+**Method:** `RefDbService.queryPpLog()`  
+**Return type:** `PpLogRow` (record with `outputDirectory`, `logMessage`, `processCode`) or `null`
 
-**Current SQL:**
-
-```sql
-SELECT log_message
-FROM refdb.pp_log
-WHERE lot = ?
-  AND filename = ?                          -- ⚠️ ISSUE: Column is FILE_NAME, not filename
-  AND LOWER(log_message) LIKE '%sandbox%'
-ORDER BY log_time DESC                     -- ⚠️ ISSUE: Column is PROCESS_DATETIME, not log_time
-```
-
-**Issues Found:**
-
-1. Column name mismatch: `filename` should be `FILE_NAME`
-2. Sort column missing: `log_time` doesn't exist, should be `PROCESS_DATETIME` or `PROCESS_DATETIME_ADJUST`
-3. Uses main datasource, not ppLogDataSource
-
-**Corrected SQL:**
+**SQL:**
 
 ```sql
-SELECT log_message
-FROM refdb.pp_log
-WHERE lot = ?
-  AND FILE_NAME = ?
-  AND LOWER(log_message) LIKE '%sandbox%'
-ORDER BY PROCESS_DATETIME DESC NULLS LAST
-```
-
----
-
-### Query 2: CP Success Query
-
-**Method:** `RefDbService.queryPpLogSuccess()` (line 3637)
-
-**Current SQL:**
-
-```sql
-SELECT output_directory
-FROM pp_log
+SELECT output_directory, log_message, process_code FROM pp_log
 WHERE lot = ?
   AND (extension LIKE ? OR file_name LIKE ?)
-  AND process_code = 0
+ORDER BY process_datetime DESC
 FETCH FIRST 1 ROWS ONLY
 ```
 
 **Analysis:**
 
-- ✅ Uses correct column names: `EXTENSION`, `FILE_NAME`
-- ✅ Correct process_code filter: 0 = success
-- ✅ Returns OUTPUT_DIRECTORY (where enriched data is)
-- ✅ Uses LIKE wildcards for flexible matching
+| Aspect | Status |
+|--------|--------|
+| Column names | ✅ Correct (`OUTPUT_DIRECTORY`, `LOG_MESSAGE`, `PROCESS_CODE`, `EXTENSION`, `FILE_NAME`, `PROCESS_DATETIME`) |
+| Row selection | ✅ Deterministic — `ORDER BY PROCESS_DATETIME DESC` returns latest entry |
+| Round-trips per record | ✅ **1** (was 2 before merge) |
+| Datasource | ✅ `ppLogDataSource` (PRODUCTION) |
+| LIKE wildcards | ✅ Flexible matching on extension/file_name |
+| Query timing | ✅ Elapsed ms logged at DEBUG |
 
 **Dataflow:**
 
 ```
-LOT='LOT123' → Search pp_log
+LOT='LOT123' idFile='FILE456' → Search pp_log
   → EXTENSION LIKE '%FILE456%' OR FILE_NAME LIKE '%FILE456%'
-  → PROCESS_CODE = 0 (success)
-  → Returns: OUTPUT_DIRECTORY e.g., '/prod/enriched/LOT123/'
+  → Latest row by PROCESS_DATETIME DESC
+  → process_code == 0   → row.outputDirectory() → Success
+  → process_code != 0   → row.logMessage() → Failure
+  → no row              → null → NotFound
 ```
 
-**Uses:** `ppLogDataSource` ✅
+**Uses:** `ppLogDataSource` ✅ (PRODUCTION connection)
+
+### Removed Methods
+
+| Method | Disposition | Reason |
+|--------|-------------|--------|
+| `getSandboxReason()` | 🗑️ **Removed** | Broken column names (`filename`, `log_time`); method no longer exists |
+| `queryPpLogSuccess()` | 🔀 **Merged** | Replaced by single `queryPpLog()` |
+| `queryPpLogError()` | 🔀 **Merged** | Replaced by single `queryPpLog()` |
 
 ---
 
-### Query 3: CP Failure Query
+## Enhancement Opportunities (Optional)
 
-**Method:** `RefDbService.queryPpLogError()` (line 3668)
-
-**Current SQL:**
-
+### A. Wafer-Level Filtering
 ```sql
-SELECT log_message
-FROM pp_log
-WHERE lot = ?
-  AND (extension LIKE ? OR file_name LIKE ?)
-  AND process_code != 0
-FETCH FIRST 1 ROWS ONLY
+AND WAFER_NUM = ?
 ```
+Better precision when the same lot has multiple wafers.
 
-**Analysis:**
-
-- ✅ Uses correct column names: `EXTENSION`, `FILE_NAME`
-- ✅ Correct process_code filter: != 0 (failure)
-- ✅ Returns LOG_MESSAGE (error description)
-- ✅ Uses LIKE wildcards for flexible matching
-- ⚠️ Could also return ERROR_CODE for structured error info
-
-**Dataflow:**
-
-```
-LOT='LOT123' → Search pp_log
-  → EXTENSION LIKE '%FILE456%' OR FILE_NAME LIKE '%FILE456%'
-  → PROCESS_CODE != 0 (failure)
-  → Returns: LOG_MESSAGE e.g., 'Wafer lookup failed in CP...'
-```
-
-**Uses:** `ppLogDataSource` ✅
-
----
-
-## Query Issues & Recommendations
-
-### Issue 1: Sandbox Query Has Column Name Errors
-
-**Severity:** 🔴 HIGH — Query will fail at runtime
-
-**Location:** `RefDbService.getSandboxReason()` (line 2756)
-
-**Problems:**
-
+### B. Environment Filtering
 ```sql
-WHERE lot = ? AND filename = ?              -- ❌ Column 'filename' doesn't exist
-ORDER BY log_time DESC                      -- ❌ Column 'log_time' doesn't exist
+AND ENVIRONMENT = 'PRODUCTION'
 ```
-
-**Fix:**
-
-```sql
-WHERE lot = ? AND FILE_NAME = ?             -- ✅ Correct column name
-ORDER BY PROCESS_DATETIME DESC NULLS LAST   -- ✅ Correct column, handle NULLs
-```
-
-**Impact:** This query will throw `SQLException: Invalid column name` if executed
-
----
-
-### Issue 2: Missing Wafer-Level Filtering
-
-**Current Approach:**
-
-```sql
-WHERE lot = ? AND FILE_NAME LIKE ?
-```
-
-**Opportunity:** Use `WAFER_NUM` column for more precise filtering
-
-**Enhanced Query (optional):**
-
-```sql
-SELECT LOG_MESSAGE, ERROR_CODE, WAFER_NUM, ENVIRONMENT
-FROM pp_log
-WHERE LOT = ?
-  AND FILE_NAME LIKE ?
-  AND WAFER_NUM = ?                         -- ✨ NEW: Filter by wafer
-  AND PROCESS_CODE != 0
-ORDER BY PROCESS_DATETIME DESC NULLS LAST
-FETCH FIRST 1 ROWS ONLY
-```
-
-**Benefit:** Wafer-level precision in enrichment verification
-
----
-
-### Issue 3: Enhancement Opportunities
-
-#### A. Environment-Aware Queries
-
-```sql
--- Query PRODUCTION pp_log for PRODUCTION environment logs
-WHERE LOT = ?
-  AND ENVIRONMENT = 'PRODUCTION'            -- ✨ Filter by environment
-  AND FILE_NAME LIKE ?
-  AND PROCESS_CODE = 0
-```
-
-#### B. Sorted by Recency
-
-```sql
--- Most recent enrichment attempt
-ORDER BY PROCESS_DATETIME_ADJUST DESC NULLS LAST
-FETCH FIRST 1 ROWS ONLY
-```
-
-#### C. Structured Error Details
-
-```sql
-SELECT LOG_MESSAGE, ERROR_CODE, PROGRAM_NAME
-FROM pp_log
-WHERE PROCESS_CODE != 0
-```
-
-**Benefit:** Extractable error codes for automated remediation
+Narrow to PRODUCTION-only entries if SANDBOX noise is an issue.
 
 ---
 
 ## Summary: PP_LOG Usage
 
-| Query Method          | Purpose              | Status     | Issue              |
-| --------------------- | -------------------- | ---------- | ------------------ |
-| `getSandboxReason()`  | Why sent to sandbox  | ❌ Broken  | Column names wrong |
-| `queryPpLogSuccess()` | Get output directory | ✅ Correct | None               |
-| `queryPpLogError()`   | Get error message    | ✅ Correct | None               |
+| Query Method  | Purpose                     | Status             | Notes |
+|---------------|-----------------------------|--------------------|-------|
+| `queryPpLog()`| Unified enrichment lookup   | ✅ Merged/improved | Single query, deterministic ordering, timing logging |
 
-**Recommendation:** Fix sandbox query column names before deployment

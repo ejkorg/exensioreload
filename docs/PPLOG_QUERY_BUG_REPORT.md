@@ -1,14 +1,14 @@
 # PP_LOG Query Bug Report
 
 **Date:** July 4, 2026  
-**Severity:** 🟢 **FIXED** — Query updated with correct column names  
-**Status:** ✅ Resolved in codebase
+**Severity:** 🟢 **RESOLVED** — `getSandboxReason()` has been **removed entirely** from the codebase; pp_log queries have been refactored into a single `queryPpLog()` method  
+**Status:** ✅ Method removed; queries merged into `queryPpLog()`
 
 ---
 
 ## Issue Summary
 
-The `RefDbService.getSandboxReason()` method uses incorrect column names that don't exist in the actual PP_LOG table schema, causing SQL execution failures.
+The `RefDbService.getSandboxReason()` method used incorrect column names that didn't exist in the actual PP_LOG table schema, causing SQL execution failures. The method has since been **removed entirely** from the codebase as part of the pp_log query refactoring.
 
 ---
 
@@ -16,8 +16,7 @@ The `RefDbService.getSandboxReason()` method uses incorrect column names that do
 
 **File:** `backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java`  
 **Method:** `getSandboxReason()`  
-**Lines:** 2737-2772  
-**Status:** ✅ **FIXED** on line 2756
+**Status:** 🗑️ **REMOVED** — method no longer exists in codebase
 
 ---
 
@@ -195,27 +194,30 @@ null  // Silent exception caught
 
 ---
 
-## Other PP_LOG Queries Status
+## Current PP_LOG Query
 
-### ✅ queryPpLogSuccess() — CORRECT
+### ✅ queryPpLog() — MERGED & IMPROVED
 
-```java
-String sql = "SELECT output_directory FROM pp_log " +
-    "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code = 0 " +
-    "FETCH FIRST 1 ROWS ONLY";
-```
-
-**Status:** Uses correct column names (`FILE_NAME`, `EXTENSION`, `PROCESS_CODE`)
-
-### ✅ queryPpLogError() — CORRECT
+The former two-method pair (`queryPpLogSuccess` + `queryPpLogError`) has been merged into a single round-trip:
 
 ```java
-String sql = "SELECT log_message FROM pp_log " +
-    "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code != 0 " +
-    "FETCH FIRST 1 ROWS ONLY";
+public record PpLogRow(String outputDirectory, String logMessage, int processCode) {}
+
+public PpLogRow queryPpLog(String lot, String idFile) {
+    String sql = "SELECT output_directory, log_message, process_code FROM pp_log " +
+        "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) " +
+        "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
+    ...
+}
 ```
 
-**Status:** Uses correct column names (`FILE_NAME`, `EXTENSION`, `PROCESS_CODE`)
+**Improvements:**
+| Before | After |
+|---|---|
+| 2 queries per record (success + error) | 1 query per record |
+| No ordering (non-deterministic row) | `ORDER BY process_datetime DESC` |
+| No timing measurement | Elapsed ms logged at DEBUG |
+| Separate SQL in each method | Single shared SQL |
 
 ---
 

@@ -117,7 +117,7 @@ public class RefDbService {
         } else {
             // No separate pp_log config — reuse the main staging datasource
             this.ppLogDataSource = this.dataSource;
-            log.info("pp_log datasource not separately configured — using main refdb datasource");
+            log.warn("pp_log datasource not separately configured — using main refdb datasource (QA instead of PRODUCTION)");
         }
     }
 
@@ -4052,50 +4052,32 @@ public class RefDbService {
     // -------------------------------------------------------------------------
 
     /**
-     * Queries {@code pp_log} for a successful CP run ({@code process_code = 0}).
+     * Result row from a pp_log lookup, combining success and error paths into a
+     * single query so the caller can inspect {@code process_code} directly.
      *
-     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
-     * match on both {@code extension} and {@code file_name}.
-     *
-     * @param lot    the lot identifier from {@link StageRecord#lot()}
-     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
-     * @return the {@code output_directory} of the first matching row, or {@code null} if none found
+     * @param outputDirectory populated when process_code = 0
+     * @param logMessage      populated when process_code != 0
+     * @param processCode     0 = success, non-zero = error
      */
-    public String queryPpLogSuccess(String lot, String idFile) {
-        String sql = "SELECT output_directory FROM pp_log " +
-                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code = 0 " +
-                "FETCH FIRST 1 ROWS ONLY";
-        String likeParam = "%" + idFile + "%";
-        try (Connection connection = ppLogDataSource.getConnection();
-             PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, lot);
-            ps.setString(2, likeParam);
-            ps.setString(3, likeParam);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("output_directory");
-                }
-            }
-        } catch (SQLException ex) {
-            log.warn("pp_log success query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
-        }
-        return null;
-    }
+    public record PpLogRow(String outputDirectory, String logMessage, int processCode) {}
 
     /**
-     * Queries {@code pp_log} for a failed CP run ({@code process_code != 0}).
+     * Looks up the most recent pp_log entry for a given lot / idFile combination.
      *
-     * <p>Binds {@code lot} directly and {@code '%' + idFile + '%'} for the LIKE
-     * match on both {@code extension} and {@code file_name}.
+     * <p>Replaces the former {@code queryPpLogSuccess} + {@code queryPpLogError} pair
+     * with a single round-trip. Rows are ordered by {@code process_datetime DESC}
+     * so the caller always sees the latest result deterministically.</p>
      *
      * @param lot    the lot identifier from {@link StageRecord#lot()}
      * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
-     * @return the {@code log_message} of the first matching row, or {@code null} if none found
+     * @return a populated {@link PpLogRow} if a matching row exists, or {@code null}
      */
-    public String queryPpLogError(String lot, String idFile) {
-        String sql = "SELECT log_message FROM pp_log " +
-                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) AND process_code != 0 " +
-                "FETCH FIRST 1 ROWS ONLY";
+    public PpLogRow queryPpLog(String lot, String idFile) {
+        long start = System.currentTimeMillis();
+        PpLogRow result = null;
+        String sql = "SELECT output_directory, log_message, process_code FROM pp_log " +
+                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) " +
+                "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
         String likeParam = "%" + idFile + "%";
         try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -4104,13 +4086,20 @@ public class RefDbService {
             ps.setString(3, likeParam);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getString("log_message");
+                    result = new PpLogRow(
+                        rs.getString("output_directory"),
+                        rs.getString("log_message"),
+                        rs.getInt("process_code")
+                    );
                 }
             }
         } catch (SQLException ex) {
-            log.warn("pp_log error query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+            log.warn("pp_log query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
         }
-        return null;
+        long elapsed = System.currentTimeMillis() - start;
+        log.debug("pp_log query for lot={} idFile={} completed in {}ms (found={})",
+                lot, idFile, elapsed, result != null);
+        return result;
     }
 
     /**

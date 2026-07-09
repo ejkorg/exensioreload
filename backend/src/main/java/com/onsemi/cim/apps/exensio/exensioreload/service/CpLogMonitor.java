@@ -174,13 +174,12 @@ public class CpLogMonitor {
         CompletableFuture<PpLogResult> ppLogFuture = hasPpLog
             ? CompletableFuture.supplyAsync(() -> {
                 try {
-                    String outputDir = refDbService.queryPpLogSuccess(record.lot(), record.metadataId());
-                    if (outputDir != null) {
-                        return new PpLogResult.Success(outputDir);
-                    }
-                    String errMsg = refDbService.queryPpLogError(record.lot(), record.metadataId());
-                    if (errMsg != null) {
-                        return new PpLogResult.Failure(errMsg);
+                    RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), record.metadataId());
+                    if (row != null) {
+                        if (row.processCode() == 0) {
+                            return new PpLogResult.Success(row.outputDirectory());
+                        }
+                        return new PpLogResult.Failure(row.logMessage());
                     }
                     return new PpLogResult.NotFound();
                 } catch (Exception e) {
