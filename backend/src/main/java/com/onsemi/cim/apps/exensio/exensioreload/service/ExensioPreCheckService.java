@@ -33,12 +33,12 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRow;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.PreCheckBlock;
 
 /**
- * Queries Snowflake (primary) or the Exensio raw-SQL endpoint (fallback) to determine
+ * Queries the Exensio raw-SQL endpoint (primary) or Snowflake (fallback) to determine
  * whether submitted lots already exist in Exensio within the given year/month range.
  *
- * <p>Primary path: Snowflake JDBC via {@code snowflakeDataSource}, querying
+ * <p>Primary path: Exensio HTTP {@code POST /v1/key/raw-sql} (Oracle SQL).</p>
+ * <p>Fallback path: Snowflake JDBC via {@code snowflakeDataSource}, querying
  * {@code ANALYTICSPRD.MFG.EXENSIO_PROD_OPLOG_METADATA}.</p>
- * <p>Fallback path: Exensio HTTP {@code POST /v1/key/raw-sql} (Oracle SQL).</p>
  * <p>Adapted from xfcs-reloader to support PGC_KEY filtering based on dataType.</p>
  */
 @Service
@@ -123,7 +123,7 @@ public class ExensioPreCheckService {
                 .build();
         
         if (snowflakeDataSource == null) {
-            log.info("[ExensioPreCheck] Snowflake DataSource not configured — will use Exensio HTTP fallback only");
+            log.info("[ExensioPreCheck] Snowflake DataSource not configured — will use Exensio HTTP only (no Snowflake fallback)");
         }
     }
 
@@ -133,7 +133,7 @@ public class ExensioPreCheckService {
 
     /**
      * Checks whether the submitted lots exist in Exensio.
-     * Tries Snowflake JDBC first; falls back to Exensio HTTP raw-SQL on failure.
+     * Tries Exensio HTTP raw-SQL first; falls back to Snowflake JDBC on failure.
      * Returns a soft-failure response (with {@code error} field) rather than throwing.
      */
     public ExensioPreCheckResponse check(ExensioPreCheckRequest request) {
@@ -145,29 +145,28 @@ public class ExensioPreCheckService {
                     null);
         }
 
-        // Primary: Snowflake JDBC
+        // Primary: Exensio HTTP raw-SQL
+        if (exensioProperties.isConfigured()) {
+            ExensioPreCheckResponse httpResult = checkViaExensioHttp(request);
+            if (httpResult != null) {
+                return httpResult;
+            }
+        } else {
+            log.debug("[ExensioPreCheck] Exensio not configured — skipping HTTP raw-sql path");
+        }
+
+        // Fallback: Snowflake JDBC
         ExensioPreCheckResponse snowflakeResult = checkViaSnowflake(request);
         if (snowflakeResult != null) {
             return snowflakeResult;
         }
 
-        // Fallback: Exensio HTTP raw-SQL
-        if (!exensioProperties.isConfigured()) {
-            log.warn("[ExensioPreCheck] Snowflake failed and Exensio is not configured — returning soft error");
-            return softError("Snowflake unavailable and Exensio is not configured");
-        }
-
-        ExensioPreCheckResponse httpResult = checkViaExensioHttp(request);
-        if (httpResult != null) {
-            return httpResult;
-        }
-
-        // Both paths failed
-        return softError("Both Snowflake and Exensio pre-check paths failed");
+        // Both paths failed or unavailable
+        return softError("Both Exensio and Snowflake pre-check paths failed");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Primary: Snowflake JDBC
+    // Fallback: Snowflake JDBC
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
@@ -222,43 +221,49 @@ public class ExensioPreCheckService {
             }
 
         } catch (SQLException e) {
-            log.warn("[ExensioPreCheck] Snowflake JDBC failed — will try Exensio HTTP fallback: {}", e.getMessage());
+            log.warn("[ExensioPreCheck] Snowflake JDBC failed — no more fallbacks: {}", e.getMessage());
             return null; // signal to use fallback
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Fallback: Exensio HTTP raw-SQL
+    // Primary: Exensio HTTP raw-SQL
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Executes the pre-check query via the Exensio HTTP {@code POST /v1/key/raw-sql} endpoint.
      * Reuses the existing Oracle SQL builder and re-logs on 401 with one token refresh.
      *
-     * @return populated response, or {@code null} if this path also fails
+     * @return populated response on success, {@code null} to signal fallback should be used
      */
     ExensioPreCheckResponse checkViaExensioHttp(ExensioPreCheckRequest request) {
         String schema = resolveSchema(request.environment());
         String sql    = buildSql(request.lotIds(), request.blocks(), request.dataType());
 
-        log.debug("[ExensioPreCheck] HTTP fallback: lots={}, schema={}", request.lotIds().size(), schema);
+        log.debug("[ExensioPreCheck] HTTP primary: lots={}, schema={}", request.lotIds().size(), schema);
 
         try {
             String token       = authService.getToken(schema);
             String responseBody = callRawSql(sql, token, schema);
 
             if (responseBody == null) {
-                return softError("Authentication failed after token refresh");
+                log.warn("[ExensioPreCheck] HTTP raw-sql: auth failed after token refresh — falling through");
+                return null;
             }
 
-            return parseResponse(responseBody, request.lotIds());
+            ExensioPreCheckResponse result = parseResponse(responseBody, request.lotIds());
+            if (result != null && result.error() != null) {
+                log.warn("[ExensioPreCheck] HTTP raw-sql: parse error — falling through: {}", result.error());
+                return null;
+            }
+            return result;
 
         } catch (ExensioAuthService.ExensioAuthException e) {
-            log.warn("[ExensioPreCheck] HTTP fallback auth error: {}", e.getMessage());
-            return softError("Exensio authentication error: " + e.getMessage());
+            log.warn("[ExensioPreCheck] HTTP raw-sql auth error — falling through: {}", e.getMessage());
+            return null;
         } catch (Exception e) {
-            log.warn("[ExensioPreCheck] HTTP fallback unexpected error: {}", e.getMessage());
-            return softError("Exensio pre-check error: " + e.getMessage());
+            log.warn("[ExensioPreCheck] HTTP raw-sql unexpected error — falling through: {}", e.getMessage());
+            return null;
         }
     }
 
