@@ -116,8 +116,7 @@ class CpLogMonitorTimeoutTest {
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
         )).thenReturn(new CpLogResult.NotFound("es-not-found"));
 
-        when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
-        when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
+        when(refDbService.queryPpLog(anyString(), anyString())).thenReturn(null);
 
         when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
@@ -166,8 +165,7 @@ class CpLogMonitorTimeoutTest {
         )).thenReturn(new CpLogResult.Success("trace-123", "path", "target", Instant.now()));
 
         // Setup pp_log is not needed since ES succeeded
-        when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
-        when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
+        when(refDbService.queryPpLog(anyString(), anyString())).thenReturn(null);
 
         when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
@@ -204,8 +202,7 @@ class CpLogMonitorTimeoutTest {
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
         )).thenReturn(new CpLogResult.Failure("trace-123", "Connection timeout", Instant.now()));
 
-        when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
-        when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
+        when(refDbService.queryPpLog(anyString(), anyString())).thenReturn(null);
 
         when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
@@ -240,8 +237,7 @@ class CpLogMonitorTimeoutTest {
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
         )).thenReturn(new CpLogResult.NotFound("es-not-found"));
 
-        when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn(null);
-        when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
+        when(refDbService.queryPpLog(anyString(), anyString())).thenReturn(null);
 
         when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));
@@ -280,8 +276,8 @@ class CpLogMonitorTimeoutTest {
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
         )).thenReturn(new CpLogResult.NotFound("es-not-found"));
 
-        when(refDbService.queryPpLogSuccess(anyString(), anyString())).thenReturn("/output/dir");
-        when(refDbService.queryPpLogError(anyString(), anyString())).thenReturn(null);
+        when(refDbService.queryPpLog(anyString(), anyString()))
+            .thenReturn(new RefDbService.PpLogRow("/output/dir", null, 0));
 
         when(refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE))
             .thenReturn(Collections.singletonList(record));

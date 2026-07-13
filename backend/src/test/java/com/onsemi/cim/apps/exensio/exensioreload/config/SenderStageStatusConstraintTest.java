@@ -1,4 +1,4 @@
-﻿package com.onsemi.cim.apps.exensio.exensioreload.config;
+package com.onsemi.cim.apps.exensio.exensioreload.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

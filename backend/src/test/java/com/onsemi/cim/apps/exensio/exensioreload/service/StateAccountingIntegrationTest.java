@@ -1,4 +1,4 @@
-﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
+package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
