@@ -824,7 +824,7 @@ public class MetadataImporterService {
                 }
                 enqueuePayloadIds.add(payload);
                 java.time.Instant endTime = mr.getEndTime() == null ? null : mr.getEndTime().toInstant(java.time.ZoneOffset.UTC);
-                batch.add(new PayloadCandidate(metadataIdValue, dataIdValue, mr.getLot(), mr.getWafer(), mr.getOriginalFileName(), endTime, dataTypeForPayload, null));
+                batch.add(new PayloadCandidate(metadataIdValue, dataIdValue, mr.getLot(), mr.getWafer(), mr.getOriginalFileName(), endTime, dataTypeForPayload, null, mr.getDevice()));
                 if (batch.size() >= batchSize) {
                     StageResult result = stageCurrentBatch(site, resolvedSenderId, batch, requestId);
                     stagedCount[0] += result.stagedCount();
