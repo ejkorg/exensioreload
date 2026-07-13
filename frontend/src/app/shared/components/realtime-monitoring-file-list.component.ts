@@ -952,7 +952,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
     // File in ENRICHMENT_TIMEOUT: show timeout label
     if (status === 'CP_TIMEOUT') {
-      return 'Enrichment: Monitoring Timeout — verify manually';
+      return 'Enrichment: Monitoring Timeout — Exensio not configured';
     }
 
     // File in EXENSIO_LOADING: show "Enrichment: Done · Exensio: Monitoring" (Requirement 7.3)

@@ -3827,7 +3827,7 @@ public class RefDbService {
                 }
             }
 
-            broadcastBatchEvents(updates, "CP_TIMEOUT", "Enrichment monitoring timeout — verify manually");
+            broadcastBatchEvents(updates, "CP_TIMEOUT", "Enrichment monitoring timeout — Exensio not configured");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ENRICHMENT_TIMEOUT: {}", ex.getMessage(), ex);

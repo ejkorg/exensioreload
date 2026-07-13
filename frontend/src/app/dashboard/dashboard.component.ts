@@ -286,7 +286,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         icon: 'schedule',
         color: 'warning',
         accentColor: '#f59e0b',
-        subtext: 'no log found — verify manually',
+        subtext: 'no enrichment source found — Exensio not configured',
       },
       {
         label: 'Exensio Monitoring',
