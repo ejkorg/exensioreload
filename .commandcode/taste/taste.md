@@ -12,6 +12,7 @@
 # logging
 - Disable or reduce Spring Boot DEBUG console logging to minimize noise. Confidence: 0.70
 - Make logging configurable via YAML properties rather than hardcoded changes. Confidence: 0.75
+- Log datasource identity at startup and query time to make database routing visible (e.g., QA vs PRD refdb). Confidence: 0.70
 
 # status-naming
 - Use lowercase status names (e.g., pending, staging, completed, failed) following xfcs-reloader convention rather than uppercase abbreviations like NEW, ENRICHMENT, DONE. Confidence: 0.70
