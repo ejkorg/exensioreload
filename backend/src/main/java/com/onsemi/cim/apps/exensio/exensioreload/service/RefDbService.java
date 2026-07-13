@@ -97,7 +97,8 @@ public class RefDbService {
         config.setMinimumIdle(properties.getPool().getMinIdle());
         config.setPoolName("refdb-staging");
         this.dataSource = new HikariDataSource(config);
-
+        log.info("Main refdb datasource (QA): {}", isOracle ? properties.buildJdbcUrl() : "H2/embedded");
+        
         // Build a separate datasource for pp_log queries (PRODUCTION) if configured.
         // Falls back to the main dataSource when refdb.pplog.host is not set.
         if (ppLogDbProperties != null && ppLogDbProperties.isConfigured()) {
@@ -4062,28 +4063,25 @@ public class RefDbService {
     public record PpLogRow(String outputDirectory, String logMessage, int processCode) {}
 
     /**
-     * Looks up the most recent pp_log entry for a given lot / idFile combination.
+     * Looks up the most recent pp_log entry for a given lot since a point in time.
      *
-     * <p>Replaces the former {@code queryPpLogSuccess} + {@code queryPpLogError} pair
-     * with a single round-trip. Rows are ordered by {@code process_datetime DESC}
-     * so the caller always sees the latest result deterministically.</p>
-     *
-     * @param lot    the lot identifier from {@link StageRecord#lot()}
-     * @param idFile the file-level identifier from {@link StageRecord#metadataId()}
+     * @param lot       the lot identifier from {@link StageRecord#lot()}
+     * @param updatedAt the {@link StageRecord#updatedAt()} timestamp — only rows
+     *                  with {@code process_datetime >= updatedAt} are considered
      * @return a populated {@link PpLogRow} if a matching row exists, or {@code null}
      */
-    public PpLogRow queryPpLog(String lot, String idFile) {
+    public PpLogRow queryPpLog(String lot, java.time.Instant updatedAt) {
         long start = System.currentTimeMillis();
         PpLogRow result = null;
         String sql = "SELECT output_directory, log_message, process_code FROM pp_log " +
-                "WHERE lot = ? AND (extension LIKE ? OR file_name LIKE ?) " +
+                "WHERE lot = ? AND process_datetime >= ? " +
                 "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
-        String likeParam = "%" + idFile + "%";
+        log.info("pp_log query using PRD refdb ({}): lot={} since={}",
+                ppLogDataSource.getJdbcUrl(), lot, updatedAt);
         try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, lot);
-            ps.setString(2, likeParam);
-            ps.setString(3, likeParam);
+            ps.setTimestamp(2, java.sql.Timestamp.from(updatedAt));
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     result = new PpLogRow(
@@ -4094,11 +4092,11 @@ public class RefDbService {
                 }
             }
         } catch (SQLException ex) {
-            log.warn("pp_log query failed for lot={} idFile={}: {}", lot, idFile, ex.getMessage());
+            log.warn("pp_log query failed for lot={} updatedAt={}: {}", lot, updatedAt, ex.getMessage());
         }
         long elapsed = System.currentTimeMillis() - start;
-        log.debug("pp_log query for lot={} idFile={} completed in {}ms (found={})",
-                lot, idFile, elapsed, result != null);
+        log.debug("pp_log query for lot={} updatedAt={} completed in {}ms (found={})",
+                lot, updatedAt, elapsed, result != null);
         return result;
     }
 
