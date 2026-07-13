@@ -1,52 +1,47 @@
 -- ==========================================================================
 -- RefDB cleanup script — empties all tables on the RefDB Oracle instance.
--- User/auth tables live on the primary datasource and are not touched.
+-- Gracefully skips tables that don't exist.
 --
 -- Usage:  sqlplus refdb_user/pass@refdb @scripts/clean-database.sql
 -- ==========================================================================
 
--- Clear child tables first (FK dependencies)
-DELETE FROM load_session_payload;
-DELETE FROM sender_queue_wafers;
-DELETE FROM external_location;
-
--- Clear parent tables
-DELETE FROM SENDER_STAGE;
-DELETE FROM sender_queue;
-DELETE FROM load_session;
-DELETE FROM external_environment;
-DELETE FROM staging_session;
-
-COMMIT;
-
--- Reset sequences
-BEGIN
-  EXECUTE IMMEDIATE 'DROP SEQUENCE SENDER_STAGE_SEQ';
-  EXECUTE IMMEDIATE 'CREATE SEQUENCE SENDER_STAGE_SEQ START WITH 1 INCREMENT BY 1';
-EXCEPTION WHEN OTHERS THEN NULL;
-END;
-/
+SET SERVEROUTPUT ON
+SET FEEDBACK OFF
+SET VERIFY OFF
 
 BEGIN
-  EXECUTE IMMEDIATE 'DROP SEQUENCE app_seq_load_session';
-  EXECUTE IMMEDIATE 'CREATE SEQUENCE app_seq_load_session START WITH 1 INCREMENT BY 1';
-EXCEPTION WHEN OTHERS THEN NULL;
-END;
-/
+  FOR t IN (SELECT table_name FROM user_tables
+             WHERE table_name IN ('SENDER_STAGE', 'SENDER_QUEUE', 'SENDER_QUEUE_WAFERS',
+                                  'LOAD_SESSION', 'LOAD_SESSION_PAYLOAD',
+                                  'EXTERNAL_ENVIRONMENT', 'EXTERNAL_LOCATION',
+                                  'STAGING_SESSION'))
+  LOOP
+    EXECUTE IMMEDIATE 'DELETE FROM ' || t.table_name;
+    DBMS_OUTPUT.PUT_LINE('Cleared ' || t.table_name || ': ' || SQL%ROWCOUNT || ' rows');
+  END LOOP;
+  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('Commit complete.');
 
-BEGIN
-  EXECUTE IMMEDIATE 'DROP SEQUENCE app_seq_load_session_payload';
-  EXECUTE IMMEDIATE 'CREATE SEQUENCE app_seq_load_session_payload START WITH 1 INCREMENT BY 1';
-EXCEPTION WHEN OTHERS THEN NULL;
+  -- Reset sequences
+  FOR s IN (SELECT sequence_name FROM user_sequences)
+  LOOP
+    EXECUTE IMMEDIATE 'DROP SEQUENCE ' || s.sequence_name;
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE ' || s.sequence_name || ' START WITH 1 INCREMENT BY 1';
+    DBMS_OUTPUT.PUT_LINE('Reset sequence ' || s.sequence_name);
+  END LOOP;
+EXCEPTION WHEN OTHERS THEN
+  ROLLBACK;
+  DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+  RAISE;
 END;
 /
 
 -- Verify
-SELECT 'SENDER_STAGE' AS table_name, COUNT(*) AS rows FROM SENDER_STAGE
-UNION ALL SELECT 'sender_queue', COUNT(*) FROM sender_queue
-UNION ALL SELECT 'sender_queue_wafers', COUNT(*) FROM sender_queue_wafers
-UNION ALL SELECT 'load_session', COUNT(*) FROM load_session
-UNION ALL SELECT 'load_session_payload', COUNT(*) FROM load_session_payload
-UNION ALL SELECT 'external_environment', COUNT(*) FROM external_environment
-UNION ALL SELECT 'external_location', COUNT(*) FROM external_location
-UNION ALL SELECT 'staging_session', COUNT(*) FROM staging_session;
+SELECT table_name, num_rows, last_analyzed FROM user_tables
+ WHERE table_name IN ('SENDER_STAGE', 'SENDER_QUEUE', 'SENDER_QUEUE_WAFERS',
+                       'LOAD_SESSION', 'LOAD_SESSION_PAYLOAD',
+                       'EXTERNAL_ENVIRONMENT', 'EXTERNAL_LOCATION',
+                       'STAGING_SESSION')
+ ORDER BY table_name;
+
+SELECT sequence_name, min_value, increment_by FROM user_sequences ORDER BY sequence_name;
