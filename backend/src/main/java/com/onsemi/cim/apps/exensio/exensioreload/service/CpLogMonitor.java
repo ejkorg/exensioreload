@@ -174,7 +174,8 @@ public class CpLogMonitor {
         CompletableFuture<PpLogResult> ppLogFuture = hasPpLog
             ? CompletableFuture.supplyAsync(() -> {
                 try {
-                    RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), record.updatedAt() != null ? record.updatedAt() : record.createdAt());
+                    Instant ppLogLookback = (record.updatedAt() != null ? record.updatedAt() : record.createdAt()).minusSeconds(120);
+                    RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback);
                     if (row != null) {
                         if (row.processCode() == 0) {
                             return new PpLogResult.Success(row.outputDirectory());
