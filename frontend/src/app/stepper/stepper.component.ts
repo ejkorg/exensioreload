@@ -3681,6 +3681,7 @@ export class StepperComponent implements OnInit, OnDestroy {
         this.backend.verifyLotsExistenceWithDateRange(
           senderId,
           lots,
+          this.selectedDataType() || 'ft',
           preCheckBlocks.length > 0 ? preCheckBlocks : null,
         ),
       );

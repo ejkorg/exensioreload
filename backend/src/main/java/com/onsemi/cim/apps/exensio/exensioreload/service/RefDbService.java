@@ -662,7 +662,7 @@ public class RefDbService {
         Instant effective = processedAt != null ? processedAt : Instant.now();
         Timestamp processedTs = Timestamp.from(effective);
         String table = properties.getStagingTable();
-        String sql = "UPDATE " + table + " SET status = ?, error_message = NULL, processed_at = ?, updated_at = " + timestampExpr() + " WHERE id = ?";
+        String sql = "UPDATE " + table + " SET status = ?, error_message = NULL, processed_at = ? WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Long id : ids) {
@@ -758,7 +758,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'EXENSIO_MONITORING', cp_output_path = NULL, cp_output_target = NULL," +
-                " error_message = NULL, updated_at = " + timestampExpr() + " WHERE id = ?";
+                " error_message = NULL WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (StageRecord record : records) {
@@ -950,8 +950,7 @@ public class RefDbService {
     private void applyExensioLoading(long recordId, String outputPath, String outputTarget) {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_MONITORING', cp_output_path = ?, cp_output_target = ?, error_message = NULL, updated_at = "
-                + timestampExpr() + " WHERE id = ?";
+                " SET status = 'EXENSIO_MONITORING', cp_output_path = ?, cp_output_target = ?, error_message = NULL WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, outputPath);
@@ -2149,7 +2148,7 @@ public class RefDbService {
             return;
         }
         String table = properties.getStagingTable();
-        String sql = "UPDATE " + table + " SET status = ?, error_message = ?, updated_at = " + timestampExpr() + " WHERE id = ?";
+        String sql = "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Long id : ids) {

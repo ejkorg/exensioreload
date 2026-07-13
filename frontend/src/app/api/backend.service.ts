@@ -149,6 +149,7 @@ export interface LotVerificationRequest {
   lots: string[];
   site: string;
   environment: string;
+  dataType: string;
   blocks?: Array<{ year: number; month: number }> | null;
 }
 
@@ -839,11 +840,12 @@ export class BackendService {
     );
   }
 
-  verifyLotsExistence(senderId: number, lots: string[]): Observable<LotVerificationResponse> {
+  verifyLotsExistence(senderId: number, lots: string[], dataType: string): Observable<LotVerificationResponse> {
     const request: LotVerificationRequest = {
       lots,
       site: 'default',
-      environment: 'qa',
+      environment: 'production',
+      dataType,
     };
     return this.http.post<LotVerificationResponse>(`${this.apiUrl}/senders/${senderId}/verify-lots`, request);
   }
@@ -857,12 +859,14 @@ export class BackendService {
   verifyLotsExistenceWithDateRange(
     senderId: number,
     lots: string[],
+    dataType: string,
     blocks?: Array<{ year: number; month: number }> | null,
   ): Observable<LotVerificationResponse> {
     const request: LotVerificationRequest = {
       lots,
       site: 'default',
-      environment: 'qa',
+      environment: 'production',
+      dataType,
       blocks: blocks || null,
     };
     return this.http.post<LotVerificationResponse>(`${this.apiUrl}/senders/${senderId}/verify-lots`, request);
