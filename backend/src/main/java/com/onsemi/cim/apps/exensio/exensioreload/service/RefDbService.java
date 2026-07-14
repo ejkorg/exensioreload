@@ -2150,7 +2150,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         boolean startsEnrichment = "ELASTICSEARCH_MONITORING".equals(status) || "EXENSIO_MONITORING".equals(status);
         String sql = startsEnrichment
-            ? "UPDATE " + table + " SET status = ?, error_message = ?, enrichment_started_at = " + timestampExpr() + " WHERE id = ?"
+            ? "UPDATE " + table + " SET status = ?, error_message = ?, enrichment_started_at = COALESCE(enrichment_started_at, " + timestampExpr() + ") WHERE id = ?"
             : "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {

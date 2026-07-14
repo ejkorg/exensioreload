@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add nullable enrichment_started_at column to SENDER_STAGE and backfill from sender_queue.processed_at where available. -->
+
+    <changeSet id="9.9-add-enrichment-started-at" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="enrichment_started_at" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="enrichment_started_at" type="TIMESTAMP" />
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="9.9-backfill-enrichment-started-from-sender-queue" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <tableExists tableName="SENDER_QUEUE" />
+            </and>
+        </preConditions>
+        <!-- H2/Postgres style: use LIMIT -->
+        <sql dbms="h2,postgresql">
+            UPDATE SENDER_STAGE s
+            SET enrichment_started_at = (
+                SELECT sq.processed_at FROM sender_queue sq
+                WHERE sq.payload_id = s.metadata_id || ',' || s.data_id
+                  AND sq.sender_id = s.sender_id
+                  AND sq.processed_at IS NOT NULL
+                ORDER BY sq.processed_at DESC
+                LIMIT 1
+            )
+            WHERE enrichment_started_at IS NULL;
+        </sql>
+
+        <!-- Oracle style: pick most recent processed_at via nested select and rownum -->
+        <sql dbms="oracle">
+            UPDATE SENDER_STAGE s
+            SET enrichment_started_at = (
+                SELECT processed_at FROM (
+                    SELECT sq.processed_at FROM sender_queue sq
+                    WHERE sq.payload_id = s.metadata_id || ',' || s.data_id
+                      AND sq.sender_id = s.sender_id
+                      AND sq.processed_at IS NOT NULL
+                    ORDER BY sq.processed_at DESC
+                ) WHERE rownum = 1
+            )
+            WHERE enrichment_started_at IS NULL;
+        </sql>
+    </changeSet>
+
+    <changeSet id="9.9-backfill-enrichment-started-fallback-to-created" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+            </and>
+        </preConditions>
+        <sql>
+            UPDATE SENDER_STAGE SET enrichment_started_at = created_at WHERE enrichment_started_at IS NULL;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

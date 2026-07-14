@@ -324,6 +324,7 @@ public class DataIntegrityJob {
         String status = rs.getString("status");
         Instant createdAt = null;
         Instant updatedAt = null;
+        Instant enrichmentStartedAt = null;
         Timestamp createdAtTs = rs.getTimestamp("created_at");
         if (createdAtTs != null) {
             createdAt = createdAtTs.toInstant();
@@ -332,13 +333,23 @@ public class DataIntegrityJob {
         if (updatedAtTs != null) {
             updatedAt = updatedAtTs.toInstant();
         }
+        Timestamp enrichmentStartedAtTs = null;
+        try {
+            enrichmentStartedAtTs = rs.getTimestamp("enrichment_started_at");
+        } catch (SQLException ignore) {
+            // Column may not exist on older schemas; leave null if absent
+            enrichmentStartedAtTs = null;
+        }
+        if (enrichmentStartedAtTs != null) {
+            enrichmentStartedAt = enrichmentStartedAtTs.toInstant();
+        }
         String requestId = rs.getString("request_id");
 
         return new StageRecord(
             id, site, senderId, senderName, metadataId, dataId, lot, wafer, null, filename,
             null,  // end_time
             status, null,  // error_message
-            createdAt, updatedAt, null, null,  // processed_at, enrichment_started_at
+            createdAt, updatedAt, enrichmentStartedAt, null,  // enrichmentStartedAt, processedAt
             null, null, null,  // staged_by, last_requested_by, last_requested_at
             requestId, null,  // cp_output_path
             null, null, null, null, null  // cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase
