@@ -743,7 +743,10 @@ public class ExensioLoadMonitor {
 
     private Instant getEnrichmentStartedAt(StageRecord record) {
         if (record == null) return null;
-        return record.enrichmentStartedAt() != null ? record.enrichmentStartedAt() : record.createdAt();
+        if (record.enrichmentStartedAt() != null) {
+            return record.enrichmentStartedAt();
+        }
+        return record.createdAt();
     }
 
     /**

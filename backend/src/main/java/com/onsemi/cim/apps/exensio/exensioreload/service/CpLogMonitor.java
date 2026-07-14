@@ -147,8 +147,8 @@ public class CpLogMonitor {
         String requestId = record.requestId();
         long stageRecordId = record.id();
 
-        log.debug("processRecord: createdAt={}, updatedAt={}, esLookbackTime={}", 
-                record.createdAt(), record.updatedAt(), esLookbackTime);
+        log.debug("processRecord: createdAt={}, enrichmentStartedAt={}, esLookbackTime={}", 
+            record.createdAt(), getEnrichmentStartedAt(record), esLookbackTime);
 
         boolean hasEs = props.isConfigured();
         boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
@@ -580,7 +580,10 @@ public class CpLogMonitor {
         if (record == null) {
             return null;
         }
-        return record.enrichmentStartedAt() != null ? record.enrichmentStartedAt() : record.createdAt();
+        if (record.enrichmentStartedAt() != null) {
+            return record.enrichmentStartedAt();
+        }
+        return record.createdAt();
     }
 
     /**

@@ -4070,25 +4070,28 @@ public class RefDbService {
     public record PpLogRow(String outputDirectory, String logMessage, int processCode) {}
 
     /**
-     * Looks up the most recent pp_log entry for a given lot since a point in time.
+     * Looks up the most recent pp_log entry for a given lot since enrichment started.
      *
-     * @param lot       the lot identifier from {@link StageRecord#lot()}
-     * @param updatedAt the {@link StageRecord#updatedAt()} timestamp — only rows
-     *                  with {@code process_datetime >= updatedAt} are considered
+     * Callers should pass {@link StageRecord#enrichmentStartedAt()} when available and
+     * fall back to {@link StageRecord#createdAt()} for older rows that do not yet have
+     * the dedicated enrichment timestamp.
+     *
+     * @param lot the lot identifier from {@link StageRecord#lot()}
+     * @param enrichmentStartedAt the effective enrichment start timestamp used for the lookup
      * @return a populated {@link PpLogRow} if a matching row exists, or {@code null}
      */
-    public PpLogRow queryPpLog(String lot, java.time.Instant updatedAt) {
+    public PpLogRow queryPpLog(String lot, java.time.Instant enrichmentStartedAt) {
         long start = System.currentTimeMillis();
         PpLogRow result = null;
         String sql = "SELECT output_directory, log_message, process_code FROM pp_log " +
                 "WHERE lot = ? AND process_datetime >= ? " +
                 "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
-        log.info("pp_log query using PRD refdb ({}): lot={} since={}",
-                ppLogDataSource.getJdbcUrl(), lot, updatedAt);
+        log.info("pp_log query using PRD refdb ({}): lot={} sinceEnrichmentStartedAt={}",
+            ppLogDataSource.getJdbcUrl(), lot, enrichmentStartedAt);
         try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, lot);
-            ps.setTimestamp(2, java.sql.Timestamp.from(updatedAt));
+            ps.setTimestamp(2, java.sql.Timestamp.from(enrichmentStartedAt));
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     result = new PpLogRow(
@@ -4099,11 +4102,11 @@ public class RefDbService {
                 }
             }
         } catch (SQLException ex) {
-            log.warn("pp_log query failed for lot={} updatedAt={}: {}", lot, updatedAt, ex.getMessage());
+            log.warn("pp_log query failed for lot={} enrichmentStartedAt={}: {}", lot, enrichmentStartedAt, ex.getMessage());
         }
         long elapsed = System.currentTimeMillis() - start;
-        log.debug("pp_log query for lot={} updatedAt={} completed in {}ms (found={})",
-                lot, updatedAt, elapsed, result != null);
+        log.debug("pp_log query for lot={} enrichmentStartedAt={} completed in {}ms (found={})",
+                lot, enrichmentStartedAt, elapsed, result != null);
         return result;
     }
 
