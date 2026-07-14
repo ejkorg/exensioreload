@@ -190,8 +190,8 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+            "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -459,8 +459,8 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatch(int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
-                "FROM " + table + " WHERE status = 'STAGED' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
+            "FROM " + table + " WHERE status = 'STAGED' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -483,14 +483,14 @@ public class RefDbService {
     public List<String> listWafersForPayload(String site, int senderId, String metadataId, String dataId) {
         String table = properties.getStagingTable();
         String sql = "SELECT DISTINCT " + coalesce("wafer", "lot") + " AS wafer_label FROM " + table + " WHERE site = ? AND sender_id = ? AND metadata_id = ? AND data_id = ?";
-        List<String> labels = new ArrayList<>();
+        List<String> labels = new ArrayList<>(); 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, site);
             ps.setInt(2, senderId);
             ps.setString(3, metadataId);
             ps.setString(4, dataId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = ps.executeQuery()) { 
                 while (rs.next()) {
                     String label = rs.getString(1);
                     if (label != null) labels.add(label);
@@ -505,7 +505,7 @@ public class RefDbService {
     public void markEnqueued(List<Long> ids) {
         // ENQUEUED is dead code — records go directly NEW → ENRICHMENT on dispatch.
         // Kept for backwards compatibility; delegates to the real transition.
-        updateStatus(ids, "ELASTICSEARCH_MONITORING", null);
+            updateStatus(ids, "ELASTICSEARCH_MONITORING", null); 
     }
 
     /**
@@ -685,7 +685,7 @@ public class RefDbService {
         if (monitorService != null) {
             Map<String, List<StageRecord>> byRequest = new HashMap<>();
             for (StageRecord r : records) {
-                if (r.requestId() != null) {
+                    if (r.requestId() != null) { 
                     byRequest.computeIfAbsent(r.requestId(), k -> new ArrayList<>()).add(r);
                 }
             }
@@ -797,7 +797,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', cp_output_path = ?, cp_output_target = ?, error_message = NULL," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -833,7 +833,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -990,7 +990,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -1280,7 +1280,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSite(String site, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status = 'STAGED' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1300,7 +1300,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSender(String site, int senderId, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase " +
                 "FROM " + table + " WHERE status = 'STAGED' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1381,8 +1381,8 @@ public class RefDbService {
     public List<StageRecord> listRecords(String site, Integer senderId, String status, int offset, int limit, String sortBy, String sortDir, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
         StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, ")
-                .append(coalesce("error_message", "''"))
-                .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase FROM ")
+            .append(coalesce("error_message", "''"))
+            .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase FROM ")
                 .append(table)
                 .append(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
@@ -1541,8 +1541,8 @@ public class RefDbService {
     public List<StageRecord> listRecordsForUser(String site, Integer senderId, String status, int offset, int limit, String userKeyFilter, String sortBy, String sortDir, String requestId) {
         String table = properties.getStagingTable();
         StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
-                .append(coalesce("error_message", "''"))
-                .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id FROM ")
+            .append(coalesce("error_message", "''"))
+            .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id FROM ")
                 .append(table)
                 .append(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
@@ -1605,8 +1605,8 @@ public class RefDbService {
     public List<StageRecord> listRecordsForUser(String site, Integer senderId, String status, String q, int offset, int limit, String userKeyFilter, String sortBy, String sortDir, String requestId) {
         String table = properties.getStagingTable();
         StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
-                .append(coalesce("error_message", "''"))
-                .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id FROM ")
+            .append(coalesce("error_message", "''"))
+            .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id FROM ")
                 .append(table)
                 .append(" WHERE 1=1");
         List<Object> params = new ArrayList<>();
@@ -2068,7 +2068,7 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String inClause = String.join(",", fromStatuses.stream().map(s -> "?").toList());
-        String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Bulk cancelled via dashboard', updated_at = " + timestampExpr()
+        String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Bulk cancelled via dashboard'
                 + " WHERE sender_id = ? AND status IN (" + inClause + ")";
         int rowsUpdated = 0;
         Set<String> affectedRequestIds = new HashSet<>();
@@ -2148,7 +2148,10 @@ public class RefDbService {
             return;
         }
         String table = properties.getStagingTable();
-        String sql = "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ?";
+        boolean startsEnrichment = "ELASTICSEARCH_MONITORING".equals(status) || "EXENSIO_MONITORING".equals(status);
+        String sql = startsEnrichment
+            ? "UPDATE " + table + " SET status = ?, error_message = ?, enrichment_started_at = " + timestampExpr() + " WHERE id = ?"
+            : "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Long id : ids) {
@@ -2184,6 +2187,7 @@ public class RefDbService {
                 rs.getString("error_message"),
                 toInstant(rs.getTimestamp("created_at")),
                 toInstant(rs.getTimestamp("updated_at")),
+                toInstant(safeTimestamp(rs, "enrichment_started_at")),
                 toInstant(rs.getTimestamp("processed_at")),
                 rs.getString("staged_by"),
                 rs.getString("last_requested_by"),
@@ -2416,6 +2420,7 @@ public class RefDbService {
                     "created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL, " +
                     "processed_at TIMESTAMP, " +
+                    "enrichment_started_at TIMESTAMP, " +
                     "staged_by VARCHAR2(128), " +
                     "last_requested_by VARCHAR2(128), " +
                     "last_requested_at TIMESTAMP" +
@@ -2437,6 +2442,7 @@ public class RefDbService {
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                     "processed_at TIMESTAMP, " +
+                    "enrichment_started_at TIMESTAMP, " +
                     "staged_by VARCHAR(128), " +
                     "last_requested_by VARCHAR(128), " +
                     "last_requested_at TIMESTAMP" +
@@ -2459,8 +2465,10 @@ public class RefDbService {
                 : "ALTER TABLE " + table + " ADD (filename VARCHAR(512))");
         boolean endTimeAdded = ensureColumn(connection, table, "END_TIME",
                 "ALTER TABLE " + table + " ADD (end_time TIMESTAMP)");
+        boolean enrichmentStartedAdded = ensureColumn(connection, table, "ENRICHMENT_STARTED_AT",
+            "ALTER TABLE " + table + " ADD (enrichment_started_at TIMESTAMP)");
 
-        if (lotAdded || waferAdded || filenameAdded || endTimeAdded) {
+        if (lotAdded || waferAdded || filenameAdded || endTimeAdded || enrichmentStartedAdded) {
             log.info("File metadata columns ensured for {}", table);
         }
     }
@@ -2748,7 +2756,7 @@ public class RefDbService {
         // Normalize empty strings to null so IS NULL comparisons work correctly
         String candidateLot = (candidate.lot() == null || candidate.lot().isBlank()) ? null : candidate.lot().trim();
         String candidateWafer = (candidate.wafer() == null || candidate.wafer().isBlank()) ? null : candidate.wafer().trim();
-        String sql = "UPDATE " + table + " SET status = 'STAGED', error_message = NULL, processed_at = NULL, updated_at = " + timestampExpr() + ", " +
+        String sql = "UPDATE " + table + " SET status = 'STAGED', error_message = NULL, processed_at = NULL, enrichment_started_at = NULL, " +
                 "last_requested_by = ?, last_requested_at = " + timestampExpr() + ", sender_name = COALESCE(?, sender_name)" +
                 (requestId != null ? ", request_id = ?" : "") +
                 " WHERE site = ? AND sender_id = ? AND metadata_id = ? AND data_id = ? " +
@@ -3469,7 +3477,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3537,7 +3545,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3602,7 +3610,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3665,7 +3673,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3728,7 +3736,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3790,7 +3798,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'CP_TIMEOUT', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int totalUpdated = 0;
@@ -3850,7 +3858,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int successCount = 0;
@@ -3907,7 +3915,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int successCount = 0;
@@ -3959,7 +3967,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int successCount = 0;
@@ -4009,7 +4017,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
-                " processed_at = " + timestampExpr() + ", updated_at = " + timestampExpr() +
+            " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
         int successCount = 0;

@@ -736,7 +736,7 @@ public class ExensioLoadMonitor {
      * Returns true if the record has been in EXENSIO_LOADING longer than the configured timeout.
      */
     private boolean isTimedOut(StageRecord record) {
-        Instant startedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant startedAt = record.createdAt();
         if (startedAt == null) return false;
         return startedAt.plus(Duration.ofMinutes(props.getTimeoutMinutes())).isBefore(Instant.now());
     }

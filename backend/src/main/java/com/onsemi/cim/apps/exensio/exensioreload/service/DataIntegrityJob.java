@@ -197,10 +197,10 @@ public class DataIntegrityJob {
         String table = refDbProperties.getStagingTable();
 
         String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, " +
-                "lot, wafer, filename, status, created_at, updated_at, request_id " +
+            "lot, wafer, filename, status, created_at, updated_at, enrichment_started_at, request_id " +
                 "FROM " + table + " " +
-                "WHERE (status = 'ELASTICSEARCH_MONITORING' OR status = 'EXENSIO_MONITORING') " +
-                "AND updated_at < ? " +
+            "WHERE (status = 'ELASTICSEARCH_MONITORING' OR status = 'EXENSIO_MONITORING') " +
+            "AND COALESCE(enrichment_started_at, created_at) < ? " +
                 "FETCH FIRST 100 ROWS ONLY";
 
         List<StageRecord> stuckRecords = new ArrayList<>();
@@ -222,7 +222,7 @@ public class DataIntegrityJob {
         int remediatedCount = 0;
         for (StageRecord stuck : stuckRecords) {
             try {
-                long minutesStuck = calculateMinutesStuck(stuck.updatedAt());
+                long minutesStuck = calculateMinutesStuck(stuck.enrichmentStartedAt() != null ? stuck.enrichmentStartedAt() : stuck.createdAt());
                 String remediationMsg = String.format(
                     "Auto-remediated by DataIntegrityJob after %d minutes in %s state",
                     minutesStuck,
@@ -338,7 +338,7 @@ public class DataIntegrityJob {
             id, site, senderId, senderName, metadataId, dataId, lot, wafer, null, filename,
             null,  // end_time
             status, null,  // error_message
-            createdAt, updatedAt, null,  // processed_at
+            createdAt, updatedAt, null, null,  // processed_at, enrichment_started_at
             null, null, null,  // staged_by, last_requested_by, last_requested_at
             requestId, null,  // cp_output_path
             null, null, null, null, null  // cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase

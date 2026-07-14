@@ -142,7 +142,7 @@ public class CpLogMonitor {
      * Either source is skipped (returns NotFound immediately) when not available.
      */
     private void processRecord(StageRecord record) {
-        Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant lookbackTime = getEnrichmentStartedAt(record);
         Instant esLookbackTime = lookbackTime.minusSeconds(120);
         String requestId = record.requestId();
         long stageRecordId = record.id();
@@ -174,7 +174,7 @@ public class CpLogMonitor {
         CompletableFuture<PpLogResult> ppLogFuture = hasPpLog
             ? CompletableFuture.supplyAsync(() -> {
                 try {
-                    Instant ppLogLookback = (record.updatedAt() != null ? record.updatedAt() : record.createdAt()).minusSeconds(120);
+                    Instant ppLogLookback = getEnrichmentStartedAt(record).minusSeconds(120);
                     RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback);
                     if (row != null) {
                         if (row.processCode() == 0) {
@@ -347,7 +347,7 @@ public class CpLogMonitor {
 
         // Identify records that exceeded the timeout threshold
         for (StageRecord record : stuckRecords) {
-            Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+            Instant enrichmentStartedAt = getEnrichmentStartedAt(record);
             if (enrichmentStartedAt == null) {
                 continue;
             }
@@ -368,7 +368,7 @@ public class CpLogMonitor {
 
         // Process each stuck record
         for (StageRecord record : stuck) {
-            Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+            Instant enrichmentStartedAt = getEnrichmentStartedAt(record);
             long minutesStuck = Duration.between(enrichmentStartedAt, now).toMinutes();
 
             log.warn("Stuck record detected: id={}, lot={}, minutes_stuck={}", 
@@ -429,7 +429,7 @@ public class CpLogMonitor {
         // Build a diagnostic summary of everything attempted
         String diagnosticSummary = String.format(
                 "ES: idData=%s since=%s; pp_log: lot=%s idFile=%s;",
-                record.dataId(), record.updatedAt() != null ? record.updatedAt() : record.createdAt(),
+            record.dataId(), getEnrichmentStartedAt(record),
                 record.lot(), record.metadataId());
 
         if (!exensioProperties.isConfigured()) {
@@ -550,7 +550,7 @@ public class CpLogMonitor {
      * Requirements: 10.1, 10.2
      */
     private String buildTimeoutDiagnosticSummary(StageRecord record) {
-        Instant lookbackTime = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant lookbackTime = getEnrichmentStartedAt(record);
         Instant esLookbackTime = lookbackTime.minusSeconds(120);
         
         StringBuilder sb = new StringBuilder();
@@ -565,15 +565,22 @@ public class CpLogMonitor {
 
     /**
      * Returns true if the record has been in ENRICHMENT status longer than the configured timeout.
-     * Requirement 2.7: timeout check using record.updatedAt().
+     * Requirement 2.7: timeout check using enrichmentStartedAt when available.
      */
     private boolean isTimedOut(StageRecord record) {
-        Instant enrichmentStartedAt = record.updatedAt() != null ? record.updatedAt() : record.createdAt();
+        Instant enrichmentStartedAt = getEnrichmentStartedAt(record);
         if (enrichmentStartedAt == null) {
             return false;
         }
         Instant timeoutDeadline = enrichmentStartedAt.plus(Duration.ofMinutes(props.getEnrichmentTimeoutMinutes()));
         return timeoutDeadline.isBefore(Instant.now());
+    }
+
+    private Instant getEnrichmentStartedAt(StageRecord record) {
+        if (record == null) {
+            return null;
+        }
+        return record.enrichmentStartedAt() != null ? record.enrichmentStartedAt() : record.createdAt();
     }
 
     /**

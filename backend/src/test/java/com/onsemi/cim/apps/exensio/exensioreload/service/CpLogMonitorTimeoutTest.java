@@ -98,6 +98,7 @@ class CpLogMonitorTimeoutTest {
             null,                  // errorMessage
             createdAt,             // createdAt
             createdAt,             // updatedAt (same as createdAt means in ELASTICSEARCH_MONITORING for 16 min)
+            createdAt,             // enrichmentStartedAt
             null,                  // processedAt
             "operator1",           // stagedBy
             null,                  // lastRequestedBy
@@ -154,7 +155,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -192,7 +193,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -227,7 +228,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
@@ -266,7 +267,7 @@ class CpLogMonitorTimeoutTest {
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
             "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
-            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, null,
+            Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
             "dataTypeA", "phase1"
         );
