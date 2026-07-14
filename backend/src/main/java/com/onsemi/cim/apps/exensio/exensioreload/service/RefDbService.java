@@ -2068,8 +2068,8 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String inClause = String.join(",", fromStatuses.stream().map(s -> "?").toList());
-        String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Bulk cancelled via dashboard'
-                + " WHERE sender_id = ? AND status IN (" + inClause + ")";
+        String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Bulk cancelled via dashboard' " +
+            " WHERE sender_id = ? AND status IN (" + inClause + ")";
         int rowsUpdated = 0;
         Set<String> affectedRequestIds = new HashSet<>();
         
