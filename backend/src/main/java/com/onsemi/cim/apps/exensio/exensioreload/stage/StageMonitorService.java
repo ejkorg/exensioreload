@@ -20,10 +20,22 @@ public class StageMonitorService {
     private final Map<String, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
     public SseEmitter createEmitter(String requestId) {
+        if (requestId == null) {
+            log.warn("Attempt to create SSE emitter with null requestId; returning a completed emitter");
+            SseEmitter dummy = new SseEmitter(0L);
+            try { dummy.complete(); } catch (Exception ignored) {}
+            return dummy;
+        }
         return subscribe(requestId);
     }
 
     public SseEmitter subscribe(String requestId) {
+        if (requestId == null) {
+            log.warn("Attempt to subscribe SSE with null requestId; returning a completed emitter");
+            SseEmitter dummy = new SseEmitter(0L);
+            try { dummy.complete(); } catch (Exception ignored) {}
+            return dummy;
+        }
         log.info("Creating SSE emitter for requestId: {}", requestId);
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
         emitters.computeIfAbsent(requestId, ignored -> ConcurrentHashMap.newKeySet()).add(emitter);
@@ -72,6 +84,10 @@ public class StageMonitorService {
     }
 
     public void sendEvent(String requestId, String type, Object payload) {
+        if (requestId == null) {
+            log.warn("Attempt to send SSE event '{}' with null requestId; skipping", type);
+            return;
+        }
         Set<SseEmitter> sessionEmitters = emitters.get(requestId);
         if (sessionEmitters == null || sessionEmitters.isEmpty()) {
             return;

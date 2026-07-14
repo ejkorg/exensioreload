@@ -617,8 +617,8 @@ public class ExensioClient {
 
         where.append(" AND ").append(buildIdentifierLikeClause("de.file_name", identifiers));
 
-        return "SELECT * FROM (" +
-                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time FROM (" +
+            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
@@ -635,8 +635,8 @@ public class ExensioClient {
 
     private String buildBatchRawSql(List<String> clauses) {
         String where = String.join(" OR ", clauses);
-        return "SELECT * FROM (" +
-                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time FROM (" +
+            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +

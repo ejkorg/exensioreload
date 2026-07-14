@@ -143,6 +143,32 @@ public class RefDbService {
         }
     }
 
+    // Safely send SSE events via StageMonitorService; guards against null/blank requestId
+    private void safeSendEvent(String requestId, String type, Object payload) {
+        if (requestId == null || requestId.isBlank()) {
+            // Try to extract an id from payload for better logging when possible
+            String payloadId = null;
+            try {
+                if (payload instanceof java.util.Map<?, ?> p && p.containsKey("id")) {
+                    Object idObj = ((java.util.Map<?, ?>) p).get("id");
+                    payloadId = idObj == null ? null : String.valueOf(idObj);
+                }
+            } catch (Exception ignored) {
+            }
+            log.warn("Skipping SSE '{}' because requestId is null or blank (payloadId={})", type, payloadId);
+            return;
+        }
+        if (monitorService == null) {
+            log.warn("Monitor service unavailable; cannot send SSE '{}' for requestId={}", type, requestId);
+            return;
+        }
+        try {
+            monitorService.sendEvent(requestId, type, payload);
+        } catch (Exception e) {
+            log.warn("Failed to send SSE '{}' for requestId={}: {}", type, requestId, e.getMessage());
+        }
+    }
+
     public StageResult stagePayloads(String site, int senderId, List<PayloadCandidate> payloads) {
         return stagePayloads(site, senderId, null, DEFAULT_USER, payloads, true);
     }
@@ -268,7 +294,7 @@ public class RefDbService {
                                 evt.put("status", "STAGED");
                                 evt.put("stagedBy", normalizedUser);
                                 evt.put("msg", "Staged");
-                                monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
+                                safeSendEvent(requestId, "ROW_UPDATE", evt);
                             }
                             log.debug("Broadcast completed for batch");
                         }
@@ -322,7 +348,7 @@ public class RefDbService {
                             evt.put("status", "STAGED");
                             evt.put("stagedBy", normalizedUser);
                             evt.put("msg", "Staged");
-                            monitorService.sendEvent(requestId, "ROW_UPDATE", evt);
+                            safeSendEvent(requestId, "ROW_UPDATE", evt);
                         }
                         log.info("All ROW_UPDATE events broadcast completed");
                     }
@@ -544,7 +570,7 @@ public class RefDbService {
             evt.put("wafer", record.wafer());
             evt.put("filename", record.filename());
             evt.put("displayStatus", StatusMapper.getDisplayStatus("CP_FAILED", false));
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+                            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             recordStateChangeForBatcher(record.requestId(), "CP_FAILED");
             broadcastStats(record.requestId());
         }
@@ -575,7 +601,7 @@ public class RefDbService {
             evt.put("wafer", record.wafer());
             evt.put("filename", record.filename());
             evt.put("displayStatus", StatusMapper.getDisplayStatus("LOAD_FAILED", false));
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             recordStateChangeForBatcher(record.requestId(), "LOAD_FAILED");
             broadcastStats(record.requestId());
         }
@@ -697,7 +723,7 @@ public class RefDbService {
                     evt.put("id", r.id());
                     evt.put("status", "COMPLETED");
                     evt.put("msg", "Dispatch completed");
-                    monitorService.sendEvent(reqId, "ROW_UPDATE", evt);
+                    safeSendEvent(reqId, "ROW_UPDATE", evt);
                 }
                 broadcastStats(reqId);
             });
@@ -729,7 +755,7 @@ public class RefDbService {
                     evt.put("id", r.id());
                     evt.put("status", "ELASTICSEARCH_MONITORING");
                     evt.put("msg", "Consumed by CP (processing)");
-                    monitorService.sendEvent(reqId, "ROW_UPDATE", evt);
+                    safeSendEvent(reqId, "ROW_UPDATE", evt);
                 }
                 // Record state change to batcher for aggregation event
                 recordStateChangeForBatcher(reqId, "ELASTICSEARCH_MONITORING");
@@ -818,7 +844,7 @@ public class RefDbService {
             evt.put("msg", "CP enrichment complete");
             evt.put("cpOutputPath", outputPath);
             evt.put("cpOutputTarget", outputTarget);
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
@@ -852,7 +878,7 @@ public class RefDbService {
             evt.put("status", "COMPLETED");
             evt.put("msg", "Completed — manual verification needed: " + truncate(message, 60));
             evt.put("errorMessage", message);
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
@@ -891,7 +917,7 @@ public class RefDbService {
             evt.put("lot", record.lot());
             evt.put("wafer", record.wafer());
             evt.put("filename", record.filename());
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "CP_TIMEOUT");
@@ -939,7 +965,7 @@ public class RefDbService {
             evt.put("lot", record.lot());
             evt.put("wafer", record.wafer());
             evt.put("filename", record.filename());
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
@@ -978,7 +1004,7 @@ public class RefDbService {
         if (outputTarget != null) {
             evt.put("cpOutputTarget", outputTarget);
         }
-        monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+        safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
         broadcastStats(record.requestId());
     }
 
@@ -1015,7 +1041,7 @@ public class RefDbService {
             evt.put("msg", "Loaded into Exensio");
             evt.put("exensioWaferKey", exensioWaferKey);
             evt.put("exensioPgKey", exensioPgKey);
-            monitorService.sendEvent(record.requestId(), "ROW_UPDATE", evt);
+            safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "COMPLETED");
             broadcastStats(record.requestId());
@@ -1082,7 +1108,7 @@ public class RefDbService {
             evt.put("integration", integrationStatusService.snapshot(requestId, esConfigured, exensioConfigured));
         }
 
-        monitorService.sendEvent(requestId, "STATS", evt);
+        safeSendEvent(requestId, "STATS", evt);
     }
 
     public List<StageStatus> fetchStatuses(String requestId) {
@@ -3888,7 +3914,7 @@ public class RefDbService {
                         evt.put("msg", "Loaded into Exensio (retry)");
                         evt.put("exensioWaferKey", update.waferKey());
                         evt.put("exensioPgKey", update.pgKey());
-                        monitorService.sendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(null, "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual DONE retry for record {}: {}",
@@ -3940,7 +3966,7 @@ public class RefDbService {
                         evt.put("id", update.recordId());
                         evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Batch processing failed (retry)");
-                        monitorService.sendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(null, "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual FAILED retry for record {}: {}",
@@ -3990,7 +4016,7 @@ public class RefDbService {
                         evt.put("id", update.recordId());
                         evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Wafer not found in Exensio (retry)");
-                        monitorService.sendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(null, "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual NOT_FOUND retry for record {}: {}",
@@ -4042,7 +4068,7 @@ public class RefDbService {
                         evt.put("id", update.recordId());
                         evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Batch processing error (retry)");
-                        monitorService.sendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(null, "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual ERROR retry for record {}: {}",
@@ -4136,7 +4162,7 @@ public class RefDbService {
                     evt.put("exensioPgKey", update.pgKey());
                 }
 
-                monitorService.sendEvent(null, "ROW_UPDATE", evt);
+                safeSendEvent(null, "ROW_UPDATE", evt);
             } catch (Exception ex) {
                 log.warn("Failed broadcasting SSE event for record {}: {}",
                         update.recordId(), ex.getMessage());

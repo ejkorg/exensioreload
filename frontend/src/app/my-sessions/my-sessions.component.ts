@@ -1,33 +1,33 @@
 import { CommonModule } from '@angular/common';
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  signal,
-  ViewChild,
+    ChangeDetectionStrategy,
+    Component,
+    computed,
+    ElementRef,
+    OnDestroy,
+    OnInit,
+    signal,
+    ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import * as echarts from 'echarts';
 import { forkJoin } from 'rxjs';
 import {
-  BackendService,
-  SessionAnalyticsResponse,
-  SessionDailyStatusPoint,
-  SessionLotWaferDailyPoint,
-  StageRecordView,
-  StagingSessionDetail,
-  StagingSessionSummary,
+    BackendService,
+    SessionAnalyticsResponse,
+    SessionDailyStatusPoint,
+    SessionLotWaferDailyPoint,
+    StageRecordView,
+    StagingSessionDetail,
+    StagingSessionSummary,
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading-overlay.component';
-import { GlassSelectComponent, GlassOption } from '../shared/components/glass-select.component';
+import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
 import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '../shared/utils/datetime.util';
 
@@ -1480,10 +1480,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .detail-overlay {
         position: absolute !important;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
+        inset: 0;
         width: 100%;
         height: 100%;
         background:
@@ -1492,28 +1489,26 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         backdrop-filter: blur(8px) saturate(108%);
         -webkit-backdrop-filter: blur(8px) saturate(108%);
         display: flex;
-        align-items: stretch;
-        justify-content: stretch;
+        align-items: center; /* center modal vertically */
+        justify-content: center; /* center modal horizontally */
         z-index: 100;
-        overflow: hidden;
-        border-radius: inherit;
+        overflow: auto; /* allow overlay to scroll if modal taller than viewport */
+        padding: 1rem; /* small padding so modal doesn't touch edges */
       }
       .detail-modal {
-        width: 100%;
-        height: 100%;
-        min-width: 0;
-        max-width: none;
-        max-height: none;
-        min-height: 0;
+        width: min(1100px, 100%);
+        max-width: 1100px;
+        max-height: 92vh; /* constrain height to viewport */
+        min-height: 160px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        border-radius: inherit;
+        border-radius: 12px;
         border: none;
         background: linear-gradient(165deg, rgba(31, 23, 61, 0.97) 0%, rgba(22, 17, 52, 0.95) 100%);
         backdrop-filter: blur(14px) saturate(118%);
         -webkit-backdrop-filter: blur(14px) saturate(118%);
-        box-shadow: none;
+        box-shadow: 0 12px 40px rgba(2,8,23,0.6);
       }
       .files-section {
         display: flex;
@@ -2007,12 +2002,13 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         flex-wrap: wrap;
       }
       .modal-body {
-        flex: 1;
+        flex: 1 1 auto;
         overflow-y: auto;
         padding: 0.875rem 1.25rem 1rem;
         display: flex;
         flex-direction: column;
         gap: 0.65rem;
+        min-height: 0; /* allow flex children to shrink and allow internal scrolling */
       }
       .head-updated {
         font-size: 0.82rem;
