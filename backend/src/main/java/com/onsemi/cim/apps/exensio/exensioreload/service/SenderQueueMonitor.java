@@ -59,14 +59,14 @@ public class SenderQueueMonitor {
         int page = 0;
         while (true) {
             int offset = page * pageSize;
-            // ENRICHMENT is the only active intermediate status — ENQUEUED is never written.
-            List<StageRecord> enrichmentPage = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", offset, pageSize, "updated_at", "asc", null);
+            // QUEUED_FOR_CP is the dispatch-time state; queue disappearance promotes it to ENRICHMENT.
+            List<StageRecord> queuedPage = refDbService.listRecords(null, null, "QUEUED_FOR_CP", offset, pageSize, "updated_at", "asc", null);
 
-            if (enrichmentPage.isEmpty()) {
+            if (queuedPage.isEmpty()) {
                 break;
             }
 
-            List<StageRecord> pending = enrichmentPage.stream()
+            List<StageRecord> pending = queuedPage.stream()
                     .filter(r -> r.processedAt() == null)
                     .toList();
 
@@ -99,7 +99,7 @@ public class SenderQueueMonitor {
                 }
             }
 
-            if (enrichmentPage.size() < pageSize) {
+            if (queuedPage.size() < pageSize) {
                 break;
             }
             page++;

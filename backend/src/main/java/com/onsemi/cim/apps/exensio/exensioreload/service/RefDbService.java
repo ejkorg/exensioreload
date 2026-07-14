@@ -503,18 +503,20 @@ public class RefDbService {
     }
 
     public void markEnqueued(List<Long> ids) {
-        // ENQUEUED is dead code — records go directly NEW → ENRICHMENT on dispatch.
-        // Kept for backwards compatibility; delegates to the real transition.
-            updateStatus(ids, "ELASTICSEARCH_MONITORING", null); 
+        // Queueing is the dispatch-time state; CP consumption later promotes to ENRICHMENT.
+        updateStatus(ids, "QUEUED_FOR_CP", null);
     }
 
     /**
-     * @deprecated ENQUEUED is dead code — records go directly NEW → ENRICHMENT on dispatch.
-     * Delegates to {@link #markEnrichmentRecords(List)} which is the canonical method.
+     * @deprecated Queueing is the dispatch-time state — records go NEW → QUEUED_FOR_CP on dispatch.
+     * Delegates to {@link #markEnqueued(List)}.
      */
     @Deprecated
     public void markEnqueuedRecords(List<StageRecord> records) {
-        markEnrichmentRecords(records);
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        markEnqueued(records.stream().map(StageRecord::id).toList());
     }
 
     public void markCpFailed(long id, String message) {
@@ -705,7 +707,7 @@ public class RefDbService {
     /**
      * Marks records as ENRICHMENT status when they are consumed from the sender queue by CP.
      * This replaces the incorrect DONE transition — the file has only been picked up for enrichment,
-     * not fully processed.
+        * not fully processed. The enrichment timestamp is set once here, at queue-consumption time.
      * Broadcasts SSE ROW_UPDATE with status "ELASTICSEARCH_MONITORING" and msg "Consumed by CP (processing)".
      * Requirements: 1.1, 1.2
      */

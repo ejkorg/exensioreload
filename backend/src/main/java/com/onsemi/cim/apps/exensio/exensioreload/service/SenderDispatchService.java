@@ -150,10 +150,10 @@ public class SenderDispatchService {
                     .filter(r -> success.contains(r.id()))
                     .toList();
             if (!dispatchedRecords.isEmpty()) {
-                refDbService.markEnrichmentRecords(dispatchedRecords);
+                refDbService.markEnqueuedRecords(dispatchedRecords);
                 stageSessionService.refreshSessions(dispatchedRecords.stream().map(StageRecord::requestId).toList());
             } else {
-                refDbService.markEnrichmentRecords(
+                refDbService.markEnqueuedRecords(
                         records.stream().filter(r -> success.contains(r.id())).toList());
             }
         }
