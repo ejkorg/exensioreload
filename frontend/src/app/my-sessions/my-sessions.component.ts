@@ -337,30 +337,30 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
           </div>
 
           <div class="modal-body">
-            <div class="metrics-cards" *ngIf="selectedDetail() as detail">
+            <div class="metrics-cards" *ngIf="sessionStats() as stats">
               <div class="metric-card metric-card--total">
                 <app-glass-icon name="description" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ detail.totalFiles }}</div>
+                <div class="metric-value">{{ stats.total }}</div>
                 <div class="metric-label">Total</div>
               </div>
               <div class="metric-card metric-card--staged">
                 <app-glass-icon name="upload" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ detail.filesStaged }}</div>
+                <div class="metric-value">{{ stats.staged }}</div>
                 <div class="metric-label">Staged</div>
               </div>
               <div class="metric-card metric-card--enqueued">
                 <app-glass-icon name="clock" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ detail.filesEnqueued }}</div>
+                <div class="metric-value">{{ stats.enqueued }}</div>
                 <div class="metric-label">Enqueued</div>
               </div>
               <div class="metric-card metric-card--done">
                 <app-glass-icon name="check_circle" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ detail.filesDone }}</div>
+                <div class="metric-value">{{ stats.done }}</div>
                 <div class="metric-label">Done</div>
               </div>
-              <div class="metric-card metric-card--failed" [class.zero]="detail.filesFailed === 0">
+              <div class="metric-card metric-card--failed" [class.zero]="stats.failed === 0">
                 <app-glass-icon name="error" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ detail.filesFailed }}</div>
+                <div class="metric-value">{{ stats.failed }}</div>
                 <div class="metric-label">Failed</div>
               </div>
             </div>
@@ -1250,8 +1250,8 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .charts-panel {
         display: flex;
         flex-direction: column;
-        gap: 0.7rem;
-        padding: 0.7rem 0.75rem;
+        gap: 1rem;
+        padding: 1.25rem;
         border-radius: 12px;
         border: 1px solid rgba(167, 139, 250, 0.18);
         background: rgba(49, 35, 98, 0.22);
@@ -1981,7 +1981,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         position: sticky;
         top: 0;
         z-index: 2;
-        padding: 0.75rem 1.25rem;
+        padding: 1.25rem 1.5rem;
         background: linear-gradient(to bottom, rgba(31, 23, 61, 0.98), rgba(31, 23, 61, 0.85));
         backdrop-filter: blur(12px);
         border-bottom: 1px solid rgba(167, 139, 250, 0.15);
@@ -2008,10 +2008,10 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .modal-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        padding: 0.875rem 1.25rem 1rem;
+        padding: 0.5rem 1.5rem 1.5rem;
         display: flex;
         flex-direction: column;
-        gap: 0.65rem;
+        gap: 1.25rem;
         min-height: 0; /* allow flex children to shrink and allow internal scrolling */
       }
       .head-updated {
@@ -2033,14 +2033,14 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .metrics-cards {
         display: flex;
-        gap: 0.75rem;
+        gap: 1rem;
         flex-wrap: wrap;
         padding: 0.25rem 0;
       }
       .metric-card {
         flex: 1;
         min-width: 100px;
-        padding: 0.875rem 1rem;
+        padding: 1.25rem 1rem;
         border-radius: 14px;
         border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
@@ -2148,13 +2148,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         color: #1e293b;
       }
       .trend-chart-container {
-        min-height: 220px;
-        padding: 0.5rem 0;
+        height: 280px;
+        min-height: 280px;
+        padding: 0;
         width: 100%;
       }
       .status-chart-container {
-        min-height: 220px;
-        padding: 0.5rem 0;
+        height: 280px;
+        min-height: 280px;
+        padding: 0;
         width: 100%;
       }
       .files tbody tr {
@@ -2229,6 +2231,34 @@ export class MySessionsComponent implements OnInit, OnDestroy {
   selectedSession = signal<StagingSessionSummary | null>(null);
   selectedDetail = signal<StagingSessionDetail | null>(null);
   files = signal<StageRecordView[]>([]);
+
+  sessionStats = computed(() => {
+    const detail = this.selectedDetail();
+    if (!detail) return null;
+
+    const total = detail.totalFiles || 0;
+    const staged = detail.filesStaged || 0;
+    const enqueued = detail.filesEnqueued || 0;
+    const done = detail.filesDone || 0;
+    const failed = detail.filesFailed || 0;
+
+    if (total > 0 && staged === 0 && enqueued === 0 && done === 0 && failed === 0) {
+      let s = 0, e = 0, d = 0, f = 0;
+      this.files().forEach((file: StageRecordView) => {
+        const status = this.normalizeStatus(file.status);
+        if (status === 'DONE') d++;
+        else if (status === 'QUEUED_FOR_CP') e++;
+        else if (status === 'FAILED' || status === 'CANCELLED') f++;
+        else s++;
+      });
+      if (this.files().length > 0) {
+          return { total, staged: s, enqueued: e, done: d, failed: f };
+      }
+    }
+    
+    return { total, staged, enqueued, done, failed };
+  });
+
   loading = signal(false);
   filesTableExpanded = signal<boolean>(true);
   filesSearchText = signal<string>('');
@@ -3160,7 +3190,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         textStyle: { color: '#cbd5e1', fontSize: 12 },
         itemGap: 16,
       },
-      grid: { left: '3%', right: '3%', bottom: '15%', top: '8%', containLabel: true },
+      grid: { left: '3%', right: '3%', bottom: '15%', top: '10%', containLabel: true },
       xAxis: {
         type: 'category',
         data: days,
@@ -3235,14 +3265,16 @@ export class MySessionsComponent implements OnInit, OnDestroy {
   private renderStatusChart() {
     if (!this.statusChartContainer?.nativeElement) return;
 
-    const detail = this.selectedDetail();
-    const total = detail?.totalFiles ?? 0;
+    const stats = this.sessionStats();
+    if (!stats) return;
+
+    const total = stats.total;
     if (total === 0) return;
 
-    const completedCount = detail?.filesDone ?? 0;
-    const failedCount = detail?.filesFailed ?? 0;
-    const enqueuedCount = detail?.filesEnqueued ?? 0;
-    const stagedCount = detail?.filesStaged ?? 0;
+    const completedCount = stats.done;
+    const failedCount = stats.failed;
+    const enqueuedCount = stats.enqueued;
+    const stagedCount = stats.staged;
     const otherCount = Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount);
 
     const data = [
@@ -3274,7 +3306,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         {
           type: 'pie',
           radius: ['35%', '60%'],
-          center: ['50%', '52%'],
+          center: ['50%', '45%'],
           data: data,
           emphasis: {
             itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(129, 140, 248, 0.5)' },
