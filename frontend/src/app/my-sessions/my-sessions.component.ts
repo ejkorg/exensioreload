@@ -1479,7 +1479,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         padding-top: 0.15rem;
       }
       .detail-overlay {
-        position: absolute !important;
+        position: fixed !important;
         inset: 0;
         width: 100%;
         height: 100%;
