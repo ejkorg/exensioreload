@@ -208,7 +208,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               </td>
             </tr>
             <tr *ngIf="sessions().length === 0 && !loading()" class="empty-row">
-              <td [attr.colspan]="showUserColumn() ? 8 : 7" class="empty-cell">
+              <td [attr.colspan]="showUserColumn() ? 9 : 8" class="empty-cell">
                 <div class="empty-state">
                   <app-glass-icon name="history" [size]="32"></app-glass-icon>
                   <span>No sessions match your filters.</span>
@@ -265,8 +265,9 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
           »
         </button>
       </div>
+    </div>
 
-      <div class="detail-overlay" *ngIf="selectedSession()" (click)="closeDetail()">
+    <div class="detail-overlay" *ngIf="selectedSession()" (click)="closeDetail()">
         <div
           class="detail-modal"
           role="dialog"
@@ -363,9 +364,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
                 <div class="metric-label">Failed</div>
               </div>
             </div>
-            <div class="status-row" *ngIf="selectedDetail() as detail">
-              <span class="status-badge" [class]="detail.status.toLowerCase()">{{ detail.status }}</span>
-            </div>
+
 
             <div
               class="coverage-banner"
@@ -595,7 +594,6 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
           <!-- /.modal-body -->
         </div>
       </div>
-    </div>
   `,
   styles: [
     `
@@ -1594,6 +1592,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         background: rgba(20, 16, 44, 0.55);
         color: rgba(226, 232, 255, 0.92);
         font-size: 0.78rem;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .files-search-input:focus {
+        border-color: rgba(167, 139, 250, 0.65);
+        box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
       }
       .files-search-input::placeholder {
         color: rgba(203, 213, 225, 0.4);
@@ -1621,7 +1625,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .files-status-filter:focus {
         outline: none;
         border-color: rgba(167, 139, 250, 0.5);
-        box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
       }
       .files-showing {
         font-size: 0.74rem;
@@ -1843,10 +1847,10 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       :host-context(body.light-theme) .detail-modal {
         background: rgba(255, 255, 255, 0.97);
-        border: none;
+        border: 1px solid rgba(99, 102, 241, 0.15);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        box-shadow: none;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
       }
       :host-context(body.light-theme) .detail-overlay {
         background:
