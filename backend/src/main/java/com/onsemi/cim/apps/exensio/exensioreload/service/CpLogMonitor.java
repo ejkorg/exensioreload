@@ -175,7 +175,7 @@ public class CpLogMonitor {
             ? CompletableFuture.supplyAsync(() -> {
                 try {
                     Instant ppLogLookback = getEnrichmentStartedAt(record).minusSeconds(120);
-                    RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback);
+                    RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback, record.filename());
                     if (row != null) {
                         if (row.processCode() == 0) {
                             return new PpLogResult.Success(row.outputDirectory());
