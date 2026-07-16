@@ -1478,9 +1478,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .detail-overlay {
         position: fixed !important;
-        inset: 0;
+        top: 64px; /* start below the 64px navbar */
+        left: 0;
+        right: 0;
+        bottom: 0;
         width: 100%;
-        height: 100%;
+        height: calc(100% - 64px);
         background:
           radial-gradient(1200px 460px at 50% 0%, rgba(79, 70, 229, 0.2), rgba(24, 18, 56, 0.68) 54%),
           rgba(20, 16, 48, 0.62);
