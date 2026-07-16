@@ -58,7 +58,8 @@ CZ4-CZ2-PROD:
     connectionTimeoutMs: 20000
     maximumPoolSize: 10
     minimumIdle: 1
-  host: cz4mfgp-db1.onsemi.com:1528/svcCZ4MFGP_DATAPORT.onsemi.com
+  # host: cz4mfgp-db1.onsemi.com:1528/svcCZ4MFGP_DATAPORT.onsemi.com
+  host:  cz4mfgp-db1.onsemi.com:1528/svcCZ4MFGP_DATAPORT.onsemi.com
   password: dportprd_19
   user: DATAPORT_USER
 CZ4-CZ2-QA:
