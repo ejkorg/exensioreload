@@ -1491,7 +1491,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         justify-content: center; /* center modal horizontally */
         z-index: 100;
         overflow: auto; /* allow overlay to scroll if modal taller than viewport */
-        padding: 1rem; /* small padding so modal doesn't touch edges */
+        padding: 2rem; /* breathing room so modal doesn't touch viewport edges */
       }
       .detail-modal {
         width: min(1100px, 100%);
@@ -1981,7 +1981,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         position: sticky;
         top: 0;
         z-index: 2;
-        padding: 1.25rem 1.5rem;
+        padding: 1.5rem 2rem;
         background: linear-gradient(to bottom, rgba(31, 23, 61, 0.98), rgba(31, 23, 61, 0.85));
         backdrop-filter: blur(12px);
         border-bottom: 1px solid rgba(167, 139, 250, 0.15);
@@ -2008,7 +2008,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .modal-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        padding: 0.5rem 1.5rem 1.5rem;
+        padding: 1.25rem 2rem 2rem;
         display: flex;
         flex-direction: column;
         gap: 1.25rem;
