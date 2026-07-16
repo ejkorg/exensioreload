@@ -506,8 +506,9 @@
           </table>
 
           <div class="empty-state" *ngIf="!previewLoading() && paginatedPreviewRows().length === 0">
-            <app-glass-icon name="search" [size]="48" color="muted"></app-glass-icon>
-            <p>No payloads found</p>
+            <app-glass-icon name="search_off" [size]="48" color="muted"></app-glass-icon>
+            <p class="empty-state-title">No payloads found</p>
+            <p class="empty-state-subtitle">No matching files were discovered for your current configuration. Try adjusting your filters or date range.</p>
           </div>
 
           <div class="loading-overlay" *ngIf="previewLoading()">

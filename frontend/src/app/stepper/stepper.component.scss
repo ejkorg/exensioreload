@@ -1085,8 +1085,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: 3.5rem 2rem;
   color: var(--text-muted);
+  gap: 0.5rem;
   mat-icon {
     font-size: 2.5rem;
     margin-bottom: 0.75rem;
@@ -1095,6 +1096,21 @@
   p {
     margin: 0;
     font-size: 0.9375rem;
+  }
+  .empty-state-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    opacity: 0.7;
+    margin: 0.5rem 0 0;
+  }
+  .empty-state-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+    max-width: 400px;
+    text-align: center;
+    line-height: 1.5;
   }
 }
 
@@ -1525,6 +1541,76 @@
   }
   .info-text p strong {
     color: #7f1d1d;
+  }
+}
+
+// Verification summary banner (discovery step)
+.verification-summary-banner {
+  @extend .info-banner-base;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, var(--bg-card) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  position: relative;
+
+  .info-icon {
+    color: #818cf8;
+  }
+  .info-text h3 {
+    color: #c7d2fe;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin: 0 0 0.2rem 0;
+  }
+  .info-text p {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin: 0;
+  }
+}
+
+:host-context(body.light-theme) .verification-summary-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(255, 255, 255, 0.9) 100%);
+  border-color: rgba(79, 70, 229, 0.25);
+  .info-icon {
+    color: #4f46e5;
+  }
+  .info-text h3 {
+    color: #312e81;
+  }
+  .info-text p {
+    color: #475569;
+  }
+}
+
+.dismiss-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin-left: auto;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-main);
+  }
+}
+
+:host-context(body.light-theme) .dismiss-banner-btn {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.15);
   }
 }
 
