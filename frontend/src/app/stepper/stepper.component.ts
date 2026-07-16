@@ -293,7 +293,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   selectedSite = signal<string | null>(null);
   historicalMode = signal(false);
-  preFlightVerify = signal(true);
+  preFlightVerify = signal(false);
 
   // Helper to create unique row key (metadataId + dataId for uniqueness)
   private getRowKey(row: DiscoveryPreviewRow): string {
@@ -2252,7 +2252,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.deviceFilter.set('');
     this.deviceFilterControl.setValue('', { emitEvent: false });
     this.historicalMode.set(false);
-    this.preFlightVerify.set(true);
+    this.preFlightVerify.set(false);
 
     // Clear all filter options
     this.siteOptions.set([]);
