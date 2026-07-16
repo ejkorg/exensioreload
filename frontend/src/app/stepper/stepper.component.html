@@ -140,6 +140,15 @@
               >
               </app-glass-checkbox>
             </div>
+
+            <div class="checkbox-wrapper">
+              <app-glass-checkbox
+                label="Pre-flight Lot Verification"
+                [checked]="preFlightVerify()"
+                (checkedChange)="preFlightVerify.set($event)"
+              >
+              </app-glass-checkbox>
+            </div>
           </div>
 
           <!-- Time range + device filter (admin) on one row -->
