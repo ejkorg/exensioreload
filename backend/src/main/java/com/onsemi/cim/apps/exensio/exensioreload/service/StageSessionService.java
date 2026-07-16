@@ -916,7 +916,7 @@ public class StageSessionService {
                             rs.getLong("enqueued_count"),
                             rs.getLong("failed_count"),
                             rs.getLong("cancelled_count"),
-                            rs.getLong("new_count")
+                            rs.getLong("pending_count")
                     ));
                 }
             }
