@@ -1266,6 +1266,7 @@ public class SenderController {
             ExensioPreCheckRequest preCheckRequest = new ExensioPreCheckRequest(
                 request.environment(),
                 lots,
+                null, // waferIds - not provided in simple lot check
                 null, // blocks - not needed for simple lot check
                 dataType
             );

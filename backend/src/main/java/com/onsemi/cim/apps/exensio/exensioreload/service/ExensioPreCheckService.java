@@ -46,54 +46,64 @@ public class ExensioPreCheckService {
 
     private static final Logger log = LoggerFactory.getLogger(ExensioPreCheckService.class);
 
-    // ── Snowflake SQL: with INSERT_TIME lower-bound date filter and PGC_KEY ────
+    // ── Snowflake SQL: with INSERT_TIME lower-bound date filter, PGC_KEY, and optional WAFER_ID ────
     static final String LOT_CHECK_SQL_WITH_DATE = """
             WITH provided_lots AS (
                 SELECT value::VARCHAR AS lot_id
                 FROM TABLE(FLATTEN(PARSE_JSON(?)))
             ),
+            provided_wafers AS (
+                SELECT value::VARCHAR AS wafer_id
+                FROM TABLE(FLATTEN(PARSE_JSON(?)))
+            ),
             found_lots AS (
-                SELECT DISTINCT LOT_ID, SCHEMANAME
+                SELECT DISTINCT LOT_ID, WAFER_ID, SCHEMANAME
                 FROM ANALYTICSPRD.MFG.EXENSIO_PROD_OPLOG_METADATA
                 WHERE PGC_KEY     = ?
                   AND INSERT_TIME >= TO_DATE(? || '-01', 'YYYY-MM-DD')
                   AND LOT_ID IN (SELECT lot_id FROM provided_lots)
+                  AND (? = 0 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
             ),
             ranked AS (
-                SELECT LOT_ID, SCHEMANAME,
+                SELECT LOT_ID, WAFER_ID, SCHEMANAME,
                        ROW_NUMBER() OVER (
-                           PARTITION BY LOT_ID
+                           PARTITION BY LOT_ID, WAFER_ID
                            ORDER BY CASE WHEN UPPER(SCHEMANAME) LIKE '%PROD%' THEN 0 ELSE 1 END
                        ) AS rn
                 FROM found_lots
             )
-            SELECT p.lot_id, COALESCE(r.SCHEMANAME, 'NOT FOUND') AS schema_loaded
+            SELECT p.lot_id, COALESCE(r.WAFER_ID, '') AS wafer_id, COALESCE(r.SCHEMANAME, 'NOT FOUND') AS schema_loaded
             FROM provided_lots p
             LEFT JOIN ranked r ON p.lot_id = r.lot_id AND r.rn = 1
             ORDER BY schema_loaded, p.lot_id
             """;
 
-    // ── Snowflake SQL: no date filter but with PGC_KEY ─────────────────────────
+    // ── Snowflake SQL: no date filter, with PGC_KEY and optional WAFER_ID ────────────────────────
     static final String LOT_CHECK_SQL_NO_DATE = """
             WITH provided_lots AS (
                 SELECT value::VARCHAR AS lot_id
                 FROM TABLE(FLATTEN(PARSE_JSON(?)))
             ),
+            provided_wafers AS (
+                SELECT value::VARCHAR AS wafer_id
+                FROM TABLE(FLATTEN(PARSE_JSON(?)))
+            ),
             found_lots AS (
-                SELECT DISTINCT LOT_ID, SCHEMANAME
+                SELECT DISTINCT LOT_ID, WAFER_ID, SCHEMANAME
                 FROM ANALYTICSPRD.MFG.EXENSIO_PROD_OPLOG_METADATA
                 WHERE PGC_KEY = ?
                   AND LOT_ID IN (SELECT lot_id FROM provided_lots)
+                  AND (? = 0 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
             ),
             ranked AS (
-                SELECT LOT_ID, SCHEMANAME,
+                SELECT LOT_ID, WAFER_ID, SCHEMANAME,
                        ROW_NUMBER() OVER (
-                           PARTITION BY LOT_ID
+                           PARTITION BY LOT_ID, WAFER_ID
                            ORDER BY CASE WHEN UPPER(SCHEMANAME) LIKE '%PROD%' THEN 0 ELSE 1 END
                        ) AS rn
                 FROM found_lots
             )
-            SELECT p.lot_id, COALESCE(r.SCHEMANAME, 'NOT FOUND') AS schema_loaded
+            SELECT p.lot_id, COALESCE(r.WAFER_ID, '') AS wafer_id, COALESCE(r.SCHEMANAME, 'NOT FOUND') AS schema_loaded
             FROM provided_lots p
             LEFT JOIN ranked r ON p.lot_id = r.lot_id AND r.rn = 1
             ORDER BY schema_loaded, p.lot_id
@@ -190,23 +200,33 @@ public class ExensioPreCheckService {
         }
 
         String lotIdsJson = buildLotIdsJson(request.lotIds());
+        String waferIdsJson = (request.waferIds() != null && !request.waferIds().isEmpty()) 
+                ? buildLotIdsJson(request.waferIds()) 
+                : "[]";
         String yearMonth  = deriveEarliestYearMonth(request.blocks());
         int pgcKey = resolvePgcKey(request.dataType());
+        boolean isWaferLevel = isWaferLevelClass(pgcKey);
 
-        log.debug("[ExensioPreCheck] Snowflake query: lots={}, yearMonth={}, pgcKey={}",
-                request.lotIds().size(), yearMonth, pgcKey);
+        log.debug("[ExensioPreCheck] Snowflake query: lots={}, wafers={}, yearMonth={}, pgcKey={}, waferLevel={}",
+                request.lotIds().size(), 
+                request.waferIds() != null ? request.waferIds().size() : 0,
+                yearMonth, pgcKey, isWaferLevel);
 
         try (Connection conn = snowflakeDataSource.getConnection()) {
             PreparedStatement ps;
             if (yearMonth != null) {
                 ps = conn.prepareStatement(LOT_CHECK_SQL_WITH_DATE);
                 ps.setString(1, lotIdsJson);
-                ps.setInt(2, pgcKey);
-                ps.setString(3, yearMonth);
+                ps.setString(2, waferIdsJson);
+                ps.setInt(3, pgcKey);
+                ps.setString(4, yearMonth);
+                ps.setInt(5, isWaferLevel ? 1 : 0);  // 1 = wafer-level filtering, 0 = lot-level only
             } else {
                 ps = conn.prepareStatement(LOT_CHECK_SQL_NO_DATE);
                 ps.setString(1, lotIdsJson);
-                ps.setInt(2, pgcKey);
+                ps.setString(2, waferIdsJson);
+                ps.setInt(3, pgcKey);
+                ps.setInt(4, isWaferLevel ? 1 : 0);  // 1 = wafer-level filtering, 0 = lot-level only
             }
 
             try (ps; ResultSet rs = ps.executeQuery()) {
@@ -238,9 +258,12 @@ public class ExensioPreCheckService {
      */
     ExensioPreCheckResponse checkViaExensioHttp(ExensioPreCheckRequest request) {
         String schema = resolveSchema(request.environment());
-        String sql    = buildSql(request.lotIds(), request.blocks(), request.dataType());
+        String sql    = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType());
 
-        log.debug("[ExensioPreCheck] HTTP primary: lots={}, schema={}", request.lotIds().size(), schema);
+        log.debug("[ExensioPreCheck] HTTP primary: lots={}, wafers={}, schema={}", 
+                request.lotIds().size(), 
+                request.waferIds() != null ? request.waferIds().size() : 0, 
+                schema);
 
         try {
             String token       = authService.getToken(schema);
@@ -416,10 +439,18 @@ public class ExensioPreCheckService {
 
     /**
      * Builds the Oracle SQL query for the Exensio raw-SQL endpoint.
-     * MODIFIED: Now includes PGC_KEY filter based on dataType.
+     * Supports wafer-level checking for Class 1, 4, 5, 14 (pgc_key 1, 4, 5, 14).
+     * For other classes (pgc_key 2), performs lot-level checking only.
+     *
+     * @param lotIds       list of lot IDs to check
+     * @param waferIds     optional list of wafer IDs (used if pgc_key is wafer-level)
+     * @param blocks       optional date range blocks for filtering
+     * @param dataType     data type string to resolve pgc_key
+     * @return Oracle SQL query string
      */
-    public String buildSql(List<String> lotIds, List<PreCheckBlock> blocks, String dataType) {
+    public String buildSql(List<String> lotIds, List<String> waferIds, List<PreCheckBlock> blocks, String dataType) {
         int pgcKey = resolvePgcKey(dataType);
+        boolean isWaferLevel = isWaferLevelClass(pgcKey);
         
         StringBuilder sb = new StringBuilder();
 
@@ -443,6 +474,16 @@ public class ExensioPreCheckService {
         }
         sb.append(")\n");
 
+        // Wafer-level filtering for Classes 1, 4, 5, 14
+        if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
+            sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
+            for (int i = 0; i < waferIds.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append("UPPER(TRIM('").append(escapeSql(waferIds.get(i))).append("'))");
+            }
+            sb.append(")\n");
+        }
+
         List<String> dateRangeClauses = buildDateRangeClauses(blocks);
         if (!dateRangeClauses.isEmpty()) {
             sb.append("  AND (\n");
@@ -458,6 +499,15 @@ public class ExensioPreCheckService {
         sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
 
         return sb.toString();
+    }
+
+    /**
+     * Determines if a pgc_key represents a wafer-level class.
+     * Class 1 (pgc_key 1), Class 4 (pgc_key 4), Class 5 (pgc_key 5), Class 14 (pgc_key 14) are wafer-level.
+     * Class 2 (pgc_key 2) is lot-level.
+     */
+    private static boolean isWaferLevelClass(int pgcKey) {
+        return pgcKey == 1 || pgcKey == 4 || pgcKey == 5 || pgcKey == 14;
     }
 
     /**
