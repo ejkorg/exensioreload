@@ -146,6 +146,7 @@ export interface DiscoveryPreviewWithDuplicatesResponse extends DiscoveryPreview
 // ============================================================================
 // Lot Verification Interfaces
 // ============================================================================
+
 export interface LotVerificationRequest {
   lots: string[];
   site: string;
@@ -154,8 +155,14 @@ export interface LotVerificationRequest {
   blocks?: Array<{ year: number; month: number }> | null;
 }
 
+export interface LotVerificationResult {
+  found: boolean;
+  schema: string | null; // "PRODUCTION", "SANDBOX", "FOUND" (HTTP), or null if not found
+  wafers?: string[]; // wafer IDs found for this lot (wafer-level classes only)
+}
+
 export interface LotVerificationResponse {
-  lotExists: Map<string, boolean> | Record<string, boolean>;
+  lots: Map<string, LotVerificationResult> | Record<string, LotVerificationResult>;
   error?: string | null;
 }
 

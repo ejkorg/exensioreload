@@ -3698,22 +3698,23 @@ export class StepperComponent implements OnInit, OnDestroy {
 
       // Requirements: 1.3 - Display verification dialog showing results
       // Open verification dialog with GlassDialogService
-      const verificationMap = new Map<string, boolean>();
-      if (result.lotExists instanceof Map) {
-        result.lotExists.forEach((value: boolean, key: string) => {
-          verificationMap.set(key, value);
+      // Transform response to map of lot -> verification result with schema info
+      const verificationMap = new Map<string, { found: boolean; schema: string | null }>();
+      if (result.lots instanceof Map) {
+        result.lots.forEach((value: any, key: string) => {
+          verificationMap.set(key, { found: value.found, schema: value.schema || null });
         });
       } else {
-        Object.entries(result.lotExists).forEach(([key, value]: [string, any]) => {
-          verificationMap.set(key, Boolean(value));
+        Object.entries(result.lots).forEach(([key, value]: [string, any]) => {
+          verificationMap.set(key, { found: Boolean(value.found), schema: value.schema || null });
         });
       }
 
       // Count found and not found lots for summary
       let foundCount = 0;
       let notFoundCount = 0;
-      verificationMap.forEach((found: boolean) => {
-        if (found) foundCount++;
+      verificationMap.forEach((result: any) => {
+        if (result.found) foundCount++;
         else notFoundCount++;
       });
 

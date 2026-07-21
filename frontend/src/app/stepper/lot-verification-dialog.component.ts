@@ -9,10 +9,11 @@ import { GLASS_DIALOG_DATA, GlassDialogRef } from '../shared/services/glass-dial
  * Contains the verification results and metadata needed to display the dialog.
  *
  * Task 11: Added appliedDateRange to display date range in results dialog.
+ * Wafer-level: Added wafer information for wafer-level classes (1, 4, 14).
  */
 export interface LotVerificationDialogData {
   lots: string[];
-  verificationResult: Map<string, boolean>;
+  verificationResult: Map<string, { found: boolean; schema: string | null; wafers?: string[] }>;
   verifiedAt: Date;
   appliedDateRange?: { start: Date; end: Date } | null;
 }
@@ -93,7 +94,18 @@ export interface LotVerificationDialogResult {
             Found in Exensio ({{ foundCount }})
           </h3>
           <div class="lot-scroll">
-            <div *ngFor="let lot of foundLots" class="lot-item">{{ lot }}</div>
+            <div *ngFor="let lot of foundLots" class="lot-item">
+              <div class="lot-name">{{ lot }}</div>
+              <div class="lot-schema" *ngIf="getSchemaForLot(lot)">
+                <app-glass-icon name="database" [size]="12"></app-glass-icon>
+                {{ getSchemaForLot(lot) }}
+              </div>
+              <div class="wafer-info" *ngIf="getWafersForLot(lot).length > 0">
+                <app-glass-icon name="memory" [size]="12"></app-glass-icon>
+                <span class="wafer-count">{{ getWafersForLot(lot).length }} wafer(s):</span>
+                <span class="wafer-list">{{ getWafersForLot(lot).join(', ') }}</span>
+              </div>
+            </div>
             <div *ngIf="foundLots.length === 0" class="empty-state">No lots found</div>
           </div>
         </div>
@@ -378,10 +390,80 @@ export interface LotVerificationDialogResult {
         color: var(--text-main);
         word-break: break-all;
         transition: all 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
 
         &:hover {
           background: rgba(255, 255, 255, 0.08);
           border-color: rgba(255, 255, 255, 0.12);
+        }
+      }
+
+      .lot-name {
+        font-weight: 500;
+      }
+
+      .lot-schema {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.7rem;
+        font-family: 'JetBrains Mono', 'Consolas', monospace;
+        color: var(--text-muted);
+        padding: 0.2rem 0.5rem;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 4px;
+        width: fit-content;
+
+        app-glass-icon {
+          flex-shrink: 0;
+        }
+
+        &.production {
+          background: rgba(16, 185, 129, 0.15);
+          color: #10b981;
+        }
+
+        &.sandbox {
+          background: rgba(59, 130, 246, 0.15);
+          color: #3b82f6;
+        }
+
+        &.http {
+          background: rgba(245, 158, 11, 0.15);
+          color: #f59e0b;
+        }
+      }
+
+      .wafer-info {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        padding: 0.3rem 0.5rem;
+        background: rgba(99, 102, 241, 0.08);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 4px;
+        margin-top: 0.2rem;
+
+        app-glass-icon {
+          flex-shrink: 0;
+        }
+
+        .wafer-count {
+          font-weight: 600;
+          color: #818cf8;
+        }
+
+        .wafer-list {
+          font-family: 'JetBrains Mono', 'Consolas', monospace;
+          font-size: 0.65rem;
+          max-width: 300px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
       }
 
@@ -490,12 +572,13 @@ export class LotVerificationDialogComponent {
 
   /**
    * Task 4.2: Process verification results
-   * Separates lots into foundLots and notFoundLots arrays based on Map<string, boolean>
+   * Separates lots into foundLots and notFoundLots arrays
    * Calculates totalLots, foundCount, notFoundCount
    */
   private processVerificationResults(): void {
     this.data.lots.forEach((lot) => {
-      if (this.data.verificationResult.get(lot)) {
+      const result = this.data.verificationResult.get(lot);
+      if (result?.found) {
         this.foundLots.push(lot);
       } else {
         this.notFoundLots.push(lot);
@@ -504,6 +587,60 @@ export class LotVerificationDialogComponent {
     this.totalLots = this.data.lots.length;
     this.foundCount = this.foundLots.length;
     this.notFoundCount = this.notFoundLots.length;
+  }
+
+  /**
+   * Get schema name for a found lot for display
+   * Maps internal schema names to user-friendly labels
+   */
+  getSchemaForLot(lot: string): string {
+    const result = this.data.verificationResult.get(lot);
+    if (!result?.found || !result.schema) {
+      return '';
+    }
+
+    // Map schema names to display labels
+    switch (result.schema.toUpperCase()) {
+      case 'PRODUCTION':
+        return '📊 Production';
+      case 'SANDBOX':
+        return '🧪 Sandbox';
+      case 'FOUND':
+        return '✓ HTTP';
+      default:
+        return result.schema;
+    }
+  }
+
+  /**
+   * Get wafer IDs for a found lot (wafer-level classes only)
+   * Returns empty array if no wafers or lot not found
+   */
+  getWafersForLot(lot: string): string[] {
+    const result = this.data.verificationResult.get(lot);
+    if (!result?.found || !result.wafers) {
+      return [];
+    }
+    return result.wafers;
+  }
+
+  /**
+   * Get CSS class for schema badge styling
+   */
+  getSchemaClass(lot: string): string {
+    const result = this.data.verificationResult.get(lot);
+    if (!result?.schema) return '';
+
+    switch (result.schema.toUpperCase()) {
+      case 'PRODUCTION':
+        return 'production';
+      case 'SANDBOX':
+        return 'sandbox';
+      case 'FOUND':
+        return 'http';
+      default:
+        return '';
+    }
   }
 
   /**
@@ -543,7 +680,7 @@ export class LotVerificationDialogComponent {
 
   /**
    * Task 4.4: Export verification results to CSV
-   * Generates CSV with headers: "Lot ID", "Status", "Verified At"
+   * Generates CSV with headers: "Lot ID", "Status", "Schema", "Wafers", "Verified At"
    * Format filename as: `lot-verification-YYYYMMDD-HHMMSS.csv`
    * Triggers browser download using Blob and temporary link
    */
@@ -560,15 +697,18 @@ export class LotVerificationDialogComponent {
     const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}`;
     const filename = `lot-verification-${timestamp}.csv`;
 
-    // Build CSV content with headers: "Lot ID", "Status", "Verified At"
-    let csv = 'Lot ID,Status,Verified At\n';
+    // Build CSV content with headers: "Lot ID", "Status", "Schema", "Wafers", "Verified At"
+    let csv = 'Lot ID,Status,Schema,Wafers,Verified At\n';
 
     // Add rows for found lots
     this.foundLots.forEach((lot) => {
       const escapedLot = this.escapeCsvField(lot);
       const status = 'Found in Exensio';
+      const result = this.data.verificationResult.get(lot);
+      const schema = result?.schema || '';
+      const wafers = result?.wafers && result.wafers.length > 0 ? result.wafers.join('; ') : '';
       const verifiedAt = this.verifiedAt.toISOString();
-      csv += `${escapedLot},"${status}","${verifiedAt}"\n`;
+      csv += `${escapedLot},"${status}","${schema}","${wafers}","${verifiedAt}"\n`;
     });
 
     // Add rows for not found lots
@@ -576,7 +716,7 @@ export class LotVerificationDialogComponent {
       const escapedLot = this.escapeCsvField(lot);
       const status = 'Not Found in Exensio';
       const verifiedAt = this.verifiedAt.toISOString();
-      csv += `${escapedLot},"${status}","${verifiedAt}"\n`;
+      csv += `${escapedLot},"${status}","","","${verifiedAt}"\n`;
     });
 
     // Create Blob and trigger download

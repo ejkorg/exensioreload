@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -44,9 +46,11 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.DuplicatePayloadView;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.EnqueueRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRow;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.HistoricalPreviewSummary;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotVerificationRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.LotVerificationResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.LotVerificationResult;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageAllRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadResponse;
@@ -1276,11 +1280,33 @@ public class SenderController {
             ExensioPreCheckResponse preCheckResponse = exensioPreCheckService.check(preCheckRequest);
 
             // Transform ExensioPreCheckResponse to LotVerificationResponse
-            // Map lotsFound list to Map<String, Boolean> (true for found, false for not found)
-            Map<String, Boolean> lotExists = new HashMap<>();
+            // Build map with schema info for each lot
+            Map<String, LotVerificationResult> lotResults = new HashMap<>();
+            
+            // Create lookup map: lotId -> (schemaName, wafers list) from rows
+            Map<String, String> lotToSchema = new HashMap<>();
+            Map<String, List<String>> lotToWafers = new HashMap<>();
+            
+            for (ExensioPreCheckRow row : preCheckResponse.rows()) {
+                String lot = row.lotId();
+                String schema = row.schemaName();
+                String wafer = row.waferId();
+                
+                // Store schema (first occurrence wins due to priority ranking)
+                lotToSchema.putIfAbsent(lot, schema);
+                
+                // Collect wafers for this lot (if wafer data exists)
+                if (wafer != null && !wafer.isBlank()) {
+                    lotToWafers.computeIfAbsent(lot, k -> new ArrayList<>()).add(wafer);
+                }
+            }
+            
+            // Map each lot to its result
             for (String lot : lots) {
                 boolean found = preCheckResponse.lotsFound().contains(lot);
-                lotExists.put(lot, found);
+                String schema = found ? lotToSchema.get(lot) : null;
+                List<String> wafers = found ? lotToWafers.getOrDefault(lot, Collections.emptyList()) : Collections.emptyList();
+                lotResults.put(lot, new LotVerificationResult(found, schema, wafers));
             }
 
             // Include error field from ExensioPreCheckResponse if present
@@ -1289,7 +1315,7 @@ public class SenderController {
             log.info("Lot verification completed for sender {}: {} lots checked, {} found, {} not found",
                     id, lots.size(), preCheckResponse.lotsFound().size(), preCheckResponse.lotsNotFound().size());
 
-            return ResponseEntity.ok(new LotVerificationResponse(lotExists, error));
+            return ResponseEntity.ok(new LotVerificationResponse(lotResults, error));
 
         } catch (Exception e) {
             log.error("Lot verification failed for sender {}: {}", id, e.getMessage(), e);

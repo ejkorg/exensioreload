@@ -63,7 +63,7 @@ public class ExensioPreCheckService {
                 WHERE PGC_KEY     = ?
                   AND INSERT_TIME >= TO_DATE(? || '-01', 'YYYY-MM-DD')
                   AND LOT_ID IN (SELECT lot_id FROM provided_lots)
-                  AND (? = 0 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
+                  AND (? = 0 OR ? = 2 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
             ),
             ranked AS (
                 SELECT LOT_ID, WAFER_ID, SCHEMANAME,
@@ -94,7 +94,7 @@ public class ExensioPreCheckService {
                 FROM ANALYTICSPRD.MFG.EXENSIO_PROD_OPLOG_METADATA
                 WHERE PGC_KEY = ?
                   AND LOT_ID IN (SELECT lot_id FROM provided_lots)
-                  AND (? = 0 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
+                  AND (? = 0 OR ? = 2 OR WAFER_ID IN (SELECT wafer_id FROM provided_wafers WHERE wafer_id IS NOT NULL))
             ),
             ranked AS (
                 SELECT LOT_ID, WAFER_ID, SCHEMANAME,
@@ -407,19 +407,26 @@ public class ExensioPreCheckService {
 
         try (Connection conn = snowflakeDataSource.getConnection()) {
             PreparedStatement ps;
+            // Determine if we should return all wafers: wafer-level class AND no wafer IDs provided
+            boolean hasWaferFilter = request.waferIds() != null && !request.waferIds().isEmpty();
+            int waferFilterMode = isWaferLevel ? (hasWaferFilter ? 1 : 2) : 0;  
+            // 0 = lot-level only, 1 = wafer-level with filter, 2 = wafer-level return all wafers
+            
             if (yearMonth != null) {
                 ps = conn.prepareStatement(LOT_CHECK_SQL_WITH_DATE);
                 ps.setString(1, lotIdsJson);
                 ps.setString(2, waferIdsJson);
                 ps.setInt(3, pgcKey);
                 ps.setString(4, yearMonth);
-                ps.setInt(5, isWaferLevel ? 1 : 0);  // 1 = wafer-level filtering, 0 = lot-level only
+                ps.setInt(5, waferFilterMode);
+                ps.setInt(6, waferFilterMode);
             } else {
                 ps = conn.prepareStatement(LOT_CHECK_SQL_NO_DATE);
                 ps.setString(1, lotIdsJson);
                 ps.setString(2, waferIdsJson);
                 ps.setInt(3, pgcKey);
-                ps.setInt(4, isWaferLevel ? 1 : 0);  // 1 = wafer-level filtering, 0 = lot-level only
+                ps.setInt(4, waferFilterMode);
+                ps.setInt(5, waferFilterMode);
             }
 
             try (ps; ResultSet rs = ps.executeQuery()) {
@@ -427,9 +434,10 @@ public class ExensioPreCheckService {
                 while (rs.next()) {
                     rows.add(new ExensioPreCheckRow(
                             rs.getString("LOT_ID"),
-                            rs.getString("SCHEMA_LOADED")));
+                            rs.getString("SCHEMA_LOADED"),
+                            rs.getString("WAFER_ID")));
                 }
-                log.debug("[ExensioPreCheck] Snowflake returned {} rows", rows.size());
+                log.debug("[ExensioPreCheck] Snowflake returned {} rows (waferFilterMode={})", rows.size(), waferFilterMode);
                 return partitionResults(rows, request.lotIds());
             }
 
@@ -807,7 +815,7 @@ public class ExensioPreCheckService {
     /**
      * Parses the Exensio raw-SQL JSON response and partitions the submitted lot IDs.
      * Maps HTTP fallback rows (LOT_ID / END_TIME / PPID / WAFER_ID) to the unified
-     * {@link ExensioPreCheckRow} shape ({@code lotId} + {@code schemaName}).
+     * {@link ExensioPreCheckRow} shape ({@code lotId} + {@code schemaName} + {@code waferId}).
      * For HTTP fallback results, {@code schemaName} is set to {@code "FOUND"} when a
      * row is present (the Oracle query does not return a schema name).
      */
@@ -820,8 +828,9 @@ public class ExensioPreCheckService {
             if (rowsNode.isArray()) {
                 for (JsonNode rowNode : rowsNode) {
                     String lotId = rowNode.path("LOT_ID").asText("");
+                    String waferId = rowNode.path("WAFER_ID").asText("");
                     // HTTP fallback doesn't return SCHEMANAME — use "FOUND" as sentinel
-                    rows.add(new ExensioPreCheckRow(lotId, "FOUND"));
+                    rows.add(new ExensioPreCheckRow(lotId, "FOUND", waferId));
                 }
             }
 
