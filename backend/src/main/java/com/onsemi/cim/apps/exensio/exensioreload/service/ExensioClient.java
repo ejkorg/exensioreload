@@ -1,17 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchLookupResult;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -28,6 +16,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchLookupResult;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
  * HTTP client for the Exensio API.
@@ -52,11 +53,11 @@ public class ExensioClient {
 
     public ExensioClient(ExensioProperties props,
                          ExensioAuthService authService,
-                         HttpClient elasticsearchHttpClient,
+                         @org.springframework.beans.factory.annotation.Qualifier("exensioHttpClient") HttpClient exensioHttpClient,
                          ObjectMapper objectMapper) {
         this.props = props;
         this.authService = authService;
-        this.httpClient = elasticsearchHttpClient;
+        this.httpClient = exensioHttpClient;
         this.objectMapper = objectMapper;
     }
 

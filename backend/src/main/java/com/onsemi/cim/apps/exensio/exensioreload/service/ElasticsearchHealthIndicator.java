@@ -1,17 +1,19 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.stereotype.Component;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 
 /**
  * Health indicator for Elasticsearch.
@@ -27,7 +29,8 @@ public class ElasticsearchHealthIndicator implements HealthIndicator {
     private final CpElasticsearchProperties props;
     private final HttpClient httpClient;
 
-    public ElasticsearchHealthIndicator(CpElasticsearchProperties props, HttpClient httpClient) {
+    public ElasticsearchHealthIndicator(CpElasticsearchProperties props,
+                                        @Qualifier("elasticsearchHttpClient") HttpClient httpClient) {
         this.props = props;
         this.httpClient = httpClient;
     }

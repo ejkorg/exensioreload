@@ -1,19 +1,26 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service.ai;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.onsemi.cim.apps.exensio.exensioreload.config.AiProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onsemi.cim.apps.exensio.exensioreload.config.AiProperties;
 
 /**
  * Gateway service for AI providers (Anthropic Claude, OpenAI, Groq, Ollama).
@@ -33,7 +40,9 @@ public class AiGatewayService {
     // Simple in-memory cache for responses
     private final Map<String, CacheEntry> responseCache = new ConcurrentHashMap<>();
 
-    public AiGatewayService(AiProperties props, HttpClient httpClient, ObjectMapper objectMapper) {
+    public AiGatewayService(AiProperties props,
+                            @Qualifier("aiHttpClient") HttpClient httpClient,
+                            ObjectMapper objectMapper) {
         this.props = props;
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
