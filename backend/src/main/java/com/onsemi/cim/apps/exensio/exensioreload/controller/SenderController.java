@@ -1268,7 +1268,8 @@ public class SenderController {
                 lots,
                 null, // waferIds - not provided in simple lot check
                 null, // blocks - not needed for simple lot check
-                dataType
+                dataType,
+                null  // enableSnowflakeFallback - use config default
             );
 
             // Call ExensioPreCheckService.check()
