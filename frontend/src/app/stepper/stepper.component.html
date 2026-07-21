@@ -300,6 +300,13 @@
             (checkedChange)="preFlightVerify.set($event)"
           >
           </app-glass-checkbox>
+          <app-glass-checkbox
+            label="Also search Snowflake if Exensio returns nothing"
+            [checked]="enableSnowflakeFallback() ?? false"
+            (checkedChange)="enableSnowflakeFallback.set($event)"
+            [glassTooltip]="'Enable Snowflake secondary fallback for preflight check'"
+          >
+          </app-glass-checkbox>
         </div>
         <app-glass-button
           variant="primary"
@@ -520,7 +527,10 @@
           <div class="empty-state" *ngIf="!previewLoading() && paginatedPreviewRows().length === 0">
             <app-glass-icon name="search_off" [size]="48" color="muted"></app-glass-icon>
             <p class="empty-state-title">No payloads found</p>
-            <p class="empty-state-subtitle">No matching files were discovered for your current configuration. Try adjusting your filters or date range.</p>
+            <p class="empty-state-subtitle">
+              No matching files were discovered for your current configuration. Try adjusting your filters or date
+              range.
+            </p>
           </div>
 
           <div class="loading-overlay" *ngIf="previewLoading()">

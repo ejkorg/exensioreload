@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.SchemaFallbackConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckResponse;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckRow;
@@ -110,6 +111,7 @@ public class ExensioPreCheckService {
             """;
 
     private final ExensioProperties exensioProperties;
+    private final SchemaFallbackConfig schemaFallbackConfig;
     private final ExensioAuthService authService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -118,12 +120,14 @@ public class ExensioPreCheckService {
 
     public ExensioPreCheckService(
             ExensioProperties exensioProperties,
+            SchemaFallbackConfig schemaFallbackConfig,
             ExensioAuthService authService,
             ObjectMapper objectMapper,
             @Qualifier("exensioHttpClient") HttpClient exensioHttpClient,
             @Qualifier("snowflakeDataSource") @org.springframework.beans.factory.annotation.Autowired(required = false) DataSource snowflakeDataSource,
             @Value("${exensio.precheck-row-limit:10000}") int precheckRowLimit) {
         this.exensioProperties = exensioProperties;
+        this.schemaFallbackConfig = schemaFallbackConfig;
         this.authService = authService;
         this.objectMapper = objectMapper;
         this.httpClient = exensioHttpClient;
@@ -133,7 +137,59 @@ public class ExensioPreCheckService {
         if (snowflakeDataSource == null) {
             log.info("[ExensioPreCheck] Snowflake DataSource not configured — will use Exensio HTTP only (no Snowflake fallback)");
         }
+        
+        // Log schema fallback configuration at startup
+        logSchemaFallbackConfiguration();
     }
+
+    /**
+     * Logs the schema fallback configuration at service initialization.
+     * Called from constructor to document configuration at startup.
+     *
+     * @see #resolveSchemaPriorityList()
+     * @see #isSnowflakeSecondaryFallbackEnabled()
+     */
+    private void logSchemaFallbackConfiguration() {
+        if (schemaFallbackConfig.isSchemaFallbackEnabled()) {
+            List<String> schemas = schemaFallbackConfig.resolveSchemaPriorityList();
+            log.info("[ExensioPreCheck] Schema Fallback: enabled=true, schemas={}, snowflakeSecondary={}",
+                schemas, schemaFallbackConfig.isEnableSnowflakeSecondary());
+        } else {
+            log.info("[ExensioPreCheck] Schema Fallback: enabled=false (using single schema only)");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Configuration helper methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Determines whether Snowflake secondary fallback is enabled.
+     * Can be set via: config property + runtime flag from caller.
+     *
+     * <p>Requirements: 5.1, 5.2</p>
+     *
+     * @return true if Snowflake fallback should be used when HTTP finds nothing
+     */
+    public boolean isSnowflakeSecondaryFallbackEnabled() {
+        return schemaFallbackConfig.isEnableSnowflakeSecondary();
+    }
+
+    /**
+     * Resolves schema priority list from configuration.
+     * Returns default [PRODUCTION, SANDBOX] if not configured.
+     *
+     * <p>Requirements: 5.1, 5.2</p>
+     *
+     * @return List of schema names in priority order
+     */
+    public List<String> resolveSchemaPriorityList() {
+        return schemaFallbackConfig.resolveSchemaPriorityList();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Public API — orchestration
+    // ─────────────────────────────────────────────────────────────────────────
 
     // ─────────────────────────────────────────────────────────────────────────
     // Public API — orchestration
@@ -141,10 +197,149 @@ public class ExensioPreCheckService {
 
     /**
      * Checks whether the submitted lots exist in Exensio.
+     *
+     * <p>Orchestration Strategy (HTTP-First with Snowflake Fallback):
+     * <ol>
+     *   <li><strong>Parse Configuration:</strong> Resolve schema priority list and Snowflake secondary flag</li>
+     *   <li><strong>HTTP Primary:</strong> Try HTTP path with configured schemas in order
+     *     <ul>
+     *       <li>If HTTP finds lots: return immediately (success)</li>
+     *       <li>If HTTP returns empty (no lots found): proceed to step 3</li>
+     *       <li>If HTTP fails: fall through to step 3 (Snowflake secondary)</li>
+     *     </ul>
+     *   </li>
+     *   <li><strong>Snowflake Secondary:</strong> If enabled and HTTP found nothing:
+     *     <ul>
+     *       <li>Query both PRODUCTION and SANDBOX in single UNION</li>
+     *       <li>Prioritize PRODUCTION results on duplicate</li>
+     *       <li>If Snowflake finds lots: return (success)</li>
+     *       <li>If Snowflake also returns empty or fails: return soft error</li>
+     *     </ul>
+     *   </li>
+     * </ol>
+     *
+     * <p>Returns a soft-failure response (with {@code error} field) rather than throwing.
+     *
+     * <p>Requirements: 1.1, 1.5, 2.4, 6.2, 8.1</p>
+     */
+    public ExensioPreCheckResponse check(ExensioPreCheckRequest request) {
+        if (request.lotIds() == null || request.lotIds().isEmpty()) {
+            return new ExensioPreCheckResponse(
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    null);
+        }
+
+        long orchestrationStart = System.currentTimeMillis();
+        log.info("[ExensioPreCheck] Starting orchestration: lots={}, env={}", request.lotIds().size(), request.environment());
+
+        // Step 1: Parse configuration
+        List<String> schemaPriority = resolveSchemaPriorityList();
+        boolean configDefault = isSnowflakeSecondaryFallbackEnabled();
+        boolean enableSnowflakeFallback = request.shouldEnableSnowflakeFallback(configDefault);
+
+        log.debug("[ExensioPreCheck] Orchestration: schemaPriority={}, snowflakeFallback={}", 
+                schemaPriority, enableSnowflakeFallback);
+
+        // Step 2: Primary HTTP path with multi-schema fallback
+        if (exensioProperties.isConfigured()) {
+            log.debug("[ExensioPreCheck] Attempting HTTP path with schemas: {}", schemaPriority);
+            ExensioPreCheckResponse httpResult = checkViaExensioHttpMultiSchema(request, schemaPriority);
+            
+            if (httpResult != null && !httpResult.lotsFound().isEmpty()) {
+                long elapsed = System.currentTimeMillis() - orchestrationStart;
+                log.info("[ExensioPreCheck] Orchestration complete (HTTP success) in {} ms", elapsed);
+                return httpResult; // HTTP found results, return success
+            }
+            
+            if (httpResult != null && httpResult.error() != null) {
+                long elapsed = System.currentTimeMillis() - orchestrationStart;
+                log.warn("[ExensioPreCheck] HTTP path error: {}", httpResult.error());
+                // HTTP returned explicit error, but still try Snowflake if available
+            } else {
+                long elapsed = System.currentTimeMillis() - orchestrationStart;
+                log.debug("[ExensioPreCheck] HTTP path returned empty after {} ms", elapsed);
+            }
+        } else {
+            log.debug("[ExensioPreCheck] Exensio not configured — skipping HTTP raw-sql path");
+        }
+
+        // Step 3: Secondary Snowflake fallback (only if HTTP returned empty/failed and fallback enabled)
+        if (enableSnowflakeFallback && snowflakeDataSource != null) {
+            log.debug("[ExensioPreCheck] Attempting Snowflake secondary fallback");
+            ExensioPreCheckResponse snowflakeResult = checkViaSnowflake(request);
+            
+            if (snowflakeResult != null && !snowflakeResult.lotsFound().isEmpty()) {
+                long elapsed = System.currentTimeMillis() - orchestrationStart;
+                log.info("[ExensioPreCheck] Orchestration complete (Snowflake success) in {} ms", elapsed);
+                return snowflakeResult; // Snowflake found results, return success
+            }
+            
+            if (snowflakeResult != null && snowflakeResult.error() != null) {
+                log.warn("[ExensioPreCheck] Snowflake path error: {}", snowflakeResult.error());
+                // Snowflake returned explicit error
+            } else if (snowflakeResult != null) {
+                long elapsed = System.currentTimeMillis() - orchestrationStart;
+                log.debug("[ExensioPreCheck] Snowflake path returned empty after {} ms", elapsed);
+            } else {
+                log.debug("[ExensioPreCheck] Snowflake path not available");
+            }
+        } else {
+            if (!enableSnowflakeFallback) {
+                log.debug("[ExensioPreCheck] Snowflake secondary fallback disabled by configuration");
+            } else {
+                log.debug("[ExensioPreCheck] Snowflake DataSource not available for fallback");
+            }
+        }
+
+        // Step 4: All paths failed or returned empty
+        long totalElapsed = System.currentTimeMillis() - orchestrationStart;
+        String errorMessage = buildOrchestratedErrorMessage(exensioProperties.isConfigured(), enableSnowflakeFallback, snowflakeDataSource != null);
+        log.warn("[ExensioPreCheck] Orchestration failed (no lots found in any path) after {} ms: {}", totalElapsed, errorMessage);
+        
+        return new ExensioPreCheckResponse(
+                request.lotIds(), // All lots are not found
+                Collections.emptyList(),
+                Collections.emptyList(),
+                errorMessage);
+    }
+
+    /**
+     * Builds an informative error message describing which paths were attempted during orchestration.
+     *
+     * @param exensioConfigured whether Exensio HTTP endpoint is configured
+     * @param snowflakeFallbackEnabled whether Snowflake fallback is enabled
+     * @param snowflakeAvailable whether Snowflake DataSource is available
+     * @return error message describing attempted paths
+     */
+    private String buildOrchestratedErrorMessage(boolean exensioConfigured, boolean snowflakeFallbackEnabled, boolean snowflakeAvailable) {
+        StringBuilder msg = new StringBuilder("Pre-flight check: unable to verify lot existence. Attempted paths: ");
+        
+        if (exensioConfigured) {
+            msg.append("HTTP (PRODUCTION→SANDBOX)");
+        } else {
+            msg.append("HTTP (not configured)");
+        }
+        
+        if (snowflakeFallbackEnabled && snowflakeAvailable) {
+            msg.append(", Snowflake (both schemas)");
+        } else if (snowflakeFallbackEnabled) {
+            msg.append(", Snowflake (not available)");
+        } else {
+            msg.append(", Snowflake (disabled)");
+        }
+        
+        msg.append(". All paths exhausted without result.");
+        return msg.toString();
+    }
+
+    /**
+     * Checks whether the submitted lots exist in Exensio.
      * Tries Exensio HTTP raw-SQL first; falls back to Snowflake JDBC on failure.
      * Returns a soft-failure response (with {@code error} field) rather than throwing.
      */
-    public ExensioPreCheckResponse check(ExensioPreCheckRequest request) {
+    public ExensioPreCheckResponse check_original(ExensioPreCheckRequest request) {
         if (request.lotIds() == null || request.lotIds().isEmpty()) {
             return new ExensioPreCheckResponse(
                     Collections.emptyList(),
@@ -245,8 +440,110 @@ public class ExensioPreCheckService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Primary: Exensio HTTP raw-SQL
+    // Primary: Exensio HTTP raw-SQL (Multi-Schema Strategy)
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Executes HTTP multi-schema sequential query logic for preflight check.
+     * Queries schemas in priority order from configuration: PRODUCTION → SANDBOX.
+     * Reuses authentication token across schema attempts.
+     *
+     * <p>Algorithm:
+     * <ol>
+     *   <li>For each configured schema in priority order:
+     *     <ol>
+     *       <li>Execute HTTP raw-sql query for that schema</li>
+     *       <li>If successful with results: return immediately (stop fallback)</li>
+     *       <li>If 401 (Unauthorized): invalidate token, refresh, retry same schema once</li>
+     *       <li>If transient error (5xx, timeout): log and continue to next schema</li>
+     *       <li>If successful but empty: continue to next schema</li>
+     *     </ol>
+     *   </li>
+     *   <li>If all schemas exhausted without results: return null (signal Snowflake fallback)</li>
+     * </ol>
+     *
+     * <p>Requirements: 1.1, 1.4, 2.3, 10.1, 10.2, 10.3</p>
+     *
+     * @param request the pre-check request
+     * @param schemas list of schema names in priority order (typically [PRODUCTION, SANDBOX])
+     * @return populated response if found, null to signal Snowflake secondary fallback should be attempted
+     */
+    ExensioPreCheckResponse checkViaExensioHttpMultiSchema(ExensioPreCheckRequest request, List<String> schemas) {
+        if (request.lotIds() == null || request.lotIds().isEmpty()) {
+            return new ExensioPreCheckResponse(
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    null);
+        }
+
+        if (schemas == null || schemas.isEmpty()) {
+            log.debug("[ExensioPreCheck] HTTP multi-schema: no schemas to query");
+            return null;
+        }
+
+        String sql = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType());
+        long startTime = System.currentTimeMillis();
+
+        for (int i = 0; i < schemas.size(); i++) {
+            String schema = schemas.get(i);
+            log.debug("[ExensioPreCheck] HTTP multi-schema attempt {} of {}: schema={}, lots={}",
+                    i + 1, schemas.size(), schema, request.lotIds().size());
+
+            try {
+                // Get or refresh token for this schema
+                String token = authService.getToken(schema);
+
+                // Execute HTTP raw-sql query
+                String responseBody = callRawSql(sql, token, schema);
+
+                if (responseBody == null) {
+                    log.debug("[ExensioPreCheck] HTTP {}: auth failed after token refresh, trying next schema", schema);
+                    continue; // Try next schema
+                }
+
+                // Parse response
+                ExensioPreCheckResponse result = parseResponse(responseBody, request.lotIds());
+
+                if (result == null) {
+                    log.debug("[ExensioPreCheck] HTTP {}: parse failed, trying next schema", schema);
+                    continue; // Try next schema
+                }
+
+                if (result.error() != null) {
+                    log.debug("[ExensioPreCheck] HTTP {}: parse error ({}), trying next schema",
+                            schema, result.error());
+                    continue; // Try next schema
+                }
+
+                // Check if we found any lots
+                if (!result.lotsFound().isEmpty()) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    log.info("[ExensioPreCheck] HTTP {}: found {} lots in {} ms",
+                            schema, result.lotsFound().size(), elapsed);
+                    return result; // Found results, stop fallback
+                }
+
+                // This schema returned empty, continue to next schema
+                log.debug("[ExensioPreCheck] HTTP {}: no lots found, trying next schema", schema);
+
+            } catch (ExensioAuthService.ExensioAuthException e) {
+                log.debug("[ExensioPreCheck] HTTP {}: auth error ({}), trying next schema",
+                        schema, e.getMessage());
+                continue; // Try next schema
+            } catch (Exception e) {
+                log.debug("[ExensioPreCheck] HTTP {}: unexpected error ({}), trying next schema",
+                        schema, e.getMessage());
+                continue; // Try next schema
+            }
+        }
+
+        // All schemas exhausted without finding lots
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.debug("[ExensioPreCheck] HTTP multi-schema: all {} schemas exhausted after {} ms, no lots found",
+                schemas.size(), elapsed);
+        return null; // Signal Snowflake secondary fallback should be attempted
+    }
 
     /**
      * Executes the pre-check query via the Exensio HTTP {@code POST /v1/key/raw-sql} endpoint.
@@ -612,6 +909,106 @@ public class ExensioPreCheckService {
     private String resolveSchema(String environment) {
         String schema = exensioProperties.getDbschema();
         return (schema != null && !schema.isBlank()) ? schema : "PRODUCTION";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Error handling and classification
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Classifies whether an error is transient (retriable) or permanent.
+     * Used to determine whether to attempt next schema in fallback sequence.
+     *
+     * <p>Transient errors (should retry next schema):
+     * <ul>
+     *   <li>HTTP 429 (Too Many Requests)</li>
+     *   <li>HTTP 5xx (Server errors)</li>
+     *   <li>Connection timeouts</li>
+     *   <li>Socket timeouts</li>
+     *   <li>Temporary unavailable (e.g., temporarily down)</li>
+     * </ul>
+     *
+     * <p>Permanent errors (should skip to Snowflake):
+     * <ul>
+     *   <li>HTTP 401 (Auth failed after refresh)</li>
+     *   <li>HTTP 403 (Forbidden)</li>
+     *   <li>HTTP 404 (Not found)</li>
+     *   <li>SQL syntax errors</li>
+     *   <li>Connection refused</li>
+     *   <li>Invalid credentials</li>
+     * </ul>
+     *
+     * <p>Requirements: 6.1, 6.3, 6.5</p>
+     *
+     * @param exception the exception to classify
+     * @return true if error is transient (retriable), false if permanent
+     */
+    public static boolean isTransientError(Exception exception) {
+        if (exception == null) {
+            return false;
+        }
+
+        String message = exception.getMessage();
+        if (message == null) {
+            message = "";
+        }
+        String msgLower = message.toLowerCase();
+
+        // Network-level transient errors
+        if (msgLower.contains("timeout") || 
+            msgLower.contains("timed out") ||
+            msgLower.contains("socket timeout") ||
+            msgLower.contains("connection timeout")) {
+            return true;
+        }
+
+        // Connection transient errors
+        if (msgLower.contains("temporarily") ||
+            msgLower.contains("temporarily unavailable") ||
+            msgLower.contains("service unavailable")) {
+            return true;
+        }
+
+        // HTTP 429, 5xx implied in exception messages
+        if (msgLower.contains("429") ||
+            msgLower.contains("too many requests") ||
+            msgLower.contains("rate limit")) {
+            return true;
+        }
+
+        if (msgLower.contains("500") || 
+            msgLower.contains("502") || 
+            msgLower.contains("503") || 
+            msgLower.contains("504") ||
+            msgLower.contains("server error") ||
+            msgLower.contains("bad gateway") ||
+            msgLower.contains("service unavailable")) {
+            return true;
+        }
+
+        // Permanent errors: auth, permission, not found
+        if (msgLower.contains("401") || 
+            msgLower.contains("unauthorized") ||
+            msgLower.contains("403") ||
+            msgLower.contains("forbidden") ||
+            msgLower.contains("404") ||
+            msgLower.contains("not found") ||
+            msgLower.contains("invalid credentials") ||
+            msgLower.contains("authentication") ||
+            msgLower.contains("permission denied")) {
+            return false;
+        }
+
+        // SQL-level errors are typically permanent
+        if (msgLower.contains("sql") ||
+            msgLower.contains("syntax") ||
+            msgLower.contains("column") ||
+            msgLower.contains("table")) {
+            return false;
+        }
+
+        // Unknown errors: assume transient to be conservative
+        return true;
     }
 
     private static ExensioPreCheckResponse softError(String message) {

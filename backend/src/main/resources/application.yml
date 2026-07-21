@@ -148,6 +148,19 @@ exensio:
   password: ${EXENSIO_PASSWORD:}
   dbname: ${EXENSIO_DBNAME:}
   dbschema: ${EXENSIO_DBSCHEMA:PRODUCTION}
+  # Schema Fallback Configuration - Requirements: 5.1, 5.2, 5.4, 5.5
+  schema-fallback-enabled: ${EXENSIO_SCHEMA_FALLBACK_ENABLED:true}
+  # Comma-separated list of schemas to query in priority order
+  # Example: "PRODUCTION,SANDBOX" or "SANDBOX,PRODUCTION"
+  schema-fallback-priority-list: ${EXENSIO_SCHEMA_FALLBACK_PRIORITY_LIST:PRODUCTION,SANDBOX}
+  # Enable/disable Snowflake as fallback when HTTP returns no results
+  enable-snowflake-secondary: ${EXENSIO_ENABLE_SNOWFLAKE_SECONDARY:true}
+  # Maximum number of schema attempts before returning error
+  schema-fallback-max-attempts: ${EXENSIO_SCHEMA_FALLBACK_MAX_ATTEMPTS:3}
+  # Exponential backoff base for HTTP retries (milliseconds)
+  schema-fallback-backoff-base-ms: ${EXENSIO_SCHEMA_FALLBACK_BACKOFF_BASE_MS:100}
+  # Exponential backoff maximum delay (milliseconds)
+  schema-fallback-backoff-max-ms: ${EXENSIO_SCHEMA_FALLBACK_BACKOFF_MAX_MS:5000}
   poll-interval-ms: 60000
   timeout-minutes: 60
   logRequestPayloads: true

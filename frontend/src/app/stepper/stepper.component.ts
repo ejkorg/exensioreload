@@ -294,8 +294,7 @@ export class StepperComponent implements OnInit, OnDestroy {
   selectedSite = signal<string | null>(null);
   historicalMode = signal(false);
   preFlightVerify = signal(false);
-
-  // Helper to create unique row key (metadataId + dataId for uniqueness)
+  enableSnowflakeFallback = signal<boolean | null>(null);
   private getRowKey(row: DiscoveryPreviewRow): string {
     // IMPORTANT: metadataId/dataId can repeat across multiple wafers (PCM).
     // Include lot/wafer/filename so selection and staging can target every row.
@@ -754,7 +753,9 @@ export class StepperComponent implements OnInit, OnDestroy {
     const enrichmentCount = hasFileBreakdown ? files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING').length : 0;
     const enrichmentTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'CP_TIMEOUT').length : 0;
     const exensioLoadingCount = hasFileBreakdown ? files.filter((f) => f.status === 'EXENSIO_MONITORING').length : 0;
-    const exensioTimeoutCount = hasFileBreakdown ? files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED').length : 0;
+    const exensioTimeoutCount = hasFileBreakdown
+      ? files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED').length
+      : 0;
 
     const processing = enrichmentCount + enrichmentTimeoutCount + exensioLoadingCount + exensioTimeoutCount;
 
@@ -1522,6 +1523,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       size,
       bypassCap: useLargePreviewWindow,
       historicalMode: this.historicalMode(),
+      enableSnowflakeFallback: this.enableSnowflakeFallback(),
     };
 
     const snapshot: DiscoveryFiltersSnapshot = {
@@ -2253,6 +2255,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.deviceFilterControl.setValue('', { emitEvent: false });
     this.historicalMode.set(false);
     this.preFlightVerify.set(false);
+    this.enableSnowflakeFallback.set(null);
 
     // Clear all filter options
     this.siteOptions.set([]);

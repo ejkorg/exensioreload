@@ -19,9 +19,16 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.ExensioPreCheckResponse;
  * <p>Caches pre-flight verification results to avoid redundant queries when the same
  * lots are verified multiple times within a short time window.</p>
  * 
- * <p>Cache key: hash of (lotIds, waferIds, dataType, blocks). Cache TTL: 5 minutes (configurable).</p>
+ * <p>Cache key: hash of (lotIds, waferIds, dataType, blocks, schemaFallbackState).
+ * Cache TTL: 5 minutes (configurable).</p>
  * 
- * <p>Feature: lot-existence-verification, Property: Pre-Flight Result Caching</p>
+ * <p>Requirements: 2.1</p>
+ * 
+ * <p>Schema Fallback Awareness:
+ * The cache key now includes the enableSnowflakeFallback state to ensure that requests
+ * with different fallback settings don't share the same cached result. This is important
+ * because two requests with the same lots but different fallback configuration might
+ * produce different results (one with HTTP-only, one with Snowflake fallback).</p>
  */
 @Service
 public class ExensioPreCheckCacheService {
@@ -41,7 +48,7 @@ public class ExensioPreCheckCacheService {
                 .recordStats()
                 .build();
 
-        log.info("[ExensioPreCheckCache] Initialized with TTL={}min, maxSize=1000", cacheTtlMinutes);
+        log.info("[ExensioPreCheckCache] Initialized with TTL={}min, maxSize=1000, schema-fallback-aware", cacheTtlMinutes);
     }
 
     /**
@@ -49,6 +56,14 @@ public class ExensioPreCheckCacheService {
      * 
      * <p>Cache hit: Returns cached result immediately (log info level).
      * Cache miss: Queries ExensioPreCheckService and caches the result.</p>
+     * 
+     * <p>Cache key includes:
+     * - Lot IDs
+     * - Wafer IDs
+     * - Data Type
+     * - Date blocks
+     * - enableSnowflakeFallback flag (NEW)
+     * </p>
      * 
      * @param request the pre-check request
      * @return cached or fresh pre-check response
@@ -59,35 +74,42 @@ public class ExensioPreCheckCacheService {
         // Try cache first
         ExensioPreCheckResponse cached = cache.getIfPresent(cacheKey);
         if (cached != null) {
-            log.info("[ExensioPreCheckCache] Cache HIT: lots={}, wafers={}, dataType={}",
+            log.info("[ExensioPreCheckCache] Cache HIT: lots={}, wafers={}, dataType={}, snowflakeFallback={}",
                     request.lotIds().size(),
                     request.waferIds() != null ? request.waferIds().size() : 0,
-                    request.dataType());
+                    request.dataType(),
+                    request.enableSnowflakeFallback());
             return cached;
         }
 
         // Cache miss: execute query
-        log.debug("[ExensioPreCheckCache] Cache MISS: lots={}, wafers={}, dataType={} — querying...",
+        log.debug("[ExensioPreCheckCache] Cache MISS: lots={}, wafers={}, dataType={}, snowflakeFallback={} — querying...",
                 request.lotIds().size(),
                 request.waferIds() != null ? request.waferIds().size() : 0,
-                request.dataType());
+                request.dataType(),
+                request.enableSnowflakeFallback());
 
         ExensioPreCheckResponse result = preCheckService.check(request);
 
         // Cache the result (both success and error responses are cached to avoid repeated failures)
         cache.put(cacheKey, result);
 
-        log.debug("[ExensioPreCheckCache] Cached result: lotsFound={}, lotsNotFound={}, error={}",
+        log.debug("[ExensioPreCheckCache] Cached result: lotsFound={}, lotsNotFound={}, error={}, key={}",
                 result.lotsFound().size(),
                 result.lotsNotFound().size(),
-                result.error());
+                result.error() != null ? "present" : "none",
+                cacheKey);
 
         return result;
     }
 
     /**
      * Builds a cache key from the request parameters.
-     * Uses hash of lots, wafers, dataType, and date blocks for a compact key.
+     * Uses hash of lots, wafers, dataType, date blocks, and enableSnowflakeFallback for a compact key.
+     * 
+     * <p>Schema fallback awareness ensures that two requests with the same lots but different
+     * enableSnowflakeFallback flags produce different cache keys, preventing incorrect cache hits
+     * where HTTP-only results are returned to Snowflake-fallback-enabled requests.</p>
      */
     private String buildCacheKey(ExensioPreCheckRequest request) {
         StringBuilder sb = new StringBuilder();
@@ -120,6 +142,12 @@ public class ExensioPreCheckCacheService {
                     })
                     .forEach(b -> sb.append(b.year()).append("-").append(b.month()).append("|"));
         }
+        sb.append(":");
+
+        // Schema fallback awareness (NEW) - include enableSnowflakeFallback in cache key
+        // This ensures requests with different fallback settings don't share cached results
+        Boolean snowflakeFallback = request.enableSnowflakeFallback();
+        sb.append("fallback:").append(snowflakeFallback != null ? snowflakeFallback.toString() : "null");
 
         // Use hash to keep key compact
         return String.valueOf(sb.toString().hashCode());

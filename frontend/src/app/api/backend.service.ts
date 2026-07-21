@@ -90,6 +90,7 @@ export interface DiscoveryPreviewRequest {
   bypassCap?: boolean | null;
   historicalMode?: boolean | null;
   requestId?: string | null;
+  enableSnowflakeFallback?: boolean | null;
 }
 
 export interface DiscoveryPreviewRow {
