@@ -1296,8 +1296,12 @@ public class SenderController {
                 lotToSchema.putIfAbsent(lot, schema);
                 
                 // Collect wafers for this lot (if wafer data exists)
+                // Avoid duplicates for wafer-level queries
                 if (wafer != null && !wafer.isBlank()) {
-                    lotToWafers.computeIfAbsent(lot, k -> new ArrayList<>()).add(wafer);
+                    List<String> wafersForLot = lotToWafers.computeIfAbsent(lot, k -> new ArrayList<>());
+                    if (!wafersForLot.contains(wafer)) {
+                        wafersForLot.add(wafer);
+                    }
                 }
             }
             

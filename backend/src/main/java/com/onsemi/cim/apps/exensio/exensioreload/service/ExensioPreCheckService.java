@@ -704,6 +704,7 @@ public class ExensioPreCheckService {
      *   <li>Rows with {@code schemaName = 'NOT FOUND'} contribute to {@code lotsNotFound}.</li>
      *   <li>Rows with any other {@code schemaName} contribute to {@code lotsFound}.</li>
      *   <li>Comparison against submitted lot IDs is case-insensitive.</li>
+     *   <li>For wafer-level queries, multiple rows per lot are preserved to capture all wafers.</li>
      * </ul>
      *
      * @param rows           rows returned from the Snowflake query
@@ -729,6 +730,7 @@ public class ExensioPreCheckService {
                 .collect(Collectors.toList());
 
         // Only include rows that were actually found (exclude NOT FOUND sentinel rows)
+        // For wafer-level queries, keep all wafer rows per lot
         List<ExensioPreCheckRow> foundRows = rows.stream()
                 .filter(r -> !"NOT FOUND".equalsIgnoreCase(r.schemaName()))
                 .collect(Collectors.toList());
@@ -757,49 +759,87 @@ public class ExensioPreCheckService {
         
         StringBuilder sb = new StringBuilder();
 
-        sb.append("SELECT lot_id, end_time, ppid, wafer_id FROM (\n");
-        sb.append("  SELECT\n");
-        sb.append("    l.lot_id                                                         AS lot_id,\n");
-        sb.append("    NVL(TO_CHAR(ol.end_time,'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), '') AS end_time,\n");
-        sb.append("    NVL(p.ppid, '')                                                  AS ppid,\n");
-        sb.append("    NVL(w.wf_id, '')                                                 AS wafer_id\n");
-        sb.append("  FROM op_log ol\n");
-        sb.append("  JOIN lot      l   ON l.lot_key  = ol.lot_key\n");
-        sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
-        sb.append("  LEFT JOIN wf_log  wfl ON wfl.lg_key = ol.lg_key\n");
-        sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
+        // For wafer-level classes without specific wafer filter, retrieve all wafers per lot
+        // Otherwise, return a single row per lot with empty wafer_id for lot-level classes
+        if (isWaferLevel && (waferIds == null || waferIds.isEmpty())) {
+            // Query all wafers per lot (wafer-level, no filter)
+            sb.append("SELECT DISTINCT lot_id, wafer_id FROM (\n");
+            sb.append("  SELECT\n");
+            sb.append("    l.lot_id                    AS lot_id,\n");
+            sb.append("    NVL(w.wf_id, '')            AS wafer_id\n");
+            sb.append("  FROM op_log ol\n");
+            sb.append("  JOIN lot      l   ON l.lot_key  = ol.lot_key\n");
+            sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
+            sb.append("  LEFT JOIN wf_log  wfl ON wfl.lg_key = ol.lg_key\n");
+            sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
 
-        sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
-        sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
-        for (int i = 0; i < lotIds.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append("UPPER(TRIM('").append(escapeSql(lotIds.get(i))).append("'))");
-        }
-        sb.append(")\n");
-
-        // Wafer-level filtering for Classes 1, 4, 5, 14
-        if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
-            sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
-            for (int i = 0; i < waferIds.size(); i++) {
+            sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
+            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
+            for (int i = 0; i < lotIds.size(); i++) {
                 if (i > 0) sb.append(", ");
-                sb.append("UPPER(TRIM('").append(escapeSql(waferIds.get(i))).append("'))");
+                sb.append("UPPER(TRIM('").append(escapeSql(lotIds.get(i))).append("'))");
             }
             sb.append(")\n");
-        }
 
-        List<String> dateRangeClauses = buildDateRangeClauses(blocks);
-        if (!dateRangeClauses.isEmpty()) {
-            sb.append("  AND (\n");
-            for (int i = 0; i < dateRangeClauses.size(); i++) {
-                if (i > 0) sb.append("    OR ");
-                else sb.append("    ");
-                sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
+            List<String> dateRangeClauses = buildDateRangeClauses(blocks);
+            if (!dateRangeClauses.isEmpty()) {
+                sb.append("  AND (\n");
+                for (int i = 0; i < dateRangeClauses.size(); i++) {
+                    if (i > 0) sb.append("    OR ");
+                    else sb.append("    ");
+                    sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
+                }
+                sb.append("  )\n");
             }
-            sb.append("  )\n");
-        }
 
-        sb.append("  ORDER BY l.lot_id, ol.end_time DESC\n");
-        sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
+            sb.append("  ORDER BY l.lot_id\n");
+            sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
+        } else {
+            // Original query for lot-level or wafer-filtered queries
+            sb.append("SELECT lot_id, end_time, ppid, wafer_id FROM (\n");
+            sb.append("  SELECT\n");
+            sb.append("    l.lot_id                                                         AS lot_id,\n");
+            sb.append("    NVL(TO_CHAR(ol.end_time,'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), '') AS end_time,\n");
+            sb.append("    NVL(p.ppid, '')                                                  AS ppid,\n");
+            sb.append("    NVL(w.wf_id, '')                                                 AS wafer_id\n");
+            sb.append("  FROM op_log ol\n");
+            sb.append("  JOIN lot      l   ON l.lot_key  = ol.lot_key\n");
+            sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
+            sb.append("  LEFT JOIN wf_log  wfl ON wfl.lg_key = ol.lg_key\n");
+            sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
+
+            sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
+            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
+            for (int i = 0; i < lotIds.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append("UPPER(TRIM('").append(escapeSql(lotIds.get(i))).append("'))");
+            }
+            sb.append(")\n");
+
+            // Wafer-level filtering for Classes 1, 4, 5, 14
+            if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
+                sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
+                for (int i = 0; i < waferIds.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append("UPPER(TRIM('").append(escapeSql(waferIds.get(i))).append("'))");
+                }
+                sb.append(")\n");
+            }
+
+            List<String> dateRangeClauses = buildDateRangeClauses(blocks);
+            if (!dateRangeClauses.isEmpty()) {
+                sb.append("  AND (\n");
+                for (int i = 0; i < dateRangeClauses.size(); i++) {
+                    if (i > 0) sb.append("    OR ");
+                    else sb.append("    ");
+                    sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
+                }
+                sb.append("  )\n");
+            }
+
+            sb.append("  ORDER BY l.lot_id, ol.end_time DESC\n");
+            sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
+        }
 
         return sb.toString();
     }
