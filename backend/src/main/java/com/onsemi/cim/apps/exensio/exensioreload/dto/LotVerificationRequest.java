@@ -6,5 +6,6 @@ public record LotVerificationRequest(
         List<String> lots,
         String site,
         String environment,
-        String dataType
+        String dataType,
+        List<String> wafers  // Optional: specific wafers to check (bypasses discovery)
 ) {}

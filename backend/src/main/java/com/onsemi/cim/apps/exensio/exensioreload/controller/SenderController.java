@@ -57,6 +57,8 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadResponse;
 import com.onsemi.cim.apps.exensio.exensioreload.entity.SenderQueueEntry;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderQueueRepository;
 import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioPreCheckCacheService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioPreCheckService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioSqlUtilService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.MailService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.SenderDispatchService;
@@ -92,8 +94,10 @@ public class SenderController {
     private final MailService mailService;
     private final com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService;
     private final ExensioPreCheckCacheService exensioPreCheckService;
+    private final com.onsemi.cim.apps.exensio.exensioreload.service.WaferDiscoveryService waferDiscoveryService;
+    private final com.onsemi.cim.apps.exensio.exensioreload.service.ParallelSchemaCheckService parallelSchemaCheckService;
 
-    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckCacheService exensioPreCheckService) {
+    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckCacheService exensioPreCheckService, com.onsemi.cim.apps.exensio.exensioreload.service.WaferDiscoveryService waferDiscoveryService, com.onsemi.cim.apps.exensio.exensioreload.service.ParallelSchemaCheckService parallelSchemaCheckService) {
         this.senderService = senderService;
         this.repo = repo;
         this.metadataImporterService = metadataImporterService;
@@ -106,6 +110,8 @@ public class SenderController {
         this.mailService = mailService;
         this.stageSessionService = stageSessionService;
         this.exensioPreCheckService = exensioPreCheckService;
+        this.waferDiscoveryService = waferDiscoveryService;
+        this.parallelSchemaCheckService = parallelSchemaCheckService;
     }
 
     // Expose download URL template defined in dbconnections.yml/json for the selected site/environment.
@@ -1245,45 +1251,76 @@ public class SenderController {
             return ResponseEntity.badRequest().build();
         }
 
-        List<String> lots = request.lots();
-        if (lots.size() > 1000) {
-            return ResponseEntity.badRequest()
-                .body(new LotVerificationResponse(
-                    Map.of(),
-                    "Too many lots. Maximum 1000 lots per request."
-                ));
-        }
-
-        // Extract dataType from request (required field)
-        String dataType = request.dataType();
-        if (dataType == null || dataType.isBlank()) {
-            return ResponseEntity.badRequest()
-                .body(new LotVerificationResponse(
-                    Map.of(),
-                    "dataType is required for lot verification."
-                ));
-        }
-
         try {
-            // Transform LotVerificationRequest to ExensioPreCheckRequest
-            // Pass dataType and null blocks (no date filtering for simple lot verification)
+            // Step 1: Validate request
+            if (request == null || request.lots() == null || request.lots().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            List<String> lots = request.lots();
+            if (lots.size() > 1000) {
+                return ResponseEntity.badRequest()
+                    .body(new LotVerificationResponse(
+                        Map.of(),
+                        "Too many lots. Maximum 1000 lots per request."
+                    ));
+            }
+
+            // Step 2: Extract and validate dataType
+            String dataType = request.dataType();
+            if (dataType == null || dataType.isBlank()) {
+                return ResponseEntity.badRequest()
+                    .body(new LotVerificationResponse(
+                        Map.of(),
+                        "dataType is required for lot verification."
+                    ));
+            }
+
+            // Step 3: Determine if wafer-level class and discover wafers if needed
+            int pgcKey = ExensioPreCheckService.resolvePgcKey(dataType);
+            boolean isWaferLevel = ExensioSqlUtilService.isWaferLevelClass(pgcKey);
+            boolean hasWaferFilter = request.wafers() != null && !request.wafers().isEmpty();
+
+            List<String> waferIds = request.wafers();
+            
+            if (isWaferLevel && !hasWaferFilter) {
+                log.info("Lot verification: Wafer-level class detected (pgcKey={}). Discovering wafers for lots...", pgcKey);
+                waferIds = waferDiscoveryService.discoverWafersForLots(lots, pgcKey);
+                
+                if (waferIds.isEmpty()) {
+                    log.warn("Lot verification: No wafers discovered for {} lots", lots.size());
+                    // Continue anyway - maybe wafers exist in Exensio but not in local DB
+                }
+                
+                log.debug("Lot verification: Discovered {} wafers for {} lots", waferIds.size(), lots.size());
+            }
+
+            // Step 4: Build preflight check request
             ExensioPreCheckRequest preCheckRequest = new ExensioPreCheckRequest(
                 request.environment(),
                 lots,
-                null, // waferIds - not provided in simple lot check
-                null, // blocks - not needed for simple lot check
+                waferIds,  // Discovered wafers (or user-provided, or null for lot-level)
+                null,      // blocks - not needed for simple lot check
                 dataType,
-                null  // enableSnowflakeFallback - use config default
+                null       // enableSnowflakeFallback - use config default
             );
 
-            // Call ExensioPreCheckService.check()
-            ExensioPreCheckResponse preCheckResponse = exensioPreCheckService.check(preCheckRequest);
+            // Step 5: Execute preflight check
+            ExensioPreCheckResponse preCheckResponse;
+            
+            if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
+                // For wafer-level: check in parallel across PRODUCTION and SANDBOX schemas
+                log.debug("Lot verification: Executing parallel schema check for wafer-level class");
+                preCheckResponse = parallelSchemaCheckService.checkLotsParallel(lots, waferIds, preCheckRequest);
+            } else {
+                // For lot-level: use standard check
+                preCheckResponse = exensioPreCheckService.check(preCheckRequest);
+            }
 
-            // Transform ExensioPreCheckResponse to LotVerificationResponse
-            // Build map with schema info for each lot
+            // Step 6: Transform ExensioPreCheckResponse to LotVerificationResponse
             Map<String, LotVerificationResult> lotResults = new HashMap<>();
             
-            // Create lookup map: lotId -> (schemaName, wafers list) from rows
+            // Create lookup maps from rows
             Map<String, String> lotToSchema = new HashMap<>();
             Map<String, List<String>> lotToWafers = new HashMap<>();
             
@@ -1292,11 +1329,10 @@ public class SenderController {
                 String schema = row.schemaName();
                 String wafer = row.waferId();
                 
-                // Store schema (first occurrence wins due to priority ranking)
+                // Store schema (first occurrence wins)
                 lotToSchema.putIfAbsent(lot, schema);
                 
-                // Collect wafers for this lot (if wafer data exists)
-                // Avoid duplicates for wafer-level queries
+                // Collect wafers, avoiding duplicates
                 if (wafer != null && !wafer.isBlank()) {
                     List<String> wafersForLot = lotToWafers.computeIfAbsent(lot, k -> new ArrayList<>());
                     if (!wafersForLot.contains(wafer)) {
@@ -1309,17 +1345,18 @@ public class SenderController {
             for (String lot : lots) {
                 boolean found = preCheckResponse.lotsFound().contains(lot);
                 String schema = found ? lotToSchema.get(lot) : null;
-                List<String> wafers = found ? lotToWafers.getOrDefault(lot, Collections.emptyList()) : Collections.emptyList();
-                lotResults.put(lot, new LotVerificationResult(found, schema, wafers));
+                List<String> resultWafers = found ? lotToWafers.getOrDefault(lot, Collections.emptyList()) : Collections.emptyList();
+                lotResults.put(lot, new LotVerificationResult(found, schema, resultWafers));
             }
 
-            // Include error field from ExensioPreCheckResponse if present
+            // Step 7: Include error field from ExensioPreCheckResponse if present
+            String errorMessage = preCheckResponse.error();
             String error = preCheckResponse.error();
             
             log.info("Lot verification completed for sender {}: {} lots checked, {} found, {} not found",
                     id, lots.size(), preCheckResponse.lotsFound().size(), preCheckResponse.lotsNotFound().size());
 
-            return ResponseEntity.ok(new LotVerificationResponse(lotResults, error));
+            return ResponseEntity.ok(new LotVerificationResponse(lotResults, errorMessage));
 
         } catch (Exception e) {
             log.error("Lot verification failed for sender {}: {}", id, e.getMessage(), e);
