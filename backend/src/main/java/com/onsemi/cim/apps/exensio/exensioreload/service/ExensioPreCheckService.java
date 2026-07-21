@@ -120,17 +120,15 @@ public class ExensioPreCheckService {
             ExensioProperties exensioProperties,
             ExensioAuthService authService,
             ObjectMapper objectMapper,
+            @Qualifier("exensioHttpClient") HttpClient exensioHttpClient,
             @Qualifier("snowflakeDataSource") @org.springframework.beans.factory.annotation.Autowired(required = false) DataSource snowflakeDataSource,
             @Value("${exensio.precheck-row-limit:10000}") int precheckRowLimit) {
         this.exensioProperties = exensioProperties;
         this.authService = authService;
         this.objectMapper = objectMapper;
+        this.httpClient = exensioHttpClient;
         this.snowflakeDataSource = snowflakeDataSource;
         this.precheckRowLimit = precheckRowLimit;
-        this.httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
         
         if (snowflakeDataSource == null) {
             log.info("[ExensioPreCheck] Snowflake DataSource not configured — will use Exensio HTTP only (no Snowflake fallback)");
@@ -503,11 +501,10 @@ public class ExensioPreCheckService {
 
     /**
      * Determines if a pgc_key represents a wafer-level class.
-     * Class 1 (pgc_key 1), Class 4 (pgc_key 4), Class 5 (pgc_key 5), Class 14 (pgc_key 14) are wafer-level.
-     * Class 2 (pgc_key 2) is lot-level.
+     * Delegated to ExensioSqlUtilService for consistency.
      */
     private static boolean isWaferLevelClass(int pgcKey) {
-        return pgcKey == 1 || pgcKey == 4 || pgcKey == 5 || pgcKey == 14;
+        return ExensioSqlUtilService.isWaferLevelClass(pgcKey);
     }
 
     /**
@@ -596,44 +593,20 @@ public class ExensioPreCheckService {
     }
 
     private List<String> buildDateRangeClauses(List<PreCheckBlock> blocks) {
-        if (blocks == null || blocks.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        Set<String> seen = new java.util.LinkedHashSet<>();
-        List<String> clauses = new ArrayList<>();
-
-        for (PreCheckBlock block : blocks) {
-            if (block.year() == null) continue;
-
-            String key = block.year() + "-" + (block.month() != null ? block.month() : "null");
-            if (!seen.add(key)) continue;
-
-            if (block.month() == null) {
-                clauses.add(yearOnlyClause(block.year()));
-            } else {
-                clauses.add(yearMonthClause(block.year(), block.month()));
-            }
-        }
-
-        return clauses;
+        return ExensioSqlUtilService.buildDateRangeClauses(blocks);
     }
 
+    // SQL utilities now consolidated in ExensioSqlUtilService — use delegating methods for backward compatibility
     static String yearOnlyClause(int year) {
-        return "TRUNC(ol.end_time) >= TO_DATE('" + year + "-01-01','YYYY-MM-DD') " +
-               "AND TRUNC(ol.end_time) < TO_DATE('" + (year + 1) + "-01-01','YYYY-MM-DD')";
+        return ExensioSqlUtilService.yearOnlyClause(year);
     }
 
     static String yearMonthClause(int year, int month) {
-        String monthStr = String.format("%02d", month);
-        String dateStr  = year + "-" + monthStr + "-01";
-        return "TRUNC(ol.end_time) >= TO_DATE('" + dateStr + "','YYYY-MM-DD') " +
-               "AND TRUNC(ol.end_time) < ADD_MONTHS(TO_DATE('" + dateStr + "','YYYY-MM-DD'), 1)";
+        return ExensioSqlUtilService.yearMonthClause(year, month);
     }
 
     static String escapeSql(String value) {
-        if (value == null) return "";
-        return value.replace("'", "''");
+        return ExensioSqlUtilService.escapeSql(value);
     }
 
     private String resolveSchema(String environment) {

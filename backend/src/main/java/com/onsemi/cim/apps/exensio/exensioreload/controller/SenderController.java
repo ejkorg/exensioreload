@@ -52,7 +52,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadRequest;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StagePayloadResponse;
 import com.onsemi.cim.apps.exensio.exensioreload.entity.SenderQueueEntry;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderQueueRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioPreCheckService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioPreCheckCacheService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.MailService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.SenderDispatchService;
@@ -87,9 +87,9 @@ public class SenderController {
     private final com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig;
     private final MailService mailService;
     private final com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService;
-    private final ExensioPreCheckService exensioPreCheckService;
+    private final ExensioPreCheckCacheService exensioPreCheckService;
 
-    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckService exensioPreCheckService) {
+    public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckCacheService exensioPreCheckService) {
         this.senderService = senderService;
         this.repo = repo;
         this.metadataImporterService = metadataImporterService;

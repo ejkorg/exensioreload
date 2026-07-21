@@ -579,10 +579,11 @@ public class ExensioLoadMonitor {
 
         for (StageRecord record : records) {
             try {
-                boolean waferBlank = record.wafer() == null || record.wafer().isBlank();
-                int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType(), waferBlank);
                 // Requirements: 4.1, 4.3 — derive pgcKey from dataType so the individual retry
                 // uses the same program-group class as the batch path.
+                // FIXED: Use ExensioPreCheckService.resolvePgcKey() for consistency with batch queries
+                // (was: DataTypePgcKeyMapper.resolve(dataType, waferBlank) which used wafer-presence fallback)
+                int pgcKey = ExensioPreCheckService.resolvePgcKey(record.dataType());
                 // Requirements: 5.1–5.5 — pass testPhase so PPID suffix validation is applied.
                 ExensioLotWaferResult result = exensioClient.lotWaferLookup(
                     record.lot(),
