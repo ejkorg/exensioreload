@@ -536,20 +536,34 @@ public class ExensioClient {
                 int pgcKey = ExensioPreCheckService.resolvePgcKey(record.dataType());
                 Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
 
+                String cleanLot = record.lot().trim();
                 StringBuilder clause = new StringBuilder();
                 clause.append("(ol.pgc_key = ").append(pgcKey)
-                        .append(" AND UPPER(TRIM(l.lot_id)) = UPPER(TRIM('")
-                        .append(escapeSqlLiteral(record.lot()))
-                        .append("'))");
+                        .append(" AND l.lot_id IN ('")
+                        .append(escapeSqlLiteral(cleanLot.toUpperCase(Locale.ROOT)))
+                        .append("', '")
+                        .append(escapeSqlLiteral(cleanLot.toLowerCase(Locale.ROOT)))
+                        .append("')");
 
                 if (!waferBlank) {
                     String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(record.wafer());
                     String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
-                    clause.append(" AND (UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                            .append(escapeSqlLiteral(cleanWafer))
-                            .append("')) OR UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                            .append(escapeSqlLiteral(paddedWafer))
-                            .append("')))");
+                    StringBuilder wfClause = new StringBuilder();
+                    wfClause.append(" AND (w.wf_id IN ('")
+                            .append(escapeSqlLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
+                            .append("', '")
+                            .append(escapeSqlLiteral(cleanWafer.toLowerCase(Locale.ROOT)))
+                            .append("', '")
+                            .append(escapeSqlLiteral(paddedWafer.toUpperCase(Locale.ROOT)))
+                            .append("', '")
+                            .append(escapeSqlLiteral(paddedWafer.toLowerCase(Locale.ROOT)))
+                            .append("')");
+                    try {
+                        int waferNum = Integer.parseInt(cleanWafer);
+                        wfClause.append(" OR w.wf_num = ").append(waferNum);
+                    } catch (NumberFormatException ignored) {}
+                    wfClause.append(")");
+                    clause.append(wfClause);
                 }
 
                 if (!identifiers.isEmpty()) {
@@ -661,12 +675,18 @@ public class ExensioClient {
         sql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
         sql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
         sql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
-        sql.append("WHERE dl.error_code != 0 AND UPPER(TRIM(l.lot_id)) IN (");
+        sql.append("WHERE dl.error_code != 0 AND l.lot_id IN (");
 
-        for (int i = 0; i < cleanLots.size(); i++) {
-            if (i > 0) sql.append(", ");
-            sql.append("'").append(escapeSqlLiteral(cleanLots.get(i).trim().toUpperCase(Locale.ROOT))).append("'");
+        List<String> lotLiterals = new ArrayList<>();
+        for (String lot : cleanLots) {
+            String trimmed = lot.trim();
+            lotLiterals.add("'" + escapeSqlLiteral(trimmed.toUpperCase(Locale.ROOT)) + "'");
+            String lower = trimmed.toLowerCase(Locale.ROOT);
+            if (!lower.equals(trimmed.toUpperCase(Locale.ROOT))) {
+                lotLiterals.add("'" + escapeSqlLiteral(lower) + "'");
+            }
         }
+        sql.append(String.join(", ", lotLiterals));
         sql.append(") ORDER BY l.lot_id, dl.start_time DESC");
 
         String primarySchema = props.resolvedDbschema();
@@ -711,20 +731,34 @@ public class ExensioClient {
     }
 
     private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers) {
+        String cleanLot = lot.trim();
         StringBuilder where = new StringBuilder();
         where.append("ol.pgc_key = ").append(pgcKey)
-                .append(" AND UPPER(TRIM(l.lot_id)) = UPPER(TRIM('")
-                .append(escapeSqlLiteral(lot))
-                .append("'))");
+                .append(" AND l.lot_id IN ('")
+                .append(escapeSqlLiteral(cleanLot.toUpperCase(Locale.ROOT)))
+                .append("', '")
+                .append(escapeSqlLiteral(cleanLot.toLowerCase(Locale.ROOT)))
+                .append("')");
 
         if (!isBlankOrNa(wafer)) {
             String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer);
             String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
-            where.append(" AND (UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                    .append(escapeSqlLiteral(cleanWafer))
-                    .append("')) OR UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                    .append(escapeSqlLiteral(paddedWafer))
-                    .append("')))");
+            StringBuilder wfClause = new StringBuilder();
+            wfClause.append(" AND (w.wf_id IN ('")
+                    .append(escapeSqlLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
+                    .append("', '")
+                    .append(escapeSqlLiteral(cleanWafer.toLowerCase(Locale.ROOT)))
+                    .append("', '")
+                    .append(escapeSqlLiteral(paddedWafer.toUpperCase(Locale.ROOT)))
+                    .append("', '")
+                    .append(escapeSqlLiteral(paddedWafer.toLowerCase(Locale.ROOT)))
+                    .append("')");
+            try {
+                int waferNum = Integer.parseInt(cleanWafer);
+                wfClause.append(" OR w.wf_num = ").append(waferNum);
+            } catch (NumberFormatException ignored) {}
+            wfClause.append(")");
+            where.append(wfClause);
         }
 
         if (!identifiers.isEmpty()) {

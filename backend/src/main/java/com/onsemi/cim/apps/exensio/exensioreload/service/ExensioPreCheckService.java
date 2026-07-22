@@ -821,19 +821,36 @@ public class ExensioPreCheckService {
             // Wafer-level filtering for Classes 1, 4, 5, 14
             if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
                 Set<String> expandedWaferIds = new java.util.LinkedHashSet<>();
+                Set<Integer> waferNums = new java.util.LinkedHashSet<>();
                 for (String w : waferIds) {
                     if (w != null && !w.isBlank()) {
                         String clean = ExensioSqlUtilService.stripWaferPrefix(w);
-                        expandedWaferIds.add(clean);
-                        expandedWaferIds.add(zeroPadWaferId(clean));
+                        expandedWaferIds.add(clean.toUpperCase(java.util.Locale.ROOT));
+                        expandedWaferIds.add(clean.toLowerCase(java.util.Locale.ROOT));
+                        expandedWaferIds.add(zeroPadWaferId(clean).toUpperCase(java.util.Locale.ROOT));
+                        expandedWaferIds.add(zeroPadWaferId(clean).toLowerCase(java.util.Locale.ROOT));
+                        try {
+                            waferNums.add(Integer.parseInt(clean));
+                        } catch (NumberFormatException ignored) {}
                     }
                 }
-                sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
+                sb.append("    AND (w.wf_id IN (");
                 int idx = 0;
                 for (String waferId : expandedWaferIds) {
                     if (idx > 0) sb.append(", ");
-                    sb.append("'").append(escapeSql(waferId.trim().toUpperCase(java.util.Locale.ROOT))).append("'");
+                    sb.append("'").append(escapeSql(waferId)).append("'");
                     idx++;
+                }
+                sb.append(")");
+                if (!waferNums.isEmpty()) {
+                    sb.append(" OR w.wf_num IN (");
+                    int nIdx = 0;
+                    for (Integer num : waferNums) {
+                        if (nIdx > 0) sb.append(", ");
+                        sb.append(num);
+                        nIdx++;
+                    }
+                    sb.append(")");
                 }
                 sb.append(")\n");
             }
