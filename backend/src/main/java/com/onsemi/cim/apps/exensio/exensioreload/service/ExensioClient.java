@@ -528,25 +528,37 @@ public class ExensioClient {
             List<String> clauses = new ArrayList<>();
             List<StageRecord> indexedRecords = new ArrayList<>();
             for (StageRecord record : records) {
-                Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
-                if (identifiers.isEmpty() || record.lot() == null || record.lot().isBlank()) {
+                if (record.lot() == null || record.lot().isBlank()) {
                     continue;
                 }
 
                 boolean waferBlank = isBlankOrNa(record.wafer());
-                int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType(), waferBlank);
+                int pgcKey = ExensioPreCheckService.resolvePgcKey(record.dataType());
+                Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
 
                 StringBuilder clause = new StringBuilder();
                 clause.append("(ol.pgc_key = ").append(pgcKey)
                         .append(" AND UPPER(TRIM(l.lot_id)) = UPPER(TRIM('")
                         .append(escapeSqlLiteral(record.lot()))
                         .append("'))");
+
                 if (!waferBlank) {
-                    clause.append(" AND UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                            .append(escapeSqlLiteral(record.wafer()))
-                            .append("'))");
+                    String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(record.wafer());
+                    String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
+                    clause.append(" AND (UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
+                            .append(escapeSqlLiteral(cleanWafer))
+                            .append("')) OR UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
+                            .append(escapeSqlLiteral(paddedWafer))
+                            .append("')))");
                 }
-                clause.append(" AND ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
+
+                if (!identifiers.isEmpty()) {
+                    clause.append(" AND (de.file_name IS NULL OR ")
+                            .append(buildIdentifierLikeClause("de.file_name", identifiers))
+                            .append(")");
+                }
+
+                clause.append(")");
                 clauses.add(clause.toString());
                 indexedRecords.add(record);
             }
@@ -706,12 +718,18 @@ public class ExensioClient {
                 .append("'))");
 
         if (!isBlankOrNa(wafer)) {
-            where.append(" AND UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
-                    .append(escapeSqlLiteral(wafer))
-                    .append("'))");
+            String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer);
+            String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
+            where.append(" AND (UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
+                    .append(escapeSqlLiteral(cleanWafer))
+                    .append("')) OR UPPER(TRIM(NVL(w.wf_id,''))) = UPPER(TRIM('")
+                    .append(escapeSqlLiteral(paddedWafer))
+                    .append("')))");
         }
 
-        where.append(" AND ").append(buildIdentifierLikeClause("de.file_name", identifiers));
+        if (!identifiers.isEmpty()) {
+            where.append(" AND (de.file_name IS NULL OR ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
+        }
 
         return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time FROM (" +
             " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
@@ -722,7 +740,8 @@ public class ExensioClient {
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
-                " LEFT JOIN wafer w ON w.wf_key = ol.wf_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE " + where +
                 " ORDER BY ol.end_time DESC" +
@@ -740,7 +759,8 @@ public class ExensioClient {
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
-                " LEFT JOIN wafer w ON w.wf_key = ol.wf_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
                 " ORDER BY ol.end_time DESC" +

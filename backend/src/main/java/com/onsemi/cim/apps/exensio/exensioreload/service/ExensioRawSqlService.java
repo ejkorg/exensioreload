@@ -131,10 +131,20 @@ public class ExensioRawSqlService {
 
         // Wafer-level filtering for Classes 1, 4, 5, 14
         if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
+            Set<String> expandedWaferIds = new java.util.LinkedHashSet<>();
+            for (String w : waferIds) {
+                if (w != null && !w.isBlank()) {
+                    String clean = ExensioSqlUtilService.stripWaferPrefix(w);
+                    expandedWaferIds.add(clean);
+                    expandedWaferIds.add(ExensioPreCheckService.zeroPadWaferId(clean));
+                }
+            }
             sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
-            for (int i = 0; i < waferIds.size(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append("UPPER(TRIM('").append(escapeSql(waferIds.get(i))).append("'))");
+            int idx = 0;
+            for (String waferId : expandedWaferIds) {
+                if (idx > 0) sb.append(", ");
+                sb.append("UPPER(TRIM('").append(escapeSql(waferId)).append("'))");
+                idx++;
             }
             sb.append(")\n");
         }
