@@ -82,13 +82,15 @@ public class ParallelSchemaCheckService {
                 preCheckRequest.enableSnowflakeFallback()
         );
 
-        // Execute both schemas in parallel
+        // Execute both schemas via HTTP multi-schema path in parallel
         CompletableFuture<ExensioPreCheckResponse> productionFuture = CompletableFuture.supplyAsync(
-                () -> exensioPreCheckService.check(productionRequest)
+                () -> exensioPreCheckService.checkViaExensioHttpMultiSchema(
+                        productionRequest, List.of("PRODUCTION", "SANDBOX"))
         );
 
         CompletableFuture<ExensioPreCheckResponse> sandboxFuture = CompletableFuture.supplyAsync(
-                () -> exensioPreCheckService.check(sandboxRequest)
+                () -> exensioPreCheckService.checkViaExensioHttpMultiSchema(
+                        sandboxRequest, List.of("PRODUCTION", "SANDBOX"))
         );
 
         // Wait for both to complete
@@ -97,8 +99,14 @@ public class ParallelSchemaCheckService {
 
         try {
             productionResult = productionFuture.get();
-            log.debug("[ParallelSchemaCheck] PRODUCTION result: found={}, notFound={}",
-                    productionResult.lotsFound().size(), productionResult.lotsNotFound().size());
+            if (productionResult == null) {
+                productionResult = new ExensioPreCheckResponse(
+                        Collections.emptyList(), lotIds, Collections.emptyList(),
+                        "PRODUCTION HTTP check returned no result");
+            } else {
+                log.debug("[ParallelSchemaCheck] PRODUCTION result: found={}, notFound={}",
+                        productionResult.lotsFound().size(), productionResult.lotsNotFound().size());
+            }
         } catch (Exception e) {
             log.warn("[ParallelSchemaCheck] PRODUCTION check failed: {}", e.getMessage());
             productionResult = new ExensioPreCheckResponse(
@@ -111,8 +119,14 @@ public class ParallelSchemaCheckService {
 
         try {
             sandboxResult = sandboxFuture.get();
-            log.debug("[ParallelSchemaCheck] SANDBOX result: found={}, notFound={}",
-                    sandboxResult.lotsFound().size(), sandboxResult.lotsNotFound().size());
+            if (sandboxResult == null) {
+                sandboxResult = new ExensioPreCheckResponse(
+                        Collections.emptyList(), lotIds, Collections.emptyList(),
+                        "SANDBOX HTTP check returned no result");
+            } else {
+                log.debug("[ParallelSchemaCheck] SANDBOX result: found={}, notFound={}",
+                        sandboxResult.lotsFound().size(), sandboxResult.lotsNotFound().size());
+            }
         } catch (Exception e) {
             log.warn("[ParallelSchemaCheck] SANDBOX check failed: {}", e.getMessage());
             sandboxResult = new ExensioPreCheckResponse(

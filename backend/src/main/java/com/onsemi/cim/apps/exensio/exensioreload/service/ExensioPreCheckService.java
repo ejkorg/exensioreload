@@ -299,8 +299,8 @@ public class ExensioPreCheckService {
         log.warn("[ExensioPreCheck] Orchestration failed (no lots found in any path) after {} ms: {}", totalElapsed, errorMessage);
         
         return new ExensioPreCheckResponse(
-                request.lotIds(), // All lots are not found
-                Collections.emptyList(),
+                Collections.emptyList(), // lotsFound: none found
+                request.lotIds(),         // lotsNotFound: all lots
                 Collections.emptyList(),
                 errorMessage);
     }
@@ -823,7 +823,8 @@ public class ExensioPreCheckService {
                 sb.append("    AND UPPER(TRIM(w.wf_id)) IN (");
                 for (int i = 0; i < waferIds.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    sb.append("UPPER(TRIM('").append(escapeSql(waferIds.get(i))).append("'))");
+                    String waferId = zeroPadWaferId(waferIds.get(i));
+                    sb.append("UPPER(TRIM('").append(escapeSql(waferId)).append("'))");
                 }
                 sb.append(")\n");
             }
@@ -956,6 +957,29 @@ public class ExensioPreCheckService {
 
     static String escapeSql(String value) {
         return ExensioSqlUtilService.escapeSql(value);
+    }
+
+    /**
+     * Zero-pads a numeric wafer ID to 2 digits so that it matches the
+     * Oracle {@code wf_id} storage format (e.g. {@code "1"} → {@code "01"}).
+     * Non-numeric IDs (e.g. {@code "01A"}) are returned unchanged.
+     *
+     * @param waferId raw wafer ID from the request
+     * @return zero-padded wafer ID if purely numeric, otherwise the original value
+     */
+    static String zeroPadWaferId(String waferId) {
+        if (waferId == null || waferId.isBlank()) {
+            return waferId;
+        }
+        String trimmed = waferId.trim();
+        if (trimmed.matches("\\d+")) {
+            try {
+                return String.format("%02d", Integer.parseInt(trimmed));
+            } catch (NumberFormatException ignored) {
+                // Fall through — value too large for int, return as-is
+            }
+        }
+        return trimmed;
     }
 
     private String resolveSchema(String environment) {
