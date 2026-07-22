@@ -1259,8 +1259,13 @@ public class ExensioPreCheckService {
     /**
      * Calls the Exensio lot-wafer-lookup endpoint for a batch of lots.
      *
+     * <p>Strategy: first tries with cleaned wafer IDs from discovery (matches
+     * {@code w.wf_id} field). If nothing found, retries without wafer IDs at all
+     * (API matches by lot alone, which is the most reliable path since the
+     * lot-wafer-lookup API may use a different field than {@code wf_id}).</p>
+     *
      * @param lotIds   list of lot IDs to check
-     * @param waferIds optional list of wafer IDs
+     * @param waferIds optional list of wafer IDs (may be null or empty)
      * @param pgcKey   the program-class key
      * @param token    Bearer token for the schema
      * @param schema   schema name for logging
@@ -1271,8 +1276,30 @@ public class ExensioPreCheckService {
             String token, String schema) {
 
         String url = exensioProperties.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
+        boolean hasWafers = waferIds != null && !waferIds.isEmpty();
 
-        // Build request body: { pgc_key, lot_ids, wafer_ids }
+        // Attempt 1: try with wafer IDs (matches against w.wf_id field in Exensio)
+        if (hasWafers) {
+            LotWaferLookupResponse result = doLotWaferLookupCall(lotIds, waferIds, pgcKey, token, url, schema);
+            if (result != null && !result.lotIds().isEmpty()) {
+                return result;
+            }
+        }
+
+        // Attempt 2: try without wafer IDs — the API matches by lot alone,
+        // which avoids wafer-field mismatch issues entirely
+        log.debug("[ExensioPreCheck] Retrying lot-wafer-lookup without wafer filter for schema {} ({} lots)",
+                schema, lotIds.size());
+        return doLotWaferLookupCall(lotIds, null, pgcKey, token, url, schema);
+    }
+
+    /**
+     * Executes a single HTTP call to the lot-wafer-lookup endpoint.
+     */
+    private LotWaferLookupResponse doLotWaferLookupCall(
+            List<String> lotIds, List<String> waferIds, int pgcKey,
+            String token, String url, String schema) {
+
         com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode();
         body.put("pgc_key", pgcKey);
 
@@ -1299,7 +1326,8 @@ public class ExensioPreCheckService {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            log.debug("[ExensioPreCheck] lot-wafer-lookup response: HTTP {}, schema={}", response.statusCode(), schema);
+            log.debug("[ExensioPreCheck] lot-wafer-lookup response: HTTP {}, schema={}, waferFilter={}",
+                    response.statusCode(), schema, hasWafers);
 
             if (response.statusCode() == 401) {
                 authService.invalidateToken(schema);
