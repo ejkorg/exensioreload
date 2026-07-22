@@ -631,8 +631,8 @@ export class StepperComponent implements OnInit, OnDestroy {
 
     let blocks: Array<{ year: number; month: number }> | null = null;
     const range = this.dateRange();
-    if (range && range.startDate) {
-      const d = new Date(range.startDate);
+    if (range && range.start) {
+      const d = new Date(range.start);
       if (!isNaN(d.getTime())) {
         blocks = [{ year: d.getFullYear(), month: d.getMonth() + 1 }];
       }
