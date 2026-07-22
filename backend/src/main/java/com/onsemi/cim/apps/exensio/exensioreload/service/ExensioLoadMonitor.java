@@ -360,10 +360,39 @@ public class ExensioLoadMonitor {
             if (lookupResult.isSuccess()) {
                 List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(apiRecords);
 
+                List<String> notFoundLots = new ArrayList<>();
                 for (BatchResult.RecordUpdate update : batchUpdates) {
                     if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
                         StageRecord record = findRecord(apiRecords, update.recordId());
-                        if (record != null && isTimedOut(record)) {
+                        if (record != null && record.lot() != null && !record.lot().isBlank()) {
+                            notFoundLots.add(record.lot());
+                        }
+                    }
+                }
+
+                Map<String, ExensioClient.ExensioLoadError> rawDataErrors = notFoundLots.isEmpty()
+                        ? Collections.emptyMap()
+                        : exensioClient.queryRawDataLoadErrors(notFoundLots, traceId);
+
+                for (BatchResult.RecordUpdate update : batchUpdates) {
+                    if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
+                        StageRecord record = findRecord(apiRecords, update.recordId());
+                        String lotUpper = (record != null && record.lot() != null) ? record.lot().toUpperCase(Locale.ROOT) : "";
+                        ExensioClient.ExensioLoadError loadErr = rawDataErrors.get(lotUpper);
+
+                        if (loadErr != null) {
+                            String errDetails = "Exensio Raw Data Load Error (code " + loadErr.errorCode() + "): "
+                                    + (loadErr.fullErrorMessage() != null && !loadErr.fullErrorMessage().isBlank()
+                                    ? loadErr.fullErrorMessage() : "Load error logged in DP_LOG");
+                            log.warn("Record id={} lot={} raw data load error found in Exensio DP_LOG: {}",
+                                    record.id(), record.lot(), errDetails);
+                            updates.add(new BatchResult.RecordUpdate(
+                                    update.recordId(),
+                                    BatchResult.UpdateType.LOAD_FAILED,
+                                    null, null,
+                                    errDetails,
+                                    record.lot(), record.wafer(), record.filename(), traceId));
+                        } else if (record != null && isTimedOut(record)) {
                             // Record timed out with NOT_FOUND - mark as EXENSIO_TIMEOUT
                             // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
@@ -631,6 +660,41 @@ public class ExensioLoadMonitor {
                 log.warn("Individual retry exception for id={}: {}", record.id(), e.getMessage());
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), null, null, null, traceId));
+            }
+        }
+
+        List<String> notFoundLots = new ArrayList<>();
+        for (BatchResult.RecordUpdate u : updates) {
+            if (u.type() == BatchResult.UpdateType.NOT_FOUND) {
+                StageRecord rec = findRecord(records, u.recordId());
+                if (rec != null && rec.lot() != null && !rec.lot().isBlank()) {
+                    notFoundLots.add(rec.lot());
+                }
+            }
+        }
+        if (!notFoundLots.isEmpty()) {
+            Map<String, ExensioClient.ExensioLoadError> rawDataErrors = exensioClient.queryRawDataLoadErrors(notFoundLots, traceId);
+            if (!rawDataErrors.isEmpty()) {
+                List<BatchResult.RecordUpdate> finalUpdates = new ArrayList<>();
+                for (BatchResult.RecordUpdate u : updates) {
+                    if (u.type() == BatchResult.UpdateType.NOT_FOUND) {
+                        StageRecord rec = findRecord(records, u.recordId());
+                        String lotUpper = (rec != null && rec.lot() != null) ? rec.lot().toUpperCase(Locale.ROOT) : "";
+                        ExensioClient.ExensioLoadError loadErr = rawDataErrors.get(lotUpper);
+                        if (loadErr != null) {
+                            String errDetails = "Exensio Raw Data Load Error (code " + loadErr.errorCode() + "): "
+                                    + (loadErr.fullErrorMessage() != null && !loadErr.fullErrorMessage().isBlank()
+                                    ? loadErr.fullErrorMessage() : "Load error logged in DP_LOG");
+                            finalUpdates.add(new BatchResult.RecordUpdate(
+                                    u.recordId(), BatchResult.UpdateType.LOAD_FAILED, null, null, errDetails, rec.lot(), rec.wafer(), rec.filename(), traceId));
+                        } else {
+                            finalUpdates.add(u);
+                        }
+                    } else {
+                        finalUpdates.add(u);
+                    }
+                }
+                return finalUpdates;
             }
         }
 

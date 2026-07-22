@@ -603,6 +603,101 @@ public class ExensioClient {
         }
     }
 
+    public record ExensioLoadError(
+            String lotId,
+            String waferId,
+            String programName,
+            String fileName,
+            int errorCode,
+            String fullErrorMessage,
+            String errorTime
+    ) {}
+
+    /**
+     * Queries Exensio raw-sql endpoint across PRODUCTION and SANDBOX schemas
+     * to fetch raw data load errors from DP_LOG, ERROR_MESSAGE, and STRING_HOLDER
+     * for specified lot IDs.
+     */
+    public Map<String, ExensioLoadError> queryRawDataLoadErrors(List<String> lotIds, String traceId) {
+        if (lotIds == null || lotIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<String> cleanLots = lotIds.stream()
+                .filter(l -> l != null && !l.isBlank())
+                .distinct()
+                .toList();
+
+        if (cleanLots.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT l.lot_id, NVL(w.wf_id, '') AS wafer_id, NVL(p.ppid, '') AS program_name, ");
+        sql.append("NVL(rf.file_name, '') AS file_name, dl.error_code, ");
+        sql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
+        sql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
+        sql.append("FROM op_log ol ");
+        sql.append("JOIN lot l ON l.lot_key = ol.lot_key ");
+        sql.append("JOIN program p ON p.pg_key = ol.pg_key ");
+        sql.append("LEFT JOIN wf_log wl ON wl.lg_key = ol.lg_key ");
+        sql.append("LEFT JOIN wafer w ON w.wf_key = wl.wf_key ");
+        sql.append("JOIN dp_log dl ON dl.start_time = ol.insert_time ");
+        sql.append("LEFT JOIN raw_file rf ON rf.rawfile_key = dl.rawfile_key ");
+        sql.append("JOIN error_message em ON em.msg_key = dl.msg_key ");
+        sql.append("LEFT JOIN string_holder sh1 ON sh1.str_key = em.str_key1 ");
+        sql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
+        sql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
+        sql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
+        sql.append("WHERE dl.error_code != 0 AND UPPER(TRIM(l.lot_id)) IN (");
+
+        for (int i = 0; i < cleanLots.size(); i++) {
+            if (i > 0) sql.append(", ");
+            sql.append("UPPER(TRIM('").append(escapeSqlLiteral(cleanLots.get(i))).append("'))");
+        }
+        sql.append(") ORDER BY l.lot_id, dl.start_time DESC");
+
+        String primarySchema = props.resolvedDbschema();
+        String fallbackSchema = props.resolvedDbschemaFallback();
+        List<String> schemas = new ArrayList<>();
+        if (primarySchema != null && !primarySchema.isBlank()) schemas.add(primarySchema);
+        if (fallbackSchema != null && !fallbackSchema.isBlank() && !schemas.contains(fallbackSchema)) schemas.add(fallbackSchema);
+        if (schemas.isEmpty()) schemas.add("PRODUCTION");
+
+        Map<String, ExensioLoadError> errorMap = new HashMap<>();
+
+        for (String schema : schemas) {
+            try {
+                String token = authService.getToken(schema);
+                JsonNode rows = executeRawSql(sql.toString(), token, traceId);
+                if (rows != null && rows.isArray() && !rows.isEmpty()) {
+                    for (JsonNode row : rows) {
+                        String lotId = safeUpper(getText(row, "LOT_ID"));
+                        if (lotId != null && !lotId.isBlank() && !errorMap.containsKey(lotId)) {
+                            errorMap.put(lotId, new ExensioLoadError(
+                                    lotId,
+                                    ExensioSqlUtilService.stripWaferPrefix(getText(row, "WAFER_ID")),
+                                    getText(row, "PROGRAM_NAME"),
+                                    getText(row, "FILE_NAME"),
+                                    getInt(row, "ERROR_CODE", -1),
+                                    getText(row, "FULL_ERROR_MESSAGE"),
+                                    getText(row, "ERROR_TIME")
+                            ));
+                        }
+                    }
+                    if (!errorMap.isEmpty()) {
+                        log.info("[ExensioLoadError] Found {} raw data load error(s) in schema {} (traceId={})", errorMap.size(), schema, traceId);
+                        break; // Stop schema fallback if errors found
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[ExensioLoadError] Failed querying raw data load errors in schema {} (traceId={}): {}", schema, traceId, ex.getMessage());
+            }
+        }
+
+        return errorMap;
+    }
+
     private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers) {
         StringBuilder where = new StringBuilder();
         where.append("ol.pgc_key = ").append(pgcKey)
@@ -804,6 +899,17 @@ public class ExensioClient {
             return Long.parseLong(v.asText());
         } catch (Exception e) {
             return 0L;
+        }
+    }
+
+    private int getInt(JsonNode node, String field, int defaultValue) {
+        JsonNode v = getFieldNode(node, field);
+        if (v == null || v.isNull()) return defaultValue;
+        if (v.isNumber()) return v.asInt();
+        try {
+            return Integer.parseInt(v.asText());
+        } catch (Exception e) {
+            return defaultValue;
         }
     }
 
