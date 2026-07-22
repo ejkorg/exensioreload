@@ -507,7 +507,7 @@ public class ExensioClient {
             long waferKey = getLong(best, "WAFER_KEY");
             long pgKey = getLong(best, "PG_KEY");
             String ppid = getText(best, "PPID");
-            String waferId = getText(best, "WAFER_ID");
+            String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(best, "WAFER_ID"));
             String lotIdStr = getText(best, "LOT_ID");
             String fileNameStr = getText(best, "FILE_NAME");
 
@@ -578,7 +578,7 @@ public class ExensioClient {
                 String lotId = safeUpper(getText(row, "LOT_ID"));
                 if (lotId == null || lotId.isBlank()) continue;
 
-                String waferId = getText(row, "WAFER_ID");
+                String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(row, "WAFER_ID"));
                 long pgKey = getLong(row, "PG_KEY");
                 String ppid = getText(row, "PPID");
                 Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
@@ -866,7 +866,7 @@ public class ExensioClient {
                 if (!wafers.isArray()) continue;
 
                 for (JsonNode waferNode : wafers) {
-                    String waferId = waferNode.path("wafer_id").asText(null);
+                    String waferId = ExensioSqlUtilService.stripWaferPrefix(waferNode.path("wafer_id").asText(null));
                     // Match by wafer_id if provided; otherwise use end_time proximity / first available.
                     if (targetWaferId != null && !targetWaferId.isBlank()
                             && !targetWaferId.equalsIgnoreCase(waferId)) {
@@ -901,7 +901,7 @@ public class ExensioClient {
                 long pgKey = bestWaferNode.path("pg_key").asLong(0);
                 String ppid = bestWaferNode.path("ppid").asText(null);
                 if (waferKey > 0) {
-                    String finalWaferId = bestWaferNode.path("wafer_id").asText(null);
+                    String finalWaferId = ExensioSqlUtilService.stripWaferPrefix(bestWaferNode.path("wafer_id").asText(null));
                     ExensioLotWaferResult candidate =
                             new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid, bestLotId, finalWaferId, null);
                     return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, finalWaferId);

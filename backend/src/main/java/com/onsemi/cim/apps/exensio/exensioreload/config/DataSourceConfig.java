@@ -35,7 +35,7 @@ public class DataSourceConfig {
         return new DataSourceProperties();
     }
 
-    @Bean
+    @Bean(name = {"primaryDataSource", "exensioDataSource"})
     @Primary
     public DataSource primaryDataSource(DataSourceProperties primaryDataSourceProperties) {
         return primaryDataSourceProperties.initializeDataSourceBuilder().build();

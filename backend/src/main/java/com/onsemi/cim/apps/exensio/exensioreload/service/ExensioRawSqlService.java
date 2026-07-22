@@ -167,11 +167,13 @@ public class ExensioRawSqlService {
             List<ExensioLotRow> rows = new ArrayList<>();
             if (rowsNode.isArray()) {
                 for (JsonNode rowNode : rowsNode) {
+                    String rawWafer = rowNode.path("WAFER_ID").asText("");
+                    String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
                     rows.add(new ExensioLotRow(
                             rowNode.path("LOT_ID").asText(""),
                             rowNode.path("END_TIME").asText(""),
                             rowNode.path("PPID").asText(""),
-                            rowNode.path("WAFER_ID").asText(""),
+                            cleanWafer,
                             rowNode.path("WAFER_KEY").asLong(-1L),
                             rowNode.path("PG_KEY").asLong(-1L)
                     ));

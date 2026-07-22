@@ -590,15 +590,119 @@ export class StepperComponent implements OnInit, OnDestroy {
     notFoundCount: number;
   } | null>(null);
 
-  // Pagination state
-  pageSize = signal(25);
-  pageIndex = signal(0);
-  pageSizeOptions = signal([25, 50, 100]); // Start with 25 to match default pageSize
+  // Single-grid Exensio precheck state
+  exensioStatusMap = signal<Map<string, string>>(new Map());
+  exensioCheckLoading = signal(false);
+  exensioStatusFilter = signal<'all' | 'missing' | 'existing'>('all');
+
+  getExensioStatusForRow(row: DiscoveryPreviewRow): string {
+    const lot = String(row.lot || '').trim();
+    const rawWafer = String(row.wafer || '').trim();
+    const rowKey = `${lot}::${rawWafer}`;
+    return this.exensioStatusMap().get(rowKey) || '-';
+  }
+
+  checkExensio(): void {
+    const senderId = this.selectedSenderId();
+    if (!senderId) {
+      this.toast.warning('Please select a sender before checking Exensio.');
+      return;
+    }
+
+    const rows = this.allPreviewRows().length > 0 ? this.allPreviewRows() : this.previewRows();
+    if (!rows || rows.length === 0) {
+      this.toast.warning('No preview rows to check.');
+      return;
+    }
+
+    const uniqueLots = Array.from(new Set(rows.map(r => String(r.lot || '').trim()).filter(l => l.length > 0)));
+    if (uniqueLots.length === 0) {
+      this.toast.warning('No valid lot IDs found in preview rows.');
+      return;
+    }
+
+    const dataType = this.selectedDataType() || '';
+    this.exensioCheckLoading.set(true);
+
+    let blocks: Array<{ year: number; month: number }> | null = null;
+    const range = this.dateRange();
+    if (range && range.startDate) {
+      const d = new Date(range.startDate);
+      if (!isNaN(d.getTime())) {
+        blocks = [{ year: d.getFullYear(), month: d.getMonth() + 1 }];
+      }
+    }
+
+    this.backend.verifyLotsExistenceWithDateRange(senderId, uniqueLots, dataType, blocks).subscribe({
+      next: (response) => {
+        this.exensioCheckLoading.set(false);
+        const statusMap = new Map<string, string>();
+        const lotsRes = response?.lots || {};
+
+        for (const row of rows) {
+          const lot = String(row.lot || '').trim();
+          const rawWafer = String(row.wafer || '').trim();
+          const cleanWafer = rawWafer.replace(/^[A-Za-z]+[-_]*/, '');
+          const rowKey = `${lot}::${rawWafer}`;
+
+          const result = (lotsRes as Record<string, any>)[lot];
+          if (!result || !result.found) {
+            statusMap.set(rowKey, 'NOT FOUND');
+          } else {
+            const foundWafers = (result.wafers || []).map((w: string) => w.toUpperCase());
+            const hasWaferMatch = foundWafers.length === 0 ||
+                                  (rawWafer && foundWafers.includes(rawWafer.toUpperCase())) ||
+                                  (cleanWafer && foundWafers.includes(cleanWafer.toUpperCase()));
+
+            if (hasWaferMatch) {
+              const schemaUpper = String(result.schema || '').toUpperCase();
+              if (schemaUpper === 'PRODUCTION' || schemaUpper === 'PROD') {
+                statusMap.set(rowKey, 'FOUND PROD');
+              } else if (schemaUpper === 'SANDBOX' || schemaUpper === 'SBX') {
+                statusMap.set(rowKey, 'FOUND SBX');
+              } else {
+                statusMap.set(rowKey, 'FOUND');
+              }
+            } else {
+              statusMap.set(rowKey, 'NOT FOUND');
+            }
+          }
+        }
+
+        this.exensioStatusMap.set(statusMap);
+        this.toast.success(`Exensio check completed for ${uniqueLots.length} lot(s).`);
+      },
+      error: (err: any) => {
+        this.exensioCheckLoading.set(false);
+        this.toast.error('Exensio check failed: ' + (err?.message || 'Server error'));
+      }
+    });
+  }
+
+  setExensioStatusFilter(filter: 'all' | 'missing' | 'existing'): void {
+    this.exensioStatusFilter.set(filter);
+    this.pageIndex.set(0);
+
+    if (filter === 'missing') {
+      const missingRows = this.filteredPreviewRows();
+      const newSelected = new Set<string>();
+      const newLookup = new Map<string, DiscoveryPreviewRow>();
+      for (const row of missingRows) {
+        const key = this.getRowKey(row);
+        newSelected.add(key);
+        newLookup.set(key, row);
+      }
+      this.selectedRows.set(newSelected);
+      this.selectedRowLookup.set(newLookup);
+    }
+  }
 
   filteredPreviewRows = computed(() => {
     const text = (this.filterText() || '').toString().toLowerCase();
     const selectedType = this.selectedFileType();
     const selectedDevices = this.previewDeviceFilter();
+    const statusFilter = this.exensioStatusFilter();
+    const statusMap = this.exensioStatusMap();
 
     const normalize = (value: unknown): string => {
       if (value === undefined || value === null) {
@@ -630,6 +734,24 @@ export class StepperComponent implements OnInit, OnDestroy {
           const rowDevice = row.device ? row.device.trim() : '';
           if (!rowDevice || !selectedDevices.includes(rowDevice)) {
             return false;
+          }
+        }
+
+        // Filter by Exensio status if quick filter is active
+        if (statusFilter !== 'all') {
+          const rowLot = String(row.lot || '').trim();
+          const rawWafer = String(row.wafer || '').trim();
+          const rowKey = `${rowLot}::${rawWafer}`;
+          const status = statusMap.get(rowKey) || '-';
+
+          if (statusFilter === 'missing') {
+            if (status !== 'NOT FOUND') {
+              return false;
+            }
+          } else if (statusFilter === 'existing') {
+            if (status !== 'FOUND PROD' && status !== 'FOUND SBX' && status !== 'FOUND') {
+              return false;
+            }
           }
         }
 
@@ -1945,6 +2067,8 @@ export class StepperComponent implements OnInit, OnDestroy {
         this.stageExecutionMode.set('selected');
         this.selectedFileType.set('ALL');
         this.filterText.set('');
+        this.exensioStatusMap.set(new Map());
+        this.exensioStatusFilter.set('all');
         this.pageIndex.set(0);
         this.previewLoading.set(false);
         // Don't auto-select - let user select rows manually (single or multi-select)

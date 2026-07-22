@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -31,7 +32,7 @@ public class WaferDiscoveryService {
     private final DataSource exensioDataSource;
 
     public WaferDiscoveryService(
-            @Qualifier("exensioDataSource") DataSource exensioDataSource) {
+            @Qualifier("exensioDataSource") @Autowired(required = false) DataSource exensioDataSource) {
         this.exensioDataSource = exensioDataSource;
     }
 
@@ -49,6 +50,11 @@ public class WaferDiscoveryService {
             return Collections.emptyList();
         }
 
+        if (exensioDataSource == null) {
+            log.debug("[WaferDiscovery] exensioDataSource is not available — skipping wafer discovery");
+            return Collections.emptyList();
+        }
+
         String sql = buildDiscoveryQuery(lotIds, pgcKey);
         
         log.debug("[WaferDiscovery] Discovering wafers for {} lots, pgcKey={}", lotIds.size(), pgcKey);
@@ -61,7 +67,10 @@ public class WaferDiscoveryService {
                     while (rs.next()) {
                         String wafer = rs.getString("WAFER_ID");
                         if (wafer != null && !wafer.isBlank()) {
-                            wafers.add(wafer.trim().toUpperCase());
+                            String cleaned = ExensioSqlUtilService.stripWaferPrefix(wafer);
+                            if (!cleaned.isBlank()) {
+                                wafers.add(cleaned.trim().toUpperCase());
+                            }
                         }
                     }
                 }

@@ -62,6 +62,29 @@ public class ExensioSqlUtilService {
     }
 
     /**
+     * Strips leading letter prefix(es) and optional delimiters (hyphens/underscores)
+     * from a wafer number string.
+     * 
+     * Examples:
+     * - "W01"     -> "01"
+     * - "W-01"    -> "01"
+     * - "WF_05"   -> "05"
+     * - "WAFER12" -> "12"
+     * - "01"      -> "01"
+     * 
+     * @param wafer raw wafer string
+     * @return wafer number with leading letter prefix removed
+     */
+    public static String stripWaferPrefix(String wafer) {
+        if (wafer == null || wafer.isBlank()) {
+            return "";
+        }
+        String trimmed = wafer.trim();
+        String cleaned = trimmed.replaceFirst("^[A-Za-z]+[-_]*", "");
+        return cleaned.isEmpty() ? trimmed : cleaned;
+    }
+
+    /**
      * Determines if a pgc_key represents a wafer-level class.
      * Wafer-level: Class 1 (pgc_key 1), Class 4 (pgc_key 4), Class 5 (pgc_key 5), Class 14 (pgc_key 14).
      * Lot-level: Class 2 (pgc_key 2).

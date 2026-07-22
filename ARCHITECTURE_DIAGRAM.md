@@ -1,453 +1,150 @@
-# Wafer-Level Preflight Check - Architecture Diagrams
+# Exensio Reload - Discovery, Precheck & Reload Architecture
 
-## System Architecture
+## Unified Single-Grid UX Architecture
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                        UI Layer (Frontend)                     │
-│  - Lot Verification Dialog                                    │
-│  - Display wafers with schema info                           │
-│  - CSV export with wafer data                                │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-                         │ HTTP POST /verify-lots
-                         │
-┌────────────────────────▼─────────────────────────────────────┐
-│                  API Layer (Controller)                       │
-│  SenderController.verifyLots()                              │
-│  - Receives LotVerificationRequest                          │
-│  - Orchestrates discovery + parallel check                  │
-│  - Returns LotVerificationResponse                          │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-          ┌──────────────┼──────────────┐
-          │              │              │
-          ▼              ▼              ▼
-    ┌─────────┐  ┌──────────────┐  ┌──────────────────┐
-    │Detect   │  │Discovery     │  │Parallel Schema   │
-    │Wafer    │  │Service       │  │Check Service     │
-    │Level    │  │              │  │                  │
-    │Class    │  │Query local   │  │Thread A: PROD    │
-    └────┬────┘  │database for  │  │Thread B: SANDBOX │
-         │       │wafers        │  └────────┬─────────┘
-         │       └──────┬───────┘           │
-         │              │                   │
-         └──────────────┼───────────────────┘
-                        │
-                        ▼
-        ┌──────────────────────────────┐
-        │ Response Processing          │
-        │ - Aggregate wafers by lot    │
-        │ - Remove duplicates          │
-        │ - Transform to DTO           │
-        └──────────────┬───────────────┘
-                       │
-                       ▼
-        ┌──────────────────────────────┐
-        │ LotVerificationResponse      │
-        │ {                            │
-        │   lots: {                    │
-        │     LOT123: {                │
-        │       found: true,           │
-        │       schema: "PRODUCTION",  │
-        │       wafers: [W01, W02...] │
-        │     }                        │
-        │   }                          │
-        │ }                            │
-        └──────────────┬───────────────┘
-                       │
-                       ▼
-        ┌──────────────────────────────┐
-        │ Return to UI                 │
-        └──────────────────────────────┘
-```
-
----
-
-## Discovery Phase
+The Exensio Reload user experience combines **Discovery** and **Precheck** into a single, interactive data grid. The user inputs search criteria, inspects discovered wafer-level records, decorates the same grid in-place with **Exensio Status**, uses **Quick Filters** to isolate missing wafers, and reloads only the targeted selection.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ INPUT: lotIds=[LOT123], pgcKey=1                       │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ WaferDiscoveryService.discoverWafersForLots()          │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-    ┌────────────────────────────────────────────┐
-    │ SQL Query:                                 │
-    │ SELECT DISTINCT UPPER(TRIM(w.wf_id))     │
-    │ FROM op_log ol                            │
-    │ JOIN lot l ON l.lot_key = ol.lot_key     │
-    │ LEFT JOIN wf_log wfl                      │
-    │ LEFT JOIN wafer w                         │
-    │ WHERE ol.pgc_key = 1                      │
-    │   AND l.lot_id IN ('LOT123')              │
-    │   AND w.wf_id IS NOT NULL                 │
-    └────────────────┬─────────────────────────┘
-                     │
-                     ▼
-    ┌────────────────────────────────────────────┐
-    │ Database Results:                          │
-    │ LOT123 | W01                               │
-    │ LOT123 | W02                               │
-    │ LOT123 | W03                               │
-    │ LOT123 | W04                               │
-    │ LOT123 | W05                               │
-    └────────────────┬─────────────────────────┘
-                     │
-                     ▼
-    ┌────────────────────────────────────────────┐
-    │ Process Results:                           │
-    │ - Extract wafer IDs                        │
-    │ - Convert to uppercase                     │
-    │ - Remove duplicates                        │
-    │ - Sort                                     │
-    └────────────────┬─────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ OUTPUT: [W01, W02, W03, W04, W05]                       │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: USER INPUT / SEARCH                                            │
+│ User enters Lot ID (e.g., LOTA), Date Range, Site Location, Data Type  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: DISCOVERY POPULATES UNIFIED GRID                              │
+│ Local DTP view query returns wafer/file rows into primary data table  │
+│                                                                        │
+│ Grid State:                                                            │
+│ ┌───┬──────┬───────┬──────────┬────────────────┬─────────────────────┐ │
+│ │   │ Lot  │ Wafer │ File     │ Exensio Status │ Action              │ │
+│ ├───┼──────┼───────┼──────────┼────────────────┼─────────────────────┤ │
+│ │[ ]│ LOTA │ W01   │ file_01  │ - (Unchecked)  │                     │ │
+│ │[ ]│ LOTA │ W02   │ file_02  │ - (Unchecked)  │                     │ │
+│ │[ ]│ LOTA │ W03   │ file_03  │ - (Unchecked)  │                     │ │
+│ │[ ]│ LOTA │ W04   │ file_04  │ - (Unchecked)  │                     │ │
+│ └───┴──────┴───────┴──────────┴────────────────┴─────────────────────┘ │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: USER CLICKS "CHECK EXENSIO"                                    │
+│ Parallel API Precheck (/v1/key/raw-sql) decorates grid rows in-place   │
+│                                                                        │
+│ Updated Grid State:                                                    │
+│ ┌───┬──────┬───────┬──────────┬────────────────┬─────────────────────┐ │
+│ │   │ Lot  │ Wafer │ File     │ Exensio Status │ Action              │ │
+│ ├───┼──────┼───────┼──────────┼────────────────┼─────────────────────┤ │
+│ │[ ]│ LOTA │ W01   │ file_01  │ FOUND PROD     │                     │ │
+│ │[ ]│ LOTA │ W02   │ file_02  │ FOUND SBX      │                     │ │
+│ │[ ]│ LOTA │ W03   │ file_03  │ NOT FOUND      │                     │ │
+│ │[ ]│ LOTA │ W04   │ file_04  │ NOT FOUND      │                     │ │
+│ └───┴──────┴───────┴──────────┴────────────────┴─────────────────────┘ │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: QUICK FILTERS & TARGETED RELOAD                                │
+│ User clicks [Show Missing Only] -> Isolates NOT FOUND rows             │
+│ User checks [x] W03, [x] W04 -> Clicks "Start Reload (2 Selected)"     │
+│                                                                        │
+│ Filtered Grid View:                                                    │
+│ ┌───┬──────┬───────┬──────────┬────────────────┬─────────────────────┐ │
+│ │   │ Lot  │ Wafer │ File     │ Exensio Status │ Action              │ │
+│ ├───┼──────┼───────┼──────────┼────────────────┼─────────────────────┤ │
+│ │[x]│ LOTA │ W03   │ file_03  │ NOT FOUND      │ Ready to Stage      │ │
+│ │[x]│ LOTA │ W04   │ file_04  │ NOT FOUND      │ Ready to Stage      │ │
+│ └───┴──────┴───────┴──────────┴────────────────┴─────────────────────┘ │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: STAGING & CP DISPATCH                                          │
+│ Selected missing rows (W03, W04) are staged to SENDER_STAGE DB         │
+│ and dispatched to CP worker queue                                      │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Parallel Check Phase
+## 1. Quick Filter Control Specifications
+
+| Filter Button | Action / Criteria | Target Operator Use Case |
+| :--- | :--- | :--- |
+| **`[Show Missing Only]`** | Filters grid to display only rows where `Exensio Status` == `NOT FOUND`. Auto-checks all visible rows. | Fast 1-click reload of missing wafers without manual unchecking. |
+| **`[Show Existing Only]`** | Filters grid to display rows where `Exensio Status` is `FOUND PROD` or `FOUND SBX`. | Verification / auditing to verify what was already loaded into Exensio. |
+| **`[Show All]`** | Resets filter; displays all discovered rows (both existing and missing). | Complete overview of all lot files. |
+
+---
+
+## 2. Grid Column Specifications
+
+| Column Header | Data Source | Field Details & Rendering |
+| :--- | :--- | :--- |
+| **Selection (`[x]`)** | Component State | Checkbox for staging selection. Supports header "Select All Visible". |
+| **Lot ID** | Local DTP View (`lot`) | Lot identification string (e.g. `LOTA`). |
+| **Wafer ID** | Local DTP View (`wafer` / `wf_id`) | Sourced wafer number (e.g. `W01`, `W02`). |
+| **File / Data ID** | Local DTP View (`filename` / `data_id` / `metadata_id`) | Original payload filename or ID. |
+| **Exensio Status** | Exensio Raw-SQL API (`/v1/key/raw-sql`) | **`- (Unchecked)`** (default)<br>**`FOUND PROD`** (green badge)<br>**`FOUND SBX`** (blue/yellow badge)<br>**`NOT FOUND`** (grey/red badge) |
+| **Actions** | Component State | Staging status indicator (`Ready`, `Staged`, `Dispatched`). |
+
+---
+
+## 3. System Architecture & Component Mapping
 
 ```
-┌──────────────────────────────────────────────────┐
-│ INPUT:                                           │
-│ lotIds=[LOT123]                                 │
-│ waferIds=[W01, W02, W03, W04, W05]             │
-└────────────────┬─────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────┐
-│ ParallelSchemaCheckService.checkLotsParallel() │
-└────────────────┬─────────────────────────────────┘
-                 │
-    ┌────────────┴────────────┐
-    │                         │
-    ▼                         ▼
-┌──────────────────┐   ┌──────────────────┐
-│ Thread A:        │   │ Thread B:        │
-│ PRODUCTION       │   │ SANDBOX          │
-└────────┬─────────┘   └────────┬─────────┘
-         │                      │
-         │ CompletableFuture    │
-         │ async execution      │
-         │                      │
-    ┌────▼─────────────────────▼────┐
-    │ Create PreCheckRequest         │
-    │ (PRODUCTION)      (SANDBOX)    │
-    │ Call               Call        │
-    │ ExensioPreCheck    ExensioPreCheck
-    │ Service.check()    Service.check()
-    └────┬─────────────────────┬────┘
-         │                     │
-         ▼                     ▼
-    ┌──────────────┐     ┌──────────────┐
-    │ PROD Results │     │ SBX Results  │
-    │              │     │              │
-    │ Found:       │     │ Found:       │
-    │ LOT123       │     │ LOT123       │
-    │ W01: PROD    │     │ W01: SANDBOX │
-    │ W02: PROD    │     │ W02: SANDBOX │
-    │ W03: PROD    │     │ W04: SANDBOX │
-    │              │     │ W05: SANDBOX │
-    └────┬─────────┘     └────┬─────────┘
-         │                    │
-         └────────┬───────────┘
-                  │
-                  ▼ (Consolidate)
-    ┌─────────────────────────────┐
-    │ Merge Results:              │
-    │                             │
-    │ PROD has: W01, W02, W03    │
-    │ SANDBOX has: W01, W02,     │
-    │              W04, W05      │
-    │                             │
-    │ Merged:                     │
-    │ W01 (PROD)                  │
-    │ W02 (PROD)                  │
-    │ W03 (PROD)                  │
-    │ W04 (SANDBOX) - new        │
-    │ W05 (SANDBOX) - new        │
-    └────────────┬────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────┐
-│ OUTPUT: Consolidated ExensioPreCheckResponse│
-│ {                                            │
-│   lotsFound: [LOT123]                       │
-│   lotsNotFound: []                          │
-│   rows: [                                   │
-│     {LOT123, PROD, W01}                     │
-│     {LOT123, PROD, W02}                     │
-│     {LOT123, PROD, W03}                     │
-│     {LOT123, SANDBOX, W04}                  │
-│     {LOT123, SANDBOX, W05}                  │
-│   ]                                         │
-│ }                                            │
-└──────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                         UI Layer (Frontend)                            │
+│  - Unified Data Grid (Lot, Wafer, File, Exensio Status, Checkbox)      │
+│  - Quick Filter Toolbar: [Show Missing Only] [Show Existing Only] [Show All]│
+│  - Primary Actions: "Check Exensio" & "Start Reload Selected"          │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+               │ HTTP POST /discover/preview-with-duplicates
+               ▼                                         ▼
+┌──────────────────────────────────────┐   ┌─────────────────────────────┐
+│    MetadataImporterService           │   │    SenderController         │
+│  - Queries local site DTP views      │   │  - Orchestrates Discovery   │
+│    (dtp_probe_view, dtp_pcm_view,    │   │    + Parallel Precheck     │
+│     dtp_defect_view, etc.)           │   └──────────────┬──────────────┘
+│  - Sources Lot & Wafer relationships │                  │
+└──────────────────┬───────────────────┘                  │
+                   │                                      ▼
+                   │                       ┌─────────────────────────────┐
+                   │                       │ ParallelSchemaCheckService  │
+                   │                       │ - Thread A: PRODUCTION      │
+                   │                       │ - Thread B: SANDBOX         │
+                   │                       └──────────────┬──────────────┘
+                   │                                      │
+                   │                                      ▼
+                   │                       ┌─────────────────────────────┐
+                   │                       │ ExensioPreCheckService      │
+                   │                       │ - Queries Exensio API       │
+                   │                       │   POST /v1/key/raw-sql      │
+                   │                       │ - Optional Snowflake        │
+                   │                       │   secondary fallback        │
+                   │                       └──────────────┬──────────────┘
+                   │                                      │
+                   └──────────────────┬───────────────────┘
+                                      │
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                       SENDER_STAGE & RELOAD                            │
+│  - RefDbService / StageSessionService                                  │
+│  - Enqueue selected payloads -> Dispatch to CP -> Monitor completion   │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Consolidation Phase
+## 4. Class Responsibility Summary
 
-```
-┌─────────────────────────────────────────────────┐
-│ PROD Response:                SANDBOX Response: │
-│ ┌──────────────┐             ┌──────────────┐  │
-│ │LOT123 - PROD │             │LOT123 - SBX  │  │
-│ │W01: PROD     │             │W01: SANDBOX  │  │
-│ │W02: PROD     │             │W02: SANDBOX  │  │
-│ │W03: PROD     │             │W04: SANDBOX  │  │
-│ │              │             │W05: SANDBOX  │  │
-│ └──────┬───────┘             └──────┬───────┘  │
-│        │                            │          │
-└────────┼────────────────────────────┼──────────┘
-         │                            │
-         └────────────┬───────────────┘
-                      │
-                      ▼
-         ┌──────────────────────────┐
-         │ Consolidation Logic:     │
-         │                          │
-         │ For each lot:            │
-         │ 1. Start with PROD rows  │
-         │ 2. Add SANDBOX if unique │
-         │ 3. Keep PROD priority    │
-         │ 4. Collect all wafers    │
-         └────────────┬─────────────┘
-                      │
-                      ▼
-         ┌──────────────────────────────────┐
-         │ Final Consolidated Row Set:      │
-         │                                  │
-         │ LOT123, PROD, W01                │
-         │ LOT123, PROD, W02                │
-         │ LOT123, PROD, W03                │
-         │ LOT123, SANDBOX, W04 (new)      │
-         │ LOT123, SANDBOX, W05 (new)      │
-         │                                  │
-         │ Aggregated Wafers:               │
-         │ LOT123: [W01, W02, W03, W04, W05]│
-         └────────────┬─────────────────────┘
-                      │
-                      ▼
-         ┌──────────────────────────────┐
-         │ Return LotVerificationResult │
-         │ {                            │
-         │   found: true               │
-         │   schema: "PRODUCTION"      │
-         │   wafers: [W01-W05]        │
-         │ }                            │
-         └──────────────────────────────┘
-```
-
----
-
-## Decision Tree
-
-```
-                    ┌─ User Input ─┐
-                    │ Lot + DataType│
-                    └────────┬──────┘
-                             │
-                    ┌────────▼────────┐
-                    │ Get pgcKey from │
-                    │ dataType        │
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────────────┐
-                    │ Is wafer-level class?  │
-                    │ (1, 4, 5, or 14)       │
-                    └────────┬────────────────┘
-                    ┌─────NO─┴─YES──┐
-                    │               │
-        ┌───────────▼────┐    ┌─────▼──────────────┐
-        │ Use Standard   │    │ Has wafer filter?  │
-        │ Check          │    │ (user provided)    │
-        └────────────────┘    └─────┬──────────────┘
-                          ┌─────NO──┴──YES──┐
-                          │                 │
-                    ┌─────▼──────┐  ┌──────▼─────┐
-                    │ Discover   │  │ Use        │
-                    │ Wafers     │  │ Provided   │
-                    └─────┬──────┘  └──────┬─────┘
-                          │                │
-                    ┌─────▼────────────────▼─────┐
-                    │ Execute Parallel Check     │
-                    │ (PROD + SANDBOX)           │
-                    └─────┬──────────────────────┘
-                          │
-                    ┌─────▼───────────┐
-                    │ Consolidate     │
-                    │ Results         │
-                    └─────┬───────────┘
-                          │
-                    ┌─────▼──────────────┐
-                    │ Return Response    │
-                    │ with Wafers        │
-                    └────────────────────┘
-```
-
----
-
-## Class Dependency Diagram
-
-```
-┌──────────────────────┐
-│ SenderController     │
-└──────────┬───────────┘
-           │
-           │ uses
-           │
-  ┌────────┴────────────────────┐
-  │                             │
-  ▼                             ▼
-┌─────────────────┐     ┌──────────────────────┐
-│ WaferDiscovery  │     │ ParallelSchemaCheck  │
-│ Service         │     │ Service              │
-└─────────────────┘     └──────────┬───────────┘
-  │ queries                       │
-  │ Exensio DB                    │ uses
-  │                               │
-  │                       ┌───────▼────────────┐
-  │                       │ ExensioPreCheck    │
-  │                       │ Service            │
-  │                       │ (existing)         │
-  │                       │                    │
-  │                       │ queries via HTTP   │
-  │                       └───────┬────────────┘
-  │                               │
-  └───────────────┬───────────────┘
-                  │
-                  ▼ (uses)
-         ┌────────────────────┐
-         │ ExensioAuthService │
-         │ (existing)         │
-         │                    │
-         │ manages tokens     │
-         └────────┬───────────┘
-                  │
-                  ▼ (calls)
-         ┌────────────────────┐
-         │ Exensio HTTP       │
-         │ /v1/key/raw-sql    │
-         │ endpoint           │
-         └────────────────────┘
-```
-
----
-
-## Sequence Diagram - Parallel Check
-
-```
-Client          Controller           Discovery        Parallel         PROD         SANDBOX
-  │                  │                 │               │                │               │
-  │─Verify Lots───→  │                 │               │                │               │
-  │                  │                 │               │                │               │
-  │                  │─Detect Wafer    │               │                │               │
-  │                  │ Level Class─────→               │                │               │
-  │                  │                 │               │                │               │
-  │                  │─Discover Wafers─────────────────→               │               │
-  │                  │                 │               │                │               │
-  │                  │←Result: [W01-W05]───────────────┤               │               │
-  │                  │                 │               │                │               │
-  │                  │─Parallel Check─────────────────→               │               │
-  │                  │                 │               │                │               │
-  │                  │                 │               │─Check PROD─────→             │
-  │                  │                 │               │                │             │
-  │                  │                 │               │                │   Check─────→
-  │                  │                 │               │                │    SANDBOX   │
-  │                  │                 │               │                │             │
-  │                  │                 │               │←Result: Found──┤             │
-  │                  │                 │               │                │             │
-  │                  │                 │               │                │         ←Result: Found
-  │                  │                 │               │                │             │
-  │                  │←Both Complete────────────────────┤               │               │
-  │                  │                 │               │                │               │
-  │                  │─Consolidate─────→               │                │               │
-  │                  │                 │               │                │               │
-  │                  │←Merged Result────┤               │                │               │
-  │                  │                 │               │                │               │
-  │←Response─────────┤                 │               │                │               │
-  │  (with wafers)   │                 │               │                │               │
-
-Legend:
-→ = synchronous call
-← = return
-─ = message
-```
-
----
-
-## Timing Diagram
-
-```
-Sequential (Old):
-├─────────┬──────────┬──────────┬──────────┬──────────┤
-│ Disc    │   PROD   │  SANDBOX │          │          │
-│ 50ms    │  200ms   │  180ms   │          │          │
-│         │          │          │          │          │
-└─────────┴──────────┴──────────┴──────────┴──────────┘
-                Total: 430ms
-
-Parallel (New):
-├─────────┬──────────────────────────────────────┤
-│ Disc    │ PROD (200ms)                         │
-│ 50ms    │ SANDBOX (180ms)  [parallel]          │
-│         │                                       │
-└─────────┴──────────────────────────────────────┘
-                Total: 250ms (~42% faster)
-```
-
----
-
-## Error Handling Flow
-
-```
-             ┌─ Start Parallel Check ─┐
-             │                        │
-      ┌──────▼──────┐        ┌────────▼──────┐
-      │ PROD Check  │        │ SANDBOX Check │
-      └──────┬──────┘        └────────┬──────┘
-             │                        │
-      ┌──────▼──────┐        ┌────────▼──────┐
-      │ Success?   │        │ Success?      │
-      └──┬───────┬──┘        └──┬────────┬───┘
-     YES │       │ NO       YES │        │ NO
-        │       │             │        │
-   ┌────▼─┐  ┌──▼───┐     ┌───▼──┐  ┌──▼───┐
-   │Use   │  │Log   │     │Use   │  │Log   │
-   │PROD  │  │Error │     │SANDBOX│ │Error │
-   │Result│  │Try SBX     │Result│  │Return│
-   └────┬─┘  │      │     └───┬──┘  │Error │
-        │    │      │         │     │      │
-        │    └──┬───┘         │     └──┬───┘
-        │       │             │        │
-        └───┬───┴─────────┬───┴────┬───┘
-            │             │        │
-        ┌───▼─────────┬───▼──┐  ┌─▼────┐
-        │Has PROD?    │Has SBX? │Both   │
-        │             │         │Failed?│
-        └─┬───────┬───┴─┬──┬────┴──┬────┘
-       YES│       │NO  YES NO     YES
-          │       │    │   │       │
-       ┌──▼┐   ┌──▼──┐│ ┌─▼────┐ ┌▼──────┐
-       │Use│   │Use  ││ │Use   │ │Not    │
-       │PROD   │Empty││ │SANDBOX│ │Found  │
-       │       │List ││ │Result│ │Error  │
-       └──────────────┘└────────┘ └───────┘
-```
-
----
-
-## This completes the implementation with full architectural documentation.
+| Class Name | Responsibility | Sourcing & Dependencies |
+| :--- | :--- | :--- |
+| **`MetadataImporterService`** | Queries site-specific local DTP views (`dtp_probe_view`, etc.) to populate the initial grid rows with lots, files, and wafer numbers. | Direct JDBC to Site DB via `ExternalDbConfig` |
+| **`WaferDiscoveryService`** | Discovers wafer list for given lots from database when explicit wafer numbers are needed for lot-level requests. | Queries local/Exensio DB (`op_log`, `lot`, `wafer`) |
+| **`ExensioPreCheckService`** | Executes Exensio API `POST /v1/key/raw-sql` queries against `PRODUCTION` & `SANDBOX` schemas to update the grid `Exensio Status` column. | Exensio HTTP API + Auth Token Service |
+| **`ParallelSchemaCheckService`** | Runs `ExensioPreCheckService` in parallel threads across `PRODUCTION` and `SANDBOX` schemas for selected grid rows. | `CompletableFuture` async execution |
+| **`SenderController`** | Provides HTTP endpoints for preview discovery (`/discover/preview-with-duplicates`), precheck verification (`/verify-lots`), and staging selected items (`/enqueue`, `/dispatch`). | Spring REST Controller |
+| **`RefDbService`** | Manages `SENDER_STAGE` persistence for selected missing grid rows and lifecycle updates (`STAGED` -> `QUEUED_FOR_CP` -> `COMPLETED`). | JDBC DataSource |

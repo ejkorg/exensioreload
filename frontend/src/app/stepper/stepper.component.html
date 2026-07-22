@@ -472,6 +472,19 @@
             >
             </app-glass-select>
 
+            <app-glass-button
+              variant="secondary"
+              size="small"
+              class="check-exensio-btn"
+              [loading]="exensioCheckLoading()"
+              [disabled]="exensioCheckLoading() || previewRows().length === 0"
+              (clicked)="checkExensio()"
+              [glassTooltip]="'Check Exensio status in parallel across PRODUCTION and SANDBOX schemas'"
+            >
+              <app-glass-icon name="fact_check" [size]="16"></app-glass-icon>
+              <span>Check Exensio</span>
+            </app-glass-button>
+
             <app-glass-input
               class="search-field-compact"
               label="Search"
@@ -484,6 +497,36 @@
           </div>
         </div>
 
+        <div class="quick-filter-toolbar" *ngIf="previewTotal() > 0">
+          <span class="filter-label">Quick Filters:</span>
+          <div class="filter-pills">
+            <button
+              type="button"
+              class="filter-pill"
+              [class.active]="exensioStatusFilter() === 'all'"
+              (click)="setExensioStatusFilter('all')"
+            >
+              Show All
+            </button>
+            <button
+              type="button"
+              class="filter-pill pill-missing"
+              [class.active]="exensioStatusFilter() === 'missing'"
+              (click)="setExensioStatusFilter('missing')"
+            >
+              Show Missing Only
+            </button>
+            <button
+              type="button"
+              class="filter-pill pill-existing"
+              [class.active]="exensioStatusFilter() === 'existing'"
+              (click)="setExensioStatusFilter('existing')"
+            >
+              Show Existing Only
+            </button>
+          </div>
+        </div>
+
         <div class="table-container-optimized">
           <table class="glass-table hub-table-compact">
             <thead>
@@ -491,6 +534,7 @@
                 <th class="col-select"></th>
                 <th>Lot</th>
                 <th *ngIf="showWaferColumn()">Wafer</th>
+                <th>Exensio Status</th>
                 <th>Device</th>
                 <th>Metadata ID</th>
                 <th>Data ID</th>
@@ -514,6 +558,20 @@
                 </td>
                 <td>{{ row.lot }}</td>
                 <td *ngIf="showWaferColumn()">{{ row.wafer || '-' }}</td>
+                <td>
+                  <span
+                    class="exensio-status-badge"
+                    [ngClass]="{
+                      'badge-prod': getExensioStatusForRow(row) === 'FOUND PROD',
+                      'badge-sbx': getExensioStatusForRow(row) === 'FOUND SBX',
+                      'badge-found': getExensioStatusForRow(row) === 'FOUND',
+                      'badge-not-found': getExensioStatusForRow(row) === 'NOT FOUND',
+                      'badge-unchecked': getExensioStatusForRow(row) === '-'
+                    }"
+                  >
+                    {{ getExensioStatusForRow(row) }}
+                  </span>
+                </td>
                 <td>{{ row.device || 'N/A' }}</td>
                 <td>{{ row.metadataId || 'N/A' }}</td>
                 <td>{{ row.dataId || 'N/A' }}</td>

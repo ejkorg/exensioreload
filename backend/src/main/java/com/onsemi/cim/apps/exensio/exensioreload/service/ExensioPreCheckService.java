@@ -432,10 +432,12 @@ public class ExensioPreCheckService {
             try (ps; ResultSet rs = ps.executeQuery()) {
                 List<ExensioPreCheckRow> rows = new ArrayList<>();
                 while (rs.next()) {
+                    String rawWafer = rs.getString("WAFER_ID");
+                    String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
                     rows.add(new ExensioPreCheckRow(
                             rs.getString("LOT_ID"),
                             rs.getString("SCHEMA_LOADED"),
-                            rs.getString("WAFER_ID")));
+                            cleanWafer));
                 }
                 log.debug("[ExensioPreCheck] Snowflake returned {} rows (waferFilterMode={})", rows.size(), waferFilterMode);
                 return partitionResults(rows, request.lotIds());
@@ -868,7 +870,8 @@ public class ExensioPreCheckService {
             if (rowsNode.isArray()) {
                 for (JsonNode rowNode : rowsNode) {
                     String lotId = rowNode.path("LOT_ID").asText("");
-                    String waferId = rowNode.path("WAFER_ID").asText("");
+                    String rawWafer = rowNode.path("WAFER_ID").asText("");
+                    String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
                     // HTTP fallback doesn't return SCHEMANAME — use "FOUND" as sentinel
                     rows.add(new ExensioPreCheckRow(lotId, "FOUND", waferId));
                 }
