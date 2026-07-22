@@ -665,7 +665,7 @@ public class ExensioClient {
 
         for (int i = 0; i < cleanLots.size(); i++) {
             if (i > 0) sql.append(", ");
-            sql.append("UPPER(TRIM('").append(escapeSqlLiteral(cleanLots.get(i))).append("'))");
+            sql.append("'").append(escapeSqlLiteral(cleanLots.get(i).trim().toUpperCase(Locale.ROOT))).append("'");
         }
         sql.append(") ORDER BY l.lot_id, dl.start_time DESC");
 

@@ -126,7 +126,7 @@ public class ExensioRawSqlService {
         sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
         for (int i = 0; i < lotIds.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append("UPPER(TRIM('").append(escapeSql(lotIds.get(i))).append("'))");
+            sb.append("'").append(escapeSql(lotIds.get(i).trim().toUpperCase(java.util.Locale.ROOT))).append("'");
         }
         sb.append(")\n");
 
@@ -144,7 +144,7 @@ public class ExensioRawSqlService {
             int idx = 0;
             for (String waferId : expandedWaferIds) {
                 if (idx > 0) sb.append(", ");
-                sb.append("UPPER(TRIM('").append(escapeSql(waferId)).append("'))");
+                sb.append("'").append(escapeSql(waferId.trim().toUpperCase(java.util.Locale.ROOT))).append("'");
                 idx++;
             }
             sb.append(")\n");
