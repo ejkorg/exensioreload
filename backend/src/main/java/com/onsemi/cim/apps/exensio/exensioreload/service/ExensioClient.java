@@ -209,6 +209,7 @@ public class ExensioClient {
             // Use the explicit pgcKey when provided; otherwise fall back to wafer-presence logic.
             int resolvedPgcKey = (pgcKey != null) ? pgcKey : (waferBlank ? 2 : 1);
 
+            // Step 1: Try raw-SQL (already has PRODUCTION → SANDBOX fallback internally)
             ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
                     lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
                     filename, metadataId, dataId, token, traceId);
@@ -216,21 +217,66 @@ public class ExensioClient {
                 return rawSqlResult;
             }
 
-            String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
+            // Step 2: Try lot-wafer-lookup endpoint with primary schema
+            ExensioLotWaferResult primaryResult = doLotWaferLookupForSchema(
+                    lot, wafer, resolvedPgcKey, testPhase, targetEndTime, token, traceId);
 
-            ObjectNode body = objectMapper.createObjectNode();
-            body.put("pgc_key", resolvedPgcKey);
-            ArrayNode lotIds = body.putArray("lot_ids");
-            lotIds.add(lot);
-            ArrayNode waferIds = body.putArray("wafer_ids");
-            if (!waferBlank) {
-                waferIds.add(wafer);
+            if (primaryResult instanceof ExensioLotWaferResult.Found) {
+                return primaryResult;
             }
 
-            if (props.isLogRequestPayloads()) {
-                log.info("Exensio lot-wafer-lookup request (traceId={}): url={}, body={}", traceId, url, body.toString());
+            // Step 3: If primary schema returned NotFound, try fallback schema (SANDBOX)
+            String fallbackSchema = props.resolvedDbschemaFallback();
+            if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                log.info("Lot-wafer lookup primary schema returned NotFound — auto-switching to fallback schema {} (traceId={})",
+                        fallbackSchema, traceId);
+                try {
+                    String fallbackToken = authService.login(fallbackSchema);
+                    ExensioLotWaferResult fallbackResult = doLotWaferLookupForSchema(
+                            lot, wafer, resolvedPgcKey, testPhase, targetEndTime, fallbackToken, traceId);
+                    if (fallbackResult instanceof ExensioLotWaferResult.Found) {
+                        return fallbackResult;
+                    }
+                    log.debug("Lot-wafer lookup fallback schema {} also returned NotFound (traceId={})",
+                            fallbackSchema, traceId);
+                } catch (Exception e) {
+                    log.debug("Lot-wafer lookup fallback schema {} failed: {} (traceId={})",
+                            fallbackSchema, e.getMessage(), traceId);
+                }
             }
 
+            return primaryResult; // Return the result from primary (most likely NotFound or Error)
+
+        } catch (Exception e) {
+            log.warn("Exensio lot-wafer-lookup failed (traceId={}) for lot={} wafer={}: {}", traceId, lot, wafer, e.getMessage());
+            return new ExensioLotWaferResult.Error(e.getMessage());
+        }
+    }
+
+    /**
+     * Helper: calls the lot-wafer-lookup POST endpoint with a specific schema token.
+     */
+    private ExensioLotWaferResult doLotWaferLookupForSchema(
+            String lot, String wafer, int resolvedPgcKey, String testPhase,
+            Instant targetEndTime, String token, String traceId) {
+
+        String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
+        boolean waferBlank = wafer == null || wafer.isBlank();
+
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("pgc_key", resolvedPgcKey);
+        ArrayNode lotIds = body.putArray("lot_ids");
+        lotIds.add(lot);
+        ArrayNode waferIds = body.putArray("wafer_ids");
+        if (!waferBlank) {
+            waferIds.add(wafer);
+        }
+
+        if (props.isLogRequestPayloads()) {
+            log.info("Exensio lot-wafer-lookup request (traceId={}): url={}, body={}", traceId, url, body.toString());
+        }
+
+        try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
@@ -245,14 +291,14 @@ public class ExensioClient {
                 return new ExensioLotWaferResult.Error("HTTP 401");
             }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("Exensio API returned error (traceId={}): HTTP {}", traceId, response.statusCode());
+                log.warn("Exensio lot-wafer-lookup returned error (traceId={}): HTTP {}", traceId, response.statusCode());
                 return new ExensioLotWaferResult.Error("HTTP " + response.statusCode());
             }
 
             return parseResponse(response.body(), wafer, targetEndTime, testPhase);
 
         } catch (Exception e) {
-            log.warn("Exensio lot-wafer-lookup failed (traceId={}) for lot={} wafer={}: {}", traceId, lot, wafer, e.getMessage());
+            log.warn("Exensio lot-wafer-lookup request failed (traceId={}): {}", traceId, e.getMessage());
             return new ExensioLotWaferResult.Error(e.getMessage());
         }
     }
@@ -359,6 +405,7 @@ public class ExensioClient {
         List<BatchLookupResult.LotResult> mergedLots = new ArrayList<>();
         Set<Long> resolvedRecordIds = new HashSet<>();
 
+        // Step 1: Try raw-SQL batch (already has PRODUCTION → SANDBOX fallback internally)
         BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, null);
         if (rawSqlResult.isSuccess()) {
             mergedLots.addAll(rawSqlResult.getLots());
@@ -379,16 +426,37 @@ public class ExensioClient {
             return new BatchLookupResult(mergedLots);
         }
 
-        BatchLookupResult fallbackResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, token);
-        if (!fallbackResult.isSuccess()) {
-            if (!mergedLots.isEmpty()) {
-                return new BatchLookupResult(mergedLots);
-            }
-            return fallbackResult;
+        // Step 2: Try lot-wafer-lookup batch endpoint with primary schema
+        BatchLookupResult primaryResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, token);
+        if (primaryResult.isSuccess()) {
+            mergedLots.addAll(primaryResult.getLots());
+            return new BatchLookupResult(mergedLots);
         }
 
-        mergedLots.addAll(fallbackResult.getLots());
-        return new BatchLookupResult(mergedLots);
+        // Step 3: Auto-switch to fallback schema (SANDBOX) if primary returned empty
+        String fallbackSchema = props.resolvedDbschemaFallback();
+        if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+            log.info("Batch lot-wafer-lookup primary schema returned empty — auto-switching to fallback schema {} ({} records)",
+                    fallbackSchema, unresolvedRecords.size());
+            try {
+                String fallbackToken = authService.login(fallbackSchema);
+                BatchLookupResult fallbackResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, fallbackToken);
+                if (fallbackResult.isSuccess()) {
+                    log.debug("Batch lot-wafer-lookup fallback schema {} found results", fallbackSchema);
+                    mergedLots.addAll(fallbackResult.getLots());
+                    return new BatchLookupResult(mergedLots);
+                }
+                log.debug("Batch lot-wafer-lookup fallback schema {} also returned empty", fallbackSchema);
+            } catch (Exception e) {
+                log.debug("Batch lot-wafer-lookup fallback schema {} failed: {}", fallbackSchema, e.getMessage());
+            }
+        }
+
+        // All batch endpoints exhausted
+        if (!mergedLots.isEmpty()) {
+            return new BatchLookupResult(mergedLots);
+        }
+        return primaryResult; // Return primary result (most informative error)
     }
 
     private BatchLookupResult doLotWaferLookupBatchEndpoint(List<StageRecord> records, String token) {

@@ -448,6 +448,8 @@ public class CpLogMonitor {
             int pgcKey = com.onsemi.cim.apps.exensio.exensioreload.service.DataTypePgcKeyMapper.resolve(
                     record.dataType(), waferBlank);
 
+            log.info("Auto-switch: CP enrichment timed out — attempting Exensio direct lookup via lot-wafer-lookup (raw-SQL→lot-wafer-lookup→SANDBOX fallback) for record id={} lot={}", record.id(), record.lot());
+
             ExensioLotWaferResult exResult = exensioClient.lotWaferLookup(
                     record.lot(), record.wafer(), record.endTime(),
                     pgcKey, record.testPhase(),
