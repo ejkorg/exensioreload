@@ -7,16 +7,21 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
@@ -40,17 +45,20 @@ public class DataIntegrityJob {
     private final CpElasticsearchProperties elasticsearchProperties;
     private final RefDbService refDbService;
     private final AuditService auditService;
+    private final ExternalDbConfig externalDbConfig;
 
     public DataIntegrityJob(DataSource dataSource,
                            RefDbProperties refDbProperties,
                            CpElasticsearchProperties elasticsearchProperties,
                            RefDbService refDbService,
-                           AuditService auditService) {
+                           AuditService auditService,
+                           @Autowired(required = false) ExternalDbConfig externalDbConfig) {
         this.dataSource = dataSource;
         this.refDbProperties = refDbProperties;
         this.elasticsearchProperties = elasticsearchProperties;
         this.refDbService = refDbService;
         this.auditService = auditService;
+        this.externalDbConfig = externalDbConfig;
     }
 
     /**
@@ -164,27 +172,64 @@ public class DataIntegrityJob {
      */
     private List<StageRecord> findOrphanedCancelledRecords() {
         String table = refDbProperties.getStagingTable();
-        String sql = "SELECT ss.id, ss.site, ss.sender_id, ss.sender_name, ss.metadata_id, ss.data_id, " +
-                "ss.lot, ss.wafer, ss.filename, ss.status, ss.created_at, ss.updated_at, ss.request_id " +
-                "FROM " + table + " ss " +
-                "WHERE ss.status = 'CANCELLED' " +
-                "AND EXISTS ( " +
-                "  SELECT 1 FROM DTP_SENDER_QUEUE_ITEM q WHERE q.id_metadata = ss.metadata_id AND q.id_data = ss.data_id AND q.id_sender = ss.sender_id " +
-                ") " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, " +
+                "status, created_at, updated_at, request_id " +
+                "FROM " + table + " " +
+                "WHERE status = 'CANCELLED' " +
                 "FETCH FIRST 100 ROWS ONLY";
 
-        List<StageRecord> records = new ArrayList<>();
+        List<StageRecord> cancelledRecords = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    records.add(mapRecordFromResultSet(rs));
+                    cancelledRecords.add(mapRecordFromResultSet(rs));
                 }
             }
         } catch (SQLException ex) {
-            log.error("Failed querying orphaned cancelled records", ex);
+            log.error("Failed querying CANCELLED status records", ex);
+            return Collections.emptyList();
         }
-        return records;
+
+        if (cancelledRecords.isEmpty() || externalDbConfig == null) {
+            return Collections.emptyList();
+        }
+
+        List<StageRecord> orphanedRecords = new ArrayList<>();
+        // Group by site to check external DTP_SENDER_QUEUE_ITEM table per site DB
+        Map<String, List<StageRecord>> bySite = new HashMap<>();
+        for (StageRecord rec : cancelledRecords) {
+            if (rec.site() != null && !rec.site().isBlank()) {
+                bySite.computeIfAbsent(rec.site(), k -> new ArrayList<>()).add(rec);
+            }
+        }
+
+        for (Map.Entry<String, List<StageRecord>> entry : bySite.entrySet()) {
+            String site = entry.getKey();
+            List<StageRecord> recordsForSite = entry.getValue();
+            try (Connection extConn = externalDbConfig.getConnection(site)) {
+                if (extConn == null) {
+                    continue;
+                }
+                String checkSql = "SELECT COUNT(*) FROM DTP_SENDER_QUEUE_ITEM WHERE id_metadata = ? AND id_data = ? AND id_sender = ?";
+                try (PreparedStatement checkPs = extConn.prepareStatement(checkSql)) {
+                    for (StageRecord rec : recordsForSite) {
+                        checkPs.setString(1, rec.metadataId());
+                        checkPs.setString(2, rec.dataId());
+                        checkPs.setInt(3, rec.senderId());
+                        try (ResultSet checkRs = checkPs.executeQuery()) {
+                            if (checkRs.next() && checkRs.getInt(1) > 0) {
+                                orphanedRecords.add(rec);
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException ex) {
+                log.warn("Failed checking external queue for site {}: {}", site, ex.getMessage());
+            }
+        }
+
+        return orphanedRecords;
     }
 
     /**
