@@ -149,6 +149,7 @@ export interface DiscoveryPreviewWithDuplicatesResponse extends DiscoveryPreview
 
 export interface LotVerificationRequest {
   lots: string[];
+  wafers?: string[] | null;
   site: string;
   environment: string;
   dataType: string;
@@ -869,9 +870,11 @@ export class BackendService {
     lots: string[],
     dataType: string,
     blocks?: Array<{ year: number; month: number }> | null,
+    wafers?: string[] | null,
   ): Observable<LotVerificationResponse> {
     const request: LotVerificationRequest = {
       lots,
+      wafers: wafers || null,
       site: 'default',
       environment: 'production',
       dataType,

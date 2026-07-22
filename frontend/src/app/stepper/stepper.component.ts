@@ -626,6 +626,14 @@ export class StepperComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const uniqueWafers = Array.from(
+      new Set(
+        rows
+          .map(r => String(r.wafer || '').trim())
+          .filter(w => w.length > 0 && w !== '-')
+      )
+    );
+
     const dataType = this.selectedDataType() || '';
     this.exensioCheckLoading.set(true);
 
@@ -638,7 +646,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.backend.verifyLotsExistenceWithDateRange(senderId, uniqueLots, dataType, blocks).subscribe({
+    this.backend.verifyLotsExistenceWithDateRange(senderId, uniqueLots, dataType, blocks, uniqueWafers).subscribe({
       next: (response) => {
         this.exensioCheckLoading.set(false);
         const statusMap = new Map<string, string>();
