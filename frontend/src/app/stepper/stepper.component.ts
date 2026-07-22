@@ -55,6 +55,11 @@ import {
   LotVerificationDialogData,
   LotVerificationDialogResult,
 } from './lot-verification-dialog.component';
+import {
+  CheckExensioDialogComponent,
+  CheckExensioDialogData,
+  CheckExensioDialogResult,
+} from './check-exensio-dialog.component';
 
 interface WaferMonitoringRow {
   lot: string;
@@ -620,7 +625,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const uniqueLots = Array.from(new Set(rows.map(r => String(r.lot || '').trim()).filter(l => l.length > 0)));
+    const uniqueLots = Array.from(new Set(rows.map((r) => String(r.lot || '').trim()).filter((l) => l.length > 0)));
     if (uniqueLots.length === 0) {
       this.toast.warning('No valid lot IDs found in preview rows.');
       return;
@@ -629,12 +634,41 @@ export class StepperComponent implements OnInit, OnDestroy {
     const uniqueWafers = Array.from(
       new Set(
         rows
-          .map(r => String(r.wafer || '').trim())
-          .filter(w => w.length > 0 && w !== '-')
-      )
+          .map((r) => String(r.wafer || '').trim())
+          .filter((w) => w.length > 0 && w !== '-'),
+      ),
     );
 
     const dataType = this.selectedDataType() || '';
+
+    const dialogRef = this.dialog.open<
+      CheckExensioDialogComponent,
+      CheckExensioDialogData,
+      CheckExensioDialogResult | undefined
+    >(CheckExensioDialogComponent, {
+      data: {
+        lotsCount: uniqueLots.length,
+        wafersCount: uniqueWafers.length,
+        dataType,
+        enableSnowflakeFallback: this.enableSnowflakeFallback() ?? false,
+      },
+    });
+
+    dialogRef.afterClosed().then((result) => {
+      if (result && result.confirmed) {
+        this.runCheckExensio(senderId, rows, uniqueLots, uniqueWafers, dataType, result.enableSnowflakeFallback);
+      }
+    });
+  }
+
+  private runCheckExensio(
+    senderId: number,
+    rows: DiscoveryPreviewRow[],
+    uniqueLots: string[],
+    uniqueWafers: string[],
+    dataType: string,
+    enableSnowflakeFallback: boolean,
+  ): void {
     this.exensioCheckLoading.set(true);
 
     let blocks: Array<{ year: number; month: number }> | null = null;
@@ -646,50 +680,53 @@ export class StepperComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.backend.verifyLotsExistenceWithDateRange(senderId, uniqueLots, dataType, blocks, uniqueWafers).subscribe({
-      next: (response) => {
-        this.exensioCheckLoading.set(false);
-        const statusMap = new Map<string, string>();
-        const lotsRes = response?.lots || {};
+    this.backend
+      .verifyLotsExistenceWithDateRange(senderId, uniqueLots, dataType, blocks, uniqueWafers, enableSnowflakeFallback)
+      .subscribe({
+        next: (response) => {
+          this.exensioCheckLoading.set(false);
+          const statusMap = new Map<string, string>();
+          const lotsRes = response?.lots || {};
 
-        for (const row of rows) {
-          const lot = String(row.lot || '').trim();
-          const rawWafer = String(row.wafer || '').trim();
-          const cleanWafer = rawWafer.replace(/^[A-Za-z]+[-_]*/, '');
-          const rowKey = `${lot}::${rawWafer}`;
+          for (const row of rows) {
+            const lot = String(row.lot || '').trim();
+            const rawWafer = String(row.wafer || '').trim();
+            const cleanWafer = rawWafer.replace(/^[A-Za-z]+[-_]*/, '');
+            const rowKey = `${lot}::${rawWafer}`;
 
-          const result = (lotsRes as Record<string, any>)[lot];
-          if (!result || !result.found) {
-            statusMap.set(rowKey, 'NOT FOUND');
-          } else {
-            const foundWafers = (result.wafers || []).map((w: string) => w.toUpperCase());
-            const hasWaferMatch = foundWafers.length === 0 ||
-                                  (rawWafer && foundWafers.includes(rawWafer.toUpperCase())) ||
-                                  (cleanWafer && foundWafers.includes(cleanWafer.toUpperCase()));
-
-            if (hasWaferMatch) {
-              const schemaUpper = String(result.schema || '').toUpperCase();
-              if (schemaUpper === 'PRODUCTION' || schemaUpper === 'PROD') {
-                statusMap.set(rowKey, 'FOUND PROD');
-              } else if (schemaUpper === 'SANDBOX' || schemaUpper === 'SBX') {
-                statusMap.set(rowKey, 'FOUND SBX');
-              } else {
-                statusMap.set(rowKey, 'FOUND');
-              }
-            } else {
+            const result = (lotsRes as Record<string, any>)[lot];
+            if (!result || !result.found) {
               statusMap.set(rowKey, 'NOT FOUND');
+            } else {
+              const foundWafers = (result.wafers || []).map((w: string) => w.toUpperCase());
+              const hasWaferMatch =
+                foundWafers.length === 0 ||
+                (rawWafer && foundWafers.includes(rawWafer.toUpperCase())) ||
+                (cleanWafer && foundWafers.includes(cleanWafer.toUpperCase()));
+
+              if (hasWaferMatch) {
+                const schemaUpper = String(result.schema || '').toUpperCase();
+                if (schemaUpper === 'PRODUCTION' || schemaUpper === 'PROD') {
+                  statusMap.set(rowKey, 'FOUND PROD');
+                } else if (schemaUpper === 'SANDBOX' || schemaUpper === 'SBX') {
+                  statusMap.set(rowKey, 'FOUND SBX');
+                } else {
+                  statusMap.set(rowKey, 'FOUND');
+                }
+              } else {
+                statusMap.set(rowKey, 'NOT FOUND');
+              }
             }
           }
-        }
 
-        this.exensioStatusMap.set(statusMap);
-        this.toast.success(`Exensio check completed for ${uniqueLots.length} lot(s).`);
-      },
-      error: (err: any) => {
-        this.exensioCheckLoading.set(false);
-        this.toast.error('Exensio check failed: ' + (err?.message || 'Server error'));
-      }
-    });
+          this.exensioStatusMap.set(statusMap);
+          this.toast.success(`Exensio check completed for ${uniqueLots.length} lot(s).`);
+        },
+        error: (err: any) => {
+          this.exensioCheckLoading.set(false);
+          this.toast.error('Exensio check failed: ' + (err?.message || 'Server error'));
+        },
+      });
   }
 
   setExensioStatusFilter(filter: 'all' | 'missing' | 'existing'): void {

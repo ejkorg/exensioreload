@@ -293,21 +293,6 @@
       </div>
 
       <div class="step-actions-compact">
-        <div class="preflight-checkbox-container">
-          <app-glass-checkbox
-            label="Pre-flight Lot Verification"
-            [checked]="preFlightVerify()"
-            (checkedChange)="preFlightVerify.set($event)"
-          >
-          </app-glass-checkbox>
-          <app-glass-checkbox
-            label="Also search Snowflake if Exensio returns nothing"
-            [checked]="enableSnowflakeFallback() ?? false"
-            (checkedChange)="enableSnowflakeFallback.set($event)"
-            [glassTooltip]="'Enable Snowflake secondary fallback for preflight check'"
-          >
-          </app-glass-checkbox>
-        </div>
         <app-glass-button
           variant="primary"
           size="medium"

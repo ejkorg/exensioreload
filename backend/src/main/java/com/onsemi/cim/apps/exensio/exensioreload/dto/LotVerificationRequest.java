@@ -7,5 +7,6 @@ public record LotVerificationRequest(
         String site,
         String environment,
         String dataType,
-        List<String> wafers  // Optional: specific wafers to check (bypasses discovery)
+        List<String> wafers, // Optional: specific wafers to check (bypasses discovery)
+        Boolean enableSnowflakeFallback // Optional: enable Snowflake secondary fallback
 ) {}

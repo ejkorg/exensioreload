@@ -154,6 +154,7 @@ export interface LotVerificationRequest {
   environment: string;
   dataType: string;
   blocks?: Array<{ year: number; month: number }> | null;
+  enableSnowflakeFallback?: boolean | null;
 }
 
 export interface LotVerificationResult {
@@ -871,6 +872,7 @@ export class BackendService {
     dataType: string,
     blocks?: Array<{ year: number; month: number }> | null,
     wafers?: string[] | null,
+    enableSnowflakeFallback?: boolean | null,
   ): Observable<LotVerificationResponse> {
     const request: LotVerificationRequest = {
       lots,
@@ -879,6 +881,7 @@ export class BackendService {
       environment: 'production',
       dataType,
       blocks: blocks || null,
+      enableSnowflakeFallback: enableSnowflakeFallback ?? null,
     };
     return this.http.post<LotVerificationResponse>(`${this.apiUrl}/senders/${senderId}/verify-lots`, request);
   }

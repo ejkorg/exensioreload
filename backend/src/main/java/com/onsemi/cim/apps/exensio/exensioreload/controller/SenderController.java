@@ -1302,7 +1302,7 @@ public class SenderController {
                 waferIds,  // Discovered wafers (or user-provided, or null for lot-level)
                 null,      // blocks - not needed for simple lot check
                 dataType,
-                null       // enableSnowflakeFallback - use config default
+                request.enableSnowflakeFallback() // enableSnowflakeFallback from caller request
             );
 
             // Step 5: Execute preflight check
