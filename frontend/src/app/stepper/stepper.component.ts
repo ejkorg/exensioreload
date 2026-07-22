@@ -590,6 +590,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     notFoundCount: number;
   } | null>(null);
 
+  // Pagination state
+  pageSize = signal(25);
+  pageIndex = signal(0);
+  pageSizeOptions = signal([25, 50, 100]); // Start with 25 to match default pageSize
+
   // Single-grid Exensio precheck state
   exensioStatusMap = signal<Map<string, string>>(new Map());
   exensioCheckLoading = signal(false);
