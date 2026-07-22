@@ -71,7 +71,8 @@ public class ParallelSchemaCheckService {
                 discoveredWafers,  // Use discovered wafers
                 preCheckRequest.blocks(),
                 preCheckRequest.dataType(),
-                preCheckRequest.enableSnowflakeFallback()
+                preCheckRequest.enableSnowflakeFallback(),
+                preCheckRequest.filenames()  // pass through filenames for raw-SQL prefix matching
         );
 
         ExensioPreCheckRequest sandboxRequest = new ExensioPreCheckRequest(
@@ -80,7 +81,8 @@ public class ParallelSchemaCheckService {
                 discoveredWafers,  // Use discovered wafers
                 preCheckRequest.blocks(),
                 preCheckRequest.dataType(),
-                preCheckRequest.enableSnowflakeFallback()
+                preCheckRequest.enableSnowflakeFallback(),
+                preCheckRequest.filenames()  // pass through filenames for raw-SQL prefix matching
         );
 
         // Step 1: Execute raw-SQL for both schemas in parallel
@@ -151,7 +153,8 @@ public class ParallelSchemaCheckService {
                     discoveredWafers,
                     preCheckRequest.blocks(),
                     preCheckRequest.dataType(),
-                    preCheckRequest.enableSnowflakeFallback()
+                    preCheckRequest.enableSnowflakeFallback(),
+                    preCheckRequest.filenames()
             );
 
             ExensioPreCheckResponse lotWaferResult = exensioPreCheckService.checkViaExensioLotWaferLookup(

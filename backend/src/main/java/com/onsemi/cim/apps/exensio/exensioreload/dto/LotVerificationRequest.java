@@ -8,5 +8,6 @@ public record LotVerificationRequest(
         String environment,
         String dataType,
         List<String> wafers, // Optional: specific wafers to check (bypasses discovery)
-        Boolean enableSnowflakeFallback // Optional: enable Snowflake secondary fallback
+        Boolean enableSnowflakeFallback, // Optional: enable Snowflake secondary fallback
+        List<String> filenames // Optional: filenames for raw-SQL filename prefix matching (first 15 chars)
 ) {}

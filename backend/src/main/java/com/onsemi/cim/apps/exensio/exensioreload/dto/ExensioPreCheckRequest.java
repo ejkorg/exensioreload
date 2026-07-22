@@ -20,7 +20,8 @@ public record ExensioPreCheckRequest(
         List<String> waferIds,  // optional wafer IDs for wafer-level checking (Class 1, 4, 5, 14)
         List<PreCheckBlock> blocks,
         String dataType,  // for PGC_KEY resolution
-        Boolean enableSnowflakeFallback  // NEW: runtime override for Snowflake fallback flag; null = use config default
+        Boolean enableSnowflakeFallback,  // NEW: runtime override for Snowflake fallback flag; null = use config default
+        List<String> filenames  // optional filenames for raw-SQL filename prefix matching (first 15 chars of df_export.file_name)
 ) {
     /**
      * Determines whether Snowflake secondary fallback should be used for this request.

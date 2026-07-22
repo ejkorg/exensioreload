@@ -27,4 +27,4 @@
 - Include filename in enrichment diagnostic messages (ES failures, pp_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
 
 # exensio
-- Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.65
+- Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75

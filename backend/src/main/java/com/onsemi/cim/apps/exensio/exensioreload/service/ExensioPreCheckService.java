@@ -522,7 +522,7 @@ public class ExensioPreCheckService {
             return null;
         }
 
-        String sql = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType());
+        String sql = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType(), request.filenames());
         long startTime = System.currentTimeMillis();
 
         for (int i = 0; i < schemas.size(); i++) {
@@ -593,7 +593,7 @@ public class ExensioPreCheckService {
      */
     ExensioPreCheckResponse checkViaExensioHttp(ExensioPreCheckRequest request) {
         String schema = resolveSchema(request.environment());
-        String sql    = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType());
+        String sql    = buildSql(request.lotIds(), request.waferIds(), request.blocks(), request.dataType(), request.filenames());
 
         log.debug("[ExensioPreCheck] HTTP primary: lots={}, wafers={}, schema={}", 
                 request.lotIds().size(), 
@@ -771,30 +771,34 @@ public class ExensioPreCheckService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Oracle SQL builder (HTTP fallback) — preserved from original service
+    // Oracle SQL builder — filename prefix matching replaces wafer ID filtering
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Builds the Oracle SQL query for the Exensio raw-SQL endpoint.
-     * Supports wafer-level checking for Class 1, 4, 5, 14 (pgc_key 1, 4, 5, 14).
-     * For other classes (pgc_key 2), performs lot-level checking only.
+     * Matches by lot + first-15-chars of filename (from df_export) instead of
+     * filtering on w.wf_id, since the wafer field format is unreliable across schemas.
      *
      * @param lotIds       list of lot IDs to check
-     * @param waferIds     optional list of wafer IDs (used if pgc_key is wafer-level)
+     * @param waferIds     optional list of wafer IDs (still used to determine wafer-level mode)
      * @param blocks       optional date range blocks for filtering
      * @param dataType     data type string to resolve pgc_key
+     * @param filenames    optional filenames for df_export.file_name prefix matching (first 15 chars)
      * @return Oracle SQL query string
      */
-    public String buildSql(List<String> lotIds, List<String> waferIds, List<PreCheckBlock> blocks, String dataType) {
+    public String buildSql(List<String> lotIds, List<String> waferIds, List<PreCheckBlock> blocks,
+                           String dataType, List<String> filenames) {
         int pgcKey = resolvePgcKey(dataType);
         boolean isWaferLevel = isWaferLevelClass(pgcKey);
-        
+
         StringBuilder sb = new StringBuilder();
 
-        // For wafer-level classes without specific wafer filter, retrieve all wafers per lot
-        // Otherwise, return a single row per lot with empty wafer_id for lot-level classes
+        String lotInList = lotIds.stream()
+                .map(l -> "'" + escapeSql(l.trim().toUpperCase(java.util.Locale.ROOT)) + "'")
+                .collect(java.util.stream.Collectors.joining(", "));
+
         if (isWaferLevel && (waferIds == null || waferIds.isEmpty())) {
-            // Query all wafers per lot (wafer-level, no filter)
+            // ── Wafer-level, no wafer filter: return all wafers per lot ──
             sb.append("SELECT DISTINCT lot_id, wafer_id FROM (\n");
             sb.append("  SELECT\n");
             sb.append("    l.lot_id                    AS lot_id,\n");
@@ -804,30 +808,17 @@ public class ExensioPreCheckService {
             sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
             sb.append("  LEFT JOIN wf_log  wfl ON wfl.lg_key = ol.lg_key\n");
             sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
+            sb.append("  LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)\n");
 
             sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
-            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
-            for (int i = 0; i < lotIds.size(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append("'").append(escapeSql(lotIds.get(i).trim().toUpperCase(java.util.Locale.ROOT))).append("'");
-            }
-            sb.append(")\n");
-
-            List<String> dateRangeClauses = buildDateRangeClauses(blocks);
-            if (!dateRangeClauses.isEmpty()) {
-                sb.append("  AND (\n");
-                for (int i = 0; i < dateRangeClauses.size(); i++) {
-                    if (i > 0) sb.append("    OR ");
-                    else sb.append("    ");
-                    sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
-                }
-                sb.append("  )\n");
-            }
+            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (").append(lotInList).append(")\n");
+            appendFilenameFilter(sb, filenames);
+            appendDateRangeFilter(sb, blocks);
 
             sb.append("  ORDER BY l.lot_id\n");
             sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
         } else {
-            // Original query for lot-level or wafer-filtered queries
+            // ── Lot-level OR wafer-filtered: replace wafer filter with filename prefix match ──
             sb.append("SELECT lot_id, end_time, ppid, wafer_id FROM (\n");
             sb.append("  SELECT\n");
             sb.append("    l.lot_id                                                         AS lot_id,\n");
@@ -839,68 +830,65 @@ public class ExensioPreCheckService {
             sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
             sb.append("  LEFT JOIN wf_log  wfl ON wfl.lg_key = ol.lg_key\n");
             sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
+            sb.append("  LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)\n");
 
             sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
-            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
-            for (int i = 0; i < lotIds.size(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append("'").append(escapeSql(lotIds.get(i).trim().toUpperCase(java.util.Locale.ROOT))).append("'");
-            }
-            sb.append(")\n");
-
-            // Wafer-level filtering for Classes 1, 4, 5, 14
-            if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
-                Set<String> expandedWaferIds = new java.util.LinkedHashSet<>();
-                Set<Integer> waferNums = new java.util.LinkedHashSet<>();
-                for (String w : waferIds) {
-                    if (w != null && !w.isBlank()) {
-                        String clean = ExensioSqlUtilService.stripWaferPrefix(w);
-                        expandedWaferIds.add(clean.toUpperCase(java.util.Locale.ROOT));
-                        expandedWaferIds.add(clean.toLowerCase(java.util.Locale.ROOT));
-                        expandedWaferIds.add(zeroPadWaferId(clean).toUpperCase(java.util.Locale.ROOT));
-                        expandedWaferIds.add(zeroPadWaferId(clean).toLowerCase(java.util.Locale.ROOT));
-                        try {
-                            waferNums.add(Integer.parseInt(clean));
-                        } catch (NumberFormatException ignored) {}
-                    }
-                }
-                sb.append("    AND (w.wf_id IN (");
-                int idx = 0;
-                for (String waferId : expandedWaferIds) {
-                    if (idx > 0) sb.append(", ");
-                    sb.append("'").append(escapeSql(waferId)).append("'");
-                    idx++;
-                }
-                sb.append(")");
-                if (!waferNums.isEmpty()) {
-                    sb.append(" OR w.wf_num IN (");
-                    int nIdx = 0;
-                    for (Integer num : waferNums) {
-                        if (nIdx > 0) sb.append(", ");
-                        sb.append(num);
-                        nIdx++;
-                    }
-                    sb.append(")");
-                }
-                sb.append(")\n");
-            }
-
-            List<String> dateRangeClauses = buildDateRangeClauses(blocks);
-            if (!dateRangeClauses.isEmpty()) {
-                sb.append("  AND (\n");
-                for (int i = 0; i < dateRangeClauses.size(); i++) {
-                    if (i > 0) sb.append("    OR ");
-                    else sb.append("    ");
-                    sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
-                }
-                sb.append("  )\n");
-            }
+            sb.append("    AND UPPER(TRIM(l.lot_id)) IN (").append(lotInList).append(")\n");
+            appendFilenameFilter(sb, filenames);
+            appendDateRangeFilter(sb, blocks);
 
             sb.append("  ORDER BY l.lot_id, ol.end_time DESC\n");
             sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
         }
 
         return sb.toString();
+    }
+
+    /**
+     * Appends a df_export.file_name prefix filter to the SQL, matching first 15 characters.
+     * Multiple filenames are OR'd together.
+     */
+    private void appendFilenameFilter(StringBuilder sb, List<String> filenames) {
+        if (filenames == null || filenames.isEmpty()) {
+            return;
+        }
+        sb.append("    AND (\n");
+        for (int i = 0; i < filenames.size(); i++) {
+            String fn = filenames.get(i);
+            if (fn == null || fn.isBlank()) continue;
+            String prefix = fn.trim().substring(0, Math.min(15, fn.trim().length()));
+            if (i > 0) sb.append("      OR ");
+            else sb.append("      ");
+            sb.append("UPPER(SUBSTR(NVL(de.file_name, ' '), 1, 15)) = UPPER('")
+              .append(escapeSql(prefix)).append("')\n");
+        }
+        sb.append("    )\n");
+    }
+
+    /**
+     * Appends the date range OR clauses from blocks.
+     */
+    private void appendDateRangeFilter(StringBuilder sb, List<PreCheckBlock> blocks) {
+        List<String> dateRangeClauses = buildDateRangeClauses(blocks);
+        if (!dateRangeClauses.isEmpty()) {
+            sb.append("  AND (\n");
+            for (int i = 0; i < dateRangeClauses.size(); i++) {
+                if (i > 0) sb.append("    OR ");
+                else sb.append("    ");
+                sb.append("(").append(dateRangeClauses.get(i)).append(")\n");
+            }
+            sb.append("  )\n");
+        }
+    }
+
+    // ── Backward-compatible overload (for any external callers) ────────────
+
+    /**
+     * @deprecated Use {@link #buildSql(List, List, List, String, List)} instead.
+     */
+    @Deprecated
+    public String buildSql(List<String> lotIds, List<String> waferIds, List<PreCheckBlock> blocks, String dataType) {
+        return buildSql(lotIds, waferIds, blocks, dataType, null);
     }
 
     /**
