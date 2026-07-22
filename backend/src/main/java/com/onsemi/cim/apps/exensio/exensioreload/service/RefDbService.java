@@ -1424,11 +1424,11 @@ public class RefDbService {
         }
         if (status != null && !status.isBlank()) {
             String normalized = status.trim().toUpperCase();
-            if (normalized.equals("QUEUED_FOR_CP") || normalized.equals("ELASTICSEARCH_MONITORING") || normalized.equals("PROCESSING")) {
+            if (normalized.equals("PROCESSING") || normalized.equals("IN_PROGRESS") || normalized.equals("ACTIVE")) {
                 sb.append(" AND status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING')");
             } else {
                 sb.append(" AND status = ?");
-                params.add(status);
+                params.add(normalized);
             }
         }
         if (requestId != null && !requestId.isBlank()) {

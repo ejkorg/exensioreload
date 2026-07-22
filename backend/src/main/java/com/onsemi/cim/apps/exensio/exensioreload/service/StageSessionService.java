@@ -584,7 +584,7 @@ public class StageSessionService {
         int pageSize = 500;
         List<StageRecord> completedNow = new ArrayList<>();
         while (true) {
-            List<StageRecord> enrichmentRecords = refDbService.listRecords(session.site(), session.senderId(), "ENRICHMENT", offset, pageSize, null, null, sessionId);
+            List<StageRecord> enrichmentRecords = refDbService.listRecords(session.site(), session.senderId(), "QUEUED_FOR_CP", offset, pageSize, null, null, sessionId);
             if (enrichmentRecords.isEmpty()) {
                 break;
             }
@@ -618,7 +618,7 @@ public class StageSessionService {
         int pageSize = 500;
         List<StageRecord> completedNow = new ArrayList<>();
         while (true) {
-            List<StageRecord> enrichmentRecords = refDbService.listRecords(session.site(), session.senderId(), "ENRICHMENT", offset, pageSize, null, null, sessionId);
+            List<StageRecord> enrichmentRecords = refDbService.listRecords(session.site(), session.senderId(), "QUEUED_FOR_CP", offset, pageSize, null, null, sessionId);
             if (enrichmentRecords.isEmpty()) {
                 break;
             }
