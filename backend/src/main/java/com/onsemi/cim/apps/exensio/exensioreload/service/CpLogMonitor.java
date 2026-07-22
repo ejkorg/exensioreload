@@ -199,7 +199,8 @@ public class CpLogMonitor {
             log.warn("Parallel query interrupted for record id={}: {}", record.id(), e.getMessage());
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "error", "Parallel query failed: " + e.getMessage());
             integrationStatusService.updateElasticsearch(requestId, "error", "Parallel query failed: " + e.getMessage());
-            return;
+            esResult = new CpLogResult.NotFound("es-error-" + java.util.UUID.randomUUID());
+            ppLogResult = new PpLogResult.NotFound();
         }
 
         // --- Step 2: Consolidate results ---
