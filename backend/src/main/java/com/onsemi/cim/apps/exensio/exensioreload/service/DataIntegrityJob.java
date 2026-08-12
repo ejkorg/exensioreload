@@ -124,7 +124,7 @@ public class DataIntegrityJob {
                 "FROM " + table + " " +
                 "WHERE status NOT IN ('STAGED', 'QUEUED_FOR_CP', 'ELASTICSEARCH_MONITORING', " +
                 "'CP_TIMEOUT', 'EXENSIO_MONITORING', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', " +
-                "'PROCESSING', 'CP_FAILED', 'LOAD_FAILED', 'COMPLETED', 'CANCELLED') " +
+                "'CP_FAILED', 'LOAD_FAILED', 'COMPLETED', 'CANCELLED') " +
                 "FETCH FIRST 100 ROWS ONLY";
 
         List<StageRecord> records = new ArrayList<>();
@@ -295,7 +295,6 @@ public class DataIntegrityJob {
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS cp_timeout, " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END) AS exensio_loading, " +
                 "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END) AS manual_verification, " +
-                "SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END) AS processing, " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, " +
                 "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
                 "SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled, " +

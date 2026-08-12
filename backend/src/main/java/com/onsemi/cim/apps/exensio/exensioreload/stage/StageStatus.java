@@ -52,10 +52,10 @@ public record StageStatus(
         return cpFailed + loadFailed;
     }
 
-    // ── Backward-compatible accessors ──────────────────────────────────────
+    // ── Backward-compatible accessor ───────────────────────────────────────
 
     /**
-     * Backward compatibility: compute enqueued as queuedForCp + elasticsearchMonitoring.
+     * Backward compatibility: compute enqueued as queuedForCp + elasticsearchMonitoring + exensioMonitoring.
      * This allows existing code to continue working without modification.
      */
     public long enqueued() {

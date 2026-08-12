@@ -215,7 +215,7 @@ public class StateAccountingIntegrationTest {
         assertNotNull(initialStatus);
         assertEquals(totalExpected, initialStatus.total());
         assertEquals(5, initialStatus.stagedToRefdb());
-        assertEquals(8, initialStatus.enqueued());
+        assertEquals(8, initialStatus.queuedForCp());
         assertEquals(10, initialStatus.elasticsearchMonitoring());
         assertEquals(3, initialStatus.totalFailed());
         assertEquals(totalExpected, initialStatus.accountingSum());
@@ -238,7 +238,7 @@ public class StateAccountingIntegrationTest {
         assertNotNull(updatedStatus);
         assertEquals(totalExpected, updatedStatus.total(), "Total should remain unchanged");
         assertEquals(5 - 2, updatedStatus.stagedToRefdb(), "Staged should decrease by 2");
-        assertEquals(8 - 3 + 2, updatedStatus.enqueued(), "Queued should be 8 - 3 + 2 = 7");
+        assertEquals(8 - 3 + 2, updatedStatus.queuedForCp(), "Queued should be 8 - 3 + 2 = 7");
         assertEquals(10 - 4, updatedStatus.elasticsearchMonitoring(), "Enriching should decrease by 4");
         assertEquals(4, updatedStatus.completed(), "Completed should be 4");
         assertEquals(3, updatedStatus.cancelled(), "Cancelled should be 3");
@@ -345,7 +345,7 @@ public class StateAccountingIntegrationTest {
 
         // Verify each state is counted
         assertEquals(1, status.stagedToRefdb(), "Staged (pending) count");
-        assertEquals(1, status.enqueued(), "Queued (ENQUEUED) count");
+        assertEquals(1, status.queuedForCp(), "Queued (ENQUEUED) count");
         assertEquals(1, status.elasticsearchMonitoring(), "Enriching count");
         assertEquals(1, status.cpTimeout(), "Enrichment timeout count");
         assertEquals(1, status.exensioMonitoring(), "Exensio loading count");
@@ -520,7 +520,7 @@ public class StateAccountingIntegrationTest {
                 "Accounting sum should equal total with timeout states");
         
         // Verify balance calculation includes timeout states
-        long manualSum = status.stagedToRefdb() + status.enqueued() + status.elasticsearchMonitoring()
+        long manualSum = status.stagedToRefdb() + status.queuedForCp() + status.elasticsearchMonitoring()
                 + status.cpTimeout() + status.exensioMonitoring() + status.completedManualVerification()
                 + status.totalFailed() + status.completed() + status.cancelled();
         

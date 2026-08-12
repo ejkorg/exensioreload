@@ -10,6 +10,8 @@ import { environment } from '../../environments/environment';
 export interface DashboardMetricTotals {
   total: number;
   staged: number;
+  ready?: number;
+  enqueued?: number;
   queuedForCp: number;
   elasticsearchMonitoring: number;
   cpTimeout: number;
@@ -684,30 +686,6 @@ export class BackendService {
     );
   }
 
-  /**
-   * List all available sites/instances filtered by environment.
-   */
-  listSitesForEnvironment(environment: string): Observable<{ key: string; label: string; environment?: string }[]> {
-    return this.http.get<string[]>(`${this.apiUrl}/sites`).pipe(
-      map((sites: string[]) => {
-        // Filter sites by environment suffix (-PROD or -QA)
-        const suffix = environment === 'PROD' ? '-PROD' : '-QA';
-        const filteredSites = (sites || []).filter((s) => {
-          if (typeof s !== 'string') return false;
-          // Case-sensitive exact suffix match
-          return s.endsWith(suffix);
-        });
-
-        // Convert to expected format
-        return filteredSites.map((site) => ({
-          key: site,
-          label: site,
-          environment: environment,
-        }));
-      }),
-    );
-  }
-
   listLocations(environment: string): Observable<ExternalLocationSummary[]> {
     return this.http.get<ExternalLocationSummary[]>(
       `${this.apiUrl}/environments/${encodeURIComponent(environment)}/locations`,
@@ -762,12 +740,6 @@ export class BackendService {
    */
   getHistoricalSenders(params: Record<string, any>): Observable<SenderOption[]> {
     return this.http.get<SenderOption[]>(`${this.apiUrl}/senders/historical/senders`, {
-      params: this.toParams(params),
-    });
-  }
-
-  getExternalSenders(params: Record<string, any>): Observable<SenderOption[]> {
-    return this.http.get<SenderOption[]>(`${this.apiUrl}/senders/external`, {
       params: this.toParams(params),
     });
   }

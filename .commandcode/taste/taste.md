@@ -8,6 +8,7 @@
 
 # communication
 - When the user asks for a command or instruction (e.g., "what is the command"), answer with the command/instructions directly before running system diagnostics or availability checks. Confidence: 0.55
+- When the user asks whether a solution is the "final and most efficient" (or similar terse challenges like "is that the best approach?"), they are pushing back on the current solution and expect the assistant to critically re-examine its approach — switching to a cleaner alternative even if it means undoing the assistant's own recent changes. Don't just confirm; find the better way. Confidence: 0.55
 
 # workflow
 - Tracks long multi-step migration tasks via a markdown checklist file (e.g., ORACLE_TO_POSTGRES_INTERNAL_DB_CHECKLIST.md) and expects work to resume from the last completed item and drive the checklist to completion (e.g., "go ahead finish these check list"). Confidence: 0.78
@@ -27,6 +28,7 @@ See [database/taste.md](database/taste.md)
 
 # status-naming
 - Use lowercase status names (e.g., pending, staging, completed, failed) following xfcs-reloader convention rather than uppercase abbreviations like NEW, ENRICHMENT, DONE. Confidence: 0.70
+- When status/enum values are renamed during a refactor, audit all layers for consistency — Java SQL string literals, Liquibase CHECK constraints, and any other hardcoded status references — not just the enum definition itself. Confidence: 0.65
 
 # enrichment
 - pp_log must be independent of Elasticsearch — if pp_log finds a success for a lot or lot/wafer, treat it as sufficient without checking or overriding from ES results. Confidence: 0.85
