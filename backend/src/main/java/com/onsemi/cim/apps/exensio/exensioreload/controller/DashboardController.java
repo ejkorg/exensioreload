@@ -385,7 +385,7 @@ public class DashboardController {
                 .map(agg -> new DashboardDateBucket(
                         agg.bucket(),
                         formatter.format(agg.bucket()),
-                        DashboardBucketTotals.of(agg.stagedToRefdb(), agg.enqueued(), agg.failed(), agg.completed())))
+                        DashboardBucketTotals.of(agg.ready(), agg.enqueued(), agg.failed(), agg.completed())))
                 .toList();
 
         return ResponseEntity.ok(List.copyOf(buckets));

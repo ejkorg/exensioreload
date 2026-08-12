@@ -540,6 +540,11 @@ public class RefDbService {
         updateStatus(ids, "QUEUED_FOR_CP", null);
     }
 
+    public void markEnqueuedRecords(List<StageRecord> records) {
+        if (records == null || records.isEmpty()) return;
+        markEnqueued(records.stream().map(StageRecord::id).toList());
+    }
+
     public void markCpFailed(long id, String message) {
         updateStatus(List.of(id), "CP_FAILED", message);
     }
@@ -1065,7 +1070,7 @@ public class RefDbService {
             enrichmentTimeout += s.cpTimeout();
             exensioLoading += s.exensioMonitoring();
             exensioTimeout += s.completedManualVerification();
-            failed += s.failed();
+            failed += s.totalFailed();
             completed += s.completed();
             cancelled += s.cancelled();
         }
@@ -2785,8 +2790,8 @@ public class RefDbService {
 
         for (List<StageUserStatus> list : result.values()) {
             list.sort((a, b) -> {
-                long backlogA = a.stagedToRefdb() + a.enqueued() + a.failed();
-                long backlogB = b.stagedToRefdb() + b.enqueued() + b.failed();
+                long backlogA = a.ready() + a.enqueued() + a.failed();
+                long backlogB = b.ready() + b.enqueued() + b.failed();
                 if (backlogA != backlogB) {
                     return Long.compare(backlogB, backlogA);
                 }

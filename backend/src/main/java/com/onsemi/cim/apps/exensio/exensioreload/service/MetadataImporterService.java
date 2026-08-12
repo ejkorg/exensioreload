@@ -699,7 +699,7 @@ public class MetadataImporterService {
                 total += s.total();
                 ready += s.stagedToRefdb();
                 enqueued += s.enqueued();
-                failed += s.failed();
+                failed += s.totalFailed();
                 completed += s.completed();
             }
 

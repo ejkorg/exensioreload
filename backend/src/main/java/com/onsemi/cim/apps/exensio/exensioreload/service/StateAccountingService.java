@@ -222,7 +222,7 @@ public class StateAccountingService {
             enrichmentTimeout += status.cpTimeout();
             exensioLoading += status.exensioMonitoring();
             exensioTimeout += status.completedManualVerification();
-            failed += status.failed();
+            failed += status.totalFailed();
             completed += status.completed();
             cancelled += status.cancelled();
         }

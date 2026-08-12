@@ -40,6 +40,9 @@ See [database/taste.md](database/taste.md)
 # project-structure
 - In a monorepo with separate backend (Maven/Java) and frontend (Node), Maven build files belong only in `backend/` — no root-level Maven aggregator pom. The repo root stays clean of language-specific build tooling. Confidence: 0.60
 
+# coding-style
+- When fields/methods are renamed in records or classes, prefer adding backward-compatible alias methods (e.g., `stagedToRefdb()` → `ready()`, `failed()` → `cpFailed + loadFailed`) rather than rewriting every call site. This keeps diffs minimal, avoids cascading changes, and lets callers migrate gradually. Confidence: 0.65
+
 # error-handling
 - Include diagnostic context in failure messages: ES failures should capture log.level, timestamp, and actual CP error message; pp_log failures should capture lot, idFile, process_code, and log_message; timeout/unresolved should document what was tried (ES, pp_log, Exensio) to aid operator investigation. Confidence: 0.60
 - Include filename in enrichment diagnostic messages (ES failures, pp_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
