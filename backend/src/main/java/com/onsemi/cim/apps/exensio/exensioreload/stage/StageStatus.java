@@ -54,23 +54,6 @@ public record StageStatus(
 
     // ── Backward-compatible accessors ──────────────────────────────────────
 
-    /** @deprecated Use {@link #stagedToRefdb()} */
-    @Deprecated public long ready() { return stagedToRefdb; }
-    /** @deprecated Use {@link #queuedForCp()} */
-    @Deprecated public long queued() { return queuedForCp; }
-    /** @deprecated Use {@link #elasticsearchMonitoring()} */
-    @Deprecated public long enriching() { return elasticsearchMonitoring; }
-    /** @deprecated Use {@link #cpTimeout()} */
-    @Deprecated public long enrichmentTimeout() { return cpTimeout; }
-    /** @deprecated Use {@link #exensioMonitoring()} */
-    @Deprecated public long exensioLoading() { return exensioMonitoring; }
-    /** @deprecated Use {@link #completedManualVerification()} */
-    @Deprecated public long exensioTimeout() { return completedManualVerification; }
-    /** @deprecated Use {@link #totalFailed()} */
-    @Deprecated public long failed() { return totalFailed(); }
-    /** @deprecated Use {@link #completed()} but maps {@code DONE} → {@code COMPLETED} display */
-    @Deprecated public long done() { return completed; }
-
     /**
      * Backward compatibility: compute enqueued as queuedForCp + elasticsearchMonitoring.
      * This allows existing code to continue working without modification.
@@ -78,7 +61,4 @@ public record StageStatus(
     public long enqueued() {
         return queuedForCp + elasticsearchMonitoring + exensioMonitoring;
     }
-
-    /** @deprecated {@link #stagedToRefdb()} + {@link #queuedForCp()} */
-    @Deprecated public long staged() { return stagedToRefdb; }
 }

@@ -11,7 +11,6 @@ export interface MonitoringStats {
   enrichmentTimeout: number;
   exensioLoading: number;
   exensioTimeout: number;
-  processing: number; // deprecated: kept for backward compatibility, equals enriching + enrichmentTimeout + exensioLoading + exensioTimeout
   completed: number;
   failed: number;
   cancelled: number;

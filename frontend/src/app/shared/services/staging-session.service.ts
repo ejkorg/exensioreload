@@ -3,11 +3,11 @@ import { interval, Observable, Subscription } from 'rxjs';
 import { distinctUntilChanged, filter, skip } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
-  BackendService,
-  CreateSessionRequest,
-  LotWaferProgress,
-  StageRecordView,
-  StagingSessionDetail,
+    BackendService,
+    CreateSessionRequest,
+    LotWaferProgress,
+    StageRecordView,
+    StagingSessionDetail,
 } from '../../api/backend.service';
 import { AuthService } from '../../auth/auth.service';
 import { ActivityEvent } from '../components/activity-feed.component';
@@ -396,8 +396,8 @@ export class StagingSessionService {
             ...current,
             totalFiles: stats.total ?? current.totalFiles,
             filesStaged: stats.ready ?? current.filesStaged,
-            // backend sends enqueued as "processing" — accept both field names
-            filesEnqueued: stats.enqueued ?? stats.processing ?? current.filesEnqueued,
+            // Use enqueued from backend
+            filesEnqueued: stats.enqueued ?? current.filesEnqueued,
             filesDone: stats.completed ?? current.filesDone,
             filesFailed: stats.failed ?? current.filesFailed,
             progress: stats.progress ?? current.progress,

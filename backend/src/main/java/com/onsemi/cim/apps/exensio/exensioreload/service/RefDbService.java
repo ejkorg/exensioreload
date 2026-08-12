@@ -533,18 +533,6 @@ public class RefDbService {
         updateStatus(ids, "QUEUED_FOR_CP", null);
     }
 
-    /**
-     * @deprecated Queueing is the dispatch-time state — records go NEW → QUEUED_FOR_CP on dispatch.
-     * Delegates to {@link #markEnqueued(List)}.
-     */
-    @Deprecated
-    public void markEnqueuedRecords(List<StageRecord> records) {
-        if (records == null || records.isEmpty()) {
-            return;
-        }
-        markEnqueued(records.stream().map(StageRecord::id).toList());
-    }
-
     public void markCpFailed(long id, String message) {
         updateStatus(List.of(id), "CP_FAILED", message);
     }
@@ -925,13 +913,6 @@ public class RefDbService {
         }
         
         log.info("Marked record {} as CP_TIMEOUT: {}", record.id(), diagnosticSummary);
-    }
-
-    /** @deprecated Use {@link #markCpTimeout(StageRecord, String)} */
-    @Deprecated
-    public void markEnrichmentTimeout(StageRecord record, String diagnosticSummary) {
-        log.warn("Deprecated method markEnrichmentTimeout called — delegating to markCpTimeout for record {}", record.id());
-        markCpTimeout(record, diagnosticSummary);
     }
 
     /**
@@ -3140,14 +3121,6 @@ public class RefDbService {
                                       long enqueued,
                                       long failed,
                                       long completed) {
-        /** @deprecated Use {@link #ready()} */
-        @Deprecated public long stagedToRefdb() { return ready; }
-        /** @deprecated Use {@link #enqueued()} */
-        @Deprecated public long queuedForCp() { return enqueued; }
-        /** @deprecated Use {@link #failed()} */
-        @Deprecated public long cpFailed() { return failed; }
-        /** @deprecated Use {@link #completed()} */
-        @Deprecated public long completedOld() { return completed; }
     }
 
     private record StageStatusKey(String site, int senderId) {}

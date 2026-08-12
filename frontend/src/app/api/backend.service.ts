@@ -22,12 +22,6 @@ export interface DashboardMetricTotals {
   backlog: number;
   activeSenders: number;
   activeUsers?: number;
-  // Aliases for code still using old field names
-  ready: number;
-  queued: number;
-  enqueued: number;
-  enriching: number;
-  enrichmentTimeout: number;
   exensioLoading: number;
   exensioTimeout: number;
   failed: number;
@@ -692,9 +686,8 @@ export class BackendService {
 
   /**
    * List all available sites/instances filtered by environment.
-   * @deprecated Use listSitesForEnvironment() instead for better performance.
    */
-  listInstances(environment: string): Observable<{ key: string; label: string; environment?: string }[]> {
+  listSitesForEnvironment(environment: string): Observable<{ key: string; label: string; environment?: string }[]> {
     return this.http.get<string[]>(`${this.apiUrl}/sites`).pipe(
       map((sites: string[]) => {
         // Filter sites by environment suffix (-PROD or -QA)
@@ -773,15 +766,10 @@ export class BackendService {
     });
   }
 
-  listSenders(): Observable<SenderOption[]> {
-    // DEPRECATED: Use getExternalSenders() instead with proper params
-    // Returns default fallback for backward compatibility
-    return new Observable<SenderOption[]>(
-      (observer: { next: (value: SenderOption[]) => void; complete: () => void }) => {
-        observer.next([{ id: 1, name: 'default' }]);
-        observer.complete();
-      },
-    );
+  getExternalSenders(params: Record<string, any>): Observable<SenderOption[]> {
+    return this.http.get<SenderOption[]>(`${this.apiUrl}/senders/external`, {
+      params: this.toParams(params),
+    });
   }
 
   // ========================================================================
