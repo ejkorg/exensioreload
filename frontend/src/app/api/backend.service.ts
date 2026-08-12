@@ -12,8 +12,10 @@ export interface DashboardMetricTotals {
   staged: number;
   ready?: number;
   enqueued?: number;
+  queued?: number;
   queuedForCp: number;
   elasticsearchMonitoring: number;
+  enrichmentTimeout?: number;
   cpTimeout: number;
   exensioMonitoring: number;
   completedManualVerification: number;

@@ -14,6 +14,7 @@ export interface MonitoringStats {
   completed: number;
   failed: number;
   cancelled: number;
+  processing?: number;
   progress: number; // 0-100
   throughput: number; // files per minute
   eta: string;

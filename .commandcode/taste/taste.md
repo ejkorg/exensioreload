@@ -13,6 +13,7 @@
 # workflow
 - Tracks long multi-step migration tasks via a markdown checklist file (e.g., ORACLE_TO_POSTGRES_INTERNAL_DB_CHECKLIST.md) and expects work to resume from the last completed item and drive the checklist to completion (e.g., "go ahead finish these check list"). Confidence: 0.78
 - Verify factual claims about the codebase against the actual code (grep/read) before asserting them; user pushes back on unverified statements (e.g., "check again" when told a table isn't created by any Liquibase changelog). Confidence: 0.75
+- When the user reports specific compile/type errors and asks for a "root cause fix for all," do a comprehensive sweep (grep across the full codebase) to find every instance of the same class of issue before applying fixes — fix the root cause (e.g., missing interface fields) rather than patching individual call sites one at a time. Confidence: 0.80
 
 # database
 See [database/taste.md](database/taste.md)
