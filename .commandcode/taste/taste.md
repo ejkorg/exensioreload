@@ -6,6 +6,9 @@
 # git
 - Commit .vscode/ directory with shared workspace config files (settings, launch, tasks, extensions) for team-wide IDE setup. Confidence: 0.75
 
+# communication
+- When the user asks for a command or instruction (e.g., "what is the command"), answer with the command/instructions directly before running system diagnostics or availability checks. Confidence: 0.55
+
 # workflow
 - Tracks long multi-step migration tasks via a markdown checklist file (e.g., ORACLE_TO_POSTGRES_INTERNAL_DB_CHECKLIST.md) and expects work to resume from the last completed item and drive the checklist to completion (e.g., "go ahead finish these check list"). Confidence: 0.78
 - Verify factual claims about the codebase against the actual code (grep/read) before asserting them; user pushes back on unverified statements (e.g., "check again" when told a table isn't created by any Liquibase changelog). Confidence: 0.75
@@ -33,6 +36,9 @@ See [database/taste.md](database/taste.md)
 # dead-code
 
 - Dead or obsolete code should be annotated with `@Deprecated` + a Javadoc note (version, reason, migration guidance) rather than deleted, so the team can track what was identified and migrate callers over time. Deletion destroys that visibility. Confidence: 0.90
+
+# project-structure
+- In a monorepo with separate backend (Maven/Java) and frontend (Node), Maven build files belong only in `backend/` — no root-level Maven aggregator pom. The repo root stays clean of language-specific build tooling. Confidence: 0.60
 
 # error-handling
 - Include diagnostic context in failure messages: ES failures should capture log.level, timestamp, and actual CP error message; pp_log failures should capture lot, idFile, process_code, and log_message; timeout/unresolved should document what was tried (ES, pp_log, Exensio) to aid operator investigation. Confidence: 0.60
