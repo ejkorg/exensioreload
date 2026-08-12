@@ -79,7 +79,7 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(status, "Status should exist for test site");
         assertEquals(recordCount, status.total(), "Total should be " + recordCount);
-        assertEquals(recordCount, status.ready(), "Ready should be " + recordCount + " (all pending)");
+        assertEquals(recordCount, status.stagedToRefdb(), "Ready should be " + recordCount + " (all pending)");
         
         // Verify accounting sum = total
         long accountingSum = status.accountingSum();
@@ -111,7 +111,7 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(initialStatus);
         assertEquals(totalRecords, initialStatus.total());
-        assertEquals(totalRecords, initialStatus.enriching());
+        assertEquals(totalRecords, initialStatus.elasticsearchMonitoring());
         assertEquals(0, initialStatus.cancelled());
 
         // Cancel 7 records
@@ -126,7 +126,7 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(updatedStatus);
         assertEquals(totalRecords, updatedStatus.total(), "Total should remain unchanged");
-        assertEquals(totalRecords - cancelCount, updatedStatus.enriching(),
+        assertEquals(totalRecords - cancelCount, updatedStatus.elasticsearchMonitoring(),
                 "Enriching should decrease by " + cancelCount);
         assertEquals(cancelCount, updatedStatus.cancelled(),
                 "Cancelled should increase by " + cancelCount);
@@ -161,7 +161,7 @@ public class StateAccountingIntegrationTest {
                 .orElse(null);
 
         assertNotNull(initialStatus);
-        assertEquals(totalRecords, initialStatus.enriching());
+        assertEquals(totalRecords, initialStatus.elasticsearchMonitoring());
         assertEquals(0, initialStatus.completed());
 
         // Mark 6 records as COMPLETED
@@ -176,7 +176,7 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(updatedStatus);
         assertEquals(totalRecords, updatedStatus.total(), "Total should remain unchanged");
-        assertEquals(totalRecords - doneCount, updatedStatus.enriching(),
+        assertEquals(totalRecords - doneCount, updatedStatus.elasticsearchMonitoring(),
                 "Enriching should decrease by " + doneCount);
         assertEquals(doneCount, updatedStatus.completed(),
                 "Completed should increase by " + doneCount);
@@ -214,10 +214,10 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(initialStatus);
         assertEquals(totalExpected, initialStatus.total());
-        assertEquals(5, initialStatus.ready());
-        assertEquals(8, initialStatus.queued());
-        assertEquals(10, initialStatus.enriching());
-        assertEquals(3, initialStatus.failed());
+        assertEquals(5, initialStatus.stagedToRefdb());
+        assertEquals(8, initialStatus.enqueued());
+        assertEquals(10, initialStatus.elasticsearchMonitoring());
+        assertEquals(3, initialStatus.totalFailed());
         assertEquals(totalExpected, initialStatus.accountingSum());
 
         // Perform multiple transitions:
@@ -237,12 +237,12 @@ public class StateAccountingIntegrationTest {
 
         assertNotNull(updatedStatus);
         assertEquals(totalExpected, updatedStatus.total(), "Total should remain unchanged");
-        assertEquals(5 - 2, updatedStatus.ready(), "Staged should decrease by 2");
-        assertEquals(8 - 3 + 2, updatedStatus.queued(), "Queued should be 8 - 3 + 2 = 7");
-        assertEquals(10 - 4, updatedStatus.enriching(), "Enriching should decrease by 4");
+        assertEquals(5 - 2, updatedStatus.stagedToRefdb(), "Staged should decrease by 2");
+        assertEquals(8 - 3 + 2, updatedStatus.enqueued(), "Queued should be 8 - 3 + 2 = 7");
+        assertEquals(10 - 4, updatedStatus.elasticsearchMonitoring(), "Enriching should decrease by 4");
         assertEquals(4, updatedStatus.completed(), "Completed should be 4");
         assertEquals(3, updatedStatus.cancelled(), "Cancelled should be 3");
-        assertEquals(3, updatedStatus.failed(), "Failed should remain 3");
+        assertEquals(3, updatedStatus.totalFailed(), "Failed should remain 3");
         
         // Verify accounting still balances
         long accountingSum = updatedStatus.accountingSum();
@@ -344,13 +344,13 @@ public class StateAccountingIntegrationTest {
         assertEquals(expectedTotal, status.total(), "Total should be 10");
 
         // Verify each state is counted
-        assertEquals(1, status.ready(), "Staged (pending) count");
-        assertEquals(1, status.queued(), "Queued (ENQUEUED) count");
-        assertEquals(1, status.enriching(), "Enriching count");
-        assertEquals(1, status.enrichmentTimeout(), "Enrichment timeout count");
-        assertEquals(1, status.exensioLoading(), "Exensio loading count");
-        assertEquals(1, status.exensioTimeout(), "Exensio timeout count");
-        assertEquals(1, status.failed(), "Failed count");
+        assertEquals(1, status.stagedToRefdb(), "Staged (pending) count");
+        assertEquals(1, status.enqueued(), "Queued (ENQUEUED) count");
+        assertEquals(1, status.elasticsearchMonitoring(), "Enriching count");
+        assertEquals(1, status.cpTimeout(), "Enrichment timeout count");
+        assertEquals(1, status.exensioMonitoring(), "Exensio loading count");
+        assertEquals(1, status.completedManualVerification(), "Exensio timeout count");
+        assertEquals(1, status.totalFailed(), "Failed count");
         assertEquals(1, status.completed(), "Completed (COMPLETED) count");
         assertEquals(1, status.cancelled(), "Cancelled count");
 
@@ -390,10 +390,10 @@ public class StateAccountingIntegrationTest {
         assertEquals(totalExpected, status.total());
         
         // Verify timeout states are segregated
-        assertEquals(5, status.enrichmentTimeout(), "Should have 5 enrichment timeouts");
-        assertEquals(3, status.exensioTimeout(), "Should have 3 exensio timeouts");
+        assertEquals(5, status.cpTimeout(), "Should have 5 enrichment timeouts");
+        assertEquals(3, status.completedManualVerification(), "Should have 3 exensio timeouts");
         assertEquals(7, status.completed(), "Should have 7 completed (COMPLETED)");
-        assertEquals(4, status.failed(), "Should have 4 failed");
+        assertEquals(4, status.totalFailed(), "Should have 4 failed");
 
         // Verify accounting includes timeout states
         long accountingSum = status.accountingSum();
@@ -520,9 +520,9 @@ public class StateAccountingIntegrationTest {
                 "Accounting sum should equal total with timeout states");
         
         // Verify balance calculation includes timeout states
-        long manualSum = status.ready() + status.queued() + status.enriching()
-                + status.enrichmentTimeout() + status.exensioLoading() + status.exensioTimeout()
-                + status.failed() + status.completed() + status.cancelled();
+        long manualSum = status.stagedToRefdb() + status.enqueued() + status.elasticsearchMonitoring()
+                + status.cpTimeout() + status.exensioMonitoring() + status.completedManualVerification()
+                + status.totalFailed() + status.completed() + status.cancelled();
         
         assertEquals(totalExpected, manualSum,
                 "Manual sum of all states should equal total");

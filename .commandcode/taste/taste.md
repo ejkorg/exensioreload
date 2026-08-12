@@ -41,7 +41,8 @@ See [database/taste.md](database/taste.md)
 - In a monorepo with separate backend (Maven/Java) and frontend (Node), Maven build files belong only in `backend/` — no root-level Maven aggregator pom. The repo root stays clean of language-specific build tooling. Confidence: 0.60
 
 # coding-style
-- When fields/methods are renamed in records or classes, prefer adding backward-compatible alias methods (e.g., `stagedToRefdb()` → `ready()`, `failed()` → `cpFailed + loadFailed`) rather than rewriting every call site. This keeps diffs minimal, avoids cascading changes, and lets callers migrate gradually. Confidence: 0.65
+- When fields/methods are renamed in records or classes, prefer adding backward-compatible alias methods (e.g., `stagedToRefdb()` → `ready()`, `failed()` → `cpFailed + loadFailed`) rather than rewriting every call site. This keeps diffs minimal, avoids cascading changes, and lets callers migrate gradually. Confidence: 0.40
+- When record components or accessor names change during a refactor, prefer migrating all callers directly to the canonical names and removing the old aliases entirely — especially during a dead-code cleanup where adding deprecated aliases would be counterproductive. The clean approach is to fix call sites, not accumulate backward-compat shims. Confidence: 0.75
 
 # error-handling
 - Include diagnostic context in failure messages: ES failures should capture log.level, timestamp, and actual CP error message; pp_log failures should capture lot, idFile, process_code, and log_message; timeout/unresolved should document what was tried (ES, pp_log, Exensio) to aid operator investigation. Confidence: 0.60
