@@ -6,8 +6,10 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "refdb")
 public class RefDbProperties {
+    private String dbType = "oracle";
     private String host;
     private int port;
+    private String database;
     private String sid;
     private String service;
     private String user;
@@ -17,10 +19,14 @@ public class RefDbProperties {
     private Pool pool = new Pool();
     private Dispatch dispatch = new Dispatch();
 
+    public String getDbType() { return dbType; }
+    public void setDbType(String dbType) { this.dbType = dbType; }
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
     public void setPort(int port) { this.port = port; }
+    public String getDatabase() { return database; }
+    public void setDatabase(String database) { this.database = database; }
     public String getSid() { return sid; }
     public void setSid(String sid) { this.sid = sid; }
     public String getService() { return service; }
@@ -39,6 +45,16 @@ public class RefDbProperties {
     public void setDispatch(Dispatch dispatch) { this.dispatch = dispatch; }
 
     public String buildJdbcUrl() {
+        if (isPostgres()) {
+            String dbName = database;
+            if (dbName == null || dbName.isBlank()) {
+                dbName = service;
+            }
+            if (dbName == null || dbName.isBlank()) {
+                dbName = sid;
+            }
+            return String.format("jdbc:postgresql://%s:%d/%s", host, port, dbName);
+        }
         if (service != null && !service.isBlank()) {
             return String.format("jdbc:oracle:thin:@//%s:%d/%s", host, port, service);
         }
@@ -46,6 +62,10 @@ public class RefDbProperties {
             return String.format("jdbc:oracle:thin:@%s:%d:%s", host, port, sid);
         }
         return String.format("jdbc:oracle:thin:@%s:%d", host, port);
+    }
+
+    public boolean isPostgres() {
+        return dbType != null && dbType.trim().equalsIgnoreCase("postgresql");
     }
 
     public static class Pool {

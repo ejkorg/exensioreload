@@ -87,5 +87,6 @@
   // ── YAML ──
   "[yaml]": {
     "editor.defaultFormatter": "redhat.vscode-yaml"
-  }
+  },
+  "kiroAgent.configureMCP": "Disabled"
 }

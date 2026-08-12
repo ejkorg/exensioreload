@@ -11,9 +11,20 @@
         "problemMatcher": []
       },
       {
-        "label": "Backend: spring-boot:run",
+        "label": "Backend: spring-boot:run (Oracle)",
         "type": "shell",
         "command": "mvn spring-boot:run -Dspring-boot.run.arguments=\"--spring.profiles.active=onsemi-oracle\"",
+        "options": { "cwd": "${workspaceFolder}/backend" },
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "java",
+          "pattern": { "regexp": "^.*$", "file": 1, "location": 2, "message": 3 }
+        }
+      },
+      {
+        "label": "Backend: spring-boot:run (PostgreSQL)",
+        "type": "shell",
+        "command": "mvn spring-boot:run -Dspring-boot.run.arguments=\"--spring.profiles.active=onsemi-postgresql\"",
         "options": { "cwd": "${workspaceFolder}/backend" },
         "isBackground": true,
         "problemMatcher": {

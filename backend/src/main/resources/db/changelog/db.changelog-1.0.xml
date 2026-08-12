@@ -395,5 +395,7 @@
     <include file="db.changelog-9.11-rename-pipeline-statuses.xml" relativeToChangelogFile="true" />
     <!-- Rename STAGED_TO_REFDB to STAGED for database-agnostic naming -->
     <include file="db.changelog-9.12-rename-staged-to-refdb.xml" relativeToChangelogFile="true" />
+    <!-- ETL trigger JPA tables (idempotency + audit log) — previously created manually -->
+    <include file="db.changelog-10.0-etl-trigger-tables.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

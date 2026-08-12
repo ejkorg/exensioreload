@@ -13,6 +13,15 @@
     },
     {
       "type": "java",
+      "name": "Backend (onsemi-postgresql)",
+      "request": "launch",
+      "mainClass": "com.onsemi.cim.apps.exensio.exensioreload.ExensioreloadApplication",
+      "projectName": "exensio-reload",
+      "args": "--spring.profiles.active=onsemi-postgresql",
+      "vmArgs": "-Dserver.port=8004"
+    },
+    {
+      "type": "java",
       "name": "Backend (localhost)",
       "request": "launch",
       "mainClass": "com.onsemi.cim.apps.exensio.exensioreload.ExensioreloadApplication",

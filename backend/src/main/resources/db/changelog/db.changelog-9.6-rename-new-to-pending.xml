@@ -4,12 +4,13 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
-    <changeSet id="9.6-rename-new-to-pending" author="user">
+    <changeSet id="9.6-rename-new-to-pending" author="user" dbms="oracle">
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="SENDER_STAGE"/>
         </preConditions>
 
-        <!-- Drop existing CHECK constraint -->
+        <!-- Drop existing CHECK constraint (Oracle PL/SQL). Gated to Oracle only;
+             PostgreSQL uses the changeSet below. -->
         <sql splitStatements="false">
             DECLARE
             v_name VARCHAR2(200);
@@ -37,6 +38,35 @@
         <!-- Update column default -->
         <sql splitStatements="false">
             ALTER TABLE SENDER_STAGE MODIFY status DEFAULT 'pending'
+        </sql>
+
+        <!-- Add updated CHECK constraint -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+            CHECK (status IN ('pending','ENQUEUED','ENRICHMENT','EXENSIO_LOADING','DONE','FAILED','CANCELLED'))
+        </sql>
+    </changeSet>
+
+    <!-- PostgreSQL-safe equivalent: drop any existing status CHECK constraint and
+         recreate it with the 'pending' state. Runs only on PostgreSQL. -->
+    <changeSet id="9.6-rename-new-to-pending-postgresql" author="user" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <!-- Drop existing CHECK constraint -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE DROP CONSTRAINT IF EXISTS chk_sender_stage_status
+        </sql>
+
+        <!-- Migrate NEW → pending -->
+        <sql splitStatements="false">
+            UPDATE SENDER_STAGE SET status = 'pending' WHERE status = 'NEW'
+        </sql>
+
+        <!-- Update column default -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ALTER COLUMN status SET DEFAULT 'pending'
         </sql>
 
         <!-- Add updated CHECK constraint -->

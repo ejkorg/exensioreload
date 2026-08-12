@@ -21,8 +21,7 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
-        <!-- Oracle boolean compatibility: migrate column type to NUMBER(1) when dbms=oracle -->
-        <modifyDataType tableName="APP_USERS" columnName="active" newDataType="NUMBER(1)" dbms="oracle"/>
+        <!-- Boolean type is compatible with both Oracle and PostgreSQL -->
         <!-- Default active=1 for Oracle; true for others -->
         <addDefaultValue tableName="APP_USERS" columnName="active" defaultValueBoolean="true"/>
     </changeSet>

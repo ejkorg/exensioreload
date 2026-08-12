@@ -78,8 +78,10 @@ public interface ExternalMetadataRepository {
                                                               String testPhase);
 
     /**
-     * Resolve historical senders by name pattern and data type using an existing connection.
+     * @deprecated since v3.1 — no implementation exists on any backend.
+     *             Kept to track migration progress. Remove once implemented or retired.
      */
+    @Deprecated
     default java.util.List<SenderCandidate> findHistoricalSendersWithConnection(java.sql.Connection conn, String dataType) {
         throw new UnsupportedOperationException("Historical sender lookup not implemented");
     }

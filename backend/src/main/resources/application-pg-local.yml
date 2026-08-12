@@ -1,0 +1,35 @@
+# Local-only PostgreSQL profile override — connects to the ephemeral PG
+# launched by scripts/docker-compose-pg.yml. Never used in production.
+#
+# Usage:
+#   java -jar target/exensioreload-*.jar --spring.profiles.active=pg-local
+#
+#   mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=pg-local"
+
+spring:
+  config:
+    activate:
+      on-profile: pg-local
+  jpa:
+    properties:
+      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/exnr"
+    username: exnr
+    password: exnr
+    driver-class-name: org.postgresql.Driver
+
+refdb:
+  db-type: postgresql
+  host: localhost
+  port: 5432
+  database: exnr
+  user: exnr
+  password: exnr
+
+logging:
+  level:
+    root: INFO
+    com.onsemi.cim.apps.exensio: DEBUG
+    org.hibernate: WARN
+    liquibase: DEBUG

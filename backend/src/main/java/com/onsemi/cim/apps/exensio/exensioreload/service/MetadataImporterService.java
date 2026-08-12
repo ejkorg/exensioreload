@@ -134,6 +134,12 @@ public class MetadataImporterService {
         return externalDbConfig.getConnectionByKey(key, environment);
     }
 
+    /**
+     * @deprecated since v3.1 — no non-JDBC implementation exists.
+     *             Kept to track migration progress. Remove once a non-Oracle backend
+     *             is implemented or the stub path is retired.
+     */
+    @Deprecated
     public java.util.List<com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate> findSendersWithConnection(java.sql.Connection c, String location, String dataType, String testerType, String dataTypeExt, String testPhase) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findSendersWithConnection(c, location, dataType, testerType, dataTypeExt, testPhase);
@@ -148,6 +154,11 @@ public class MetadataImporterService {
         return null;
     }
 
+    /**
+     * @deprecated since v3.1 — no non-JDBC implementation exists.
+     *             Kept to track migration progress.
+     */
+    @Deprecated
     public java.util.List<SenderCandidate> findHistoricalSendersWithConnection(java.sql.Connection c, String dataType) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository)
@@ -202,6 +213,11 @@ public class MetadataImporterService {
         return describeSenderLookupQueryWithParamsWithConnection(c, location, dataType, testerType, dataTypeExt, testPhase);
     }
 
+    /**
+     * @deprecated since v3.1 — no non-JDBC implementation exists.
+     *             Kept to track migration progress.
+     */
+    @Deprecated
     public java.util.List<com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate> findAllSendersWithConnection(java.sql.Connection c) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findAllSendersWithConnection(c);
@@ -209,7 +225,10 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Sender list only supported by JDBC implementation");
     }
 
-    // Distinct value helpers using an existing connection
+    // Distinct value helpers — all stubs, no non-JDBC implementation exists.
+    // @deprecated since v3.1 — kept to track migration progress.
+
+    @Deprecated
     public java.util.List<String> findDistinctLocationsWithConnection(java.sql.Connection c, String dataType, String testerType, String testPhase) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findDistinctLocationsWithConnection(c, dataType, testerType, testPhase);
@@ -217,6 +236,7 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct locations supported only by JDBC implementation");
     }
 
+    @Deprecated
     public java.util.List<String> findDistinctDataTypesWithConnection(java.sql.Connection c, String location, String testerType, String testPhase) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findDistinctDataTypesWithConnection(c, location, testerType, testPhase);
@@ -224,6 +244,7 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct data types supported only by JDBC implementation");
     }
 
+    @Deprecated
     public java.util.List<String> findDistinctTesterTypesWithConnection(java.sql.Connection c, String location, String dataType, String testPhase) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findDistinctTesterTypesWithConnection(c, location, dataType, testPhase);
@@ -231,6 +252,7 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct tester types supported only by JDBC implementation");
     }
 
+    @Deprecated
     public java.util.List<String> findDistinctDataTypeExtsWithConnection(java.sql.Connection c, String location, String dataType, String testerType) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findDistinctDataTypeExtsWithConnection(c, location, dataType, testerType);
@@ -238,12 +260,22 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct data type extensions supported only by JDBC implementation");
     }
 
+    /**
+     * @deprecated since v3.1 — shorthand overload; the 8-arg version is the real stub.
+     *             Kept to track migration progress.
+     */
+    @Deprecated
     public java.util.List<String> findDistinctTestPhasesWithConnection(java.sql.Connection c, String location, String dataType, String dataTypeExt, String testerType, Integer senderId, String senderName) {
         return findDistinctTestPhasesWithConnection(c, location, dataType, dataTypeExt, testerType, senderId, senderName, false);
     }
 
+    /**
+     * @deprecated since v3.1 — no non-JDBC implementation exists.
+     *             Kept to track migration progress.
+     */
+    @Deprecated
     public java.util.List<String> findDistinctTestPhasesWithConnection(java.sql.Connection c,
-                                                                       String location,
+                                                                        String location,
                                                                        String dataType,
                                                                        String dataTypeExt,
                                                                        String testerType,
@@ -257,6 +289,11 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Distinct test phases supported only by JDBC implementation");
     }
 
+    /**
+     * @deprecated since v3.1 — no non-JDBC implementation exists.
+     *             Kept to track migration progress.
+     */
+    @Deprecated
     public java.util.List<String> findDistinctDevicesWithConnection(java.sql.Connection c, String dataType, String testerType) {
         if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
             return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository)

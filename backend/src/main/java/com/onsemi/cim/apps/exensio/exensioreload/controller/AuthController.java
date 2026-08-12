@@ -131,9 +131,11 @@ public class AuthController {
     }
 
     /**
-     * Added to preserve older test signatures that pass a ProbeStrategy instance.
-     * Signature: (..., String resetUrlBaseRaw, ProbeStrategy probeStrategy, boolean returnTokensInResponse)
+     * @deprecated since v3.1 — legacy test-signature constructor with ProbeStrategy.
+     *             Kept to track migration progress. Remove once tests are migrated to
+     *             the primary constructor.
      */
+    @Deprecated
     public AuthController(AuthenticationManager authManager, JwtUtil jwtUtil, RefreshTokenService refreshTokenService,
                           AuthTokenService authTokenService, AppUserRepository userRepository, PasswordEncoder passwordEncoder,
                           com.onsemi.cim.apps.exensio.exensioreload.service.MailService mailService,
@@ -145,9 +147,10 @@ public class AuthController {
     }
 
     /**
-     * Added to preserve older test signatures that pass probe settings and ProbeStrategy.
-     * Signature: (..., String resetUrlBaseRaw, int resetUrlProbeFirst, int resetUrlProbeTimeoutMillis, ProbeStrategy probeStrategy, boolean returnTokensInResponse)
+     * @deprecated since v3.1 — legacy test-signature constructor with ProbeStrategy
+     *             and probe settings. Kept to track migration progress.
      */
+    @Deprecated
     public AuthController(AuthenticationManager authManager, JwtUtil jwtUtil, RefreshTokenService refreshTokenService,
                           AuthTokenService authTokenService, AppUserRepository userRepository, PasswordEncoder passwordEncoder,
                           com.onsemi.cim.apps.exensio.exensioreload.service.MailService mailService,

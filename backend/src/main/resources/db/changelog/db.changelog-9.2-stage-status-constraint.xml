@@ -4,14 +4,15 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
-    <changeSet id="2026-04-30-02-stage-status-constraint" author="copilot">
+    <changeSet id="2026-04-30-02-stage-status-constraint" author="copilot" dbms="oracle">
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="SENDER_STAGE"/>
         </preConditions>
 
         <!-- Drop any existing CHECK constraint on SENDER_STAGE.status (Oracle PL/SQL).
              splitStatements="false" is required so Liquibase sends the entire block
-             as a single statement instead of splitting on semicolons. -->
+             as a single statement instead of splitting on semicolons.
+             NOTE: gated to Oracle only; PostgreSQL uses the changeSet below. -->
         <sql splitStatements="false">
             DECLARE
             v_name VARCHAR2(200);
@@ -29,6 +30,30 @@
             END;
             END LOOP;
             END;
+        </sql>
+
+        <!-- Migrate any existing PROCESSING rows to ENRICHMENT before adding the constraint -->
+        <sql splitStatements="false">
+            UPDATE SENDER_STAGE SET status = 'ENRICHMENT' WHERE status = 'PROCESSING'
+        </sql>
+
+        <!-- Add canonical CHECK constraint with the full status lifecycle -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+            CHECK (status IN ('NEW','ENQUEUED','ENRICHMENT','EXENSIO_LOADING','DONE','FAILED','CANCELLED'))
+        </sql>
+    </changeSet>
+
+    <!-- PostgreSQL-safe equivalent: drop any existing status CHECK constraint and
+         recreate it. Runs only on PostgreSQL (Oracle uses the changeSet above). -->
+    <changeSet id="2026-04-30-02-stage-status-constraint-postgresql" author="copilot" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <!-- Drop any existing CHECK constraint on SENDER_STAGE.status -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE DROP CONSTRAINT IF EXISTS chk_sender_stage_status
         </sql>
 
         <!-- Migrate any existing PROCESSING rows to ENRICHMENT before adding the constraint -->

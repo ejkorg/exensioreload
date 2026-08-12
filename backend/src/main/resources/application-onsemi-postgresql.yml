@@ -1,0 +1,190 @@
+server:
+  port: 8004
+  servlet:
+    context-path: /exensio-reload
+  forward-headers-strategy: native
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/octet-stream
+    min-response-size: 1024
+
+spring:
+  config:
+    activate:
+      on-profile: onsemi-postgresql
+  autoconfigure:
+    # Override base exclusion: re-enable Liquibase auto-configuration in this profile
+    exclude: []
+  liquibase:
+    enabled: true
+  jpa:
+    properties:
+      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+      hibernate.jdbc.time_zone: UTC
+  datasource:
+    # Use refdb.* properties below via placeholders so the canonical values live in refdb
+    url: "jdbc:postgresql://${refdb.host}:${refdb.port}/${refdb.database}"
+    username: ${refdb.user}
+    password: ${refdb.password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${refdb.pool.max-size:10}
+      minimum-idle: ${refdb.pool.min-idle:2}
+      connection-timeout: 30000
+      idle-timeout: 600000
+      validation-timeout: 5000
+      leak-detection-threshold: 30000
+  mail:
+    host: mailhost.onsemi.com # your SMTP host (e.g. smtp.sendgrid.net)
+    port: 25 # internal SMTP relay, no auth/STARTTLS
+    username: ""
+    password: ""
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Logging configuration for onsemi-postgresql profile (production-like)
+logging:
+  level:
+    root: INFO
+    com.onsemi.cim.apps.exensio: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.web: DEBUG
+    org.hibernate: WARN
+  file:
+    name: logs/exensioreload.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# Internal refdb QA application DB used for staging and dispatch in the onsemi environment.
+refdb:
+  db-type: postgresql
+  #  host: exndev-db.onsemi.com
+  host: "10.253.112.87"
+  #  port: 1739
+  port: 5432
+  database: "exnr"
+  # Service/SID are retained only for legacy Oracle profile compatibility.
+  #  service: EXNQA.onsemi.com
+  service: ""
+  user: exnr
+  #  password: "XBfjCq#$1542FFz"
+  password: ${REFDB_PASSWORD:}
+  # Disable legacy auth bootstrap - now using modern JPA-based AdminUserSeeder
+  auth-bootstrap-enabled: false
+  bootstrap-admins: "admin"
+  staging-table: SENDER_STAGE
+  pool:
+    max-size: 10
+  # Separate connection for pp_log queries — must point to PRODUCTION so that
+  # CP enrichment fallback reads real processing outcomes, not QA data.
+  pplog:
+    host: "exnprd-db.onsemi.com"
+    port: 1729
+    service: "EXNPRD.onsemi.com"
+    user: refdb
+    password: "88sgX%#$29-azx"
+    pool:
+      max-size: 3
+      min-idle: 1
+    min-idle: 2
+  dispatch:
+    per-send: 100
+    interval-ms: 60000
+    # Maximum allowed queue size in the external DTP queue (per sender). When the external
+    # queue for a sender has >= this many rows, the dispatcher will skip pushing new items
+    # for that sender until the external queue drains below this value.
+    max-queue-size: 600
+
+external-db:
+  hikari:
+    maximum-pool-size: 10
+    minimum-idle: 1
+    connection-timeout-ms: 15000
+    idle-timeout-ms: 600000
+    validation-timeout-ms: 5000
+  cache:
+    max-pools: 50
+    expire-after-access-minutes: 60
+
+exensioreload:
+  dtp-db:
+    yaml:
+      path: classpath:dbconnections.yml
+  auth:
+    return-tokens-in-response: false
+
+# Controls metadata query view selection. When true the repository will
+# always use `all_metadata_view` and skip automatic specialization to
+# per-dataType views (probe/ft/...). Set to `false` to allow optimized
+# per-dataType views.
+
+security:
+  ldap:
+    enabled: false
+  sso:
+    enabled: false
+  csp:
+    relaxed: true
+  # Allowed origins for CORS (can be provided as a folded scalar, CSV, or YAML list).
+  # Parsed by SecurityConfig and split on commas/newlines.
+  allowed-origins: >
+    http://localhost:4200,
+    http://172.21.172.136:4200,
+    http://172.20.240.1:4200,
+    http://localhost:8080,
+    http://172.20.240.1:8080,
+    http://172.21.172.136:8080,
+    http://localhost:8004,
+    http://172.20.240.1:8004,
+    http://172.21.172.136:8004,
+    http://usaz15ls088:8080,
+    http://usaz15ls088:8004
+
+# Optional: from address used when sending automated messages
+app:
+  mail:
+    from: "no-reply@onsemi.com"
+    # Reset URL base(s) used when sending password reset emails. Can be a YAML list, CSV, or folded scalar.
+    reset-url-base:
+      - "http://usaz15ls088:8080/exensio-reload/reset-password"
+      - "http://127.0.0.1:4200/reset-password"
+    # Probe the first N configured reset-url-base entries and prefer the first reachable one.
+    reset-url-probe-first: 1
+    # Probe timeout in milliseconds for probing reset-url-base entries
+    reset-url-probe-timeout-ms: 1000
+  # Enable returning the param-expanded sender lookup SQL in API responses for diagnostic UIs
+  discovery:
+    debug-sql: false
+# Dev note: in the 'test' profile the app returns reset/verification tokens in HTTP responses
+
+# CP Elasticsearch settings for onsemi profile — tune in production via env vars or vault
+cp:
+  elasticsearch:
+    url: ${CP_ES_URL:}
+    api-key: ${CP_ES_API_KEY:}
+    username: ${CP_ES_USERNAME:}
+    password: ${CP_ES_PASSWORD:}
+    index-pattern: logs*dataport*
+    cp-config-filter: "*sender*"
+    # Optional: per-location field name overrides for the country term. Keys are site
+    # names from dbconnections.yml (upper-cased). Values are the ES field name that
+    # contains the country code for that site.
+    service-country-field-by-location:
+      EXTERNAL-PROD: service.country
+      EXTERNAL-QA: service_country
+      PHM-TARLAC-PROD: service.country
+    # Default country filter value can be set by env var CP_ES_SERVICE_COUNTRY_FILTER
+    service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
+    poll-interval-ms: 60000
+    enrichment-timeout-minutes: 15
+    logRequestPayloads: false # Suppress verbose ES query logging in production
+
+# Exensio API — production overrides
+exensio:
+  logRequestPayloads: true # Suppress verbose Exensio request logging in production

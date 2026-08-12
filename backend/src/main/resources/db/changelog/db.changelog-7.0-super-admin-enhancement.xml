@@ -78,7 +78,7 @@
                 <constraints nullable="false"/>
             </column>
             <column name="resource_id" type="VARCHAR(100)"/>
-            <column name="details" type="CLOB"/>
+            <column name="details" type="TEXT"/>
             <column name="ip_address" type="VARCHAR(45)"/>
             <column name="user_agent" type="VARCHAR(500)"/>
             <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">

@@ -20,8 +20,8 @@
                 COALESCE('$2a$10$defaulthash', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.') as password_hash,
                 CASE WHEN au.active = 1 THEN 1 ELSE 0 END as enabled,
                 'ACTIVE' as status,
-                SYSTIMESTAMP as created_at,
-                SYSTIMESTAMP as updated_at
+                CURRENT_TIMESTAMP as created_at,
+                CURRENT_TIMESTAMP as updated_at
             FROM APP_USERS au
             WHERE NOT EXISTS (
                 SELECT 1 FROM users u WHERE u.username = au.username
@@ -73,7 +73,7 @@
             ON (u.username = src.username)
             WHEN NOT MATCHED THEN
                 INSERT (username, email, password_hash, enabled, status, created_at, updated_at)
-                VALUES ('admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', 1, 'ACTIVE', SYSTIMESTAMP, SYSTIMESTAMP)
+                VALUES ('admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', 1, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         </sql>
         
         <!-- Ensure admin has all required roles -->

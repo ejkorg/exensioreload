@@ -4,6 +4,39 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
+    <!-- PostgreSQL-safe equivalent: 9.12 is gated to oracle,h2 above, so on PostgreSQL
+         the status CHECK constraint is never recreated. This changeSet ensures the
+         final 12-state constraint exists on PostgreSQL. -->
+    <changeSet id="9.12-postgresql-status-constraint" author="exensioreload" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <!-- Drop any existing status CHECK constraint -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE DROP CONSTRAINT IF EXISTS chk_sender_stage_status
+        </sql>
+
+        <!-- Recreate CHECK constraint with the final v3.0 status set -->
+        <sql splitStatements="false">
+            ALTER TABLE SENDER_STAGE ADD CONSTRAINT chk_sender_stage_status
+            CHECK (status IN (
+                'DISCOVERED',
+                'STAGED',
+                'QUEUED_FOR_CP',
+                'CP_CONSUMED',
+                'ELASTICSEARCH_MONITORING',
+                'CP_TIMEOUT',
+                'EXENSIO_MONITORING',
+                'COMPLETED_MANUAL_VERIFICATION_REQUIRED',
+                'COMPLETED',
+                'CP_FAILED',
+                'LOAD_FAILED',
+                'CANCELLED'
+            ))
+        </sql>
+    </changeSet>
+
     <changeSet id="9.12-rename-staged-to-refdb" author="exensioreload" dbms="oracle,h2">
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="SENDER_STAGE"/>

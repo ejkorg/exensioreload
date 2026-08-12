@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!--
+        JPA entities IdempotencyRecord (etl_trigger_idempotency) and EtlAuditLog
+        (etl_trigger_audit_log) live on the internal datasource but were never
+        created by Liquibase (previously created manually / out-of-band).
+        This changeSet makes them portable so a fresh PostgreSQL database works.
+    -->
+
+    <changeSet id="10.0-create-etl-trigger-idempotency" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="etl_trigger_idempotency"/>
+            </not>
+        </preConditions>
+        <createTable tableName="etl_trigger_idempotency">
+            <column name="request_id" type="VARCHAR(100)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="10.0-create-etl-trigger-audit-log" author="fg8n8x">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="etl_trigger_audit_log"/>
+            </not>
+        </preConditions>
+        <createTable tableName="etl_trigger_audit_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="request_id" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="site" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="location" type="VARCHAR(100)"/>
+            <column name="etl_server_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_port" type="INT"/>
+            <column name="status" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT"/>
+            <column name="timestamp" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="remote_ip" type="VARCHAR(45)"/>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

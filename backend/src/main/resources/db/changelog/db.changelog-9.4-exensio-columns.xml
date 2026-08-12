@@ -16,7 +16,7 @@
             </and>
         </preConditions>
         <addColumn tableName="SENDER_STAGE">
-            <column name="exensio_wafer_key" type="NUMBER"/>
+            <column name="exensio_wafer_key" type="BIGINT"/>
         </addColumn>
     </changeSet>
 
@@ -32,7 +32,7 @@
             </and>
         </preConditions>
         <addColumn tableName="SENDER_STAGE">
-            <column name="exensio_pg_key" type="NUMBER"/>
+            <column name="exensio_pg_key" type="BIGINT"/>
         </addColumn>
     </changeSet>
 

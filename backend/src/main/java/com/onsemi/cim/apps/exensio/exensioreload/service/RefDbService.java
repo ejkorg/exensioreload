@@ -53,6 +53,7 @@ public class RefDbService {
     /** Separate datasource for pp_log queries — points to PRODUCTION when configured. */
     private final HikariDataSource ppLogDataSource;
     private final boolean isOracle;
+    private final boolean isPostgres;
     private final com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService;
     private final com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties;
     private final com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties;
@@ -74,9 +75,15 @@ public class RefDbService {
         this.exensioProperties = exensioProperties;
         this.integrationStatusService = integrationStatusService;
         this.stateAggregationBatcher = stateAggregationBatcher;
-        this.isOracle = properties.getHost() != null && !properties.getHost().isBlank();
+        this.isPostgres = properties.isPostgres();
+        this.isOracle = !isPostgres && properties.getHost() != null && !properties.getHost().isBlank();
         HikariConfig config = new HikariConfig();
-        if (isOracle) {
+        if (isPostgres) {
+            config.setJdbcUrl(properties.buildJdbcUrl());
+            config.setUsername(properties.getUser());
+            config.setPassword(properties.getPassword());
+            config.setDriverClassName("org.postgresql.Driver");
+        } else if (isOracle) {
             config.setJdbcUrl(properties.buildJdbcUrl());
             config.setUsername(properties.getUser());
             config.setPassword(properties.getPassword());
@@ -97,7 +104,7 @@ public class RefDbService {
         config.setMinimumIdle(properties.getPool().getMinIdle());
         config.setPoolName("refdb-staging");
         this.dataSource = new HikariDataSource(config);
-        log.info("Main refdb datasource (QA): {}", isOracle ? properties.buildJdbcUrl() : "H2/embedded");
+        log.info("Main refdb datasource (QA): {}", isPostgres ? properties.buildJdbcUrl() : (isOracle ? properties.buildJdbcUrl() : "H2/embedded"));
         
         // Build a separate datasource for pp_log queries (PRODUCTION) if configured.
         // Falls back to the main dataSource when refdb.pplog.host is not set.
@@ -2399,6 +2406,14 @@ public class RefDbService {
                     return rs.next() && rs.getInt(1) > 0;
                 }
             }
+        } else if (isPostgres) {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM pg_indexes WHERE tablename = ? AND indexname = ?")) {
+                ps.setString(1, table.toLowerCase());
+                ps.setString(2, index.toLowerCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && rs.getInt(1) > 0;
+                }
+            }
         } else {
             try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.INDEXES WHERE TABLE_NAME = ? AND INDEX_NAME = ?")) {
                 ps.setString(1, table.toUpperCase());
@@ -2532,6 +2547,31 @@ public class RefDbService {
                     log.warn("Could not verify/update STATUS column size for table {}: {}", table, ex.getMessage());
                 }
             }
+        } else if (isPostgres) {
+            // PostgreSQL: check and alter if needed
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = 'STATUS'")) {
+                ps.setString(1, table.toLowerCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        Integer currentLength = rs.getInt("CHARACTER_MAXIMUM_LENGTH");
+                        if (currentLength == 0 || currentLength < 36) {
+                            String ddl = "ALTER TABLE " + table + " ALTER COLUMN STATUS TYPE VARCHAR(36)";
+                            try (Statement stmt = connection.createStatement()) {
+                                stmt.executeUpdate(ddl);
+                                log.info("Increased STATUS column size from {} to 36 for table {}", currentLength, table);
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                try (Statement stmt = connection.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE " + table + " ALTER COLUMN STATUS TYPE VARCHAR(36)");
+                    log.info("Ensured STATUS column size is 36 for table {}", table);
+                } catch (SQLException ex) {
+                    log.warn("Could not verify/update STATUS column size for table {}: {}", table, ex.getMessage());
+                }
+            }
         } else {
             // For H2, check and alter if needed
             try (PreparedStatement ps = connection.prepareStatement(
@@ -2613,8 +2653,16 @@ public class RefDbService {
         if (columnExists(connection, table, column)) {
             return false;
         }
+        // PostgreSQL does not accept Oracle/H2 "ADD (col ...)" syntax — use "ADD COLUMN".
+        String exec = ddl;
+        if (isPostgres) {
+            int addIdx = ddl.toUpperCase().indexOf(" ADD (");
+            if (addIdx >= 0) {
+                exec = ddl.substring(0, addIdx) + " ADD COLUMN " + ddl.substring(addIdx + " ADD (".length(), ddl.length() - 1);
+            }
+        }
         try (Statement statement = connection.createStatement()) {
-            statement.executeUpdate(ddl);
+            statement.executeUpdate(exec);
         }
         return true;
     }
@@ -2669,7 +2717,9 @@ public class RefDbService {
     }
 
     private void addProcessedAtColumn(Connection connection, String table) throws SQLException {
-        String ddl = "ALTER TABLE " + table + " ADD (processed_at TIMESTAMP)";
+        String ddl = isPostgres
+                ? "ALTER TABLE " + table + " ADD COLUMN processed_at TIMESTAMP"
+                : "ALTER TABLE " + table + " ADD (processed_at TIMESTAMP)";
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate(ddl);
         }
@@ -3206,10 +3256,15 @@ public class RefDbService {
         return message.length() > 4000 ? message.substring(0, 4000) : message;
     }
 
-    // H2 vs Oracle SQL fragments
+    // H2 vs Oracle vs PostgreSQL SQL fragments
     private String nextIdExpr(String table) {
         String sequence = table + "_SEQ";
-        return isOracle ? sequence + ".NEXTVAL" : "NEXT VALUE FOR " + sequence;
+        if (isOracle) {
+            return sequence + ".NEXTVAL";
+        } else if (isPostgres) {
+            return "nextval('" + sequence + "')";
+        }
+        return "NEXT VALUE FOR " + sequence;
     }
 
     private String timestampExpr() {
@@ -3282,13 +3337,18 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
 
-        // Build the bucket truncation expression (Oracle TRUNC vs H2 FORMATDATETIME)
+        // Build the bucket truncation expression (Oracle TRUNC vs H2 FORMATDATETIME vs PG to_char)
         String bucketExpr;
         if (isOracle) {
             String fmt = "MONTH".equalsIgnoreCase(granularity) ? "'MONTH'"
                     : "WEEK".equalsIgnoreCase(granularity) ? "'IW'"
                     : "'DD'";
             bucketExpr = "TO_CHAR(TRUNC(end_time, " + fmt + "), 'YYYY-MM-DD')";
+        } else if (isPostgres) {
+            String fmt = "MONTH".equalsIgnoreCase(granularity) ? "'YYYY-MM-01'"
+                    : "WEEK".equalsIgnoreCase(granularity) ? "'IYYY-IW'"
+                    : "'YYYY-MM-DD'";
+            bucketExpr = "to_char(end_time, " + fmt + ")";
         } else {
             String fmt = "MONTH".equalsIgnoreCase(granularity) ? "'yyyy-MM-01'"
                     : "WEEK".equalsIgnoreCase(granularity) ? "'yyyy-ww'"

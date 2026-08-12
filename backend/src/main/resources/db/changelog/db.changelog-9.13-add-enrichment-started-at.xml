@@ -43,8 +43,8 @@
             WHERE enrichment_started_at IS NULL;
         </sql>
 
-        <!-- Oracle style: pick most recent processed_at via nested select and rownum -->
-        <sql dbms="oracle">
+        <!-- PostgreSQL compatible: pick most recent processed_at via nested select and LIMIT -->
+        <sql dbms="postgresql,oracle,h2">
             UPDATE SENDER_STAGE s
             SET enrichment_started_at = (
                 SELECT processed_at FROM (
@@ -53,7 +53,8 @@
                       AND sq.sender_id = s.sender_id
                       AND sq.processed_at IS NOT NULL
                     ORDER BY sq.processed_at DESC
-                ) WHERE rownum = 1
+                    LIMIT 1
+                ) subq
             )
             WHERE enrichment_started_at IS NULL;
         </sql>

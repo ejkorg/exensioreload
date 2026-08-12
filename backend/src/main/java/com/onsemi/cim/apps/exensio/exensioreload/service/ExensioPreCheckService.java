@@ -884,7 +884,8 @@ public class ExensioPreCheckService {
     // ── Backward-compatible overload (for any external callers) ────────────
 
     /**
-     * @deprecated Use {@link #buildSql(List, List, List, String, List)} instead.
+     * @deprecated since v3.1 — Use {@link #buildSql(List, List, List, String, List)} instead.
+     *              Kept to track migration progress. Remove once all callers are migrated.
      */
     @Deprecated
     public String buildSql(List<String> lotIds, List<String> waferIds, List<PreCheckBlock> blocks, String dataType) {

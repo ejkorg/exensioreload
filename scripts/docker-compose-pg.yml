@@ -1,0 +1,32 @@
+# Ephemeral PostgreSQL instance for local migration validation.
+# Start it, then run scripts/pg-verify.sh (or the manual commands below).
+#
+# Usage:
+#   docker compose -f scripts/docker-compose-pg.yml up -d
+#   docker compose -f scripts/docker-compose-pg.yml down
+#
+# Once PG is up, verify:
+#   1. Start the app with the pg-local profile:
+#      mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=pg-local"
+#   2. Or use:
+#      java -jar target/exensioreload-*.jar --spring.profiles.active=pg-local
+#
+# Cleanup:
+#   docker compose -f scripts/docker-compose-pg.yml down -v
+
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: exnr-local-pg
+    environment:
+      POSTGRES_DB: exnr
+      POSTGRES_USER: exnr
+      POSTGRES_PASSWORD: exnr
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exnr -d exnr"]
+      interval: 3s
+      timeout: 5s
+      retries: 5

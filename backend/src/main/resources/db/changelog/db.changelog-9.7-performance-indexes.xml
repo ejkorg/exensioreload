@@ -81,11 +81,17 @@
 
     </changeSet>
 
-    <!-- Additional changeSet for Oracle-specific index tuning -->
-    <changeSet id="9.7-oracle-index-statistics" author="exensioreload" dbms="oracle">
-        <comment>Oracle: Update index statistics for newly created indexes</comment>
+    <!-- Additional changeSet for database statistics collection -->
+    <changeSet id="9.7-dbms-analyze-stats" author="exensioreload">
+        <comment>Update index statistics for newly created indexes. Oracle uses DBMS_STATS, PostgreSQL uses ANALYZE.</comment>
         
-        <sql splitStatements="false">
+        <!-- PostgreSQL: Analyze table for query planning -->
+        <sql dbms="postgresql,h2">
+            ANALYZE SENDER_STAGE;
+        </sql>
+        
+        <!-- Oracle: Update statistics using DBMS_STATS -->
+        <sql dbms="oracle" splitStatements="false">
             BEGIN
                 DBMS_STATS.gather_table_stats(
                     ownname => USER,
