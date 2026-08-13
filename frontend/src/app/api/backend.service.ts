@@ -10,12 +10,13 @@ import { environment } from '../../environments/environment';
 export interface DashboardMetricTotals {
   total: number;
   staged: number;
-  ready?: number;
-  enqueued?: number;
-  queued?: number;
+  ready: number;
+  enqueued: number;
+  queued: number;
   queuedForCp: number;
   elasticsearchMonitoring: number;
-  enrichmentTimeout?: number;
+  enriching: number;
+  enrichmentTimeout: number;
   cpTimeout: number;
   exensioMonitoring: number;
   completedManualVerification: number;
@@ -25,7 +26,7 @@ export interface DashboardMetricTotals {
   cancelled: number;
   backlog: number;
   activeSenders: number;
-  activeUsers?: number;
+  activeUsers: number;
   exensioLoading: number;
   exensioTimeout: number;
   failed: number;
