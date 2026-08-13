@@ -77,8 +77,10 @@
         </sql>
         <sql dbms="postgresql">
             INSERT INTO users (username, email, password_hash, enabled, status, created_at, updated_at)
-            VALUES ('admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', TRUE, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (username) DO NOTHING
+            SELECT 'admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', TRUE, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            WHERE NOT EXISTS (
+                SELECT 1 FROM users WHERE username = 'admin'
+            )
         </sql>
         
         <!-- Ensure admin has all required roles -->
