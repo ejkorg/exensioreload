@@ -6,6 +6,7 @@
 
     <!-- Complete Authentication System Modernization -->
     <changeSet id="2025-02-02-01-migrate-legacy-users" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="APP_USERS"/>
             <tableExists tableName="users"/>
