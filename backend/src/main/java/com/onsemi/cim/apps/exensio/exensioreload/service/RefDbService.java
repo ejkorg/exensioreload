@@ -2236,6 +2236,7 @@ public class RefDbService {
         ensureSenderNameColumn(connection, table);
         ensureFileColumns(connection, table);
         ensureRequestIdColumn(connection, table);
+        ensureExtendedColumns(connection, table);
         if (!sequenceExists(connection, table + "_SEQ")) {
             createSequence(connection, table + "_SEQ");
         }
@@ -2474,7 +2475,14 @@ public class RefDbService {
                     "enrichment_started_at TIMESTAMP, " +
                     "staged_by VARCHAR2(128), " +
                     "last_requested_by VARCHAR2(128), " +
-                    "last_requested_at TIMESTAMP" +
+                    "last_requested_at TIMESTAMP, " +
+                    "device VARCHAR2(100), " +
+                    "cp_output_path VARCHAR2(1000), " +
+                    "cp_output_target VARCHAR2(20), " +
+                    "exensio_wafer_key NUMBER(19), " +
+                    "exensio_pg_key NUMBER(19), " +
+                    "data_type VARCHAR2(100), " +
+                    "test_phase VARCHAR2(50)" +
                     ")";
         } else {
             ddl = "CREATE TABLE " + table + " (" +
@@ -2496,7 +2504,14 @@ public class RefDbService {
                     "enrichment_started_at TIMESTAMP, " +
                     "staged_by VARCHAR(128), " +
                     "last_requested_by VARCHAR(128), " +
-                    "last_requested_at TIMESTAMP" +
+                    "last_requested_at TIMESTAMP, " +
+                    "device VARCHAR(100), " +
+                    "cp_output_path VARCHAR(1000), " +
+                    "cp_output_target VARCHAR(20), " +
+                    "exensio_wafer_key BIGINT, " +
+                    "exensio_pg_key BIGINT, " +
+                    "data_type VARCHAR(100), " +
+                    "test_phase VARCHAR(50)" +
                     ")";
         }
         try (Statement statement = connection.createStatement()) {
@@ -2539,6 +2554,35 @@ public class RefDbService {
                 : "ALTER TABLE " + table + " ADD (request_id VARCHAR(128))");
         if (requestIdAdded) {
             log.info("Request ID column ensured for {}", table);
+        }
+    }
+
+    private void ensureExtendedColumns(Connection connection, String table) throws SQLException {
+        boolean deviceAdded = ensureColumn(connection, table, "DEVICE", isOracle
+                ? "ALTER TABLE " + table + " ADD (device VARCHAR2(100))"
+                : "ALTER TABLE " + table + " ADD (device VARCHAR(100))");
+        boolean cpOutputPathAdded = ensureColumn(connection, table, "CP_OUTPUT_PATH", isOracle
+                ? "ALTER TABLE " + table + " ADD (cp_output_path VARCHAR2(1000))"
+                : "ALTER TABLE " + table + " ADD (cp_output_path VARCHAR(1000))");
+        boolean cpOutputTargetAdded = ensureColumn(connection, table, "CP_OUTPUT_TARGET", isOracle
+                ? "ALTER TABLE " + table + " ADD (cp_output_target VARCHAR2(20))"
+                : "ALTER TABLE " + table + " ADD (cp_output_target VARCHAR(20))");
+        boolean exensioWaferKeyAdded = ensureColumn(connection, table, "EXENSIO_WAFER_KEY", isOracle
+                ? "ALTER TABLE " + table + " ADD (exensio_wafer_key NUMBER(19))"
+                : "ALTER TABLE " + table + " ADD (exensio_wafer_key BIGINT)");
+        boolean exensioPgKeyAdded = ensureColumn(connection, table, "EXENSIO_PG_KEY", isOracle
+                ? "ALTER TABLE " + table + " ADD (exensio_pg_key NUMBER(19))"
+                : "ALTER TABLE " + table + " ADD (exensio_pg_key BIGINT)");
+        boolean dataTypeAdded = ensureColumn(connection, table, "DATA_TYPE", isOracle
+                ? "ALTER TABLE " + table + " ADD (data_type VARCHAR2(100))"
+                : "ALTER TABLE " + table + " ADD (data_type VARCHAR(100))");
+        boolean testPhaseAdded = ensureColumn(connection, table, "TEST_PHASE", isOracle
+                ? "ALTER TABLE " + table + " ADD (test_phase VARCHAR2(50))"
+                : "ALTER TABLE " + table + " ADD (test_phase VARCHAR(50))");
+
+        if (deviceAdded || cpOutputPathAdded || cpOutputTargetAdded || exensioWaferKeyAdded
+                || exensioPgKeyAdded || dataTypeAdded || testPhaseAdded) {
+            log.info("Extended metadata columns ensured for {}", table);
         }
     }
 
