@@ -17,7 +17,7 @@
             SELECT 
                 au.username,
                 COALESCE(au.username || '@localhost', 'unknown@localhost') as email,
-                COALESCE('$2a$10$defaulthash', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.') as password_hash,
+                '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.' as password_hash,
                 CASE WHEN au.active = 1 THEN 1 ELSE 0 END as enabled,
                 'ACTIVE' as status,
                 CURRENT_TIMESTAMP as created_at,

@@ -514,7 +514,7 @@ public class UserAdminController {
             AppUser admin = new AppUser();
             admin.setUsername(username);
             admin.setEmail(username + "@localhost");
-            admin.setPasswordHash(passwordEncoder.encode("admin123"));
+            admin.setPasswordHash(passwordEncoder.encode("password"));
             admin.setEnabled(true);
             admin.setStatus(AppUser.UserStatus.ACTIVE);
             admin.setRoles(Set.of("ROLE_USER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN"));
@@ -543,7 +543,7 @@ public class UserAdminController {
                 AppUser admin = new AppUser();
                 admin.setUsername(username);
                 admin.setEmail("admin@localhost");
-                admin.setPasswordHash(passwordEncoder.encode("admin123"));
+                admin.setPasswordHash(passwordEncoder.encode("password"));
                 admin.setEnabled(true);
                 admin.setStatus(AppUser.UserStatus.ACTIVE);
                 admin.setRoles(Set.of("ROLE_USER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN"));
