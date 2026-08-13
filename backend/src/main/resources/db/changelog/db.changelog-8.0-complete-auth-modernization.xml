@@ -6,7 +6,6 @@
 
     <!-- Complete Authentication System Modernization -->
     <changeSet id="2025-02-02-01-migrate-legacy-users" author="auth-modernization">
-        <validCheckSum>ANY</validCheckSum>
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="APP_USERS"/>
             <tableExists tableName="users"/>
@@ -18,7 +17,7 @@
             SELECT 
                 au.username,
                 COALESCE(au.username || '@localhost', 'unknown@localhost') as email,
-                '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.' as password_hash,
+                COALESCE('$2a$10$defaulthash', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.') as password_hash,
                 CASE WHEN au.active = 1 THEN 1 ELSE 0 END as enabled,
                 'ACTIVE' as status,
                 CURRENT_TIMESTAMP as created_at,
