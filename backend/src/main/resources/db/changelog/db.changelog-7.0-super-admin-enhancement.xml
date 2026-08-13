@@ -282,12 +282,27 @@
 
     <!-- Separate changeset for session_token index (may already exist due to unique constraint) -->
     <changeSet id="2025-02-01-06b-create-user-sessions-token-index" author="super-admin-implementation">
-        <!-- Only create the index if no index exists on the column -->
+        <!-- Only create the index if no index exists on the column.
+             Oracle: check USER_IND_COLUMNS for an index on SESSION_TOKEN.
+             PostgreSQL: the unique constraint auto-creates user_sessions_session_token_key. -->
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="user_sessions"/>
-            <sqlCheck expectedResult="0">
-                SELECT COUNT(*) FROM user_ind_columns WHERE table_name = 'USER_SESSIONS' AND column_name = 'SESSION_TOKEN'
-            </sqlCheck>
+            <or>
+                <and>
+                    <dbms type="oracle"/>
+                    <sqlCheck expectedResult="0">
+                        SELECT COUNT(*) FROM user_ind_columns WHERE table_name = 'USER_SESSIONS' AND column_name = 'SESSION_TOKEN'
+                    </sqlCheck>
+                </and>
+                <and>
+                    <not>
+                        <dbms type="oracle"/>
+                    </not>
+                    <not>
+                        <indexExists tableName="user_sessions" indexName="user_sessions_session_token_key"/>
+                    </not>
+                </and>
+            </or>
         </preConditions>
 
         <createIndex tableName="user_sessions" indexName="idx_user_sessions_token">
