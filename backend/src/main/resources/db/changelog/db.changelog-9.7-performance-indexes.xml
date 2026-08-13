@@ -84,7 +84,10 @@
     <!-- Additional changeSet for database statistics collection -->
     <changeSet id="9.7-dbms-analyze-stats" author="exensioreload">
         <comment>Update index statistics for newly created indexes. Oracle uses DBMS_STATS, PostgreSQL uses ANALYZE.</comment>
-        
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
         <!-- PostgreSQL: Analyze table for query planning -->
         <sql dbms="postgresql,h2">
             ANALYZE SENDER_STAGE;
