@@ -2352,6 +2352,13 @@ public class RefDbService {
                     return rs.next() && rs.getInt(1) > 0;
                 }
             }
+        } else if (isPostgres) {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?")) {
+                ps.setString(1, table.toLowerCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && rs.getInt(1) > 0;
+                }
+            }
         } else {
             // H2: use INFORMATION_SCHEMA
             try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?")) {
@@ -2371,6 +2378,13 @@ public class RefDbService {
                     return rs.next() && rs.getInt(1) > 0;
                 }
             }
+        } else if (isPostgres) {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.SEQUENCES WHERE SEQUENCE_NAME = ?")) {
+                ps.setString(1, sequence.toLowerCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && rs.getInt(1) > 0;
+                }
+            }
         } else {
             try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.SEQUENCES WHERE SEQUENCE_NAME = ?")) {
                 ps.setString(1, sequence.toUpperCase());
@@ -2386,6 +2400,14 @@ public class RefDbService {
             try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM user_constraints WHERE table_name = ? AND constraint_name = ?")) {
                 ps.setString(1, table.toUpperCase());
                 ps.setString(2, constraint.toUpperCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && rs.getInt(1) > 0;
+                }
+            }
+        } else if (isPostgres) {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = ? AND CONSTRAINT_NAME = ?")) {
+                ps.setString(1, table.toLowerCase());
+                ps.setString(2, constraint.toLowerCase());
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() && rs.getInt(1) > 0;
                 }
@@ -2706,6 +2728,14 @@ public class RefDbService {
             try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM user_tab_cols WHERE table_name = ? AND column_name = ?")) {
                 ps.setString(1, table.toUpperCase());
                 ps.setString(2, column.toUpperCase());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() && rs.getInt(1) > 0;
+                }
+            }
+        } else if (isPostgres) {
+            try (PreparedStatement ps = connection.prepareStatement("SELECT COUNT(1) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = ?")) {
+                ps.setString(1, table.toLowerCase());
+                ps.setString(2, column.toLowerCase());
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() && rs.getInt(1) > 0;
                 }
