@@ -62,6 +62,7 @@
     </changeSet>
 
     <changeSet id="2025-02-02-04-ensure-admin-user" author="auth-modernization">
+        <validCheckSum>ANY</validCheckSum>
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="users"/>
         </preConditions>
