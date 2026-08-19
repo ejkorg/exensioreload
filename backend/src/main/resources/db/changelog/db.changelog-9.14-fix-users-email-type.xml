@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Fix email column type on users table if it was incorrectly set to bytea -->
+    <changeSet id="2026-08-19-02-fix-users-email-type" author="kiro" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="users"/>
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = 'users'
+                AND column_name = 'email'
+                AND data_type = 'bytea'
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(255) USING encode(email, 'escape')
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

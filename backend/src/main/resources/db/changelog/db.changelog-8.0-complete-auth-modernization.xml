@@ -67,17 +67,18 @@
         </preConditions>
         
         <!-- Ensure admin user exists with all required roles -->
+        <!-- BCrypt hash for password: admin123 -->
         <sql dbms="oracle">
             MERGE INTO users u
             USING (SELECT 'admin' as username FROM dual) src
             ON (u.username = src.username)
             WHEN NOT MATCHED THEN
                 INSERT (username, email, password_hash, enabled, status, created_at, updated_at)
-                VALUES ('admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', 1, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES ('admin', 'admin@localhost', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 1, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         </sql>
         <sql dbms="postgresql">
             INSERT INTO users (username, email, password_hash, enabled, status, created_at, updated_at)
-            SELECT 'admin', 'admin@localhost', '$2a$10$N9qo8uLOickgx2ZMRZoMye.Ik0hFvxfI7iWS.nQBYvQjO8B9dAX4.', TRUE, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            SELECT 'admin', 'admin@localhost', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', TRUE, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             WHERE NOT EXISTS (
                 SELECT 1 FROM users WHERE username = 'admin'
             )
