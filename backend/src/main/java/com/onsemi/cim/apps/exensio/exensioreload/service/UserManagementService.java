@@ -1,13 +1,11 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.AuditLog;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.PasswordHistory;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.PasswordHistoryRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.CreateUserRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.UpdateUserRequest;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.UserDto;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -18,12 +16,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.CreateUserRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.UpdateUserRequest;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.UserDto;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AuditLog;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.PasswordHistory;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.PasswordHistoryRepository;
 
 @Service
 @Transactional
@@ -51,7 +51,7 @@ public class UserManagementService {
      */
     @Transactional(readOnly = true)
     public Page<UserDto> getUsers(String search, String role, AppUser.UserStatus status, Pageable pageable) {
-        Page<AppUser> users = userRepository.findWithFilters(search, role, status, pageable);
+        Page<AppUser> users = userRepository.findWithFilters(search, role, status != null ? status.name() : null, pageable);
         return users.map(this::convertToDto);
     }
 

@@ -31,13 +31,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findSuperAdmins();
     
     // Search users with pagination and filtering
-    @Query("SELECT u FROM AppUser u WHERE " +
-           "(:search IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
-           "(:role IS NULL OR :role MEMBER OF u.roles) AND " +
-           "(:status IS NULL OR u.status = :status)")
+    @Query(value = "SELECT u.* FROM users u WHERE " +
+           "(:search IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:search AS VARCHAR), '%')) OR (u.email IS NOT NULL AND LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS VARCHAR), '%')))) AND " +
+           "(:role IS NULL OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = CAST(:role AS VARCHAR))) AND " +
+           "(:status IS NULL OR u.status = CAST(:status AS VARCHAR))",
+           countQuery = "SELECT COUNT(u.id) FROM users u WHERE " +
+           "(:search IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:search AS VARCHAR), '%')) OR (u.email IS NOT NULL AND LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS VARCHAR), '%')))) AND " +
+           "(:role IS NULL OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = CAST(:role AS VARCHAR))) AND " +
+           "(:status IS NULL OR u.status = CAST(:status AS VARCHAR))",
+           nativeQuery = true)
     Page<AppUser> findWithFilters(@Param("search") String search,
                                  @Param("role") String role,
-                                 @Param("status") AppUser.UserStatus status,
+                                 @Param("status") String status,
                                  Pageable pageable);
     
     // Find users created by a specific user
