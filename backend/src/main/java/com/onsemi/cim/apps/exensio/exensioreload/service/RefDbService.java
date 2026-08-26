@@ -4224,6 +4224,26 @@ public class RefDbService {
         long start = System.currentTimeMillis();
         PpLogRow result = null;
         boolean hasFilename = discoveredFilename != null && !discoveredFilename.trim().isEmpty();
+
+        // pp_log.process_datetime is written by third-party ETL in the Oracle server's local
+        // timezone (no TZ info stored). Convert enrichmentStartedAt from UTC to the server's
+        // local time before comparing, otherwise the query will miss records when the server
+        // is not in UTC.
+        java.time.ZoneId ppLogZone;
+        try {
+            ppLogZone = java.time.ZoneId.of(ppLogDbProperties.getServerTimezone());
+        } catch (Exception e) {
+            log.warn("Invalid pp_log server-timezone '{}', falling back to UTC", ppLogDbProperties.getServerTimezone());
+            ppLogZone = java.time.ZoneId.of("UTC");
+        }
+        java.time.LocalDateTime sinceLocal = enrichmentStartedAt
+                .atZone(ppLogZone)
+                .toLocalDateTime();
+        java.sql.Timestamp sinceTs = java.sql.Timestamp.valueOf(sinceLocal);
+
+        log.info("pp_log query using PRD refdb ({}): lot={} discoveredFilename={} sinceEnrichmentStartedAt={} (UTC) → sinceLocal={} ({})",
+            ppLogDataSource.getJdbcUrl(), lot, discoveredFilename, enrichmentStartedAt, sinceLocal, ppLogZone);
+
         String sql;
         if (hasFilename) {
             sql = "SELECT output_directory, log_message, process_code FROM pp_log " +
@@ -4234,12 +4254,10 @@ public class RefDbService {
                     "WHERE lot = ? AND process_datetime >= ? " +
                     "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
         }
-        log.info("pp_log query using PRD refdb ({}): lot={} discoveredFilename={} sinceEnrichmentStartedAt={}",
-            ppLogDataSource.getJdbcUrl(), lot, discoveredFilename, enrichmentStartedAt);
         try (Connection connection = ppLogDataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, lot);
-            ps.setTimestamp(2, java.sql.Timestamp.from(enrichmentStartedAt));
+            ps.setTimestamp(2, sinceTs);
             if (hasFilename) {
                 String cleanFilename = discoveredFilename.trim();
                 String prefix = cleanFilename.substring(0, Math.min(cleanFilename.length(), 15));

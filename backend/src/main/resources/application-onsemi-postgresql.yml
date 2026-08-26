@@ -91,6 +91,11 @@ refdb:
     service: "EXNPRD.onsemi.com"
     user: refdb
     password: "88sgX%#$29-azx"
+    # Timezone of the Oracle pp_log server. process_datetime is written by third-party
+    # ETL processes in the server's local time (no TZ info stored). Set this to the
+    # Oracle server's local timezone so timestamps are correctly compared.
+    # Confirmed via: SELECT DBTIMEZONE, SESSIONTIMEZONE FROM DUAL → -07:00 (UTC-7 / Arizona)
+    server-timezone: "America/Phoenix"
     pool:
       max-size: 3
       min-idle: 1

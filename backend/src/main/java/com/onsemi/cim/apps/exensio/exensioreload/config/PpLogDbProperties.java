@@ -44,6 +44,18 @@ public class PpLogDbProperties {
      */
     private boolean enabled = true;
 
+    /**
+     * Timezone of the Oracle server hosting pp_log.
+     * pp_log.process_datetime is written by third-party ETL processes in the
+     * server's local timezone (no TZ info stored). This timezone is used to
+     * convert the UTC enrichmentStartedAt before querying, ensuring correct
+     * comparison against process_datetime.
+     *
+     * Example values: "America/Phoenix", "Europe/Brussels", "Asia/Tokyo", "UTC"
+     * Defaults to "UTC" for backward compatibility.
+     */
+    private String serverTimezone = "UTC";
+
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
@@ -60,6 +72,8 @@ public class PpLogDbProperties {
     public void setPool(Pool pool) { this.pool = pool; }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public String getServerTimezone() { return serverTimezone; }
+    public void setServerTimezone(String serverTimezone) { this.serverTimezone = serverTimezone == null ? "UTC" : serverTimezone; }
 
     /** Returns true if a separate pp_log host is configured. */
     public boolean isConfigured() {
