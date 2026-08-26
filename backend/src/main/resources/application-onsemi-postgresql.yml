@@ -25,7 +25,7 @@ spring:
     # Use refdb.* properties below via placeholders so the canonical values live in refdb
     # CRITICAL: TimeZone=UTC forces PostgreSQL JDBC driver to interpret TIMESTAMP columns as UTC
     # This ensures consistency between database, application, and Elasticsearch timestamps
-    url: "jdbc:postgresql://${refdb.host}:${refdb.port}/${refdb.database}?TimeZone=UTC"
+    url: "jdbc:postgresql://${refdb.host}:${refdb.port}/${refdb.database}"
     username: ${refdb.user}
     password: ${refdb.password}
     driver-class-name: org.postgresql.Driver
