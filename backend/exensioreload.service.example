@@ -1,0 +1,46 @@
+[Unit]
+Description=Exensio Reload Service
+Documentation=https://github.com/your-org/exensioreload
+After=network.target postgresql.service oracle.service
+
+[Service]
+Type=simple
+User=exensio
+Group=exensio
+WorkingDirectory=/opt/exensioreload
+
+# CRITICAL: Force JVM to use UTC timezone for consistent timestamp handling
+# This ensures Oracle TIMESTAMP columns, Elasticsearch @timestamp, and Java Instant
+# all use the same timezone reference, preventing query mismatches.
+Environment="JAVA_OPTS=-Duser.timezone=UTC -Xmx2g -Xms512m -XX:+UseG1GC"
+
+# Application configuration via environment variables
+Environment="SPRING_PROFILES_ACTIVE=production"
+Environment="CP_ES_URL=https://your-elasticsearch:9200"
+Environment="CP_ES_API_KEY=your-api-key-here"
+
+# Optional: Set OS timezone as well (defense in depth)
+Environment="TZ=UTC"
+
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/exensioreload/exensioreload.jar
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=3
+StartLimitInterval=60
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/exensioreload/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=exensioreload
+
+[Install]
+WantedBy=multi-user.target

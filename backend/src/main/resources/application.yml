@@ -45,6 +45,11 @@ security:
 # the corresponding profile such as `application-oracle.yml`.
 refdb:
   staging-table: SENDER_STAGE
+  # CRITICAL: JDBC connection timezone must match Oracle DB server timezone.
+  # Oracle TIMESTAMP columns do not store timezone information, so the JDBC driver
+  # interprets them using the session timezone. Set this to UTC to ensure consistent
+  # timestamp conversion between database, application, and Elasticsearch.
+  connection-timezone: UTC
   pool:
     max-size: 5
     min-idle: 1
@@ -96,6 +101,13 @@ cp:
     password: ${CP_ES_PASSWORD:}
     index-pattern: logs*dataport*
     cp-config-filter: "*sender*"
+    # Lookback buffer (seconds) applied when querying Elasticsearch to account for:
+    # 1. Clock skew between application and ES cluster
+    # 2. Processing delays between enrichment start and log indexing
+    # 3. Potential timezone conversion drift (mitigated by UTC enforcement)
+    # Default: 900 seconds (15 minutes) provides safety margin while avoiding stale matches.
+    # Reduce to 120 (2 minutes) only after confirming timezone configuration is correct.
+    lookback-buffer-seconds: 900
     # Optional: set to PHO to isolate the External log source when ES contains mixed regions/services.
     service-country-filter: ${CP_ES_SERVICE_COUNTRY_FILTER:}
     # Optional: per-location ES field name overrides when different sites index the country

@@ -14,7 +14,7 @@ spring:
     properties:
       hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
   datasource:
-    url: "jdbc:postgresql://localhost:5432/exnr"
+    url: "jdbc:postgresql://localhost:5432/exnr?TimeZone=UTC"
     username: exnr
     password: exnr
     driver-class-name: org.postgresql.Driver

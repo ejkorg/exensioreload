@@ -347,7 +347,8 @@ public class ElasticsearchLogService {
             String sinceStr = since.toString();
             tsRange.put("gte", sinceStr);
             if (log.isDebugEnabled()) {
-                log.debug("ES query @timestamp range: gte={}, since={}", sinceStr, since);
+                log.debug("ES query @timestamp range: gte={}, since={}, sinceEpochMs={}, systemTZ={}", 
+                    sinceStr, since, since.toEpochMilli(), java.util.TimeZone.getDefault().getID());
             }
 
             // Flat should clauses matching the curl query structure

@@ -1,11 +1,11 @@
 package com.onsemi.cim.apps.exensio.exensioreload.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
-
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
 /**
  * Configuration properties for the CP Elasticsearch integration.
@@ -54,6 +54,11 @@ public class CpElasticsearchProperties {
 
     /** Timeout in minutes before a record stuck in ENRICHMENT falls through to Exensio or marked for manual verify. Default: 15 minutes. */
     private int enrichmentTimeoutMinutes = 15;
+
+    /** Lookback buffer in seconds applied when querying Elasticsearch.
+     * Accounts for clock skew, processing delays, and potential timezone drift.
+     * Default: 900 seconds (15 minutes). */
+    private int lookbackBufferSeconds = 900;
 
     /** Whether to log Elasticsearch request payloads (query JSON). */
     private boolean logRequestPayloads = false;
@@ -168,6 +173,9 @@ public class CpElasticsearchProperties {
 
     public int getEnrichmentTimeoutMinutes() { return enrichmentTimeoutMinutes; }
     public void setEnrichmentTimeoutMinutes(int enrichmentTimeoutMinutes) { this.enrichmentTimeoutMinutes = enrichmentTimeoutMinutes; }
+
+    public int getLookbackBufferSeconds() { return lookbackBufferSeconds; }
+    public void setLookbackBufferSeconds(int lookbackBufferSeconds) { this.lookbackBufferSeconds = lookbackBufferSeconds; }
 
     public boolean isRequireLot() { return requireLot; }
     public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }

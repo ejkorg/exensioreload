@@ -143,12 +143,17 @@ public class CpLogMonitor {
      */
     private void processRecord(StageRecord record) {
         Instant lookbackTime = getEnrichmentStartedAt(record);
-        Instant esLookbackTime = lookbackTime.minusSeconds(120);
+        // Use configurable lookback buffer (default 900s / 15 minutes) to account for:
+        // 1. Clock skew between application and ES cluster
+        // 2. Processing delays between enrichment start and log indexing
+        // 3. Potential timezone conversion drift (mitigated by UTC enforcement)
+        int bufferSeconds = props.getLookbackBufferSeconds();
+        Instant esLookbackTime = lookbackTime.minusSeconds(bufferSeconds);
         String requestId = record.requestId();
         long stageRecordId = record.id();
 
-        log.debug("processRecord: createdAt={}, enrichmentStartedAt={}, esLookbackTime={}", 
-            record.createdAt(), getEnrichmentStartedAt(record), esLookbackTime);
+        log.debug("processRecord: createdAt={}, enrichmentStartedAt={}, esLookbackTime={}, bufferSeconds={}", 
+            record.createdAt(), getEnrichmentStartedAt(record), esLookbackTime, bufferSeconds);
 
         boolean hasEs = props.isConfigured();
         boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
@@ -174,7 +179,7 @@ public class CpLogMonitor {
         CompletableFuture<PpLogResult> ppLogFuture = hasPpLog
             ? CompletableFuture.supplyAsync(() -> {
                 try {
-                    Instant ppLogLookback = getEnrichmentStartedAt(record).minusSeconds(120);
+                    Instant ppLogLookback = getEnrichmentStartedAt(record).minusSeconds(bufferSeconds);
                     RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback, record.filename());
                     if (row != null) {
                         if (row.processCode() == 0) {
