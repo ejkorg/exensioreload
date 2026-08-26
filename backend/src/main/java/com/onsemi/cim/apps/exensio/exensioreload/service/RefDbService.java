@@ -52,6 +52,7 @@ public class RefDbService {
     private final HikariDataSource dataSource;
     /** Separate datasource for pp_log queries — points to PRODUCTION when configured. */
     private final HikariDataSource ppLogDataSource;
+    private final PpLogDbProperties ppLogDbProperties;
     private final boolean isOracle;
     private final boolean isPostgres;
     private final com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService;
@@ -70,6 +71,7 @@ public class RefDbService {
                         IntegrationStatusService integrationStatusService,
                         StateAggregationBatcher stateAggregationBatcher) {
         this.properties = properties;
+        this.ppLogDbProperties = ppLogDbProperties;
         this.monitorService = monitorService;
         this.elasticsearchProperties = elasticsearchProperties;
         this.exensioProperties = exensioProperties;
