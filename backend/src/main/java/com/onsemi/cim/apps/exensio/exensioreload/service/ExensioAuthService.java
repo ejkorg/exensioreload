@@ -7,6 +7,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -29,9 +30,13 @@ import java.util.concurrent.locks.ReentrantLock;
  * errors rather than silently followed.</p>
  *
  * <p>Thread-safe: a {@link ReentrantLock} prevents concurrent login storms.</p>
+ *
+ * <p>Implements {@link ExensioTokenProvider} so that callers depend on the interface
+ * and require no changes when {@code AUTH_MODE} switches to OAUTH (Requirement 4.4).</p>
  */
 @Service
-public class ExensioAuthService {
+@ConditionalOnProperty(name = "exensio.auth-mode", havingValue = "SESSION", matchIfMissing = true)
+public class ExensioAuthService implements ExensioTokenProvider {
 
     private static final Logger log = LoggerFactory.getLogger(ExensioAuthService.class);
 
@@ -129,6 +134,15 @@ public class ExensioAuthService {
         } finally {
             loginLock.unlock();
         }
+    }
+
+    /**
+     * Implements {@link ExensioTokenProvider#shutdown()}.
+     * Delegates to {@link #logout()} which closes all Exensio sessions.
+     */
+    @Override
+    public void shutdown() {
+        logout();
     }
 
     @PreDestroy

@@ -175,6 +175,42 @@
             <artifactId>snowflake-jdbc</artifactId>
             <version>3.27.1</version>
         </dependency>
+        <!-- AWS SDK v2 for Secrets Manager (OAuth credentials) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>secretsmanager</artifactId>
+            <version>2.24.2</version>
+        </dependency>
+        <!-- SAML support via OpenSAML 4 -->
+        <dependency>
+            <groupId>org.opensaml</groupId>
+            <artifactId>opensaml-saml-impl</artifactId>
+            <version>4.3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opensaml</groupId>
+            <artifactId>opensaml-xmlsec-impl</artifactId>
+            <version>4.3.0</version>
+        </dependency>
+        <!-- Joda-Time required by OpenSAML -->
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+        </dependency>
+        <!-- Selenium (optional — for headless browser SAML authentication fallback) -->
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.15.2</version>
+            <optional>true</optional>
+        </dependency>
+        <!-- jqwik for property-based testing -->
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.8.1</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -185,6 +185,54 @@ public class ExensioProperties {
      */
     private int rawSqlRowLimit = 200;
 
+    // --- OAuth Authentication (Requirement 5.4, 5.5) ---
+
+    /**
+     * Authentication mode: SESSION (username/password), OAUTH (Azure AD client credentials),
+     * or SAML (Azure AD SAML SSO).
+     * Default: SESSION (backward compatible).
+     * 
+     * When set to OAUTH, the system uses {@link ExensioOAuthAuthService} instead of
+     * {@link com.onsemi.cim.apps.exensio.exensioreload.service.ExensioAuthService}.
+     * When set to SAML, the system uses the new {@link ExensioSamlAuthService}.
+     */
+    private String authMode = "SESSION";
+
+    /**
+     * AWS Secrets Manager secret name for OAuth credentials.
+     * Required only when authMode=OAUTH.
+     * 
+     * Secret format (JSON):
+     * {
+     *   "tenant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+     *   "client_id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+     *   "client_secret": "zzzzzzzz~very-long-secret-value~",
+     *   "scope": "api://exensio-big-data-api/.default"
+     * }
+     */
+    private String oauthSecretName = "";
+
+    /**
+     * AWS Secrets Manager secret name for SAML credentials.
+     * Required only when authMode=SAML.
+     * 
+     * Secret format (JSON):
+     * {
+     *   "idp_sso_url": "https://login.microsoftonline.com/{tenant}/saml2",
+     *   "idp_entity_id": "https://sts.windows.net/{tenant}/",
+     *   "idp_certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+     *   "sp_entity_id": "https://exensio-prod.example.com/api/v1/saml/metadata",
+     *   "acs_url": "https://exensio-prod.example.com/api/v1/saml/consumer",
+     *   "sign_requests": true,
+     *   "sp_private_key": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+     *   "sp_certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+     *   "service_account_username": "exensio-svc@domain.com",
+     *   "service_account_password": "...",
+     *   "predefined_connection": "PRODUCTION_DB"
+     * }
+     */
+    private String samlSecretName = "";
+
     // --- constructor ---
 
     public ExensioProperties(CpElasticsearchProperties esProps) {
@@ -195,9 +243,34 @@ public class ExensioProperties {
 
     @jakarta.annotation.PostConstruct
     public void validate() {
-        log.info("Exensio Configuration: enabled={}, env={}, qaUrl={}, prodUrl={}, username={}", 
+        log.info("Exensio Configuration: enabled={}, env={}, qaUrl={}, prodUrl={}, username={}, authMode={}", 
             enabled, env, (!qaUrl.isBlank() ? "set" : "empty"), 
-            (!prodUrl.isBlank() ? "set" : "empty"), username);
+            (!prodUrl.isBlank() ? "set" : "empty"), username, authMode);
+        
+        // Validate authMode
+        String validatedMode = authMode == null ? "SESSION" : authMode.toUpperCase();
+        if (!validatedMode.equals("SESSION") && !validatedMode.equals("OAUTH") && !validatedMode.equals("SAML")) {
+            log.warn("Invalid exensio.auth-mode='{}', defaulting to SESSION", authMode);
+            this.authMode = "SESSION";
+        }
+
+        // Fail fast if OAUTH mode but no secret name configured
+        if ("OAUTH".equals(validatedMode) && (oauthSecretName == null || oauthSecretName.isBlank())) {
+            throw new IllegalArgumentException(
+                "OAuth is enabled (exensio.auth-mode=OAUTH) but exensio.oauth-secret-name is missing. " +
+                "Please set exensio.oauth-secret-name to the Secrets Manager secret name containing " +
+                "{\"tenant_id\": \"...\", \"client_id\": \"...\", \"client_secret\": \"...\", \"scope\": \"...\"}"
+            );
+        }
+
+        // Fail fast if SAML mode but no secret name configured
+        if ("SAML".equals(validatedMode) && (samlSecretName == null || samlSecretName.isBlank())) {
+            throw new IllegalArgumentException(
+                "SAML is enabled (exensio.auth-mode=SAML) but exensio.saml-secret-name is missing. " +
+                "Please set exensio.saml-secret-name to the Secrets Manager secret name containing " +
+                "SAML configuration (idp_sso_url, idp_entity_id, idp_certificate, sp_entity_id, acs_url, etc.)"
+            );
+        }
         
         if (batchSize < 1 || batchSize > 100) {
             throw new IllegalArgumentException("exensio.batchSize must be between 1 and 100");
@@ -421,4 +494,13 @@ public class ExensioProperties {
 
     public int getDeadLetterQueueThreshold() { return deadLetterQueueThreshold; }
     public void setDeadLetterQueueThreshold(int deadLetterQueueThreshold) { this.deadLetterQueueThreshold = deadLetterQueueThreshold; }
+
+    public String getAuthMode() { return authMode; }
+    public void setAuthMode(String authMode) { this.authMode = authMode == null ? "SESSION" : authMode; }
+
+    public String getOauthSecretName() { return oauthSecretName; }
+    public void setOauthSecretName(String oauthSecretName) { this.oauthSecretName = oauthSecretName == null ? "" : oauthSecretName; }
+
+    public String getSamlSecretName() { return samlSecretName; }
+    public void setSamlSecretName(String samlSecretName) { this.samlSecretName = samlSecretName == null ? "" : samlSecretName; }
 }

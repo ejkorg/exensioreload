@@ -160,6 +160,14 @@ exensio:
   password: ${EXENSIO_PASSWORD:}
   dbname: ${EXENSIO_DBNAME:}
   dbschema: ${EXENSIO_DBSCHEMA:PRODUCTION}
+  # Authentication mode: SESSION (username/password, default), OAUTH (Azure AD client credentials), or SAML (Azure AD SAML SSO)
+  auth-mode: ${EXENSIO_AUTH_MODE:SESSION}
+  # AWS Secrets Manager secret name for OAuth credentials (required when auth-mode=OAUTH)
+  # Secret format: {"tenant_id": "...", "client_id": "...", "client_secret": "...", "scope": "..."}
+  oauth-secret-name: ${EXENSIO_OAUTH_SECRET_NAME:}
+  # AWS Secrets Manager secret name for SAML credentials (required when auth-mode=SAML)
+  # Secret format: {"idp_sso_url": "...", "idp_entity_id": "...", "idp_certificate": "...", "sp_entity_id": "...", "acs_url": "...", "sign_requests": true/false, "sp_private_key": "...", "sp_certificate": "...", "service_account_username": "...", "service_account_password": "...", "predefined_connection": "..."}
+  saml-secret-name: ${EXENSIO_SAML_SECRET_NAME:}
   # Schema Fallback Configuration - Requirements: 5.1, 5.2, 5.4, 5.5
   schema-fallback-enabled: ${EXENSIO_SCHEMA_FALLBACK_ENABLED:true}
   # Comma-separated list of schemas to query in priority order
