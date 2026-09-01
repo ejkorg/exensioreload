@@ -11,7 +11,7 @@
 - When the user asks whether a solution is the "final and most efficient" (or similar terse challenges like "is that the best approach?"), they are pushing back on the current solution and expect the assistant to critically re-examine its approach — switching to a cleaner alternative even if it means undoing the assistant's own recent changes. Don't just confirm; find the better way. Confidence: 0.55
 
 # workflow
-- The user's environment cannot run Java or Node builds (no `java`/`node`/`npm` execution); verify fixes statically via grep/read and type-level reasoning rather than attempting `npm install`/`npm run build` or Java compilation. Confidence: 0.85
+- The user's environment cannot run Java or Node builds (no `java`/`node`/`npm`/`mvn` on PATH, and the local `.m2` repo may be missing expected artifacts); verify fixes statically via grep/read, IDE diagnostics, and type-level reasoning rather than attempting builds or compilation. Confidence: 0.88
 - Tracks long multi-step migration tasks via a markdown checklist file (e.g., ORACLE_TO_POSTGRES_INTERNAL_DB_CHECKLIST.md) and expects work to resume from the last completed item and drive the checklist to completion (e.g., "go ahead finish these check list"). Confidence: 0.78
 - Verify factual claims about the codebase against the actual code (grep/read) before asserting them; user pushes back on unverified statements (e.g., "check again" when told a table isn't created by any Liquibase changelog). Confidence: 0.75
 - When the user reports specific compile/type errors and asks for a "root cause fix for all," do a comprehensive sweep (grep across the full codebase) to find every instance of the same class of issue before applying fixes — fix the root cause (e.g., missing interface fields) rather than patching individual call sites one at a time. Confidence: 0.80
@@ -54,3 +54,4 @@ See [database/taste.md](database/taste.md)
 
 # exensio
 - Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75
+in Exensio. Confidence: 0.75

@@ -36,7 +36,7 @@ import software.amazon.awssdk.services.secretsmanager.model.SecretsManagerExcept
 @ConditionalOnProperty(name = "exensio.auth-mode", havingValue = "OAUTH")
 public class ExensioOAuthProperties {
 
-    private static final Logger log = LoggerFactory.getLogger(ExensioOAuthProperties.java);
+    private static final Logger log = LoggerFactory.getLogger(ExensioOAuthProperties.class);
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 

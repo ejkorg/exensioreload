@@ -2,6 +2,7 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioOAuthProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
