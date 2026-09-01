@@ -257,7 +257,6 @@ public class ExensioSamlAuthService implements ExensioTokenProvider {
             this.cachedTokenExpiry = null;
         }
     }
-}
 
     /**
      * Builds a SamlCredentials record from ExensioSamlProperties.
