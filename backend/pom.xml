@@ -196,6 +196,7 @@
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
+            <version>2.12.7</version>
         </dependency>
         <!-- Selenium (optional — for headless browser SAML authentication fallback) -->
         <dependency>
