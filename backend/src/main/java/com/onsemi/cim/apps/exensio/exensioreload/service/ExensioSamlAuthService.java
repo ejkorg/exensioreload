@@ -3,7 +3,7 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioSamlProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.service.auth.SamlCredentials;
+import com.onsemi.cim.apps.exensio.exensioreload.service.saml.SamlCredentials;
 import com.onsemi.cim.apps.exensio.exensioreload.service.saml.ExensioSamlTokenExchanger;
 import com.onsemi.cim.apps.exensio.exensioreload.service.saml.SamlAuthenticationFacade;
 import com.onsemi.cim.apps.exensio.exensioreload.service.saml.SamlAssertionValidator;
@@ -68,7 +68,6 @@ public class ExensioSamlAuthService implements ExensioTokenProvider {
     private final ExensioProperties props;
     private final HttpClient httpClient;
     private final SamlAuthenticationFacade samlFacade;
-    private final SamlAssertionValidator assertionValidator;
     private final ExensioSamlTokenExchanger tokenExchanger;
 
     // Token caching fields — volatile for visibility across threads
@@ -100,7 +99,6 @@ public class ExensioSamlAuthService implements ExensioTokenProvider {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
         this.samlFacade = new SamlAuthenticationFacade(buildSamlCredentials(samlProps));
-        this.assertionValidator = new SamlAssertionValidator(samlProps.getIdpCertificate());
         this.tokenExchanger = new ExensioSamlTokenExchanger(objectMapper, httpClient);
         log.info("Auth mode: SAML (Azure AD SSO)");
     }
@@ -178,7 +176,7 @@ public class ExensioSamlAuthService implements ExensioTokenProvider {
             String samlAssertion = samlFacade.acquireSamlAssertion();
 
             // Step 2: Validate assertion signature against IdP certificate
-            assertionValidator.validate(samlAssertion);
+            SamlAssertionValidator.validateAndExtractNameId(samlAssertion, samlProps.getIdpCertificate());
 
             // Step 3: Exchange assertion with Exensio for Bearer token
             ExensioTokenResponse response = tokenExchanger.exchange(
@@ -239,7 +237,7 @@ public class ExensioSamlAuthService implements ExensioTokenProvider {
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build();
 
-            HttpResponse<String> response = httpClient.send(
+            HttpResponse<Void> response = httpClient.send(
                     request,
                     HttpResponse.BodyHandlers.discarding()
             );

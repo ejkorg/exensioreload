@@ -1,11 +1,14 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service.saml;
 
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 import javax.xml.transform.OutputKeys;
@@ -13,19 +16,20 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import org.joda.time.DateTime;
 import org.opensaml.core.config.InitializationException;
 import org.opensaml.core.config.InitializationService;
 import org.opensaml.core.xml.XMLObjectBuilderFactory;
 import org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport;
 import org.opensaml.core.xml.io.MarshallingException;
 import org.opensaml.core.xml.util.XMLObjectSupport;
+import org.opensaml.saml.common.SAMLObjectContentReference;
 import org.opensaml.saml.common.SAMLVersion;
 import org.opensaml.saml.saml2.core.AuthnRequest;
 import org.opensaml.saml.saml2.core.Issuer;
 import org.opensaml.saml.saml2.core.NameIDPolicy;
-import org.opensaml.security.SecurityException;
 import org.opensaml.security.x509.BasicX509Credential;
+import org.opensaml.xmlsec.signature.Signature;
+import org.opensaml.xmlsec.signature.support.SignatureConstants;
 import org.opensaml.xmlsec.signature.support.Signer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +114,7 @@ public class SamlAuthnRequestBuilder {
             .buildObject(AuthnRequest.DEFAULT_ELEMENT_NAME);
         authnRequest.setVersion(SAMLVersion.VERSION_20);
         authnRequest.setID("_" + UUID.randomUUID());
-        authnRequest.setIssueInstant(new DateTime());
+        authnRequest.setIssueInstant(Instant.now());
         authnRequest.setDestination(credentials.idpSsoUrl());
         authnRequest.setAssertionConsumerServiceURL(credentials.acsUrl());
         authnRequest.setIssuer(issuer);
@@ -132,12 +136,54 @@ public class SamlAuthnRequestBuilder {
             }
 
             PrivateKey privateKey = loadPrivateKey(credentials.spPrivateKey());
-            BasicX509Credential credential = new BasicX509Credential(privateKey);
+            X509Certificate certificate = loadCertificate(credentials.spCertificate());
+            BasicX509Credential credential = new BasicX509Credential(certificate, privateKey);
 
-            Signer.signObject(authnRequest, credential);
+            Signature signature = (Signature) XMLObjectProviderRegistrySupport.getBuilderFactory()
+                    .getBuilder(Signature.DEFAULT_ELEMENT_NAME)
+                    .buildObject(Signature.DEFAULT_ELEMENT_NAME);
+            signature.setSigningCredential(credential);
+            signature.setCanonicalizationAlgorithm(SignatureConstants.ALGO_ID_C14N_EXCL_OMIT_COMMENTS);
+            signature.setSignatureAlgorithm(SignatureConstants.ALGO_ID_SIGNATURE_RSA_SHA256);
+
+            SAMLObjectContentReference contentReference = new SAMLObjectContentReference(authnRequest);
+            contentReference.setDigestAlgorithm(SignatureConstants.ALGO_ID_DIGEST_SHA256);
+            signature.getContentReferences().add(contentReference);
+
+            authnRequest.setSignature(signature);
+
+            XMLObjectSupport.marshall(authnRequest);
+            Signer.signObject(signature);
             logger.debug("SAML AuthnRequest signed with SP private key");
-        } catch (SecurityException e) {
+        } catch (SamlBuilderException e) {
+            throw e;
+        } catch (Exception e) {
             throw new SamlBuilderException("Failed to sign AuthnRequest", e);
+        }
+    }
+
+    /**
+     * Loads an X.509 certificate from a PEM-formatted string.
+     *
+     * @param pemCertificate the PEM-formatted certificate
+     * @return the X509Certificate
+     * @throws SamlBuilderException if certificate loading fails
+     */
+    private X509Certificate loadCertificate(String pemCertificate) {
+        if (pemCertificate == null || pemCertificate.isBlank()) {
+            throw new SamlBuilderException("sign_requests is true but sp_certificate is missing or blank");
+        }
+        try {
+            String cert = pemCertificate
+                .replace("-----BEGIN CERTIFICATE-----", "")
+                .replace("-----END CERTIFICATE-----", "")
+                .replaceAll("\\s", "");
+
+            byte[] decoded = Base64.getDecoder().decode(cert);
+            CertificateFactory factory = CertificateFactory.getInstance("X.509");
+            return (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(decoded));
+        } catch (Exception e) {
+            throw new SamlBuilderException("Failed to load SP certificate from PEM", e);
         }
     }
 

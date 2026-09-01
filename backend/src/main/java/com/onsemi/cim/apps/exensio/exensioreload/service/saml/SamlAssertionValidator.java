@@ -9,13 +9,15 @@ import java.util.Base64;
 import org.opensaml.core.config.InitializationException;
 import org.opensaml.core.config.InitializationService;
 import org.opensaml.core.xml.XMLObject;
+import org.opensaml.core.xml.io.Unmarshaller;
 import org.opensaml.core.xml.io.UnmarshallingException;
+import org.opensaml.core.xml.util.XMLObjectSupport;
 import org.opensaml.saml.saml2.core.Assertion;
 import org.opensaml.saml.saml2.core.Response;
 import org.opensaml.saml.saml2.core.Subject;
-import org.opensaml.security.SecurityException;
 import org.opensaml.security.x509.BasicX509Credential;
 import org.opensaml.xmlsec.signature.Signature;
+import org.opensaml.xmlsec.signature.support.SignatureException;
 import org.opensaml.xmlsec.signature.support.SignatureValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,7 +136,12 @@ public class SamlAssertionValidator {
      */
     private static XMLObject unmarshallElement(Element element) {
         try {
-            return org.opensaml.core.xml.XMLObjectSupport.unmarshallFromElement(element);
+            Unmarshaller unmarshaller = XMLObjectSupport.getUnmarshaller(element);
+            if (unmarshaller == null) {
+                throw new ExensioAuthService.ExensioAuthException(
+                    "No OpenSAML unmarshaller registered for element: " + element.getNodeName());
+            }
+            return unmarshaller.unmarshall(element);
         } catch (UnmarshallingException e) {
             throw new ExensioAuthService.ExensioAuthException(
                 "Failed to unmarshal SAML Response: " + e.getMessage(), e);
@@ -167,7 +174,7 @@ public class SamlAssertionValidator {
 
         } catch (ExensioAuthService.ExensioAuthException e) {
             throw e;
-        } catch (SecurityException e) {
+        } catch (SignatureException e) {
             throw new ExensioAuthService.ExensioAuthException(
                 "SAML assertion signature validation failed: " + e.getMessage(), e);
         } catch (Exception e) {

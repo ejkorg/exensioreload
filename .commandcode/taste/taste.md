@@ -47,10 +47,17 @@ See [database/taste.md](database/taste.md)
 # coding-style
 - When fields/methods are renamed in records or classes, prefer adding backward-compatible alias methods (e.g., `stagedToRefdb()` → `ready()`, `failed()` → `cpFailed + loadFailed`) rather than rewriting every call site. This keeps diffs minimal, avoids cascading changes, and lets callers migrate gradually. Confidence: 0.40
 - When record components or accessor names change during a refactor, prefer migrating all callers directly to the canonical names and removing the old aliases entirely — especially during a dead-code cleanup where adding deprecated aliases would be counterproductive. The clean approach is to fix call sites, not accumulate backward-compat shims. Confidence: 0.75
+- Avoid JDK-internal `sun.*` APIs (e.g., `sun.security.x509.*`) that don't compile on modern JDKs; use public standard APIs or established libraries (e.g., BouncyCastle, already a transitive dependency) for things like self-signed certificate generation. Confidence: 0.70
+- When editing a file, remove imports that become unused as a result of the change (and drop any leftover dead imports spotted in the same file) rather than leaving them behind. Confidence: 0.55
 
 # error-handling
 - Include diagnostic context in failure messages: ES failures should capture log.level, timestamp, and actual CP error message; pp_log failures should capture lot, idFile, process_code, and log_message; timeout/unresolved should document what was tried (ES, pp_log, Exensio) to aid operator investigation. Confidence: 0.60
 - Include filename in enrichment diagnostic messages (ES failures, pp_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
+
+# exensio
+- Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75
+in Exensio. Confidence: 0.75
+_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
 
 # exensio
 - Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75

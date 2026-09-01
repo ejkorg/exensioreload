@@ -1,27 +1,40 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service.saml;
 
-import java.io.ByteArrayOutputStream;
+import java.io.StringWriter;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
 import net.jqwik.api.Example;
-import org.joda.time.DateTime;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.opensaml.core.config.InitializationException;
 import org.opensaml.core.config.InitializationService;
 import org.opensaml.core.xml.XMLObjectBuilderFactory;
 import org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport;
-import org.opensaml.core.xml.io.MarshallingException;
 import org.opensaml.core.xml.util.XMLObjectSupport;
+import org.opensaml.saml.common.SAMLObjectContentReference;
 import org.opensaml.saml.common.SAMLVersion;
+import org.opensaml.saml.common.SignableSAMLObject;
 import org.opensaml.saml.saml2.core.Assertion;
 import org.opensaml.saml.saml2.core.Issuer;
 import org.opensaml.saml.saml2.core.NameID;
@@ -29,23 +42,11 @@ import org.opensaml.saml.saml2.core.Response;
 import org.opensaml.saml.saml2.core.Subject;
 import org.opensaml.saml.saml2.core.SubjectConfirmation;
 import org.opensaml.saml.saml2.core.SubjectConfirmationData;
-import org.opensaml.security.SecurityException;
-import org.opensaml.security.credential.Credential;
 import org.opensaml.security.x509.BasicX509Credential;
+import org.opensaml.xmlsec.signature.Signature;
+import org.opensaml.xmlsec.signature.support.SignatureConstants;
 import org.opensaml.xmlsec.signature.support.Signer;
 import org.w3c.dom.Element;
-
-import sun.security.x509.AlgorithmId;
-import sun.security.x509.CertificateAlgorithmId;
-import sun.security.x509.CertificateIssuerName;
-import sun.security.x509.CertificateSerialNumber;
-import sun.security.x509.CertificateSubjectName;
-import sun.security.x509.CertificateValidity;
-import sun.security.x509.CertificateVersion;
-import sun.security.x509.CertificateX509Key;
-import sun.security.x509.X500Name;
-import sun.security.x509.X509CertImpl;
-import sun.security.x509.X509CertInfo;
 
 import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioAuthService;
 
@@ -99,7 +100,7 @@ class SamlAssertionValidatorPropertiesTest {
         String validCertPem = toPem(validCertificate);
 
         // Create a valid assertion signed with the validKeyPair
-        Assertion assertion = createSignedAssertion("user@example.com", validKeyPair.getPrivate());
+        Assertion assertion = createSignedAssertion("user@example.com", validKeyPair);
 
         // Wrap in a Response
         Response response = (Response) XMLObjectProviderRegistrySupport.getBuilderFactory()
@@ -126,7 +127,7 @@ class SamlAssertionValidatorPropertiesTest {
     @Test
     void assertionValidator_succeedsAndExtractsNameId_whenSignatureIsValid() throws Exception {
         // Create a signed assertion with our keyPair
-        Assertion assertion = createSignedAssertion("user@example.com", keyPair.getPrivate());
+        Assertion assertion = createSignedAssertion("user@example.com", keyPair);
 
         // Wrap in a Response
         Response response = (Response) XMLObjectProviderRegistrySupport.getBuilderFactory()
@@ -178,7 +179,7 @@ class SamlAssertionValidatorPropertiesTest {
     @Test
     void assertionValidator_throwsException_whenNameIdIsMissing() throws Exception {
         // Create an assertion without NameID
-        Assertion assertion = createSignedAssertionWithoutNameId(keyPair.getPrivate());
+        Assertion assertion = createSignedAssertionWithoutNameId(keyPair);
 
         // Wrap in a Response
         Response response = (Response) XMLObjectProviderRegistrySupport.getBuilderFactory()
@@ -204,7 +205,7 @@ class SamlAssertionValidatorPropertiesTest {
     @Test
     void assertionValidator_throwsException_whenAssertionIsTampered() throws Exception {
         // Create a valid signed assertion
-        Assertion assertion = createSignedAssertion("user@example.com", keyPair.getPrivate());
+        Assertion assertion = createSignedAssertion("user@example.com", keyPair);
 
         // Wrap in a Response
         Response response = (Response) XMLObjectProviderRegistrySupport.getBuilderFactory()
@@ -233,7 +234,7 @@ class SamlAssertionValidatorPropertiesTest {
     /**
      * Creates a signed SAML assertion with a given NameID.
      */
-    private static Assertion createSignedAssertion(String nameId, PrivateKey privateKey) throws Exception {
+    private static Assertion createSignedAssertion(String nameId, KeyPair keyPair) throws Exception {
         XMLObjectBuilderFactory builderFactory = XMLObjectProviderRegistrySupport.getBuilderFactory();
 
         // Create NameID
@@ -256,7 +257,7 @@ class SamlAssertionValidatorPropertiesTest {
         SubjectConfirmationData confirmationData = (SubjectConfirmationData) builderFactory
             .getBuilder(SubjectConfirmationData.DEFAULT_ELEMENT_NAME)
             .buildObject(SubjectConfirmationData.DEFAULT_ELEMENT_NAME);
-        confirmationData.setNotOnOrAfter(new DateTime().plusHours(1));
+        confirmationData.setNotOnOrAfter(Instant.now().plus(1, ChronoUnit.HOURS));
 
         confirmation.setSubjectConfirmationData(confirmationData);
         subject.getSubjectConfirmations().add(confirmation);
@@ -273,13 +274,12 @@ class SamlAssertionValidatorPropertiesTest {
             .buildObject(Assertion.DEFAULT_ELEMENT_NAME);
         assertion.setVersion(SAMLVersion.VERSION_20);
         assertion.setID("_" + java.util.UUID.randomUUID());
-        assertion.setIssueInstant(new DateTime());
+        assertion.setIssueInstant(Instant.now());
         assertion.setIssuer(issuer);
         assertion.setSubject(subject);
 
         // Sign the assertion
-        BasicX509Credential credential = new BasicX509Credential(privateKey);
-        Signer.signObject(assertion, credential);
+        signObject(assertion, keyPair);
 
         return assertion;
     }
@@ -314,7 +314,7 @@ class SamlAssertionValidatorPropertiesTest {
             .buildObject(Assertion.DEFAULT_ELEMENT_NAME);
         assertion.setVersion(SAMLVersion.VERSION_20);
         assertion.setID("_" + java.util.UUID.randomUUID());
-        assertion.setIssueInstant(new DateTime());
+        assertion.setIssueInstant(Instant.now());
         assertion.setIssuer(issuer);
         assertion.setSubject(subject);
 
@@ -324,7 +324,7 @@ class SamlAssertionValidatorPropertiesTest {
     /**
      * Creates a signed SAML assertion WITHOUT a NameID in the subject.
      */
-    private static Assertion createSignedAssertionWithoutNameId(PrivateKey privateKey) throws Exception {
+    private static Assertion createSignedAssertionWithoutNameId(KeyPair keyPair) throws Exception {
         XMLObjectBuilderFactory builderFactory = XMLObjectProviderRegistrySupport.getBuilderFactory();
 
         // Create Subject WITHOUT NameID
@@ -344,13 +344,12 @@ class SamlAssertionValidatorPropertiesTest {
             .buildObject(Assertion.DEFAULT_ELEMENT_NAME);
         assertion.setVersion(SAMLVersion.VERSION_20);
         assertion.setID("_" + java.util.UUID.randomUUID());
-        assertion.setIssueInstant(new DateTime());
+        assertion.setIssueInstant(Instant.now());
         assertion.setIssuer(issuer);
         assertion.setSubject(subject);
 
         // Sign the assertion
-        BasicX509Credential credential = new BasicX509Credential(privateKey);
-        Signer.signObject(assertion, credential);
+        signObject(assertion, keyPair);
 
         return assertion;
     }
@@ -358,36 +357,59 @@ class SamlAssertionValidatorPropertiesTest {
     /**
      * Marshals a Response object to XML, wraps it, and encodes as base64.
      */
-    private static String marshalAndEncode(Response response) throws MarshallingException {
+    private static String marshalAndEncode(Response response) throws Exception {
         Element element = XMLObjectSupport.marshall(response);
-        String xml = org.opensaml.core.xml.util.XMLObjectSupport.prettyPrintXML(element);
-        return Base64.getEncoder().encodeToString(xml.getBytes(StandardCharsets.UTF_8));
+        StringWriter writer = new StringWriter();
+        TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        Transformer transformer = transformerFactory.newTransformer();
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+        transformer.transform(new DOMSource(element), new StreamResult(writer));
+        return Base64.getEncoder().encodeToString(writer.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * Generates a self-signed X.509 certificate from a key pair.
      */
     private static X509Certificate generateSelfSignedCertificate(KeyPair keyPair) throws Exception {
-        X509CertInfo info = new X509CertInfo();
-        Date from = new Date();
-        Date to = new Date(from.getTime() + 365 * 24 * 60 * 60 * 1000L);
-        CertificateValidity interval = new CertificateValidity(from, to);
-        BigInteger serialNumber = new java.math.BigInteger(64, new java.security.SecureRandom());
-        X500Name owner = new X500Name("CN=test,O=test,C=US");
+        X500Name subject = new X500Name("CN=test,O=test,C=US");
+        BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
+        Instant now = Instant.now();
+        JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+                subject,
+                serial,
+                Date.from(now),
+                Date.from(now.plus(365, ChronoUnit.DAYS)),
+                subject,
+                keyPair.getPublic());
 
-        info.set(X509CertInfo.VALIDITY, interval);
-        info.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(serialNumber));
-        info.set(X509CertInfo.SUBJECT, new CertificateSubjectName(owner));
-        info.set(X509CertInfo.ISSUER, new CertificateIssuerName(owner));
-        info.set(X509CertInfo.KEY, new CertificateX509Key(keyPair.getPublic()));
-        info.set(X509CertInfo.VERSION, new CertificateVersion(CertificateVersion.V3));
-        AlgorithmId algo = new AlgorithmId(AlgorithmId.sha256WithRSAEncryption_oid);
-        info.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(algo));
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
+                .build(keyPair.getPrivate());
 
-        X509CertImpl cert = new X509CertImpl(info);
-        cert.sign(keyPair.getPrivate(), "SHA256withRSA");
+        return new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
+    }
 
-        return cert;
+    /**
+     * Signs a signable SAML object using the supplied private key and a generated self-signed certificate.
+     */
+    private static void signObject(SignableSAMLObject object, KeyPair keyPair) throws Exception {
+        X509Certificate signingCertificate = generateSelfSignedCertificate(keyPair);
+        BasicX509Credential credential = new BasicX509Credential(signingCertificate, keyPair.getPrivate());
+
+        Signature signature = (Signature) XMLObjectProviderRegistrySupport.getBuilderFactory()
+                .getBuilder(Signature.DEFAULT_ELEMENT_NAME)
+                .buildObject(Signature.DEFAULT_ELEMENT_NAME);
+        signature.setSigningCredential(credential);
+        signature.setCanonicalizationAlgorithm(SignatureConstants.ALGO_ID_C14N_EXCL_OMIT_COMMENTS);
+        signature.setSignatureAlgorithm(SignatureConstants.ALGO_ID_SIGNATURE_RSA_SHA256);
+
+        SAMLObjectContentReference contentReference = new SAMLObjectContentReference(object);
+        contentReference.setDigestAlgorithm(SignatureConstants.ALGO_ID_DIGEST_SHA256);
+        signature.getContentReferences().add(contentReference);
+
+        object.setSignature(signature);
+
+        XMLObjectSupport.marshall(object);
+        Signer.signObject(signature);
     }
 
     /**
