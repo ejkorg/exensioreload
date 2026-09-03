@@ -156,11 +156,12 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                         java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
                                                         java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use COUNT(*) OVER() window function to get total count with each row
+        // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
-                "select DISTINCT m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program, COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.id = m.id_file",
+                "select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\", COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
-        sql.append(" order by m.end_time desc");
+        sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
@@ -219,10 +220,11 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use the internal builder variant with emitInfo=false so describing
         // the query doesn't produce the same INFO logs as the executing call.
+        // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
-        SqlWithParams sql = buildMetadataQueryInternal("select m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program from " + viewName + " m left join dtp_file f on f.id = m.id_file",
+        SqlWithParams sql = buildMetadataQueryInternal("select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\" from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, devices, false, this.forceAllMetadataView, steps, recipes, equipmentIds, additionalWhereFilters);
-        sql.append(" order by m.end_time desc");
+        sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
@@ -274,7 +276,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
-            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program from all_metadata_view m left join dtp_file f on f.id = m.id_file",
+            // Use quoted identifiers for Oracle compatibility
+            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\" from all_metadata_view m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                     start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");
@@ -1243,19 +1246,20 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Build the time predicate only when one or both bounds are provided.
         // This avoids an unnecessary BETWEEN clause when callers want an unbounded query.
         // Use table alias 'm' for metadata columns since we join with dtp_file
+        // Use quoted identifiers for Oracle compatibility
         SqlWithParams result;
         if (start == null && end == null) {
             result = new SqlWithParams(effectiveSelect + " where 1=1");
         } else if (start != null && end != null) {
-            result = new SqlWithParams(effectiveSelect + " where m.end_time BETWEEN ? AND ?");
+            result = new SqlWithParams(effectiveSelect + " where m.\"END_TIME\" BETWEEN ? AND ?");
             result.params.add(Timestamp.valueOf(start));
             result.params.add(Timestamp.valueOf(end));
         } else if (start != null) {
-            result = new SqlWithParams(effectiveSelect + " where m.end_time >= ?");
+            result = new SqlWithParams(effectiveSelect + " where m.\"END_TIME\" >= ?");
             result.params.add(Timestamp.valueOf(start));
         } else {
             // end != null
-            result = new SqlWithParams(effectiveSelect + " where m.end_time <= ?");
+            result = new SqlWithParams(effectiveSelect + " where m.\"END_TIME\" <= ?");
             result.params.add(Timestamp.valueOf(end));
         }
         // If still on all_metadata_view and a dataType was provided, add a predicate.
@@ -1265,13 +1269,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             // Prefer `data_type = ?` when the provided value is already uppercased
             // so we avoid applying functions on the column and preserve index usage.
             if (!dt.isEmpty() && dt.equals(dtUpper)) {
-                result.append(" and m.data_type = ?");
+                result.append(" and m.\"DATA_TYPE\" = ?");
                 result.params.add(dtUpper);
                 if (log.isInfoEnabled()) {
                     log.info("Applying dataType equality filter (no UPPER) to metadata query: dataType='{}'", dtUpper);
                 }
             } else {
-                result.append(" and UPPER(m.data_type) = ?");
+                result.append(" and UPPER(m.\"DATA_TYPE\") = ?");
                 result.params.add(dtUpper);
                 if (log.isInfoEnabled()) {
                     log.info("Applying dataType UPPER() filter to metadata query: dataType='{}'", dtUpper);
@@ -1285,7 +1289,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             // we use dataTypeExt. If the query is against *_metadata_view, data_type_ext column might not exist.
             // Map it to test_phase if we are dealing with legacy views which all have test_phase instead of data_type_ext
             boolean isLegacyView = effectiveSelect != null && effectiveSelect.toLowerCase(Locale.ROOT).contains("_metadata_view");
-            String colName = isLegacyView ? "m.test_phase" : "m.data_type_ext";
+            String colName = isLegacyView ? "m.\"TEST_PHASE\"" : "m.\"DATA_TYPE_EXT\"";
             
             if (dte.equals(dteUpper)) {
                 result.append(" and " + colName + " = ?");
@@ -1299,10 +1303,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             String tp = testPhase.trim();
             String tpUpper = tp.toUpperCase(Locale.ROOT);
             if (tp.equals(tpUpper)) {
-                result.append(" and m.test_phase = ?");
+                result.append(" and m.\"TEST_PHASE\" = ?");
                 result.params.add(tpUpper);
             } else {
-                result.append(" and UPPER(m.test_phase) = ?");
+                result.append(" and UPPER(m.\"TEST_PHASE\") = ?");
                 result.params.add(tpUpper);
             }
         }
@@ -1310,19 +1314,20 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             String tt = testerType.trim();
             String ttUpper = tt.toUpperCase(Locale.ROOT);
             if (tt.equals(ttUpper)) {
-                result.append(" and m.tester_type = ?");
+                result.append(" and m.\"TESTER_TYPE\" = ?");
                 result.params.add(ttUpper);
             } else {
-                result.append(" and UPPER(m.tester_type) = ?");
+                result.append(" and UPPER(m.\"TESTER_TYPE\") = ?");
                 result.params.add(ttUpper);
             }
         }
         if (location != null && !location.isBlank()) {
-            result.append(" and m.location = ?");
+            result.append(" and m.\"LOCATION\" = ?");
             result.params.add(location);
         }
 
         // New filter predicates for dtp_*_metadata tables
+        // Use quoted identifiers for Oracle compatibility
         if (steps != null && !steps.isEmpty()) {
             int cap = Math.min(steps.size(), 100);
             List<String> vals = new ArrayList<>();
@@ -1338,10 +1343,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.step = ?" : " and UPPER(m.step) = ?");
+                    result.append(allUpper ? " and m.\"STEP\" = ?" : " and UPPER(m.\"STEP\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.step IN (" : " and UPPER(m.step) IN (");
+                    result.append(allUpper ? " and m.\"STEP\" IN (" : " and UPPER(m.\"STEP\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1367,10 +1372,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.test_program = ?" : " and UPPER(m.test_program) = ?");
+                    result.append(allUpper ? " and m.\"TEST_PROGRAM\" = ?" : " and UPPER(m.\"TEST_PROGRAM\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.test_program IN (" : " and UPPER(m.test_program) IN (");
+                    result.append(allUpper ? " and m.\"TEST_PROGRAM\" IN (" : " and UPPER(m.\"TEST_PROGRAM\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1396,10 +1401,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.tester_id = ?" : " and UPPER(m.tester_id) = ?");
+                    result.append(allUpper ? " and m.\"TESTER_ID\" = ?" : " and UPPER(m.\"TESTER_ID\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.tester_id IN (" : " and UPPER(m.tester_id) IN (");
+                    result.append(allUpper ? " and m.\"TESTER_ID\" IN (" : " and UPPER(m.\"TESTER_ID\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1413,6 +1418,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Handle lots/wafer lists. Support up to 5 pairs; matching is case-insensitive.
         boolean hasLots = lots != null && !lots.isEmpty();
         boolean hasWafers = wafers != null && !wafers.isEmpty();
+        // Use quoted identifiers for Oracle compatibility
         if (hasLots && !hasWafers) {
             // If caller supplied a single lot value prefer '=' for clarity, otherwise use IN(...)
             int cap = Math.min(lots.size(), 100); // safety cap
@@ -1429,10 +1435,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.lot = ?" : " and UPPER(m.lot) = ?");
+                    result.append(allUpper ? " and m.\"LOT\" = ?" : " and UPPER(m.\"LOT\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.lot IN (" : " and UPPER(m.lot) IN (");
+                    result.append(allUpper ? " and m.\"LOT\" IN (" : " and UPPER(m.\"LOT\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1457,10 +1463,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.wafer = ?" : " and UPPER(m.wafer) = ?");
+                    result.append(allUpper ? " and m.\"WAFER\" = ?" : " and UPPER(m.\"WAFER\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.wafer IN (" : " and UPPER(m.wafer) IN (");
+                    result.append(allUpper ? " and m.\"WAFER\" IN (" : " and UPPER(m.\"WAFER\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1522,20 +1528,21 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             if (!pairData.isEmpty()) {
                 if (pairData.size() == 1) {
                     // Single pair: emit simple AND-ed equality clauses where applicable
+                    // Use quoted identifiers for Oracle compatibility
                     Object[] p = pairData.get(0);
                     String lu = (String) p[0];
                     String wu = (String) p[1];
                     boolean lUp = (Boolean) p[2];
                     boolean wUp = (Boolean) p[3];
                     if (lu != null && wu != null) {
-                        result.append(" and " + (lUp ? "m.lot" : "UPPER(m.lot)") + " = ? and " + (wUp ? "m.wafer" : "UPPER(m.wafer)") + " = ?");
+                        result.append(" and " + (lUp ? "m.\"LOT\"" : "UPPER(m.\"LOT\")") + " = ? and " + (wUp ? "m.\"WAFER\"" : "UPPER(m.\"WAFER\")") + " = ?");
                         result.params.add(lu);
                         result.params.add(wu);
                     } else if (lu != null) {
-                        result.append(" and " + (lUp ? "m.lot" : "UPPER(m.lot)") + " = ?");
+                        result.append(" and " + (lUp ? "m.\"LOT\"" : "UPPER(m.\"LOT\")") + " = ?");
                         result.params.add(lu);
                     } else {
-                        result.append(" and " + (wUp ? "m.wafer" : "UPPER(m.wafer)") + " = ?");
+                        result.append(" and " + (wUp ? "m.\"WAFER\"" : "UPPER(m.\"WAFER\")") + " = ?");
                         result.params.add(wu);
                     }
                 } else {
@@ -1548,14 +1555,14 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                         boolean lUp = (Boolean) p[2];
                         boolean wUp = (Boolean) p[3];
                         if (lu != null && wu != null) {
-                            result.append("(" + (lUp ? "m.lot" : "UPPER(m.lot)") + " = ? and " + (wUp ? "m.wafer" : "UPPER(m.wafer)") + " = ?)");
+                            result.append("(" + (lUp ? "m.\"LOT\"" : "UPPER(m.\"LOT\")") + " = ? and " + (wUp ? "m.\"WAFER\"" : "UPPER(m.\"WAFER\")") + " = ?)");
                             result.params.add(lu);
                             result.params.add(wu);
                         } else if (lu != null) {
-                            result.append("(" + (lUp ? "m.lot" : "UPPER(m.lot)") + " = ?)");
+                            result.append("(" + (lUp ? "m.\"LOT\"" : "UPPER(m.\"LOT\")") + " = ?)");
                             result.params.add(lu);
                         } else {
-                            result.append("(" + (wUp ? "m.wafer" : "UPPER(m.wafer)") + " = ?)");
+                            result.append("(" + (wUp ? "m.\"WAFER\"" : "UPPER(m.\"WAFER\")") + " = ?)");
                             result.params.add(wu);
                         }
                         added++;
@@ -1664,8 +1671,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     private static final String PREVIEW_ROW_NUMBER =
-            "ROW_NUMBER() OVER (PARTITION BY m.lot, NVL(TRIM(m.wafer), ' '), NVL(TRIM(f.file_name), ' ') "
-                    + "ORDER BY m.end_time DESC NULLS LAST, m.id DESC) rn";
+            "ROW_NUMBER() OVER (PARTITION BY m.\"LOT\", NVL(TRIM(m.\"WAFER\"), ' '), NVL(TRIM(f.\"FILE_NAME\"), ' ') "
+                    + "ORDER BY m.\"END_TIME\" DESC NULLS LAST, m.\"ID\" DESC) rn";
 
     /**
      * Preview rows are shown one line per lot+wafer+filename. External views can return multiple
@@ -1687,8 +1694,9 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                        java.util.List<String> recipes,
                                                        java.util.List<String> equipmentIds,
                                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
-        String innerSelect = "select m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program, "
-                + PREVIEW_ROW_NUMBER + " from " + viewName + " m left join dtp_file f on f.id = m.id_file";
+        // Use quoted identifiers for Oracle compatibility
+        String innerSelect = "select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\", "
+                + PREVIEW_ROW_NUMBER + " from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
         SqlWithParams ranked = optimized
                 ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
                 : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
@@ -1717,7 +1725,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                         java.util.List<String> recipes,
                                                         java.util.List<String> equipmentIds,
                                                         java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
-        String innerSelect = "select distinct m.lot, m.wafer, f.file_name as original_file_name from " + viewName + " m left join dtp_file f on f.id = m.id_file";
+        // Use quoted identifiers for Oracle compatibility
+        String innerSelect = "select distinct m.\"LOT\", m.\"WAFER\", f.\"FILE_NAME\" as original_file_name from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
         SqlWithParams inner = optimized
                 ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
                 : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
@@ -1752,7 +1761,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             return;
         }
 
-        String deviceExpr = allUpper ? "m.device" : "UPPER(m.device)";
+        // Use quoted identifiers for Oracle compatibility
+        String deviceExpr = allUpper ? "m.\"DEVICE\"" : "UPPER(m.\"DEVICE\")";
         boolean hasWildcard = vals.stream().anyMatch(DevicePatternUtils::containsWildcard);
 
         if (vals.size() == 1 && !hasWildcard) {
@@ -2121,11 +2131,12 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
             String[] parts = key.split(":");
             String type = parts[0];
-            String fieldName = parts[1];
+            // Convert field name to uppercase for Oracle quoted identifiers
+            String fieldName = "\"" + parts[1].toUpperCase(Locale.ROOT) + "\"";
 
             switch (type) {
                 case "SUBSTR_IN":
-                    // SUBSTR(m.field, pos, len) IN (?, ?)
+                    // SUBSTR(m."FIELD", pos, len) IN (?, ?)
                     int substrInPos = Integer.parseInt(parts[2]);
                     int substrInLen = Integer.parseInt(parts[3]);
                     sql.append(" and SUBSTR(m." + fieldName + ", " + substrInPos + ", " + substrInLen + ") in (");
@@ -2138,7 +2149,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                     break;
 
                 case "SUBSTR_EQ":
-                    // SUBSTR(m.field, pos, len) = ?
+                    // SUBSTR(m."FIELD", pos, len) = ?
                     int substrEqPos = Integer.parseInt(parts[2]);
                     int substrEqLen = Integer.parseInt(parts[3]);
                     sql.append(" and SUBSTR(m." + fieldName + ", " + substrEqPos + ", " + substrEqLen + ") = ?");
@@ -2146,7 +2157,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                     break;
 
                 case "UPPER_IN":
-                    // UPPER(m.field) IN (?, ?)
+                    // UPPER(m."FIELD") IN (?, ?)
                     sql.append(" and UPPER(m." + fieldName + ") in (");
                     for (int i = 0; i < values.size(); i++) {
                         if (i > 0) sql.append(",");
@@ -2157,13 +2168,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                     break;
 
                 case "UPPER_EQ":
-                    // UPPER(m.field) = ?
+                    // UPPER(m."FIELD") = ?
                     sql.append(" and UPPER(m." + fieldName + ") = ?");
                     sql.params.add(values.get(0));
                     break;
 
                 case "NOT_IN":
-                    // m.field NOT IN (?, ?)
+                    // m."FIELD" NOT IN (?, ?)
                     sql.append(" and m." + fieldName + " not in (");
                     for (int i = 0; i < values.size(); i++) {
                         if (i > 0) sql.append(",");
@@ -2174,7 +2185,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                     break;
 
                 case "IN":
-                    // m.field IN (?, ?)
+                    // m."FIELD" IN (?, ?)
                     sql.append(" and m." + fieldName + " in (");
                     for (int i = 0; i < values.size(); i++) {
                         if (i > 0) sql.append(",");
