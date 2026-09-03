@@ -194,7 +194,8 @@
               <app-glass-input
                 label="Step (Admin)"
                 placeholder="Enter step values, comma or newline separated"
-                [formControl]="stepFilterControl"
+                [ngModel]="stepFilter()"
+                (ngModelChange)="stepFilter.set($event); stepFilterControl.setValue($event, { emitEvent: false })"
                 prefixIcon="filter_list"
               >
               </app-glass-input>
@@ -204,7 +205,8 @@
               <app-glass-input
                 label="Recipe (Admin)"
                 placeholder="Enter recipe (test_program) values, comma or newline separated"
-                [formControl]="recipeFilterControl"
+                [ngModel]="recipeFilter()"
+                (ngModelChange)="recipeFilter.set($event); recipeFilterControl.setValue($event, { emitEvent: false })"
                 prefixIcon="science"
               >
               </app-glass-input>
@@ -214,7 +216,8 @@
               <app-glass-input
                 label="Equipment ID (Admin)"
                 placeholder="Enter equipment ID (tester_id) values, comma or newline separated"
-                [formControl]="equipmentIdFilterControl"
+                [ngModel]="equipmentIdFilter()"
+                (ngModelChange)="equipmentIdFilter.set($event); equipmentIdFilterControl.setValue($event, { emitEvent: false })"
                 prefixIcon="precision_manufacturing"
               >
               </app-glass-input>
