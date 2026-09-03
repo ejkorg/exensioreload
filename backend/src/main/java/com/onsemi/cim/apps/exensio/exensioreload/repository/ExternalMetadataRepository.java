@@ -61,7 +61,8 @@ public interface ExternalMetadataRepository {
                                         int limit,
                                         java.util.List<String> steps,
                                         java.util.List<String> recipes,
-                                        java.util.List<String> equipmentIds) {
+                                        java.util.List<String> equipmentIds,
+                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         return null;
     }
 
@@ -71,7 +72,8 @@ public interface ExternalMetadataRepository {
     void streamMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
                         String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
                         java.util.function.Consumer<MetadataRow> consumer,
-                        java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds);
+                        java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                        java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     /**
      * Stream rows using an existing JDBC Connection (caller is responsible for lifecycle).
@@ -79,7 +81,8 @@ public interface ExternalMetadataRepository {
     void streamMetadataWithConnection(java.sql.Connection conn, LocalDateTime start, LocalDateTime end,
                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
                                       java.util.function.Consumer<MetadataRow> consumer,
-                                      java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds);
+                                      java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                      java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     /**
      * Find candidate senders from the external metadata DB using an existing Connection.

@@ -153,12 +153,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                         String dataType, String dataTypeExt, String testPhase, String testerType, String location,
                                                         java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
                                                         int offset, int limit,
-                                                        java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds) {
+                                                        java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use COUNT(*) OVER() window function to get total count with each row
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
                 "select DISTINCT lot, id as metadata_id, id_data, end_time, wafer, device, original_file_name, step, tester_id, test_program, COUNT(*) OVER() as total_count from " + viewName,
-                start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds);
+                start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
         sql.append(" order by end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
