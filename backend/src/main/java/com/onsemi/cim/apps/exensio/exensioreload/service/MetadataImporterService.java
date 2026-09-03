@@ -459,7 +459,7 @@ public class MetadataImporterService {
                     // Describe using the effective filter set so debug SQL matches the executed query
                     if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
                         debugSql = ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository)
-                                .describePreviewQuery(lstart, lend, dataType,
+                                .describePreviewQuery(site, resolvedEnv, lstart, lend, dataType,
                                         /*dataTypeExt*/ effectiveDataTypeExt,
                                         /*testPhase*/ effectiveTestPhase,
                                         testerType,
@@ -468,7 +468,7 @@ public class MetadataImporterService {
                                         effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
                                         additionalWhereFilters);
                     } else {
-                        debugSql = externalMetadataRepository.describePreviewQuery(lstart, lend, dataType,
+                        debugSql = externalMetadataRepository.describePreviewQuery(site, resolvedEnv, lstart, lend, dataType,
                                 effectiveDataTypeExt, effectiveTestPhase, testerType,
                                 effectiveLocation, lots, wafers, devices, offset, resolvedSize,
                                 effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
@@ -981,7 +981,7 @@ public class MetadataImporterService {
                     log.warn("External location id {} not found, aborting discovery", locationId);
                 } else {
                     try (Connection conn = externalDbResolverService.resolveConnectionForLocation(loc, environment)) {
-                        externalMetadataRepository.streamMetadataWithConnection(conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor,
+                        externalMetadataRepository.streamMetadataWithConnection(site, environment, conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor,
                                 null, null, null, // steps, recipes, equipmentIds not used in staging
                                 null); // additionalWhereFilters not used in staging
                     }

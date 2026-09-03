@@ -200,7 +200,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     @Override
-    public String describePreviewQuery(LocalDateTime start,
+    public String describePreviewQuery(String site, String environment,
+                                       LocalDateTime start,
                                        LocalDateTime end,
                                        String dataType,
                                        String dataTypeExt,
@@ -267,7 +268,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     @Override
-    public void streamMetadataWithConnection(Connection c, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit, java.util.function.Consumer<MetadataRow> consumer,
+    public void streamMetadataWithConnection(String site, String environment, Connection c, LocalDateTime start, LocalDateTime end, String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit, java.util.function.Consumer<MetadataRow> consumer,
                                               java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
                                               java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         PreparedStatement ps = null;

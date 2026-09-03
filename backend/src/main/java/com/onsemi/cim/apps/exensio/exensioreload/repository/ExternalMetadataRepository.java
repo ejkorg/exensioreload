@@ -47,7 +47,8 @@ public interface ExternalMetadataRepository {
                                       java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
                                       java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
-    default String describePreviewQuery(LocalDateTime start,
+    default String describePreviewQuery(String site, String environment,
+                                        LocalDateTime start,
                                         LocalDateTime end,
                                         String dataType,
                                         String dataTypeExt,
@@ -78,7 +79,7 @@ public interface ExternalMetadataRepository {
     /**
      * Stream rows using an existing JDBC Connection (caller is responsible for lifecycle).
      */
-    void streamMetadataWithConnection(java.sql.Connection conn, LocalDateTime start, LocalDateTime end,
+    void streamMetadataWithConnection(String site, String environment, java.sql.Connection conn, LocalDateTime start, LocalDateTime end,
                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
                                       java.util.function.Consumer<MetadataRow> consumer,
                                       java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
