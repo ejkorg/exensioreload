@@ -385,48 +385,15 @@ public class MetadataImporterService {
         if (whereCondition != null && !whereCondition.isBlank()) {
             if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository jdbcRepo) {
                 whereConditionFilters = jdbcRepo.parseWhereCondition(whereCondition);
-                if (log.isInfoEnabled() && !whereConditionFilters.isEmpty()) {
+                if (log.isInfoEnabled() && whereConditionFilters != null && !whereConditionFilters.isEmpty()) {
                     log.info("Parsed where_condition for sender={}: filters={}", senderId, whereConditionFilters);
                 }
             }
         }
 
-        // Merge where_condition filters with user-provided filters
-        // The where_condition filters are applied as additional constraints
-        java.util.List<String> effectiveSteps = steps != null ? new java.util.ArrayList<>(steps) : new java.util.ArrayList<>();
-        java.util.List<String> effectiveRecipes = recipes != null ? new java.util.ArrayList<>(recipes) : new java.util.ArrayList<>();
-        java.util.List<String> effectiveEquipmentIds = equipmentIds != null ? new java.util.ArrayList<>(equipmentIds) : new java.util.ArrayList<>();
-
-        // Store additional where_condition filters that don't map to user-provided filters
-        // These will be applied directly to the SQL query
-        Map<String, List<String>> additionalWhereFilters = new LinkedHashMap<>();
-
-        if (whereConditionFilters != null) {
-            // Merge step filters
-            List<String> whereSteps = whereConditionFilters.get("step");
-            if (whereSteps != null && !whereSteps.isEmpty()) {
-                effectiveSteps.addAll(whereSteps);
-            }
-            // Merge tester_id filters (equipmentId)
-            List<String> whereTesterIds = whereConditionFilters.get("tester_id");
-            if (whereTesterIds != null && !whereTesterIds.isEmpty()) {
-                effectiveEquipmentIds.addAll(whereTesterIds);
-            }
-            // Merge test_program filters (recipe)
-            List<String> whereTestPrograms = whereConditionFilters.get("test_program");
-            if (whereTestPrograms != null && !whereTestPrograms.isEmpty()) {
-                effectiveRecipes.addAll(whereTestPrograms);
-            }
-
-            // Store additional filters that don't map to user-provided filters
-            // These include: device, copy_status, tester_platform, tester_type, file_type, etc.
-            for (Map.Entry<String, List<String>> entry : whereConditionFilters.entrySet()) {
-                String key = entry.getKey();
-                if (!key.equals("step") && !key.equals("tester_id") && !key.equals("test_program")) {
-                    additionalWhereFilters.put(key, entry.getValue());
-                }
-            }
-        }
+        // The where_condition filters are applied directly to the SQL query
+        // They preserve the original filter type (SUBSTR, IN, LIKE, EQ)
+        // No need to merge with user-provided filters - they are separate constraints
 
         // Build cache key for this request (include all filters that will be used in the query)
         String cacheKey = buildPreviewCacheKey(site, resolvedEnv, senderId, lstart, lend, lots, wafers, devices,
@@ -466,13 +433,13 @@ public class MetadataImporterService {
                                         /*location*/ effectiveLocation,
                                         lots, wafers, devices, offset, resolvedSize,
                                         effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
-                                        additionalWhereFilters);
+                                        whereConditionFilters);
                     } else {
                         debugSql = externalMetadataRepository.describePreviewQuery(site, resolvedEnv, lstart, lend, dataType,
                                 effectiveDataTypeExt, effectiveTestPhase, testerType,
                                 effectiveLocation, lots, wafers, devices, offset, resolvedSize,
                                 effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
-                                additionalWhereFilters);
+                                whereConditionFilters);
                     }
                 } catch (Exception ex) {
                     log.warn("Failed generating preview debug SQL: {}", ex.getMessage());
@@ -498,7 +465,7 @@ public class MetadataImporterService {
                         effectiveLocation,
                         lots, wafers, devices, offset, resolvedSize,
                         effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
-                        additionalWhereFilters);
+                        whereConditionFilters);
                 long queryDurationMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStartNanos);
 
                 long total;
@@ -508,7 +475,7 @@ public class MetadataImporterService {
                             effectiveDataTypeExt, effectiveTestPhase, testerType,
                             effectiveLocation, lots, wafers, devices,
                             effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
-                            additionalWhereFilters);
+                            whereConditionFilters);
                 } else {
                     // Don't run a full count by default; infer whether more rows exist.
                     if (rows.size() == resolvedSize) {

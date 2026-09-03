@@ -1799,7 +1799,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
     /**
      * Parse DTP_DIST_CONF.where_condition and extract field-level filters.
-     * Returns a map of fieldName -> filterValues.
+     * Returns a map where keys encode the filter type and field name.
+     * 
+     * Key format:
+     * - "SUBSTR:field:pos:len" for SUBSTR patterns
+     * - "IN:field" for IN patterns
+     * - "LIKE:field" for LIKE patterns
+     * - "EQ:field" for equality patterns
      * 
      * The where_condition can contain multiple EXISTS clauses, each with different field filters.
      * All field names in the where_condition match the column names in dtp_*_metadata tables.
@@ -1814,7 +1820,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
      * Example input: 
      * "EXISTS(SELECT * FROM dtp_defect_metadata m WHERE m.id = t.id_metadata AND SUBSTR(m.tester_id, 1, 1) IN ('C', 'D')), 
      *  EXISTS (SELECT * FROM all_metadata_view m WHERE m.id = t.id_metadata AND m.device like '%Eagle Test Systems Application%' and m.copy_status='PASS')"
-     * Returns: {"tester_id": ["C", "D"], "device": ["%Eagle Test Systems Application%"], "copy_status": ["PASS"]}
+     * Returns: {"SUBSTR:tester_id:1:1": ["C", "D"], "LIKE:device": ["%Eagle Test Systems Application%"], "EQ:copy_status": ["PASS"]}
      */
     public Map<String, List<String>> parseWhereCondition(String whereCondition) {
         Map<String, List<String>> filters = new LinkedHashMap<>();
@@ -1851,24 +1857,95 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
     /**
      * Parse field filters from a WHERE clause string.
-     * Handles: equality, IN, LIKE, SUBSTR patterns.
+     * Handles all common Oracle SQL patterns:
+     * - SUBSTR(m.field, pos, len) IN ('A', 'B')
+     * - m.field IN ('A', 'B', 'C')
+     * - m.field NOT IN ('A', 'B')
+     * - m.field = 'value'
+     * - m.field != 'value' or m.field <> 'value'
+     * - m.field > 'value' or m.field >= 'value'
+     * - m.field < 'value' or m.field <= 'value'
+     * - m.field LIKE '%value%'
+     * - m.field NOT LIKE '%value%'
+     * - m.field BETWEEN 'a' AND 'b'
+     * - m.field IS NULL / IS NOT NULL
+     * - UPPER(m.field) = 'value' (case-insensitive comparisons)
      */
     private void parseWhereClauseFields(String whereClause, Map<String, List<String>> filters) {
-        // Pattern 1: SUBSTR(m.field, 1, 1) IN ('A', 'B', 'C')
-        java.util.regex.Pattern substrPattern = java.util.regex.Pattern.compile(
-                "SUBSTR\\s*\\(\\s*m\\.(\\w+)\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*\\)\\s*IN\\s*\\(\\s*([^)]+)\\)",
+        // Pattern 1: SUBSTR(m.field, pos, len) IN ('A', 'B', 'C')
+        java.util.regex.Pattern substrInPattern = java.util.regex.Pattern.compile(
+                "SUBSTR\\s*\\(\\s*m\\.(\\w+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*IN\\s*\\(\\s*([^)]+)\\)",
                 java.util.regex.Pattern.CASE_INSENSITIVE);
-        java.util.regex.Matcher substrMatcher = substrPattern.matcher(whereClause);
-        while (substrMatcher.find()) {
-            String fieldName = substrMatcher.group(1);
-            String valuesStr = substrMatcher.group(2);
+        java.util.regex.Matcher substrInMatcher = substrInPattern.matcher(whereClause);
+        while (substrInMatcher.find()) {
+            String fieldName = substrInMatcher.group(1);
+            int pos = Integer.parseInt(substrInMatcher.group(2));
+            int len = Integer.parseInt(substrInMatcher.group(3));
+            String valuesStr = substrInMatcher.group(4);
             List<String> values = extractQuotedValues(valuesStr);
             if (!values.isEmpty()) {
-                filters.putIfAbsent(fieldName.toLowerCase(), values);
+                String key = "SUBSTR_IN:" + fieldName.toLowerCase() + ":" + pos + ":" + len;
+                filters.putIfAbsent(key, values);
             }
         }
 
-        // Pattern 2: m.field IN ('A', 'B', 'C')
+        // Pattern 2: SUBSTR(m.field, pos, len) = 'value'
+        java.util.regex.Pattern substrEqPattern = java.util.regex.Pattern.compile(
+                "SUBSTR\\s*\\(\\s*m\\.(\\w+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*=\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher substrEqMatcher = substrEqPattern.matcher(whereClause);
+        while (substrEqMatcher.find()) {
+            String fieldName = substrEqMatcher.group(1);
+            int pos = Integer.parseInt(substrEqMatcher.group(2));
+            int len = Integer.parseInt(substrEqMatcher.group(3));
+            String value = substrEqMatcher.group(4);
+            String key = "SUBSTR_EQ:" + fieldName.toLowerCase() + ":" + pos + ":" + len;
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 3: UPPER(m.field) IN ('A', 'B', 'C')
+        java.util.regex.Pattern upperInPattern = java.util.regex.Pattern.compile(
+                "UPPER\\s*\\(\\s*m\\.(\\w+)\\s*\\)\\s*IN\\s*\\(\\s*([^)]+)\\)",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher upperInMatcher = upperInPattern.matcher(whereClause);
+        while (upperInMatcher.find()) {
+            String fieldName = upperInMatcher.group(1);
+            String valuesStr = upperInMatcher.group(2);
+            List<String> values = extractQuotedValues(valuesStr);
+            if (!values.isEmpty()) {
+                String key = "UPPER_IN:" + fieldName.toLowerCase();
+                filters.putIfAbsent(key, values);
+            }
+        }
+
+        // Pattern 4: UPPER(m.field) = 'value'
+        java.util.regex.Pattern upperEqPattern = java.util.regex.Pattern.compile(
+                "UPPER\\s*\\(\\s*m\\.(\\w+)\\s*\\)\\s*=\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher upperEqMatcher = upperEqPattern.matcher(whereClause);
+        while (upperEqMatcher.find()) {
+            String fieldName = upperEqMatcher.group(1);
+            String value = upperEqMatcher.group(2);
+            String key = "UPPER_EQ:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 5: m.field NOT IN ('A', 'B', 'C')
+        java.util.regex.Pattern notInPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+NOT\\s+IN\\s*\\(\\s*([^)]+)\\)",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher notInMatcher = notInPattern.matcher(whereClause);
+        while (notInMatcher.find()) {
+            String fieldName = notInMatcher.group(1);
+            String valuesStr = notInMatcher.group(2);
+            List<String> values = extractQuotedValues(valuesStr);
+            if (!values.isEmpty()) {
+                String key = "NOT_IN:" + fieldName.toLowerCase();
+                filters.putIfAbsent(key, values);
+            }
+        }
+
+        // Pattern 6: m.field IN ('A', 'B', 'C')
         java.util.regex.Pattern inPattern = java.util.regex.Pattern.compile(
                 "m\\.(\\w+)\\s+IN\\s*\\(\\s*([^)]+)\\)",
                 java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -1878,11 +1955,87 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             String valuesStr = inMatcher.group(2);
             List<String> values = extractQuotedValues(valuesStr);
             if (!values.isEmpty()) {
-                filters.putIfAbsent(fieldName.toLowerCase(), values);
+                String key = "IN:" + fieldName.toLowerCase();
+                filters.putIfAbsent(key, values);
             }
         }
 
-        // Pattern 3: m.field = 'value'
+        // Pattern 7: m.field BETWEEN 'a' AND 'b'
+        java.util.regex.Pattern betweenPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+BETWEEN\\s*'([^']+)'\\s+AND\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher betweenMatcher = betweenPattern.matcher(whereClause);
+        while (betweenMatcher.find()) {
+            String fieldName = betweenMatcher.group(1);
+            String value1 = betweenMatcher.group(2);
+            String value2 = betweenMatcher.group(3);
+            String key = "BETWEEN:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value1, value2));
+        }
+
+        // Pattern 8: m.field NOT LIKE '%value%'
+        java.util.regex.Pattern notLikePattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+NOT\\s+LIKE\\s+'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher notLikeMatcher = notLikePattern.matcher(whereClause);
+        while (notLikeMatcher.find()) {
+            String fieldName = notLikeMatcher.group(1);
+            String value = notLikeMatcher.group(2);
+            String key = "NOT_LIKE:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 9: m.field LIKE '%value%'
+        java.util.regex.Pattern likePattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+LIKE\\s+'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher likeMatcher = likePattern.matcher(whereClause);
+        while (likeMatcher.find()) {
+            String fieldName = likeMatcher.group(1);
+            String value = likeMatcher.group(2);
+            String key = "LIKE:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 10: m.field != 'value' or m.field <> 'value'
+        java.util.regex.Pattern neqPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s*(?:!=|<>)\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher neqMatcher = neqPattern.matcher(whereClause);
+        while (neqMatcher.find()) {
+            String fieldName = neqMatcher.group(1);
+            String value = neqMatcher.group(2);
+            String key = "NEQ:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 11: m.field >= 'value' or m.field > 'value'
+        java.util.regex.Pattern gtPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s*(>=|>)\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher gtMatcher = gtPattern.matcher(whereClause);
+        while (gtMatcher.find()) {
+            String fieldName = gtMatcher.group(1);
+            String op = gtMatcher.group(2);
+            String value = gtMatcher.group(3);
+            String key = (">=".equals(op) ? "GTE:" : "GT:") + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 12: m.field <= 'value' or m.field < 'value'
+        java.util.regex.Pattern ltPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s*(<=|<)\\s*'([^']+)'",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher ltMatcher = ltPattern.matcher(whereClause);
+        while (ltMatcher.find()) {
+            String fieldName = ltMatcher.group(1);
+            String op = ltMatcher.group(2);
+            String value = ltMatcher.group(3);
+            String key = ("<=".equals(op) ? "LTE:" : "LT:") + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
+        }
+
+        // Pattern 13: m.field = 'value'
         java.util.regex.Pattern eqPattern = java.util.regex.Pattern.compile(
                 "m\\.(\\w+)\\s*=\\s*'([^']+)'",
                 java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -1890,19 +2043,30 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         while (eqMatcher.find()) {
             String fieldName = eqMatcher.group(1);
             String value = eqMatcher.group(2);
-            filters.putIfAbsent(fieldName.toLowerCase(), List.of(value));
+            String key = "EQ:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of(value));
         }
 
-        // Pattern 4: m.field like '%value%'
-        java.util.regex.Pattern likePattern = java.util.regex.Pattern.compile(
-                "m\\.(\\w+)\\s+like\\s+'([^']+)'",
+        // Pattern 14: m.field IS NOT NULL
+        java.util.regex.Pattern isNotNullPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+IS\\s+NOT\\s+NULL",
                 java.util.regex.Pattern.CASE_INSENSITIVE);
-        java.util.regex.Matcher likeMatcher = likePattern.matcher(whereClause);
-        while (likeMatcher.find()) {
-            String fieldName = likeMatcher.group(1);
-            String value = likeMatcher.group(2);
-            // Store LIKE patterns with the % wildcards preserved
-            filters.putIfAbsent(fieldName.toLowerCase(), List.of(value));
+        java.util.regex.Matcher isNotNullMatcher = isNotNullPattern.matcher(whereClause);
+        while (isNotNullMatcher.find()) {
+            String fieldName = isNotNullMatcher.group(1);
+            String key = "IS_NOT_NULL:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of());
+        }
+
+        // Pattern 15: m.field IS NULL
+        java.util.regex.Pattern isNullPattern = java.util.regex.Pattern.compile(
+                "m\\.(\\w+)\\s+IS\\s+NULL",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher isNullMatcher = isNullPattern.matcher(whereClause);
+        while (isNullMatcher.find()) {
+            String fieldName = isNullMatcher.group(1);
+            String key = "IS_NULL:" + fieldName.toLowerCase();
+            filters.putIfAbsent(key, List.of());
         }
     }
 
@@ -1924,13 +2088,27 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
      * Apply parsed where_condition filters as AND predicates to the SQL builder.
      * This modifies the SqlWithParams in-place by appending AND conditions.
      * 
-     * Handles:
-     * - Equality: field = 'value' → AND field = ?
-     * - IN clauses: field IN ('A','B') → AND field IN (?,?)
-     * - LIKE patterns: field like '%value%' → AND field LIKE ?
+     * Key format in the map:
+     * - "SUBSTR_IN:field:pos:len" → AND SUBSTR(m.field, pos, len) IN (?,?)
+     * - "SUBSTR_EQ:field:pos:len" → AND SUBSTR(m.field, pos, len) = ?
+     * - "UPPER_IN:field" → AND UPPER(m.field) IN (?,?)
+     * - "UPPER_EQ:field" → AND UPPER(m.field) = ?
+     * - "NOT_IN:field" → AND m.field NOT IN (?,?)
+     * - "IN:field" → AND m.field IN (?,?)
+     * - "BETWEEN:field" → AND m.field BETWEEN ? AND ?
+     * - "NOT_LIKE:field" → AND m.field NOT LIKE ?
+     * - "LIKE:field" → AND m.field LIKE ?
+     * - "NEQ:field" → AND m.field != ?
+     * - "GTE:field" → AND m.field >= ?
+     * - "GT:field" → AND m.field > ?
+     * - "LTE:field" → AND m.field <= ?
+     * - "LT:field" → AND m.field < ?
+     * - "EQ:field" → AND m.field = ?
+     * - "IS_NOT_NULL:field" → AND m.field IS NOT NULL
+     * - "IS_NULL:field" → AND m.field IS NULL
      * 
      * @param sql The SQL builder to modify
-     * @param filters Map of fieldName -> filterValues from parseWhereCondition
+     * @param filters Map from parseWhereCondition
      */
     public void applyWhereConditionFilters(SqlWithParams sql, Map<String, List<String>> filters) {
         if (filters == null || filters.isEmpty()) {
@@ -1938,41 +2116,148 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         }
 
         for (Map.Entry<String, List<String>> entry : filters.entrySet()) {
-            String fieldName = entry.getKey();
+            String key = entry.getKey();
             List<String> values = entry.getValue();
-            if (values == null || values.isEmpty()) {
-                continue;
-            }
 
-            // Check if any value contains LIKE wildcards
-            boolean hasLikePattern = values.stream().anyMatch(v -> v.contains("%") || v.contains("_"));
+            String[] parts = key.split(":");
+            String type = parts[0];
+            String fieldName = parts[1];
 
-            if (hasLikePattern) {
-                // Use LIKE for patterns with wildcards
-                if (values.size() == 1) {
-                    sql.append(" and " + fieldName + " like ?");
-                    sql.params.add(values.get(0));
-                } else {
-                    // Multiple LIKE patterns - use OR
-                    sql.append(" and (");
+            switch (type) {
+                case "SUBSTR_IN":
+                    // SUBSTR(m.field, pos, len) IN (?, ?)
+                    int substrInPos = Integer.parseInt(parts[2]);
+                    int substrInLen = Integer.parseInt(parts[3]);
+                    sql.append(" and SUBSTR(m." + fieldName + ", " + substrInPos + ", " + substrInLen + ") in (");
                     for (int i = 0; i < values.size(); i++) {
-                        if (i > 0) sql.append(" or ");
-                        sql.append(fieldName + " like ?");
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
                         sql.params.add(values.get(i));
                     }
                     sql.append(")");
-                }
-            } else if (values.size() == 1) {
-                sql.append(" and " + fieldName + " = ?");
-                sql.params.add(values.get(0));
-            } else {
-                sql.append(" and " + fieldName + " in (");
-                for (int i = 0; i < values.size(); i++) {
-                    if (i > 0) sql.append(",");
-                    sql.append("?");
-                    sql.params.add(values.get(i));
-                }
-                sql.append(")");
+                    break;
+
+                case "SUBSTR_EQ":
+                    // SUBSTR(m.field, pos, len) = ?
+                    int substrEqPos = Integer.parseInt(parts[2]);
+                    int substrEqLen = Integer.parseInt(parts[3]);
+                    sql.append(" and SUBSTR(m." + fieldName + ", " + substrEqPos + ", " + substrEqLen + ") = ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "UPPER_IN":
+                    // UPPER(m.field) IN (?, ?)
+                    sql.append(" and UPPER(m." + fieldName + ") in (");
+                    for (int i = 0; i < values.size(); i++) {
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
+                        sql.params.add(values.get(i));
+                    }
+                    sql.append(")");
+                    break;
+
+                case "UPPER_EQ":
+                    // UPPER(m.field) = ?
+                    sql.append(" and UPPER(m." + fieldName + ") = ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "NOT_IN":
+                    // m.field NOT IN (?, ?)
+                    sql.append(" and m." + fieldName + " not in (");
+                    for (int i = 0; i < values.size(); i++) {
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
+                        sql.params.add(values.get(i));
+                    }
+                    sql.append(")");
+                    break;
+
+                case "IN":
+                    // m.field IN (?, ?)
+                    sql.append(" and m." + fieldName + " in (");
+                    for (int i = 0; i < values.size(); i++) {
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
+                        sql.params.add(values.get(i));
+                    }
+                    sql.append(")");
+                    break;
+
+                case "BETWEEN":
+                    // m.field BETWEEN ? AND ?
+                    sql.append(" and m." + fieldName + " between ? and ?");
+                    sql.params.add(values.get(0));
+                    sql.params.add(values.get(1));
+                    break;
+
+                case "NOT_LIKE":
+                    // m.field NOT LIKE ?
+                    sql.append(" and m." + fieldName + " not like ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "LIKE":
+                    // m.field LIKE ?
+                    if (values.size() == 1) {
+                        sql.append(" and m." + fieldName + " like ?");
+                        sql.params.add(values.get(0));
+                    } else {
+                        sql.append(" and (");
+                        for (int i = 0; i < values.size(); i++) {
+                            if (i > 0) sql.append(" or ");
+                            sql.append("m." + fieldName + " like ?");
+                            sql.params.add(values.get(i));
+                        }
+                        sql.append(")");
+                    }
+                    break;
+
+                case "NEQ":
+                    // m.field != ?
+                    sql.append(" and m." + fieldName + " != ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "GTE":
+                    // m.field >= ?
+                    sql.append(" and m." + fieldName + " >= ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "GT":
+                    // m.field > ?
+                    sql.append(" and m." + fieldName + " > ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "LTE":
+                    // m.field <= ?
+                    sql.append(" and m." + fieldName + " <= ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "LT":
+                    // m.field < ?
+                    sql.append(" and m." + fieldName + " < ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "EQ":
+                    // m.field = ?
+                    sql.append(" and m." + fieldName + " = ?");
+                    sql.params.add(values.get(0));
+                    break;
+
+                case "IS_NOT_NULL":
+                    // m.field IS NOT NULL
+                    sql.append(" and m." + fieldName + " is not null");
+                    break;
+
+                case "IS_NULL":
+                    // m.field IS NULL
+                    sql.append(" and m." + fieldName + " is null");
+                    break;
             }
         }
     }
