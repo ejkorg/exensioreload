@@ -260,7 +260,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
                                java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         try (Connection c = externalDbConfig.getConnection(site, environment)) {
-            streamMetadataWithConnection(c, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, limit, consumer, steps, recipes, equipmentIds, additionalWhereFilters);
+            streamMetadataWithConnection(site, environment, c, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, limit, consumer, steps, recipes, equipmentIds, additionalWhereFilters);
         } catch (Exception ex) {
             log.error("Failed streaming metadata for site {} env {}: {}", site, environment, ex.getMessage(), ex);
             throw new RuntimeException("External metadata read failed", ex);
