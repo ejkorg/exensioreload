@@ -92,7 +92,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
         }
 
-        sql.append(" order by end_time desc");
+        sql.append(" order by m.end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
@@ -123,7 +123,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // which were likely null anyway after the MetadataImporterService optimization.
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildOptimizedSummaryQuery(
-                "select count(*) as total_count, min(end_time) as min_end_time, max(end_time) as max_end_time from " + viewName,
+                "select count(*) as total_count, min(m.end_time) as min_end_time, max(m.end_time) as max_end_time from " + viewName + " m",
                 start, end,
                 dataType,
                 lots, wafers, devices);
@@ -160,7 +160,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         SqlWithParams sql = buildMetadataQuery(
                 "select DISTINCT m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program, COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.id = m.id_file",
                 start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
-        sql.append(" order by end_time desc");
+        sql.append(" order by m.end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
@@ -221,7 +221,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQueryInternal("select m.lot, m.id as metadata_id, m.id_data, m.end_time, m.wafer, m.device, f.file_name as original_file_name, m.step, m.tester_id, m.test_program from " + viewName + " m left join dtp_file f on f.id = m.id_file",
                 start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, devices, false, this.forceAllMetadataView, steps, recipes, equipmentIds, additionalWhereFilters);
-        sql.append(" order by end_time desc");
+        sql.append(" order by m.end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
@@ -1663,8 +1663,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     private static final String PREVIEW_ROW_NUMBER =
-            "ROW_NUMBER() OVER (PARTITION BY lot, NVL(TRIM(wafer), ' '), NVL(TRIM(original_file_name), ' ') "
-                    + "ORDER BY end_time DESC NULLS LAST, id DESC) rn";
+            "ROW_NUMBER() OVER (PARTITION BY m.lot, NVL(TRIM(m.wafer), ' '), NVL(TRIM(f.file_name), ' ') "
+                    + "ORDER BY m.end_time DESC NULLS LAST, m.id DESC) rn";
 
     /**
      * Preview rows are shown one line per lot+wafer+filename. External views can return multiple
