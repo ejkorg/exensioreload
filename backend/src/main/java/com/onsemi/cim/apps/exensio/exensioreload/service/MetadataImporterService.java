@@ -395,6 +395,11 @@ public class MetadataImporterService {
         // They preserve the original filter type (SUBSTR, IN, LIKE, EQ)
         // No need to merge with user-provided filters - they are separate constraints
 
+        // User-provided filters (steps, recipes, equipmentIds)
+        java.util.List<String> effectiveSteps = steps != null ? new java.util.ArrayList<>(steps) : new java.util.ArrayList<>();
+        java.util.List<String> effectiveRecipes = recipes != null ? new java.util.ArrayList<>(recipes) : new java.util.ArrayList<>();
+        java.util.List<String> effectiveEquipmentIds = equipmentIds != null ? new java.util.ArrayList<>(equipmentIds) : new java.util.ArrayList<>();
+
         // Build cache key for this request (include all filters that will be used in the query)
         String cacheKey = buildPreviewCacheKey(site, resolvedEnv, senderId, lstart, lend, lots, wafers, devices,
                 testerType, /*dataType*/ dataType,
