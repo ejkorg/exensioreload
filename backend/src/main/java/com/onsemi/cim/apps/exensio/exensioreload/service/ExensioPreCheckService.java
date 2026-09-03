@@ -636,27 +636,7 @@ public class ExensioPreCheckService {
      * @return PGC_KEY integer value
      */
     public static int resolvePgcKey(String dataType) {
-        if (dataType == null || dataType.isBlank()) {
-            log.debug("[ExensioPreCheck] No dataType provided, defaulting to PGC_KEY=2 (FT)");
-            return 2; // Default to FT
-        }
-
-        String normalized = dataType.trim().toLowerCase();
-        
-        int pgcKey = switch (normalized) {
-            case "probe" -> 1;
-            case "ft", "final test" -> 2;
-            case "pcm" -> 5;
-            case "defect" -> 14;
-            case "map", "binmap", "wxml", "upm" -> 4;
-            default -> {
-                log.warn("[ExensioPreCheck] Unknown dataType '{}', defaulting to PGC_KEY=2 (FT)", dataType);
-                yield 2;
-            }
-        };
-
-        log.debug("[ExensioPreCheck] Resolved dataType '{}' to PGC_KEY={}", dataType, pgcKey);
-        return pgcKey;
+        return DataTypePgcKeyMapper.resolve(dataType);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

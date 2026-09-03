@@ -188,6 +188,37 @@
                 <span>Loading devices...</span>
               </div>
             </div>
+
+            <!-- New filter fields for dtp_*_metadata tables (admin only) -->
+            <div class="device-field" *ngIf="isAdminUser()">
+              <app-glass-input
+                label="Step (Admin)"
+                placeholder="Enter step values, comma or newline separated"
+                [formControl]="stepFilterControl"
+                prefixIcon="filter_list"
+              >
+              </app-glass-input>
+            </div>
+
+            <div class="device-field" *ngIf="isAdminUser()">
+              <app-glass-input
+                label="Recipe (Admin)"
+                placeholder="Enter recipe (test_program) values, comma or newline separated"
+                [formControl]="recipeFilterControl"
+                prefixIcon="science"
+              >
+              </app-glass-input>
+            </div>
+
+            <div class="device-field" *ngIf="isAdminUser()">
+              <app-glass-input
+                label="Equipment ID (Admin)"
+                placeholder="Enter equipment ID (tester_id) values, comma or newline separated"
+                [formControl]="equipmentIdFilterControl"
+                prefixIcon="precision_manufacturing"
+              >
+              </app-glass-input>
+            </div>
           </div>
 
           <div class="divider"></div>

@@ -552,7 +552,10 @@ public class SenderController {
                 request.page(),
                 request.size(),
                 /* strictFilters */ strictFilters,
-                request.bypassCap());
+                request.bypassCap(),
+                filters.steps(),
+                filters.recipes(),
+                filters.equipmentIds());
         if (log.isInfoEnabled()) {
             log.info("Preview response rows={} total={} strictFilters={} historicalMode={}", response.items().size(), response.total(), strictFilters, request.historicalMode());
         }
@@ -611,7 +614,10 @@ public class SenderController {
                 fetchPage,
                 fetchSize,
                 /* strictFilters */ strictFilters,
-                request.bypassCap());
+                request.bypassCap(),
+                filters.steps(),
+                filters.recipes(),
+                filters.equipmentIds());
         long previewDurationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - previewStartNanos);
 
         // Now check for duplicates in parallel for all items
@@ -655,7 +661,8 @@ public class SenderController {
                                 request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(),
                                 request.location(), request.locationId(),
                                 0, (int) previewResponse.total(), // fetch all
-                                strictFilters, true // bypass cap
+                                strictFilters, true, // bypass cap
+                                filters.steps(), filters.recipes(), filters.equipmentIds()
                         );
                         if (fullResponse != null && fullResponse.items() != null) {
                             metadataImporterService.putCachedDiscoveryResults(asyncToken, fullResponse.items(), request.dataType());
@@ -860,7 +867,8 @@ public class SenderController {
                         dateMode.startDate(), dateMode.endDate(), lotsParam, wafersParam, request.devices(),
                         request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(),
                         request.location(), request.locationId(),
-                        0, resolvedMaxRows, strictFilters, true); // bypassCap = true
+                        0, resolvedMaxRows, strictFilters, true, // bypassCap = true
+                        request.steps(), request.recipes(), request.equipmentIds());
                 if (resp != null) {
                     totalAvailable = resp.total();
                     pagesFetched = 1;
@@ -988,7 +996,8 @@ public class SenderController {
                         request.site(), request.environment(), id, filters.startDate(), filters.endDate(), filters.lots(), filters.wafers(), filters.devices(),
                         request.testerType(), request.dataType(), request.dataTypeExt(), request.testPhase(), request.location(), request.locationId(), page, pageSize,
                         /* strictFilters */ strictFilters,
-                        request.bypassCap());
+                        request.bypassCap(),
+                        filters.steps(), filters.recipes(), filters.equipmentIds());
                 if (resp == null) break;
                 if (total == Long.MAX_VALUE) total = resp.total();
                 if (resp.items() != null && !resp.items().isEmpty()) {
@@ -1081,7 +1090,32 @@ public class SenderController {
             devices = null;
         }
 
-        return new PreviewFilters(lotsParam, wafersParam, startDate, endDate, devices);
+        // New filter fields - admin only
+        java.util.List<String> steps = request.steps();
+        if (!isAdmin || steps == null || steps.isEmpty()) {
+            if (steps != null && !steps.isEmpty() && log.isInfoEnabled()) {
+                log.info("Ignoring step filter for preview (sender={}): admin={} stepCount={}", senderId, isAdmin, steps.size());
+            }
+            steps = null;
+        }
+
+        java.util.List<String> recipes = request.recipes();
+        if (!isAdmin || recipes == null || recipes.isEmpty()) {
+            if (recipes != null && !recipes.isEmpty() && log.isInfoEnabled()) {
+                log.info("Ignoring recipe filter for preview (sender={}): admin={} recipeCount={}", senderId, isAdmin, recipes.size());
+            }
+            recipes = null;
+        }
+
+        java.util.List<String> equipmentIds = request.equipmentIds();
+        if (!isAdmin || equipmentIds == null || equipmentIds.isEmpty()) {
+            if (equipmentIds != null && !equipmentIds.isEmpty() && log.isInfoEnabled()) {
+                log.info("Ignoring equipmentId filter for preview (sender={}): admin={} equipmentIdCount={}", senderId, isAdmin, equipmentIds.size());
+            }
+            equipmentIds = null;
+        }
+
+        return new PreviewFilters(lotsParam, wafersParam, startDate, endDate, devices, steps, recipes, equipmentIds);
     }
 
     private String trimToNull(String value) {
@@ -1118,7 +1152,8 @@ public class SenderController {
 
     private record DateMode(String startDate, String endDate, boolean historicalMode) {}
 
-    private record PreviewFilters(java.util.List<String> lots, java.util.List<String> wafers, String startDate, String endDate, java.util.List<String> devices) { }
+    private record PreviewFilters(java.util.List<String> lots, java.util.List<String> wafers, String startDate, String endDate, java.util.List<String> devices,
+                                  java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds) { }
 
     private String csvEscape(String v) {
         if (v == null) return "";

@@ -83,6 +83,9 @@ interface DiscoveryFiltersSnapshot {
   location?: string;
   historicalMode: boolean;
   devices?: string[];
+  steps?: string[];
+  recipes?: string[];
+  equipmentIds?: string[];
 }
 
 interface DuplicateStageContext {
@@ -420,6 +423,14 @@ export class StepperComponent implements OnInit, OnDestroy {
   deviceOptions = signal<string[]>([]);
   devicesLoading = signal(false);
   deviceFilterControl = new FormControl('');
+
+  // New filter fields for dtp_*_metadata tables (admin only)
+  stepFilter = signal<string>('');
+  stepFilterControl = new FormControl('');
+  recipeFilter = signal<string>('');
+  recipeFilterControl = new FormControl('');
+  equipmentIdFilter = signal<string>('');
+  equipmentIdFilterControl = new FormControl('');
 
   // Site / DTP instance options for the selected environment (external instances)
   siteOptions = signal<GlassOption[]>([]);
@@ -1586,6 +1597,13 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.deviceFilter.set('');
     this.deviceFilterControl.setValue('', { emitEvent: false });
     this.deviceOptions.set([]);
+    // Reset new filter fields
+    this.stepFilter.set('');
+    this.stepFilterControl.setValue('', { emitEvent: false });
+    this.recipeFilter.set('');
+    this.recipeFilterControl.setValue('', { emitEvent: false });
+    this.equipmentIdFilter.set('');
+    this.equipmentIdFilterControl.setValue('', { emitEvent: false });
 
     if (dataType) {
       // Load both testerTypes and dataTypeExt filtered by location + dataType
@@ -1605,6 +1623,13 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.deviceFilter.set('');
     this.deviceFilterControl.setValue('', { emitEvent: false });
     this.deviceOptions.set([]);
+    // Reset new filter fields
+    this.stepFilter.set('');
+    this.stepFilterControl.setValue('', { emitEvent: false });
+    this.recipeFilter.set('');
+    this.recipeFilterControl.setValue('', { emitEvent: false });
+    this.equipmentIdFilter.set('');
+    this.equipmentIdFilterControl.setValue('', { emitEvent: false });
 
     if (this.selectedDataType()) {
       this.loadTestPhasesForFilters();
@@ -1650,6 +1675,14 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Sanitize wafer value by stripping all alpha characters, keeping only numeric digits.
+   */
+  private sanitizeWaferValue(raw: string): string {
+    if (!raw?.trim()) return '';
+    return raw.replace(/[^0-9]/g, '');
+  }
+
+  /**
    * Build discovery preview/stage query params from the current form state.
    * Device filter is included whenever an admin has entered or selected a device value.
    */
@@ -1672,6 +1705,20 @@ export class StepperComponent implements OnInit, OnDestroy {
     const deviceList = this.parseDeviceList(this.deviceFilter());
     const useDeviceFilter = this.isAdminUser() && deviceList.length > 0;
 
+    // New filter fields - admin only
+    const stepList = this.parseDeviceList(this.stepFilter());
+    const useStepFilter = this.isAdminUser() && stepList.length > 0;
+    const recipeList = this.parseDeviceList(this.recipeFilter());
+    const useRecipeFilter = this.isAdminUser() && recipeList.length > 0;
+    const equipmentIdList = this.parseDeviceList(this.equipmentIdFilter());
+    const useEquipmentIdFilter = this.isAdminUser() && equipmentIdList.length > 0;
+
+    // Sanitize wafer values in pairs - strip alpha characters
+    const sanitizedPairs = normalizedPairs.map(pair => ({
+      lot: pair.lot,
+      wafer: pair.wafer ? this.sanitizeWaferValue(pair.wafer) : pair.wafer
+    }));
+
     const useLargePreviewWindow = this.historicalMode() || useDateFilters;
     const defaultSize = useLargePreviewWindow ? 10000 : 1000;
     const page = options.page ?? 0;
@@ -1684,7 +1731,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       endDate: endDate ?? null,
       lots: null,
       wafers: null,
-      pairs: normalizedPairs.length ? normalizedPairs : null,
+      pairs: sanitizedPairs.length ? sanitizedPairs : null,
       devices: useDeviceFilter ? deviceList : null,
       testerType: this.selectedTesterType() || null,
       dataType: this.selectedDataType() || null,
@@ -1696,6 +1743,9 @@ export class StepperComponent implements OnInit, OnDestroy {
       bypassCap: useLargePreviewWindow,
       historicalMode: this.historicalMode(),
       enableSnowflakeFallback: this.enableSnowflakeFallback(),
+      steps: useStepFilter ? stepList : null,
+      recipes: useRecipeFilter ? recipeList : null,
+      equipmentIds: useEquipmentIdFilter ? equipmentIdList : null,
     };
 
     const snapshot: DiscoveryFiltersSnapshot = {
@@ -1713,6 +1763,9 @@ export class StepperComponent implements OnInit, OnDestroy {
       testPhase: params.testPhase ?? undefined,
       location: params.location ?? undefined,
       historicalMode: !!params.historicalMode,
+      steps: useStepFilter ? stepList : undefined,
+      recipes: useRecipeFilter ? recipeList : undefined,
+      equipmentIds: useEquipmentIdFilter ? equipmentIdList : undefined,
     };
 
     return { params, snapshot };
@@ -1735,6 +1788,9 @@ export class StepperComponent implements OnInit, OnDestroy {
     return {
       ...saved,
       devices: current.devices,
+      steps: current.steps,
+      recipes: current.recipes,
+      equipmentIds: current.equipmentIds,
     };
   }
 
@@ -2427,6 +2483,12 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.dateRange.set(null);
     this.deviceFilter.set('');
     this.deviceFilterControl.setValue('', { emitEvent: false });
+    this.stepFilter.set('');
+    this.stepFilterControl.setValue('', { emitEvent: false });
+    this.recipeFilter.set('');
+    this.recipeFilterControl.setValue('', { emitEvent: false });
+    this.equipmentIdFilter.set('');
+    this.equipmentIdFilterControl.setValue('', { emitEvent: false });
     this.historicalMode.set(false);
     this.preFlightVerify.set(false);
     this.enableSnowflakeFallback.set(null);

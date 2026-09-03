@@ -26,5 +26,9 @@ public record DiscoveryPreviewRequest(
         // dataTypeExt, testPhase, and location when a date range is provided.
         boolean historicalMode,
         Long locationId,
-        String requestId
+        String requestId,
+        // New filter fields for dtp_*_metadata tables
+        List<String> steps,
+        List<String> recipes,       // maps to test_program column
+        List<String> equipmentIds   // maps to tester_id column
 ) {}

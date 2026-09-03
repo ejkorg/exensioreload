@@ -1,0 +1,7 @@
+# documentation
+- Check if docs are already up-to-date before writing new documentation files; don't rewrite existing docs unnecessarily. Confidence: 0.65
+- Checklist/documentation wording must accurately reflect the chosen approach (e.g., "add a profile" rather than "replace"), and when the approach changes, all sections of the doc (Goal, Scope, Rollback, Acceptance Criteria, cleanup) should be reframed consistently so no lingering contradictory wording remains. Confidence: 0.80
+- Prefers a clean project root with only backend/, frontend/, and docs/ directories — no scattered root-level markdown files. Documentation consolidates into docs/exensio.md, a single AI-context file (like CLAUDE.md) with up-to-date information about the current codebase. Confidence: 0.65
+- When asked whether documentation is aligned with code, cross-check each doc claim against the actual code and report concrete misalignments (endpoint counts, status/enum names, mapping tables, file/line anchors, config keys) rather than confirming alignment by assumption. Confidence: 0.70
+- When docs and code diverge, treat the code as the source of truth and update the docs for stale/typo'd prose (endpoint counts, status names, line anchors, prose); only change the code when the divergence reflects a genuine code inconsistency (e.g., two implementations producing different behavior for the same input). Confidence: 0.70
+

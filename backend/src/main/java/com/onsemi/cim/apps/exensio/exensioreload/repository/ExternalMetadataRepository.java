@@ -5,11 +5,15 @@ import java.util.List;
 
 public interface ExternalMetadataRepository {
     List<MetadataRow> findMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
-                                   String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit);
+                                   String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
+                                   java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                   java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     List<MetadataRow> findMetadataPage(String site, String environment, LocalDateTime start, LocalDateTime end,
                                        String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
-                                       int offset, int limit);
+                                       int offset, int limit,
+                                       java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                       java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     /**
      * Optimized single-query method that returns both the paginated rows and total count.
@@ -19,15 +23,19 @@ public interface ExternalMetadataRepository {
     default MetadataPageResult findMetadataPageWithCount(String site, String environment, LocalDateTime start, LocalDateTime end,
                                                          String dataType, String dataTypeExt, String testPhase, String testerType, String location,
                                                          java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
-                                                         int offset, int limit) {
+                                                         int offset, int limit,
+                                                         java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                                         java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Default implementation falls back to two queries for backwards compatibility
-        long total = countMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices);
-        List<MetadataRow> rows = findMetadataPage(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, offset, limit);
+        long total = countMetadata(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
+        List<MetadataRow> rows = findMetadataPage(site, environment, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, offset, limit, steps, recipes, equipmentIds, additionalWhereFilters);
         return new MetadataPageResult(rows, total);
     }
 
     long countMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
-                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices);
+                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
+                       java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                       java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     /**
      * Lightweight aggregate for preview-like requests. Returns total row count and the
@@ -35,7 +43,9 @@ public interface ExternalMetadataRepository {
      */
     MetadataSummary summarizeMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location,
-                                      java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices);
+                                      java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices,
+                                      java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds,
+                                      java.util.Map<String, java.util.List<String>> additionalWhereFilters);
 
     default String describePreviewQuery(LocalDateTime start,
                                         LocalDateTime end,
@@ -48,7 +58,10 @@ public interface ExternalMetadataRepository {
                                         java.util.List<String> wafers,
                                         java.util.List<String> devices,
                                         int offset,
-                                        int limit) {
+                                        int limit,
+                                        java.util.List<String> steps,
+                                        java.util.List<String> recipes,
+                                        java.util.List<String> equipmentIds) {
         return null;
     }
 
@@ -57,14 +70,16 @@ public interface ExternalMetadataRepository {
      */
     void streamMetadata(String site, String environment, LocalDateTime start, LocalDateTime end,
                         String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
-                        java.util.function.Consumer<MetadataRow> consumer);
+                        java.util.function.Consumer<MetadataRow> consumer,
+                        java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds);
 
     /**
      * Stream rows using an existing JDBC Connection (caller is responsible for lifecycle).
      */
     void streamMetadataWithConnection(java.sql.Connection conn, LocalDateTime start, LocalDateTime end,
                                       String dataType, String dataTypeExt, String testPhase, String testerType, String location, java.util.List<String> lots, java.util.List<String> wafers, java.util.List<String> devices, int limit,
-                                      java.util.function.Consumer<MetadataRow> consumer);
+                                      java.util.function.Consumer<MetadataRow> consumer,
+                                      java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds);
 
     /**
      * Find candidate senders from the external metadata DB using an existing Connection.

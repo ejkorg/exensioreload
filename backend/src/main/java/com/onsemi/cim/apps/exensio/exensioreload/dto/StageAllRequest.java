@@ -28,6 +28,10 @@ public record StageAllRequest(
         boolean forceDuplicates,
         String userEmail,
         String requestId,
-        String discoveryToken
+        String discoveryToken,
+        // New filter fields for dtp_*_metadata tables
+        List<String> steps,
+        List<String> recipes,       // maps to test_program column
+        List<String> equipmentIds   // maps to tester_id column
 ) {
 }

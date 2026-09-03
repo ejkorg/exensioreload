@@ -32,7 +32,7 @@ The application acts as an intermediary between semiconductor manufacturing data
 2. **Look up lot/wafer data** — Verify that data has been loaded into Exensio (single or batch)
 3. **Execute raw SQL queries** — Query Exensio's Oracle database directly for lot metadata
 4. **Pre-flight checks** — Verify lot existence before staging data for reload
-5. **Monitor loading status** — Poll for records in `EXENSIO_LOADING` state and drive status transitions
+5. **Monitor loading status** — Poll for records in `EXENSIO_MONITORING` state and drive status transitions
 
 ### Component Interaction
 
@@ -67,7 +67,7 @@ All Exensio HTTP operations share a single `HttpClient` bean created by [Exensio
 
 ## 2. Exensio API Endpoints Used
 
-The application communicates with **three** Exensio REST API endpoints:
+The application communicates with **four** Exensio REST API endpoints:
 
 | Endpoint | Method | Purpose | Used By |
 |---|---|---|---|
@@ -78,7 +78,7 @@ The application communicates with **three** Exensio REST API endpoints:
 
 ### Base URL Resolution
 
-The base URL is environment-dependent, resolved by [ExensioProperties.resolvedBaseUrl()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L273-L275):
+The base URL is environment-dependent, resolved by [ExensioProperties.resolvedBaseUrl()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L346-L348):
 
 ```java
 // ExensioProperties.java
@@ -554,7 +554,7 @@ flowchart TD
 
 Each batch goes through:
 
-1. **Validation**: Records with missing lot IDs are immediately marked `FAILED`
+1. **Validation**: Records with missing lot IDs are immediately marked `LOAD_FAILED`
 2. **Cache lookup**: Check Caffeine cache for previously resolved lot/wafer pairs
 3. **Concurrency control**: Acquire semaphore permit (max concurrent requests)
 4. **API call**: `ExensioClient.lotWaferLookupBatch(records)`
@@ -594,7 +594,7 @@ The application implements a **multi-schema fallback** pattern to maximize data 
 
 ### 9.1 Schema Resolution
 
-[ExensioProperties.resolvedDbschema()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L282-L299):
+[ExensioProperties.resolvedDbschema()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L356-L372):
 
 | Condition | Primary Schema |
 |---|---|
@@ -602,7 +602,7 @@ The application implements a **multi-schema fallback** pattern to maximize data 
 | Both ES + Exensio configured, `env=SBX/SANDBOX` | `SANDBOX` |
 | Only Exensio configured | `PRODUCTION` |
 
-[resolvedDbschemaFallback()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L301-L316):
+[resolvedDbschemaFallback()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioProperties.java#L375-L389):
 
 | Primary Schema | Fallback Schema |
 |---|---|
@@ -638,16 +638,16 @@ The **Program Group Class key** (`pgc_key`) determines which type of semiconduct
 
 ### 10.1 Data Type → PGC Key Mapping
 
-Defined in [ExensioPreCheckService.resolvePgcKey()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckService.java#L638-L660) and [DataTypePgcKeyMapper.resolve()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/DataTypePgcKeyMapper.java):
+Defined in [DataTypePgcKeyMapper.resolve()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/DataTypePgcKeyMapper.java) and exposed via [ExensioPreCheckService.resolvePgcKey()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckService.java#L638-L640):
 
 | Data Type | PGC Key | Level | Description |
 |---|---|---|---|
 | `probe` | 1 | Wafer | Probe/wafer sort test data |
 | `ft`, `final test` | 2 | Lot | Final test data |
-| `map`, `binmap`, `wxml`, `upm`, `wmap` | 4 | Wafer | Wafer map / bin map data |
+| `map`, `binmap`, `wxml`, `upm` | 4 | Wafer | Wafer map / bin map data |
 | `pcm` | 5 | Wafer | Process Control Monitor data |
 | `defect` | 14 | Wafer | Defect inspection data |
-| `null` / unknown | 2 | Lot | Default to Final Test |
+| `null`, blank, or unknown | 2 | Lot | Default to Final Test |
 
 ### 10.2 Wafer-Level vs Lot-Level
 
@@ -746,7 +746,7 @@ All configuration is under the `exensio` prefix in [application.yml](file:///c:/
 | Property | Default | Description |
 |---|---|---|
 | `exensio.poll-interval-ms` | `60000` | Monitor poll interval (ms) |
-| `exensio.timeout-minutes` | `60` | Max time in `EXENSIO_LOADING` before FAILED |
+| `exensio.timeout-minutes` | `60` | Max time in `EXENSIO_MONITORING` before FAILED |
 
 ### Batch & Parallel Processing
 
@@ -787,6 +787,9 @@ All configuration is under the `exensio` prefix in [application.yml](file:///c:/
 | `exensio.retry-max-attempts` | `3` | Max API call retry attempts |
 | `exensio.retry-base-delay-ms` | `1000` | Base delay for exponential backoff |
 | `exensio.dead-letter-queue-threshold` | `5` | Consecutive failures before DLQ |
+
+> [!NOTE]
+> These three properties are not declared explicitly in `application.yml`; they exist as `@ConfigurationProperties` fields on `ExensioProperties`. Spring Boot's relaxed binding resolves them from the same `exensio.*` prefix, so they can be overridden via YAML or environment variables (`EXENSIO_RETRY_MAX_ATTEMPTS`, `EXENSIO_RETRY_BASE_DELAY_MS`, `EXENSIO_DEAD_LETTER_QUEUE_THRESHOLD`) without adding them to the base file.
 
 ---
 
@@ -883,7 +886,7 @@ sequenceDiagram
 |---|---|---|
 | [ExensioClient](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java) | `service/ExensioClient.java` | HTTP client for lot-wafer-lookup and raw-sql endpoints |
 | [ExensioAuthService](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioAuthService.java) | `service/ExensioAuthService.java` | Per-schema token management (login/logout/cache) |
-| [ExensioLoadMonitor](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioLoadMonitor.java) | `service/ExensioLoadMonitor.java` | Scheduled poller for EXENSIO_LOADING records |
+| [ExensioLoadMonitor](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioLoadMonitor.java) | `service/ExensioLoadMonitor.java` | Scheduled poller for EXENSIO_MONITORING records |
 | [ExensioPreCheckService](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckService.java) | `service/ExensioPreCheckService.java` | Pre-flight lot existence verification |
 | [ExensioPreCheckCacheService](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckCacheService.java) | `service/ExensioPreCheckCacheService.java` | Caching wrapper for pre-check results |
 | [ExensioRawSqlService](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioRawSqlService.java) | `service/ExensioRawSqlService.java` | Unified raw-SQL query builder and executor |

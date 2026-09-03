@@ -15,14 +15,12 @@
 - Tracks long multi-step migration tasks via a markdown checklist file (e.g., ORACLE_TO_POSTGRES_INTERNAL_DB_CHECKLIST.md) and expects work to resume from the last completed item and drive the checklist to completion (e.g., "go ahead finish these check list"). Confidence: 0.78
 - Verify factual claims about the codebase against the actual code (grep/read) before asserting them; user pushes back on unverified statements (e.g., "check again" when told a table isn't created by any Liquibase changelog). Confidence: 0.75
 - When the user reports specific compile/type errors and asks for a "root cause fix for all," do a comprehensive sweep (grep across the full codebase) to find every instance of the same class of issue before applying fixes — fix the root cause (e.g., missing interface fields) rather than patching individual call sites one at a time. Confidence: 0.80
+- When asked to make another backend app in the same workspace match a documented standard (e.g., an API documentation file written for a sibling app), first assess what's actually applicable before applying changes — align the genuinely-applicable parts and explicitly flag/hold back anything intentionally out of scope for that app rather than forcing full parity. Confidence: 0.65
 
 # database
 See [database/taste.md](database/taste.md)
 # documentation
-- Check if docs are already up-to-date before writing new documentation files; don't rewrite existing docs unnecessarily. Confidence: 0.65
-- Checklist/documentation wording must accurately reflect the chosen approach (e.g., "add a profile" rather than "replace"), and when the approach changes, all sections of the doc (Goal, Scope, Rollback, Acceptance Criteria, cleanup) should be reframed consistently so no lingering contradictory wording remains. Confidence: 0.80
-- Prefers a clean project root with only backend/, frontend/, and docs/ directories — no scattered root-level markdown files. Documentation consolidates into docs/exensio.md, a single AI-context file (like CLAUDE.md) with up-to-date information about the current codebase. Confidence: 0.65
-
+See [documentation/taste.md](documentation/taste.md)
 # logging
 - Disable or reduce Spring Boot DEBUG console logging to minimize noise. Confidence: 0.70
 - Make logging configurable via YAML properties rather than hardcoded changes. Confidence: 0.75

@@ -476,8 +476,7 @@ public class ExensioClient {
             ObjectNode body = objectMapper.createObjectNode();
             Map<Integer, Long> pgcKeyCounts = new HashMap<>();
             for (StageRecord record : records) {
-                boolean waferBlank = record.wafer() == null || record.wafer().isBlank();
-                int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType(), waferBlank);
+                int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType());
                 pgcKeyCounts.merge(pgcKey, 1L, Long::sum);
             }
             int batchPgcKey = pgcKeyCounts.entrySet().stream()

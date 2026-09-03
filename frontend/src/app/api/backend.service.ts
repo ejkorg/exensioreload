@@ -90,6 +90,10 @@ export interface DiscoveryPreviewRequest {
   historicalMode?: boolean | null;
   requestId?: string | null;
   enableSnowflakeFallback?: boolean | null;
+  // New filter fields for dtp_*_metadata tables
+  steps?: string[] | null;
+  recipes?: string[] | null;       // maps to test_program column
+  equipmentIds?: string[] | null;  // maps to tester_id column
 }
 
 export interface DiscoveryPreviewRow {
@@ -101,6 +105,9 @@ export interface DiscoveryPreviewRow {
   filename: string;
   originalFileName?: string;
   endTime?: string;
+  step?: string | null;
+  testerId?: string | null;
+  testProgram?: string | null;
 }
 
 export interface DiscoveryPreviewResponse {

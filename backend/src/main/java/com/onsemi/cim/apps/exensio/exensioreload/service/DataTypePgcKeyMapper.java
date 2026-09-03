@@ -1,10 +1,17 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
- * Utility class that maps a stepper Data Type string to the correct Exensio pgc_key.
- * Falls back to wafer-presence logic when the data type is unknown or null.
+ * Single source of truth for mapping stepper Data Type strings to Exensio {@code pgc_key} values.
+ *
+ * <p>Both the raw-SQL/batch paths and the lot-wafer-lookup batch path resolve through this
+ * mapper so a given data type always yields the same program group class.</p>
  */
 public final class DataTypePgcKeyMapper {
+
+    private static final Logger log = LoggerFactory.getLogger(DataTypePgcKeyMapper.class);
 
     public static final int PGC_KEY_PROBE  = 1;
     public static final int PGC_KEY_FT     = 2;
@@ -15,47 +22,40 @@ public final class DataTypePgcKeyMapper {
     private DataTypePgcKeyMapper() {}
 
     /**
-     * Resolves the pgc_key for a given data type string.
-     * Mapping is case-insensitive.
+     * Resolves the {@code pgc_key} for a given data type string (case-insensitive).
      *
      * <ul>
-     *   <li>PROBE                               → 1</li>
-     *   <li>FT / FINAL TEST / FINAL_TEST        → 2</li>
-     *   <li>MAP / BIN MAP / BINMAP / WMAP / WMP → 4</li>
-     *   <li>PCM                                 → 5</li>
-     *   <li>DEFECT                              → 14</li>
-     *   <li>anything else / null                → 1 if wafer present, 2 if wafer absent</li>
+     *   <li>PROBE                         → 1</li>
+     *   <li>FT / FINAL TEST               → 2</li>
+     *   <li>MAP / BINMAP / WXML / UPM     → 4</li>
+     *   <li>PCM                           → 5</li>
+     *   <li>DEFECT                        → 14</li>
+     *   <li>anything else / null / blank  → 2 (Final Test)</li>
      * </ul>
      *
-     * @param dataType   the data type string from the stepper (may be null)
-     * @param waferBlank true when the wafer ID is absent (used for fallback)
-     * @return the pgc_key to send in the Exensio lot-wafer-lookup request
+     * @param dataType the data type string from the stepper (may be null or blank)
+     * @return the {@code pgc_key} to use for Exensio queries
      */
-    public static int resolve(String dataType, boolean waferBlank) {
-        if (dataType != null) {
-            String normalized = dataType.trim().toUpperCase();
-            switch (normalized) {
-                case "PROBE":
-                    return PGC_KEY_PROBE;
-                case "FT":
-                case "FINAL TEST":
-                case "FINAL_TEST":
-                    return PGC_KEY_FT;
-                case "MAP":
-                case "BIN MAP":
-                case "BINMAP":
-                case "WMAP":
-                case "WMP":
-                    return PGC_KEY_WMAP;
-                case "PCM":
-                    return PGC_KEY_PCM;
-                case "DEFECT":
-                    return PGC_KEY_DEFECT;
-                default:
-                    break;
-            }
+    public static int resolve(String dataType) {
+        if (dataType == null || dataType.isBlank()) {
+            log.debug("[DataTypePgcKeyMapper] No dataType provided, defaulting to PGC_KEY=2 (FT)");
+            return PGC_KEY_FT;
         }
-        // Fallback: wafer-presence logic
-        return waferBlank ? PGC_KEY_FT : PGC_KEY_PROBE;
+
+        String normalized = dataType.trim().toLowerCase();
+        int pgcKey = switch (normalized) {
+            case "probe" -> PGC_KEY_PROBE;
+            case "ft", "final test" -> PGC_KEY_FT;
+            case "pcm" -> PGC_KEY_PCM;
+            case "defect" -> PGC_KEY_DEFECT;
+            case "map", "binmap", "wxml", "upm" -> PGC_KEY_WMAP;
+            default -> {
+                log.warn("[DataTypePgcKeyMapper] Unknown dataType '{}', defaulting to PGC_KEY=2 (FT)", dataType);
+                yield PGC_KEY_FT;
+            }
+        };
+
+        log.debug("[DataTypePgcKeyMapper] Resolved dataType '{}' to PGC_KEY={}", dataType, pgcKey);
+        return pgcKey;
     }
 }

@@ -311,7 +311,8 @@ public class MetadataImporterService {
                                                     java.util.List<String> lots, java.util.List<String> wafers,
                                                     java.util.List<String> devices,
                                                     String testerType, String dataType, String dataTypeExt, String testPhase,
-                                                    String location, Long locationId, int page, int size, boolean strictFilters, boolean bypassCap) {
+                                                    String location, Long locationId, int page, int size, boolean strictFilters, boolean bypassCap,
+                                                    java.util.List<String> steps, java.util.List<String> recipes, java.util.List<String> equipmentIds) {
         if (site == null || site.isBlank()) {
             throw new IllegalArgumentException("site is required");
         }
@@ -376,6 +377,57 @@ public class MetadataImporterService {
         String effectiveDataTypeExt = (strictFilters ? dataTypeExt : null);
         String effectiveLocation = (strictFilters || forceLocation ? location : null);
 
+        // Fetch and parse where_condition from DTP_DIST_CONF for this sender
+        // This is critical for correct discovery - the where_condition defines
+        // sender-specific filters that must be applied to the metadata query
+        String whereCondition = fetchWhereCondition(senderId, site, resolvedEnv);
+        Map<String, List<String>> whereConditionFilters = null;
+        if (whereCondition != null && !whereCondition.isBlank()) {
+            if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository jdbcRepo) {
+                whereConditionFilters = jdbcRepo.parseWhereCondition(whereCondition);
+                if (log.isInfoEnabled() && !whereConditionFilters.isEmpty()) {
+                    log.info("Parsed where_condition for sender={}: filters={}", senderId, whereConditionFilters);
+                }
+            }
+        }
+
+        // Merge where_condition filters with user-provided filters
+        // The where_condition filters are applied as additional constraints
+        java.util.List<String> effectiveSteps = steps != null ? new java.util.ArrayList<>(steps) : new java.util.ArrayList<>();
+        java.util.List<String> effectiveRecipes = recipes != null ? new java.util.ArrayList<>(recipes) : new java.util.ArrayList<>();
+        java.util.List<String> effectiveEquipmentIds = equipmentIds != null ? new java.util.ArrayList<>(equipmentIds) : new java.util.ArrayList<>();
+
+        // Store additional where_condition filters that don't map to user-provided filters
+        // These will be applied directly to the SQL query
+        Map<String, List<String>> additionalWhereFilters = new LinkedHashMap<>();
+
+        if (whereConditionFilters != null) {
+            // Merge step filters
+            List<String> whereSteps = whereConditionFilters.get("step");
+            if (whereSteps != null && !whereSteps.isEmpty()) {
+                effectiveSteps.addAll(whereSteps);
+            }
+            // Merge tester_id filters (equipmentId)
+            List<String> whereTesterIds = whereConditionFilters.get("tester_id");
+            if (whereTesterIds != null && !whereTesterIds.isEmpty()) {
+                effectiveEquipmentIds.addAll(whereTesterIds);
+            }
+            // Merge test_program filters (recipe)
+            List<String> whereTestPrograms = whereConditionFilters.get("test_program");
+            if (whereTestPrograms != null && !whereTestPrograms.isEmpty()) {
+                effectiveRecipes.addAll(whereTestPrograms);
+            }
+
+            // Store additional filters that don't map to user-provided filters
+            // These include: device, copy_status, tester_platform, tester_type, file_type, etc.
+            for (Map.Entry<String, List<String>> entry : whereConditionFilters.entrySet()) {
+                String key = entry.getKey();
+                if (!key.equals("step") && !key.equals("tester_id") && !key.equals("test_program")) {
+                    additionalWhereFilters.put(key, entry.getValue());
+                }
+            }
+        }
+
         // Build cache key for this request (include all filters that will be used in the query)
         String cacheKey = buildPreviewCacheKey(site, resolvedEnv, senderId, lstart, lend, lots, wafers, devices,
                 testerType, /*dataType*/ dataType,
@@ -412,11 +464,15 @@ public class MetadataImporterService {
                                         /*testPhase*/ effectiveTestPhase,
                                         testerType,
                                         /*location*/ effectiveLocation,
-                                        lots, wafers, devices, offset, resolvedSize);
+                                        lots, wafers, devices, offset, resolvedSize,
+                                        effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
+                                        additionalWhereFilters);
                     } else {
                         debugSql = externalMetadataRepository.describePreviewQuery(lstart, lend, dataType,
                                 effectiveDataTypeExt, effectiveTestPhase, testerType,
-                                effectiveLocation, lots, wafers, devices, offset, resolvedSize);
+                                effectiveLocation, lots, wafers, devices, offset, resolvedSize,
+                                effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
+                                additionalWhereFilters);
                     }
                 } catch (Exception ex) {
                     log.warn("Failed generating preview debug SQL: {}", ex.getMessage());
@@ -440,7 +496,9 @@ public class MetadataImporterService {
                         effectiveTestPhase,
                         testerType,
                         effectiveLocation,
-                        lots, wafers, devices, offset, resolvedSize);
+                        lots, wafers, devices, offset, resolvedSize,
+                        effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
+                        additionalWhereFilters);
                 long queryDurationMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStartNanos);
 
                 long total;
@@ -448,7 +506,9 @@ public class MetadataImporterService {
                     // Caller explicitly requested an accurate total — run the count query.
                     total = externalMetadataRepository.countMetadata(site, resolvedEnv, lstart, lend, dataType,
                             effectiveDataTypeExt, effectiveTestPhase, testerType,
-                            effectiveLocation, lots, wafers, devices);
+                            effectiveLocation, lots, wafers, devices,
+                            effectiveSteps, effectiveRecipes, effectiveEquipmentIds,
+                            additionalWhereFilters);
                 } else {
                     // Don't run a full count by default; infer whether more rows exist.
                     if (rows.size() == resolvedSize) {
@@ -472,7 +532,10 @@ public class MetadataImporterService {
                                 nullSafe(row.getWafer()),
                                 nullSafe(row.getDevice()),
                                 nullSafe(row.getOriginalFileName()),
-                                toIsoString(row.getEndTime())
+                                toIsoString(row.getEndTime()),
+                                nullSafe(row.getStep()),
+                                nullSafe(row.getTesterId()),
+                                nullSafe(row.getTestProgram())
                         ))
                     .toList(), dataType);
 
@@ -564,7 +627,46 @@ public class MetadataImporterService {
                 effectiveTestPhase,
                 effectiveTesterType,
                 effectiveLocation,
-                lots, wafers, devices);
+                lots, wafers, devices,
+                null, null, null, // steps, recipes, equipmentIds not used in summary
+                null); // additionalWhereFilters not used in summary
+    }
+
+    /**
+    /**
+     * Fetch the where_condition from DTP_DIST_CONF for the given senderId.
+     * This condition is used to filter metadata discovery queries.
+     * 
+     * @param senderId The sender ID to lookup
+     * @param site The site/connection key
+     * @param environment The environment (qa/prod)
+     * @return The where_condition string, or null if not found
+     */
+    private String fetchWhereCondition(Integer senderId, String site, String environment) {
+        if (senderId == null || senderId <= 0) {
+            return null;
+        }
+        String resolvedEnv = (environment == null || environment.isBlank()) ? "qa" : environment;
+        try (Connection conn = externalDbConfig.getConnection(site, resolvedEnv)) {
+            String sql = "SELECT where_condition FROM dtp_dist_conf WHERE id_sender = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, senderId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        String whereCondition = rs.getString("where_condition");
+                        if (whereCondition != null && !whereCondition.isBlank()) {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Fetched where_condition for sender={}: {}", senderId, whereCondition);
+                            }
+                            return whereCondition.trim();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch where_condition for sender={}: {}", senderId, ex.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -879,11 +981,15 @@ public class MetadataImporterService {
                     log.warn("External location id {} not found, aborting discovery", locationId);
                 } else {
                     try (Connection conn = externalDbResolverService.resolveConnectionForLocation(loc, environment)) {
-                        externalMetadataRepository.streamMetadataWithConnection(conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor);
+                        externalMetadataRepository.streamMetadataWithConnection(conn, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor,
+                                null, null, null, // steps, recipes, equipmentIds not used in staging
+                                null); // additionalWhereFilters not used in staging
                     }
                 }
             } else {
-                externalMetadataRepository.streamMetadata(site, environment, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor);
+                externalMetadataRepository.streamMetadata(site, environment, lstart, lend, qDataTypeParam, qDataTypeExtParam, qTestPhaseParam, qTesterTypeParam, qLocationParam, lots, wafers, null, maxToStage, processor,
+                        null, null, null, // steps, recipes, equipmentIds not used in staging
+                        null); // additionalWhereFilters not used in staging
             }
 
             boolean hadTailBatch = !batch.isEmpty();
