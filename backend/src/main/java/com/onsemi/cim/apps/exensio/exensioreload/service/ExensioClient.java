@@ -714,13 +714,50 @@ public class ExensioClient {
      * Queries Exensio raw-sql endpoint across PRODUCTION and SANDBOX schemas
      * to fetch raw data load errors from DP_LOG, ERROR_MESSAGE, and STRING_HOLDER
      * for specified lot IDs.
+     *
+     * <p>Convenience overload for callers that only have lot IDs (no filename/dataId context).
+     * Records not found via OP_LOG will not receive a filename-based fallback query.
      */
     public Map<String, ExensioLoadError> queryRawDataLoadErrors(List<String> lotIds, String traceId) {
         if (lotIds == null || lotIds.isEmpty()) {
             return Collections.emptyMap();
         }
+        // Build a minimal map with no record context so the overload can still run the primary query
+        Map<String, StageRecord> lotToRecord = new HashMap<>();
+        for (String lot : lotIds) {
+            if (lot != null && !lot.isBlank()) {
+                lotToRecord.put(lot, null); // null record = no fallback context available
+            }
+        }
+        return queryRawDataLoadErrors(lotToRecord, traceId);
+    }
 
-        List<String> cleanLots = lotIds.stream()
+    /**
+     * Queries Exensio raw-sql endpoint across PRODUCTION and SANDBOX schemas
+     * to fetch raw data load errors from DP_LOG, ERROR_MESSAGE, and STRING_HOLDER.
+     *
+     * <p>Strategy:
+     * <ol>
+     *   <li><b>Primary (OP_LOG path)</b>: Queries DP_LOG joined through OP_LOG → LOT.
+     *       This finds errors for lots that were at least partially processed.</li>
+     *   <li><b>Fallback (RAW_FILE path)</b>: For any lot still unresolved after the primary
+     *       query, queries DP_LOG directly joined to RAW_FILE on {@code rawfile_key},
+     *       filtering by {@code file_name} or {@code data_id}. This captures early-loader
+     *       rejections where the file was rejected before OP_LOG / LOT entries were written.</li>
+     * </ol>
+     *
+     * @param lotToRecord map from lot ID to its {@link StageRecord} (value may be {@code null}
+     *                    when filename/dataId context is unavailable — fallback will be skipped
+     *                    for those lots)
+     * @param traceId     correlation ID for logging
+     * @return map from upper-cased lot ID to its most recent load error
+     */
+    public Map<String, ExensioLoadError> queryRawDataLoadErrors(Map<String, StageRecord> lotToRecord, String traceId) {
+        if (lotToRecord == null || lotToRecord.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<String> cleanLots = lotToRecord.keySet().stream()
                 .filter(l -> l != null && !l.isBlank())
                 .distinct()
                 .toList();
@@ -729,6 +766,21 @@ public class ExensioClient {
             return Collections.emptyMap();
         }
 
+        // -----------------------------------------------------------------
+        // Build schemas list (PRODUCTION first, then optional SANDBOX)
+        // -----------------------------------------------------------------
+        String primarySchema = props.resolvedDbschema();
+        String fallbackSchema = props.resolvedDbschemaFallback();
+        List<String> schemas = new ArrayList<>();
+        if (primarySchema != null && !primarySchema.isBlank()) schemas.add(primarySchema);
+        if (fallbackSchema != null && !fallbackSchema.isBlank() && !schemas.contains(fallbackSchema)) schemas.add(fallbackSchema);
+        if (schemas.isEmpty()) schemas.add("PRODUCTION");
+
+        Map<String, ExensioLoadError> errorMap = new HashMap<>();
+
+        // -----------------------------------------------------------------
+        // PRIMARY QUERY: DP_LOG via OP_LOG → LOT
+        // -----------------------------------------------------------------
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT l.lot_id, NVL(w.wf_id, '') AS wafer_id, NVL(p.ppid, '') AS program_name, ");
         sql.append("NVL(rf.file_name, '') AS file_name, dl.error_code, ");
@@ -760,15 +812,6 @@ public class ExensioClient {
         sql.append(String.join(", ", lotLiterals));
         sql.append(") ORDER BY l.lot_id, dl.start_time DESC");
 
-        String primarySchema = props.resolvedDbschema();
-        String fallbackSchema = props.resolvedDbschemaFallback();
-        List<String> schemas = new ArrayList<>();
-        if (primarySchema != null && !primarySchema.isBlank()) schemas.add(primarySchema);
-        if (fallbackSchema != null && !fallbackSchema.isBlank() && !schemas.contains(fallbackSchema)) schemas.add(fallbackSchema);
-        if (schemas.isEmpty()) schemas.add("PRODUCTION");
-
-        Map<String, ExensioLoadError> errorMap = new HashMap<>();
-
         for (String schema : schemas) {
             try {
                 String token = authService.getToken(schema);
@@ -789,16 +832,139 @@ public class ExensioClient {
                         }
                     }
                     if (!errorMap.isEmpty()) {
-                        log.info("[ExensioLoadError] Found {} raw data load error(s) in schema {} (traceId={})", errorMap.size(), schema, traceId);
-                        break; // Stop schema fallback if errors found
+                        log.info("[ExensioLoadError] Primary query found {} error(s) in schema {} (traceId={})",
+                                errorMap.size(), schema, traceId);
+                        break;
                     }
                 }
             } catch (Exception ex) {
-                log.warn("[ExensioLoadError] Failed querying raw data load errors in schema {} (traceId={}): {}", schema, traceId, ex.getMessage());
+                log.warn("[ExensioLoadError] Primary query failed in schema {} (traceId={}): {}",
+                        schema, traceId, ex.getMessage());
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // FALLBACK QUERY: DP_LOG → RAW_FILE (filename / dataId based)
+        // Used when early-loader rejection happens before OP_LOG/LOT exists.
+        // Only executed for lots that primary query didn't resolve.
+        // -----------------------------------------------------------------
+        List<StageRecord> unresolvedRecords = new ArrayList<>();
+        for (Map.Entry<String, StageRecord> entry : lotToRecord.entrySet()) {
+            String lotUpper = entry.getKey() == null ? null : entry.getKey().toUpperCase(Locale.ROOT);
+            if (lotUpper != null && !errorMap.containsKey(lotUpper) && entry.getValue() != null) {
+                StageRecord rec = entry.getValue();
+                boolean hasFileName = rec.filename() != null && !rec.filename().isBlank();
+                boolean hasDataId = rec.dataId() != null && !rec.dataId().isBlank();
+                if (hasFileName || hasDataId) {
+                    unresolvedRecords.add(rec);
+                }
+            }
+        }
+
+        if (!unresolvedRecords.isEmpty()) {
+            log.debug("[ExensioLoadError] {} lot(s) unresolved after primary query; attempting RAW_FILE fallback (traceId={})",
+                    unresolvedRecords.size(), traceId);
+            Map<String, ExensioLoadError> fallbackErrors = queryRawDataLoadErrorsByFile(unresolvedRecords, traceId, schemas);
+            if (!fallbackErrors.isEmpty()) {
+                log.info("[ExensioLoadError] RAW_FILE fallback found {} error(s) (traceId={})",
+                        fallbackErrors.size(), traceId);
+                errorMap.putAll(fallbackErrors);
             }
         }
 
         return errorMap;
+    }
+
+    /**
+     * Fallback error query: joins DP_LOG directly to RAW_FILE without going through
+     * OP_LOG/LOT.  This catches early-loader rejections where Exensio rejects the file
+     * before any LOT record is written.
+     *
+     * <p>The WHERE clause matches on either:
+     * <ul>
+     *   <li>{@code rf.file_name LIKE '%<basename>%'} — using the original filename, or</li>
+     *   <li>{@code rf.data_id = '<dataId>'} — using the staging system's data ID (if column exists).</li>
+     * </ul>
+     *
+     * <p>Results are keyed by upper-cased lot ID derived from the matched StageRecord (since
+     * the LOT table may be absent; the lot is taken from our own record metadata).
+     */
+    private Map<String, ExensioLoadError> queryRawDataLoadErrorsByFile(
+            List<StageRecord> records, String traceId, List<String> schemas) {
+
+        Map<String, ExensioLoadError> result = new HashMap<>();
+
+        for (StageRecord rec : records) {
+            String fileNameFilter = rec.filename() != null ? rec.filename().trim() : null;
+            String dataIdFilter   = rec.dataId()   != null ? rec.dataId().trim()   : null;
+            if ((fileNameFilter == null || fileNameFilter.isBlank()) &&
+                    (dataIdFilter == null || dataIdFilter.isBlank())) {
+                continue;
+            }
+
+            // Build WHERE predicate for this record
+            List<String> predicates = new ArrayList<>();
+            if (fileNameFilter != null && !fileNameFilter.isBlank()) {
+                // Match on basename (strip path separators that don't belong in SQL)
+                String baseName = fileNameFilter.contains("/")
+                        ? fileNameFilter.substring(fileNameFilter.lastIndexOf('/') + 1)
+                        : fileNameFilter.contains("\\")
+                                ? fileNameFilter.substring(fileNameFilter.lastIndexOf('\\') + 1)
+                                : fileNameFilter;
+                predicates.add("UPPER(rf.file_name) LIKE '%' || '" +
+                        escapeSqlLiteral(baseName.toUpperCase(Locale.ROOT)) + "' || '%' ESCAPE '\\'");
+            }
+            if (dataIdFilter != null && !dataIdFilter.isBlank()) {
+                predicates.add("rf.data_id = '" + escapeSqlLiteral(dataIdFilter) + "'");
+            }
+
+            if (predicates.isEmpty()) continue;
+
+            StringBuilder fallbackSql = new StringBuilder();
+            fallbackSql.append("SELECT NVL(rf.file_name, '') AS file_name, dl.error_code, ");
+            fallbackSql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || ");
+            fallbackSql.append("COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
+            fallbackSql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
+            fallbackSql.append("FROM dp_log dl ");
+            fallbackSql.append("JOIN raw_file rf ON rf.rawfile_key = dl.rawfile_key ");
+            fallbackSql.append("JOIN error_message em ON em.msg_key = dl.msg_key ");
+            fallbackSql.append("LEFT JOIN string_holder sh1 ON sh1.str_key = em.str_key1 ");
+            fallbackSql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
+            fallbackSql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
+            fallbackSql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
+            fallbackSql.append("WHERE dl.error_code != 0 AND (");
+            fallbackSql.append(String.join(" OR ", predicates));
+            fallbackSql.append(") ORDER BY dl.start_time DESC");
+
+            String lotKey = rec.lot() != null ? rec.lot().toUpperCase(Locale.ROOT) : ("ID_" + rec.id());
+
+            for (String schema : schemas) {
+                try {
+                    String token = authService.getToken(schema);
+                    JsonNode rows = executeRawSql(fallbackSql.toString(), token, traceId);
+                    if (rows != null && rows.isArray() && !rows.isEmpty()) {
+                        JsonNode row = rows.get(0); // most recent error only
+                        result.put(lotKey, new ExensioLoadError(
+                                rec.lot() != null ? rec.lot() : "",
+                                rec.wafer() != null ? rec.wafer() : "",
+                                "", // program name unavailable without OP_LOG
+                                getText(row, "FILE_NAME"),
+                                getInt(row, "ERROR_CODE", -1),
+                                getText(row, "FULL_ERROR_MESSAGE"),
+                                getText(row, "ERROR_TIME")
+                        ));
+                        log.info("[ExensioLoadError] RAW_FILE fallback hit for lot={} file={} in schema={} (traceId={})",
+                                rec.lot(), fileNameFilter, schema, traceId);
+                        break; // found in this schema, no need to check others
+                    }
+                } catch (Exception ex) {
+                    log.warn("[ExensioLoadError] RAW_FILE fallback query failed for lot={} in schema={} (traceId={}): {}",
+                            rec.lot(), schema, traceId, ex.getMessage());
+                }
+            }
+        }
+
+        return result;
     }
 
     private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers) {

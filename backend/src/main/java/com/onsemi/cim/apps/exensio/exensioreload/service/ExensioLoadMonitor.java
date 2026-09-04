@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -362,19 +363,19 @@ public class ExensioLoadMonitor {
             if (lookupResult.isSuccess()) {
                 List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(apiRecords, traceId);
 
-                List<String> notFoundLots = new ArrayList<>();
+                Map<String, StageRecord> notFoundLotMap = new HashMap<>();
                 for (BatchResult.RecordUpdate update : batchUpdates) {
                     if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
                         StageRecord record = findRecord(apiRecords, update.recordId());
                         if (record != null && record.lot() != null && !record.lot().isBlank()) {
-                            notFoundLots.add(record.lot());
+                            notFoundLotMap.put(record.lot(), record);
                         }
                     }
                 }
 
-                Map<String, ExensioClient.ExensioLoadError> rawDataErrors = notFoundLots.isEmpty()
+                Map<String, ExensioClient.ExensioLoadError> rawDataErrors = notFoundLotMap.isEmpty()
                         ? Collections.emptyMap()
-                        : exensioClient.queryRawDataLoadErrors(notFoundLots, traceId);
+                        : exensioClient.queryRawDataLoadErrors(notFoundLotMap, traceId);
 
                 for (BatchResult.RecordUpdate update : batchUpdates) {
                     if (update.type() == BatchResult.UpdateType.NOT_FOUND) {
@@ -665,17 +666,17 @@ public class ExensioLoadMonitor {
             }
         }
 
-        List<String> notFoundLots = new ArrayList<>();
+        Map<String, StageRecord> notFoundLotMap = new HashMap<>();
         for (BatchResult.RecordUpdate u : updates) {
             if (u.type() == BatchResult.UpdateType.NOT_FOUND) {
                 StageRecord rec = findRecord(records, u.recordId());
                 if (rec != null && rec.lot() != null && !rec.lot().isBlank()) {
-                    notFoundLots.add(rec.lot());
+                    notFoundLotMap.put(rec.lot(), rec);
                 }
             }
         }
-        if (!notFoundLots.isEmpty()) {
-            Map<String, ExensioClient.ExensioLoadError> rawDataErrors = exensioClient.queryRawDataLoadErrors(notFoundLots, traceId);
+        if (!notFoundLotMap.isEmpty()) {
+            Map<String, ExensioClient.ExensioLoadError> rawDataErrors = exensioClient.queryRawDataLoadErrors(notFoundLotMap, traceId);
             if (!rawDataErrors.isEmpty()) {
                 List<BatchResult.RecordUpdate> finalUpdates = new ArrayList<>();
                 for (BatchResult.RecordUpdate u : updates) {
