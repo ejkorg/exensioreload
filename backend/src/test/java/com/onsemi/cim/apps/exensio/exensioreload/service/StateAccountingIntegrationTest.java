@@ -321,12 +321,12 @@ public class StateAccountingIntegrationTest {
     public void testAllStatesCountedInAccounting() throws SQLException {
         // Insert one record in each valid state
         insertRecords(1, "STAGED");
-        insertRecords(1, "ENQUEUED");
+        insertRecords(1, "QUEUED_FOR_CP");
         insertRecords(1, "ELASTICSEARCH_MONITORING");
         insertRecords(1, "CP_TIMEOUT");
         insertRecords(1, "EXENSIO_MONITORING");
         insertRecords(1, "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
-        insertRecords(1, "PROCESSING");
+        insertRecords(1, "LOAD_FAILED");
         insertRecords(1, "COMPLETED");
         insertRecords(1, "CP_FAILED");
         insertRecords(1, "CANCELLED");
@@ -345,12 +345,14 @@ public class StateAccountingIntegrationTest {
 
         // Verify each state is counted
         assertEquals(1, status.stagedToRefdb(), "Staged (pending) count");
-        assertEquals(1, status.queuedForCp(), "Queued (ENQUEUED) count");
+        assertEquals(1, status.queuedForCp(), "Queued (QUEUED_FOR_CP) count");
         assertEquals(1, status.elasticsearchMonitoring(), "Enriching count");
         assertEquals(1, status.cpTimeout(), "Enrichment timeout count");
         assertEquals(1, status.exensioMonitoring(), "Exensio loading count");
         assertEquals(1, status.completedManualVerification(), "Exensio timeout count");
-        assertEquals(1, status.totalFailed(), "Failed count");
+        assertEquals(2, status.totalFailed(), "Failed count");
+        assertEquals(1, status.cpFailed(), "CP Failed count");
+        assertEquals(1, status.loadFailed(), "Load Failed count");
         assertEquals(1, status.completed(), "Completed (COMPLETED) count");
         assertEquals(1, status.cancelled(), "Cancelled count");
 

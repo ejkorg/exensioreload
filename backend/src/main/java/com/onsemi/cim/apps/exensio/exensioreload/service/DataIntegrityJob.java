@@ -115,7 +115,7 @@ public class DataIntegrityJob {
 
     /**
      * Find records with status values NOT in the valid set.
-     * Valid states: pending, ENQUEUED, ENRICHMENT, EXENSIO_LOADING, PROCESSING, FAILED, DONE, CANCELLED
+     * Valid states: STAGED, QUEUED_FOR_CP, ELASTICSEARCH_MONITORING, CP_TIMEOUT, EXENSIO_MONITORING, COMPLETED_MANUAL_VERIFICATION_REQUIRED, CP_FAILED, LOAD_FAILED, COMPLETED, CANCELLED
      */
     private List<StageRecord> findInvalidStatusRecords() {
         String table = refDbProperties.getStagingTable();
@@ -312,7 +312,6 @@ public class DataIntegrityJob {
                     long cpTimeout = rs.getLong("cp_timeout");
                     long exensioLoading = rs.getLong("exensio_loading");
                     long manualVerification = rs.getLong("manual_verification");
-                    long processing = rs.getLong("processing");
                     long failed = rs.getLong("failed");
                     long done = rs.getLong("done");
                     long cancelled = rs.getLong("cancelled");
@@ -320,13 +319,13 @@ public class DataIntegrityJob {
 
                     long summedStates = pending + enqueued + enrichment + cpTimeout +
                                       exensioLoading + manualVerification +
-                                      processing + failed + done + cancelled + nullStatus;
+                                      failed + done + cancelled + nullStatus;
 
                     log.info("Accounting check: total={}, summed={}, pending={}, enqueued={}, enrichment={}, " +
-                             "cpTimeout={}, exensioLoading={}, manualVerification={}, processing={}, failed={}, " +
+                             "cpTimeout={}, exensioLoading={}, manualVerification={}, failed={}, " +
                              "done={}, cancelled={}, nullStatus={}",
                              total, summedStates, pending, enqueued, enrichment, cpTimeout,
-                             exensioLoading, manualVerification, processing, failed, done, cancelled, nullStatus);
+                             exensioLoading, manualVerification, failed, done, cancelled, nullStatus);
 
                     if (total != summedStates) {
                         log.error("ACCOUNTING IMBALANCE: total {} != summed {}", total, summedStates);

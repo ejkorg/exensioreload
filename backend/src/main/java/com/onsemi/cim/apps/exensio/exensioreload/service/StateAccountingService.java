@@ -132,7 +132,6 @@ public class StateAccountingService {
                         long enrichmentTimeout = rs.getLong("enrichment_timeout");
                         long exensioLoading = rs.getLong("exensio_loading");
                         long exensioTimeout = rs.getLong("exensio_timeout");
-                        long processing = rs.getLong("processing");
                         long failed = rs.getLong("failed");
                         long done = rs.getLong("done");
                         long cancelled = rs.getLong("cancelled");
@@ -146,14 +145,13 @@ public class StateAccountingService {
                         globalStates.put("CP_TIMEOUT", globalStates.getOrDefault("CP_TIMEOUT", 0L) + enrichmentTimeout);
                         globalStates.put("EXENSIO_MONITORING", globalStates.getOrDefault("EXENSIO_MONITORING", 0L) + exensioLoading);
                         globalStates.put("COMPLETED_MANUAL_VERIFICATION_REQUIRED", globalStates.getOrDefault("COMPLETED_MANUAL_VERIFICATION_REQUIRED", 0L) + exensioTimeout);
-                        globalStates.put("PROCESSING", globalStates.getOrDefault("PROCESSING", 0L) + processing);
                         globalStates.put("CP_FAILED", globalStates.getOrDefault("CP_FAILED", 0L) + failed);
                         globalStates.put("COMPLETED", globalStates.getOrDefault("COMPLETED", 0L) + done);
                         globalStates.put("CANCELLED", globalStates.getOrDefault("CANCELLED", 0L) + cancelled);
                         globalStates.put("NULL_STATUS", globalStates.getOrDefault("NULL_STATUS", 0L) + nullStatus);
 
                         totalCount += recordTotal;
-                        sumOfStates += (pending + enqueued + enrichment + enrichmentTimeout + exensioLoading + exensioTimeout + processing + failed + done + cancelled + nullStatus);
+                        sumOfStates += (pending + enqueued + enrichment + enrichmentTimeout + exensioLoading + exensioTimeout + failed + done + cancelled + nullStatus);
 
                         // Build sender breakdown
                         Map<String, Long> senderStates = new HashMap<>();
@@ -163,7 +161,6 @@ public class StateAccountingService {
                         senderStates.put("CP_TIMEOUT", enrichmentTimeout);
                         senderStates.put("EXENSIO_MONITORING", exensioLoading);
                         senderStates.put("COMPLETED_MANUAL_VERIFICATION_REQUIRED", exensioTimeout);
-                        senderStates.put("PROCESSING", processing);
                         senderStates.put("CP_FAILED", failed);
                         senderStates.put("COMPLETED", done);
                         senderStates.put("CANCELLED", cancelled);
@@ -294,7 +291,6 @@ public class StateAccountingService {
         long expectedAccountingSum = enrichment + enrichmentTimeout + exensioLoading + exensioTimeout
                 + dbCounts.getStates().getOrDefault("STAGED", 0L)
                 + dbCounts.getStates().getOrDefault("QUEUED_FOR_CP", 0L)
-                + dbCounts.getStates().getOrDefault("PROCESSING", 0L)
                 + dbCounts.getStates().getOrDefault("CP_FAILED", 0L)
                 + dbCounts.getStates().getOrDefault("COMPLETED", 0L)
                 + dbCounts.getStates().getOrDefault("CANCELLED", 0L);
@@ -302,8 +298,8 @@ public class StateAccountingService {
         if (dbCounts.getSumOfStates() != expectedAccountingSum && dbCounts.getSumOfStates() != dbCounts.getTotalCount()) {
             // Already reported via discrepancies, but add explicit validation note
             warnings.add("Timeout states are included in accounting validation to ensure: "
-                    + "pending + ENQUEUED + ENRICHMENT + ENRICHMENT_TIMEOUT + EXENSIO_LOADING + EXENSIO_TIMEOUT "
-                    + "+ PROCESSING + FAILED + DONE + CANCELLED = Total record count");
+                    + "STAGED + QUEUED_FOR_CP + ELASTICSEARCH_MONITORING + CP_TIMEOUT + EXENSIO_MONITORING + COMPLETED_MANUAL_VERIFICATION_REQUIRED "
+                    + "+ CP_FAILED + COMPLETED + CANCELLED = Total record count");
         }
 
         return new StateAccountingReport.DataIntegrity(valid, warnings, errors);
