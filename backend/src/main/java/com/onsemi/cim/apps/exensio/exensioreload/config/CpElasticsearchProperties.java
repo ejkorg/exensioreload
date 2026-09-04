@@ -60,6 +60,11 @@ public class CpElasticsearchProperties {
      * Default: 900 seconds (15 minutes). */
     private int lookbackBufferSeconds = 900;
 
+    /** Maximum number of days to look back in ES when computing the @timestamp floor.
+     * Acts as a hard cap when the file's endTime or enrichmentStartedAt is very old
+     * (e.g. archived / resubmitted files). Default: 60 days. */
+    private int maxLookbackDays = 60;
+
     /** Whether to log Elasticsearch request payloads (query JSON). */
     private boolean logRequestPayloads = false;
 
@@ -176,6 +181,9 @@ public class CpElasticsearchProperties {
 
     public int getLookbackBufferSeconds() { return lookbackBufferSeconds; }
     public void setLookbackBufferSeconds(int lookbackBufferSeconds) { this.lookbackBufferSeconds = lookbackBufferSeconds; }
+
+    public int getMaxLookbackDays() { return maxLookbackDays; }
+    public void setMaxLookbackDays(int maxLookbackDays) { this.maxLookbackDays = maxLookbackDays; }
 
     public boolean isRequireLot() { return requireLot; }
     public void setRequireLot(boolean requireLot) { this.requireLot = requireLot; }

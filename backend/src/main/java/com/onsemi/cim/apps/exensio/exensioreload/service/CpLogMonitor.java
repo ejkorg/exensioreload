@@ -164,7 +164,7 @@ public class CpLogMonitor {
                 try {
                     return elasticsearchLogService.findCpLog(
                         record.metadataId(), record.dataId(), record.lot(),
-                        esLookbackTime, record.site(), record.filename());
+                        lookbackTime, record.site(), record.filename());
                 } catch (Exception e) {
                     log.warn("ES query failed for record id={}: {}", record.id(), e.getMessage());
                     return new CpLogResult.NotFound("es-error-" + java.util.UUID.randomUUID());

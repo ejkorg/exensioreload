@@ -81,45 +81,54 @@ public class ElasticsearchLogService {
      * <p>Query filters (Requirements 1.1, 1.2, 1.3, 2.3–2.6):</p>
      * <ul>
      *   <li>{@code cpConfig: *sender*} — isolates ExensioReload-triggered files</li>
-     *   <li>{@code idFile: <idFile>} — file-level key match (when non-blank)</li>
+     *   <li>{@code idFile: <idFile>} — boost match (when non-blank)</li>
      *   <li>{@code idData: <dataId>} — data-level key match</li>
      *   <li>{@code mLot: <lot>} — disambiguation when idData is ambiguous</li>
      *   <li>{@code filename: <filename>} — optional filename match for additional accuracy</li>
-     *   <li>{@code @timestamp >= since} — only logs after enrichment started</li>
+     *   <li>{@code @timestamp >= earliest(endTime, since) - buffer} — lookback floor</li>
      * </ul>
      *
-     * <p>Hit evaluation order (Requirements 4.1, 2.6, 2.7, 3.1):</p>
-     * <ol>
-     *   <li>If {@code log.level == ERROR} → {@link CpLogResult.Failure}</li>
-     *   <li>Else if message contains PRODUCTION → {@link CpLogResult.Success}</li>
-     *   <li>Else if message contains SANDBOX → {@link CpLogResult.Success}</li>
-     *   <li>Else if message contains "executed successfully" → pp_log fallback</li>
-     *   <li>Else → {@link CpLogResult.NotFound}</li>
-     * </ol>
-     *
-     * @param idFile the metadata_id of the SENDER_STAGE record (may be null/blank)
-     * @param dataId the data_id of the SENDER_STAGE record
-     * @param lot    the lot of the SENDER_STAGE record
-     * @param since  the instant the record entered ENRICHMENT status
-     * @param site   the site identifier
-     * @return the enrichment outcome
+     * <p>Convenience overload without filename or endTime context.</p>
      */
     public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site) {
-        return findCpLog(idFile, dataId, lot, since, site, null);
+        return findCpLog(idFile, dataId, lot, since, site, null, null);
     }
 
     /**
      * Searches the CP Elasticsearch index with optional filename filter.
      *
-     * @param idFile the metadata_id of the SENDER_STAGE record (may be null/blank)
-     * @param dataId the data_id of the SENDER_STAGE record
-     * @param lot    the lot of the SENDER_STAGE record
-     * @param since  the instant the record entered ENRICHMENT status
-     * @param site   the site identifier
-     * @param filename the optional filename to filter by (may be null/blank)
+     * @param idFile    the metadata_id of the SENDER_STAGE record (may be null/blank)
+     * @param dataId    the data_id of the SENDER_STAGE record
+     * @param lot       the lot of the SENDER_STAGE record
+     * @param since     the instant the record entered ENRICHMENT status
+     * @param site      the site identifier
+     * @param filename  the optional filename to filter by (may be null/blank)
      * @return the enrichment outcome
      */
     public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site, String filename) {
+        return findCpLog(idFile, dataId, lot, since, site, filename, null);
+    }
+    /**
+     * Searches the CP Elasticsearch index with optional filename filter.
+     *
+     * <p>The {@code @timestamp} lower bound is computed in UTC:
+     * <pre>
+     *   floor = since (enrichmentStartedAt) - lookbackBufferSeconds
+     * </pre>
+     * Elasticsearch stores and streams {@code @timestamp} in UTC (ending with 'Z').
+     * The lower bound is formatted as an ISO-8601 UTC string (e.g. {@code 2026-09-04T07:40:10.652Z})
+     * to accurately match indexed document timestamps regardless of client/Kibana local display timezone.
+     *
+     * @param idFile    the metadata_id of the SENDER_STAGE record (may be null/blank)
+     * @param dataId    the data_id of the SENDER_STAGE record
+     * @param lot       the lot of the SENDER_STAGE record
+     * @param since     the instant the record entered ENRICHMENT status (lookback anchor in UTC)
+     * @param site      the site identifier
+     * @param filename  the optional filename to filter by (may be null/blank)
+     * @param endTime   unused (retained for signature compatibility)
+     * @return the enrichment outcome
+     */
+    public CpLogResult findCpLog(String idFile, String dataId, String lot, Instant since, String site, String filename, Instant endTime) {
         // Generate trace ID for this request
         String traceId = UUID.randomUUID().toString();
         log.info("Starting ES query with traceId={} for dataId={}, lot={}", traceId, dataId, lot);
@@ -135,7 +144,7 @@ public class ElasticsearchLogService {
 
         try {
             // First attempt using configured cpConfig filter
-            String queryJson = buildQuery(idFile, dataId, lot, since, site, filename, initialFilter);
+            String queryJson = buildQuery(idFile, dataId, lot, since, site, filename, initialFilter, endTime);
             CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot, traceId);
 
             // If no hit found and the configured filter is restrictive,
@@ -145,7 +154,7 @@ public class ElasticsearchLogService {
                     && initialFilter != null
                     && !initialFilter.equals("*")) {
                 log.info("No hits with cpConfig filter='{}'. Retrying with wildcard '*' for dataId={} (traceId={})", initialFilter, dataId, traceId);
-                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*");
+                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*", endTime);
                 return executeSearch(url, fallbackQuery, idFile, dataId, lot, traceId);
             }
 
@@ -269,7 +278,7 @@ public class ElasticsearchLogService {
      * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
     String buildQuery(String idFile, String dataId, String lot, Instant since, String site) {
-        return buildQuery(idFile, dataId, lot, since, site, null, props.getCpConfigFilter());
+        return buildQuery(idFile, dataId, lot, since, site, null, props.getCpConfigFilter(), null);
     }
 
     /**
@@ -277,7 +286,7 @@ public class ElasticsearchLogService {
      * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
     String buildQuery(String idFile, String dataId, String lot, Instant since, String site, String cpConfigFilter) {
-        return buildQuery(idFile, dataId, lot, since, site, null, cpConfigFilter);
+        return buildQuery(idFile, dataId, lot, since, site, null, cpConfigFilter, null);
     }
 
     /**
@@ -285,6 +294,36 @@ public class ElasticsearchLogService {
      * Requirements: 1.1, 1.2, 1.3, 1.4, 2.1–2.5, 7.1
      */
     String buildQuery(String idFile, String dataId, String lot, Instant since, String site, String filename, String cpConfigFilter) {
+        return buildQuery(idFile, dataId, lot, since, site, filename, cpConfigFilter, null);
+    }
+
+
+    /**
+     * Core ES query builder.
+     *
+     * <p><b>idFile and inputFileName placement:</b>
+     * Both {@code idFile} and {@code inputFileName} are placed in {@code should} boost
+     * clauses (not {@code must}). This increases relevance when the document matches,
+     * but does not eliminate documents where the field is absent or indexed differently —
+     * which previously caused zero hits. The {@code idData} term remains in {@code must}
+     * as the primary required filter.
+     *
+     * <p><b>Lookback floor:</b>
+     * The {@code @timestamp gte} is set to {@code enrichmentStartedAt - lookbackBufferSeconds}.
+     * We always look for logs from the <em>current</em> reprocessing event, not from the
+     * file's original creation date (which could be days/weeks old for archived files).
+     *
+     * @param idFile        metadata_id / idFile (null/blank = skip)
+     * @param dataId        data_id (required)
+     * @param lot           lot id (optional, only used when requireLot=true)
+     * @param since         enrichmentStartedAt — the lookback anchor
+     * @param site          site key for service-country field resolution
+     * @param filename      original filename (null/blank = skip)
+     * @param cpConfigFilter wildcard value for the cpConfig must clause
+     * @param endTime       unused — retained for API compatibility (may be null)
+     */
+    String buildQuery(String idFile, String dataId, String lot, Instant since, String site,
+                      String filename, String cpConfigFilter, Instant endTime) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode query = root.putObject("query");
@@ -307,32 +346,10 @@ public class ElasticsearchLogService {
                 termServiceCountryInner.put(fieldName, props.getServiceCountryFilter().trim());
             }
 
-            // idData term match (Requirement 1.2)
+            // idData term match (Requirement 1.2) — primary required filter
             ObjectNode termIdData = must.addObject();
             ObjectNode termIdDataInner = termIdData.putObject("term");
             termIdDataInner.put("idData", dataId);
-
-            // Optional idFile term match (metadata_id) — file-level key for precise matching
-            if (idFile != null && !idFile.isBlank()) {
-                ObjectNode termIdFile = must.addObject();
-                ObjectNode termIdFileInner = termIdFile.putObject("term");
-                termIdFileInner.put("idFile", idFile);
-            }
-
-            // Optional inputFileName wildcard match for discovered file
-            // Uses inputFileName field to match against the actual CP log field name.
-            // Strips file extension (e.g. "data.csv" -> "data") because CP may index the
-            // file name with or without extension. The surrounding wildcard catches both.
-            if (filename != null && !filename.isBlank()) {
-                String nameBase = filename.trim();
-                int dot = nameBase.lastIndexOf('.');
-                if (dot > 0) nameBase = nameBase.substring(0, dot);
-                ObjectNode wildcardFilename = must.addObject();
-                ObjectNode wildcardFilenameInner = wildcardFilename.putObject("wildcard");
-                ObjectNode filenameWildcard = wildcardFilenameInner.putObject("inputFileName");
-                filenameWildcard.put("value", "*" + nameBase + "*");
-                filenameWildcard.put("case_insensitive", true);
-            }
 
             // mLot term match — only add when requireLot is true AND lot is provided
             if (props.isRequireLot() && lot != null && !lot.isBlank()) {
@@ -341,19 +358,50 @@ public class ElasticsearchLogService {
                 termLotInner.put("mLot", lot);
             }
 
-            // @timestamp range
+            // @timestamp range — anchored to enrichmentStartedAt (current reprocessing).
+            // We look for logs from the current reload cycle, not from the original file date.
+            int bufferSeconds = props.getLookbackBufferSeconds();
+            Instant lookbackFloor = since.minusSeconds(bufferSeconds);
+
             ObjectNode rangeClause = must.addObject();
             ObjectNode range = rangeClause.putObject("range");
             ObjectNode tsRange = range.putObject("@timestamp");
-            String sinceStr = since.toString();
+            String sinceStr = lookbackFloor.toString();
             tsRange.put("gte", sinceStr);
             if (log.isDebugEnabled()) {
-                log.debug("ES query @timestamp range: gte={}, since={}, sinceEpochMs={}, systemTZ={}", 
-                    sinceStr, since, since.toEpochMilli(), java.util.TimeZone.getDefault().getID());
+                log.debug("ES query @timestamp range: gte={}, since={}, sinceEpochMs={}, systemTZ={}",
+                    sinceStr, since, lookbackFloor.toEpochMilli(), java.util.TimeZone.getDefault().getID());
             }
 
-            // Flat should clauses matching the curl query structure
+            // ── should clauses (boost, not required) ──────────────────────────────
             ArrayNode should = bool.putArray("should");
+
+            // Boost 5: idFile exact match — in should so mismatch doesn't zero out results.
+            // Previously was a must-filter which caused zero hits when ES indexed idFile
+            // differently or the field was absent.
+            if (idFile != null && !idFile.isBlank()) {
+                ObjectNode shouldIdFile = should.addObject();
+                ObjectNode termIdFile = shouldIdFile.putObject("term");
+                ObjectNode termIdFileInner = termIdFile.putObject("idFile");
+                termIdFileInner.put("value", idFile);
+                termIdFileInner.put("boost", 5);
+            }
+
+            // Boost 4: inputFileName wildcard match — in should so a reprocessed file
+            // with a different inputFileName still gets matched by idData alone.
+            // Previously was in must which zeroed out results when CP indexed the file
+            // under a different name during reprocessing.
+            if (filename != null && !filename.isBlank()) {
+                String nameBase = filename.trim();
+                int dot = nameBase.lastIndexOf('.');
+                if (dot > 0) nameBase = nameBase.substring(0, dot);
+                ObjectNode shouldFilename = should.addObject();
+                ObjectNode wildcardFilenameOuter = shouldFilename.putObject("wildcard");
+                ObjectNode filenameWildcard = wildcardFilenameOuter.putObject("inputFileName");
+                filenameWildcard.put("value", "*" + nameBase + "*");
+                filenameWildcard.put("case_insensitive", true);
+                filenameWildcard.put("boost", 4);
+            }
 
             // Boost 4: PRODUCTION output path in message
             ObjectNode shouldProd = should.addObject();
@@ -387,10 +435,11 @@ public class ElasticsearchLogService {
             termErrorInner.put("value", "ERROR");
             termErrorInner.put("boost", 1);
 
+
             // At least one should clause must match
             bool.put("minimum_should_match", 1);
 
-            // Sort by @timestamp desc, fetch only the most recent hit
+            // Sort by @timestamp desc
             ArrayNode sort = root.putArray("sort");
             ObjectNode sortField = sort.addObject();
             ObjectNode tsSort = sortField.putObject("@timestamp");
@@ -413,6 +462,7 @@ public class ElasticsearchLogService {
             throw new ElasticsearchQueryException("Failed to build ES query", e);
         }
     }
+
 
     /**
      * Parses the ES search response body and returns the appropriate {@link CpLogResult}.
