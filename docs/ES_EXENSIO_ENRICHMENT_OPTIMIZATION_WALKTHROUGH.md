@@ -97,8 +97,35 @@ When files fail early during the raw data loader phase, Exensio does not create 
 
 ---
 
-## 5. Modified Source Files
+---
 
+## 5. Bug Fix: PostgreSQL `value too long for type character varying(36)`
+
+### Root Cause
+When a record timed out in `ExensioLoadMonitor`, `RefDbService.markCompletedManualVerification(...)` attempted to set the status to:
+`'COMPLETED_MANUAL_VERIFICATION_REQUIRED'`
+
+This status string is **38 characters long**. In PostgreSQL, the `status` column in `SENDER_STAGE` was defined as `VARCHAR(36)` (created in early schema scripts and only checked up to `< 36` in `RefDbService.ensureStatusColumnSize(...)`). As a result, PostgreSQL aborted the batch update with:
+`ERROR: value too long for type character varying(36)`.
+
+### Resolution Applied
+1. **Widened Column Initialization & Validation in [`RefDbService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java#L2595-L2675)**:
+   - Updated `ensureStatusColumnSize()` for PostgreSQL, Oracle, and H2 to check if `currentLength < 64` and alter column to `VARCHAR(64)` / `VARCHAR2(64)`.
+   - Updated table creation DDL (`createTable()`) from `VARCHAR(36)` to `VARCHAR(64)`.
+2. **Added Liquibase Migration**:
+   - Created [`db.changelog-9.15-widen-sender-stage-status.xml`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/db/changelog/db.changelog-9.15-widen-sender-stage-status.xml) running `<modifyDataType tableName="SENDER_STAGE" columnName="status" newDataType="VARCHAR(64)"/>`.
+   - Included in [`db.changelog-1.0.xml`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/db/changelog/db.changelog-1.0.xml).
+
+---
+
+## 6. Modified Source Files
+
+- [`RefDbService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java):
+  - Widened `status` column DDL and automatic schema migration to `VARCHAR(64)` (was 36).
+- [`db.changelog-9.15-widen-sender-stage-status.xml`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/db/changelog/db.changelog-9.15-widen-sender-stage-status.xml):
+  - Liquibase migration to alter `SENDER_STAGE.status` to `VARCHAR(64)`.
+- [`db.changelog-1.0.xml`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/db/changelog/db.changelog-1.0.xml):
+  - Added include for changelog 9.15.
 - [`ElasticsearchLogService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ElasticsearchLogService.java):
   - Moved `idFile` and `inputFileName` to `should` clauses with boosts.
   - Retained `enrichmentStartedAt` as the `@timestamp` lookback anchor.

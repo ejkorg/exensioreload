@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="9.15-widen-sender-stage-status" author="exensioreload">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="SENDER_STAGE"/>
+        </preConditions>
+
+        <comment>
+            Widen SENDER_STAGE.status to VARCHAR(64) on all databases (PostgreSQL, Oracle, H2).
+            Status 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' is 38 characters and exceeds VARCHAR(36).
+        </comment>
+
+        <modifyDataType tableName="SENDER_STAGE" columnName="status" newDataType="VARCHAR(64)"/>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
@@ -401,5 +401,7 @@
     <include file="db.changelog-9.13-add-load-session-notification-columns.xml" relativeToChangelogFile="true" />
     <!-- Fix users.email column type if incorrectly set to bytea -->
     <include file="db.changelog-9.14-fix-users-email-type.xml" relativeToChangelogFile="true" />
+    <!-- Widen SENDER_STAGE.status to VARCHAR(64) to support COMPLETED_MANUAL_VERIFICATION_REQUIRED (38 chars) -->
+    <include file="db.changelog-9.15-widen-sender-stage-status.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>
