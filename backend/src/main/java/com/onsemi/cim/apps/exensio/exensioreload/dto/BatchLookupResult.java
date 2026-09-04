@@ -111,6 +111,17 @@ public class BatchLookupResult {
      * @return list of record updates
      */
     public List<BatchResult.RecordUpdate> mapToRecordUpdates(List<StageRecord> originalRecords) {
+        return mapToRecordUpdates(originalRecords, null);
+    }
+
+    /**
+     * Map the batch response to individual record updates with traceId.
+     *
+     * @param originalRecords the original batch of records
+     * @param traceId the trace ID for logging and event correlation
+     * @return list of record updates
+     */
+    public List<BatchResult.RecordUpdate> mapToRecordUpdates(List<StageRecord> originalRecords, String traceId) {
         if (!success) {
             // If the batch API call failed, mark all records as ERROR
             List<BatchResult.RecordUpdate> updates = new ArrayList<>();
@@ -121,10 +132,11 @@ public class BatchLookupResult {
                         null,
                         null,
                         errorMessage,
-                        null,
-                        null,
-                        null,
-                        null
+                        record.lot(),
+                        record.wafer(),
+                        record.filename(),
+                        traceId,
+                        record.requestId()
                 ));
             }
             return updates;
@@ -164,7 +176,7 @@ public class BatchLookupResult {
             LotResult.WaferResult waferResult = selectBestCandidate(candidates, record.endTime());
 
             if (waferResult != null) {
-                // Wafer found - mark as DONE
+                // Wafer found - mark as COMPLETED
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(),
                         BatchResult.UpdateType.COMPLETED,
@@ -174,7 +186,8 @@ public class BatchLookupResult {
                         record.lot(),
                         waferResult.waferId(),
                         waferResult.fileName(),
-                        null
+                        traceId,
+                        record.requestId()
                 ));
             } else {
                 // Wafer not found in Exensio response
@@ -184,10 +197,11 @@ public class BatchLookupResult {
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null
+                        record.lot(),
+                        record.wafer(),
+                        record.filename(),
+                        traceId,
+                        record.requestId()
                 ));
             }
         }

@@ -34,8 +34,14 @@ public record BatchResult(
             String lotId,
             String waferId,
             String fileName,
-            String traceId
-    ) {}
+            String traceId,
+            String requestId
+    ) {
+        public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
+                            String errorMessage, String lotId, String waferId, String fileName, String traceId) {
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, null);
+        }
+    }
 
     /**
      * Type of update applied to a record (v3.0 state machine).

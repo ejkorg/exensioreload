@@ -340,7 +340,7 @@ public class ExensioClient {
                 needToRefreshToken = false;
             }
 
-            BatchLookupResult result = doLotWaferLookupBatch(records, token);
+            BatchLookupResult result = doLotWaferLookupBatch(records, token, traceId);
             lastResult = result;
 
             if (result.isSuccess()) {
@@ -402,20 +402,24 @@ public class ExensioClient {
      * @return BatchLookupResult with parsed response or error message
      */
     private BatchLookupResult doLotWaferLookupBatch(List<StageRecord> records, String token) {
+        return doLotWaferLookupBatch(records, token, null);
+    }
+
+    private BatchLookupResult doLotWaferLookupBatch(List<StageRecord> records, String token, String traceId) {
         List<BatchLookupResult.LotResult> mergedLots = new ArrayList<>();
         Set<Long> resolvedRecordIds = new HashSet<>();
 
         // Step 1: Try raw-SQL batch (already has PRODUCTION → SANDBOX fallback internally)
-        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, null);
+        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, traceId);
         if (rawSqlResult.isSuccess()) {
             mergedLots.addAll(rawSqlResult.getLots());
-            for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records)) {
+            for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records, traceId)) {
                 if (update.type() == BatchResult.UpdateType.COMPLETED) {
                     resolvedRecordIds.add(update.recordId());
                 }
             }
         } else {
-            log.warn("Raw SQL batch lookup failed, falling back to lot-wafer endpoint: {}", rawSqlResult.getErrorMessage());
+            log.warn("Raw SQL batch lookup failed (traceId={}), falling back to lot-wafer endpoint: {}", traceId, rawSqlResult.getErrorMessage());
         }
 
         List<StageRecord> unresolvedRecords = records.stream()
@@ -980,7 +984,7 @@ public class ExensioClient {
     private String buildIdentifierLikeClause(String column, Set<String> identifiers) {
         List<String> parts = new ArrayList<>();
         for (String id : identifiers) {
-            parts.add("UPPER(NVL(" + column + ",'')) LIKE '%" + escapeLikeLiteral(id.toUpperCase(Locale.ROOT)) + "%' ESCAPE '\\\\'");
+            parts.add("UPPER(NVL(" + column + ",'')) LIKE '%" + escapeLikeLiteral(id.toUpperCase(Locale.ROOT)) + "%' ESCAPE '\\'");
         }
         if (parts.isEmpty()) {
             return "1=0";

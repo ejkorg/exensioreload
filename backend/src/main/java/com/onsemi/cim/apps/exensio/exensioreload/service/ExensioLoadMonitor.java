@@ -297,7 +297,7 @@ public class ExensioLoadMonitor {
                 log.warn("Record id={} missing lot — marking FAILED (traceId={})", record.id(), traceId);
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(), BatchResult.UpdateType.LOAD_FAILED, null, null,
-                        "Missing lot for Exensio lookup", null, null, null, traceId));
+                        "Missing lot for Exensio lookup", record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
             } else {
                 validRecords.add(record);
             }
@@ -320,7 +320,7 @@ public class ExensioLoadMonitor {
                     updates.add(new BatchResult.RecordUpdate(
                             record.id(), BatchResult.UpdateType.COMPLETED,
                             cached.waferKey(), cached.pgKey(), null,
-                            record.lot(), record.wafer(), record.filename(), traceId));
+                            record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                 } else {
                     apiRecords.add(record);
                 }
@@ -342,7 +342,7 @@ public class ExensioLoadMonitor {
             log.warn("Batch processing interrupted while acquiring permit (traceId={}) for {} records", traceId, apiRecords.size());
             for (StageRecord r : apiRecords) {
                 updates.add(new BatchResult.RecordUpdate(
-                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted", null, null, null, traceId));
+                        r.id(), BatchResult.UpdateType.ERROR, null, null, "Interrupted", r.lot(), r.wafer(), r.filename(), traceId, r.requestId()));
             }
             return buildBatchResult(updates, batchStart);
         }
@@ -360,7 +360,7 @@ public class ExensioLoadMonitor {
             log.debug("Batch API response (traceId={}): success={}, timeMs={}", traceId, lookupResult.isSuccess(), apiElapsedMs);
 
             if (lookupResult.isSuccess()) {
-                List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(apiRecords);
+                List<BatchResult.RecordUpdate> batchUpdates = lookupResult.mapToRecordUpdates(apiRecords, traceId);
 
                 List<String> notFoundLots = new ArrayList<>();
                 for (BatchResult.RecordUpdate update : batchUpdates) {
@@ -393,9 +393,9 @@ public class ExensioLoadMonitor {
                                     BatchResult.UpdateType.LOAD_FAILED,
                                     null, null,
                                     errDetails,
-                                    record.lot(), record.wafer(), record.filename(), traceId));
+                                    record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                         } else if (record != null && isTimedOut(record)) {
-                            // Record timed out with NOT_FOUND - mark as EXENSIO_TIMEOUT
+                            // Record timed out with NOT_FOUND - mark as COMPLETED_MANUAL_VERIFICATION_REQUIRED
                             // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
                                     update.recordId(),
@@ -403,7 +403,7 @@ public class ExensioLoadMonitor {
                                     null, null,
                                     "Exensio load timeout — wafer not found after "
                                             + props.getTimeoutMinutes() + " minutes. May need retry.",
-                                    null, null, null, traceId));
+                                    record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                         } else {
                             updates.add(update);
                         }
@@ -632,11 +632,11 @@ public class ExensioLoadMonitor {
                                 record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
                         updates.add(new BatchResult.RecordUpdate(
                                 record.id(), BatchResult.UpdateType.COMPLETED,
-                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId));
+                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId, record.requestId()));
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
                         if (isTimedOut(record)) {
-                            // Record timed out with NOT_FOUND - mark as EXENSIO_TIMEOUT
+                            // Record timed out with NOT_FOUND - mark as COMPLETED_MANUAL_VERIFICATION_REQUIRED
                             // Requirements: 2.1, 2.2, 2.3
                             updates.add(new BatchResult.RecordUpdate(
                                     record.id(),
@@ -644,24 +644,24 @@ public class ExensioLoadMonitor {
                                     null, null,
                                     "Exensio load timeout — wafer not found after "
                                             + props.getTimeoutMinutes() + " minutes. May need retry.",
-                                    null, null, null, traceId));
+                                    record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                         } else {
                             // Still within timeout — skip (retry next cycle)
                             updates.add(new BatchResult.RecordUpdate(
-                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null, null, null, null, traceId));
+                                    record.id(), BatchResult.UpdateType.NOT_FOUND, null, null, null, record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                         }
                     }
                     case ExensioLotWaferResult.Error error -> {
                         log.warn("Individual retry error for id={}: {}", record.id(), error.message());
                         // Leave as ERROR — no status change, retry next cycle
                         updates.add(new BatchResult.RecordUpdate(
-                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message(), null, null, null, traceId));
+                                record.id(), BatchResult.UpdateType.ERROR, null, null, error.message(), record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
                     }
                 }
             } catch (Exception e) {
                 log.warn("Individual retry exception for id={}: {}", record.id(), e.getMessage());
                 updates.add(new BatchResult.RecordUpdate(
-                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), null, null, null, traceId));
+                        record.id(), BatchResult.UpdateType.ERROR, null, null, e.getMessage(), record.lot(), record.wafer(), record.filename(), traceId, record.requestId()));
             }
         }
 
@@ -688,7 +688,7 @@ public class ExensioLoadMonitor {
                                     + (loadErr.fullErrorMessage() != null && !loadErr.fullErrorMessage().isBlank()
                                     ? loadErr.fullErrorMessage() : "Load error logged in DP_LOG");
                             finalUpdates.add(new BatchResult.RecordUpdate(
-                                    u.recordId(), BatchResult.UpdateType.LOAD_FAILED, null, null, errDetails, rec.lot(), rec.wafer(), rec.filename(), traceId));
+                                    u.recordId(), BatchResult.UpdateType.LOAD_FAILED, null, null, errDetails, rec.lot(), rec.wafer(), rec.filename(), traceId, rec.requestId()));
                         } else {
                             finalUpdates.add(u);
                         }
@@ -833,14 +833,12 @@ public class ExensioLoadMonitor {
             return update;
         }
 
-        // For NOT_FOUND, ERROR, FAILED, and timeout states (we treat all non-DONE as failure for counting)
-        // Note: ENRICHMENT_TIMEOUT and EXENSIO_TIMEOUT are created by ExensioLoadMonitor with state updates,
-        // so they don't need DLQ processing here - they're handled as expected timeout conditions.
-        // However, we still increment failure count for other non-DONE types.
-        if (update.type() == BatchResult.UpdateType.CP_TIMEOUT || 
+        // For NOT_FOUND, CP_TIMEOUT, and COMPLETED_MANUAL_VERIFICATION_REQUIRED states:
+        // do not treat as error for DLQ purposes. NOT_FOUND is an expected in-progress polling state.
+        if (update.type() == BatchResult.UpdateType.NOT_FOUND ||
+            update.type() == BatchResult.UpdateType.CP_TIMEOUT || 
             update.type() == BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED) {
-            // Timeout states don't accumulate as "failures" for DLQ purposes - they're expected conditions
-            // that should be handled by RefDbService.markExensioTimeout / markEnrichmentTimeout
+            // In-progress and timeout states don't accumulate as "failures" for DLQ purposes
             return update;
         }
 
@@ -848,17 +846,17 @@ public class ExensioLoadMonitor {
         int currentCount = failureCount.incrementAndGet();
 
         if (currentCount >= props.getDeadLetterQueueThreshold()) {
-            // We have reached the threshold: mark as FAILED and reset the count.
+            // We have reached the threshold: mark for manual verification (never LOAD_FAILED on API failures)
             failureCount.set(0);
-            String dlqMessage = "Exensio load failed after " + props.getDeadLetterQueueThreshold() +
-                                " consecutive failures — moved to dead letter queue";
+            String dlqMessage = "Exensio API lookup failed after " + props.getDeadLetterQueueThreshold() +
+                                " consecutive errors — manual verification required in Exensio";
             return new BatchResult.RecordUpdate(
                     recordId,
-                    BatchResult.UpdateType.LOAD_FAILED,
+                    BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED,
                     null, null,
                     dlqMessage,
-                    null, null, null,
-                    update.traceId());
+                    update.lotId(), update.waferId(), update.fileName(),
+                    update.traceId(), update.requestId());
         }
 
         return update;

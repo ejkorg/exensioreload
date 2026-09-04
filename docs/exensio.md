@@ -214,10 +214,17 @@ Key groups: `/auth` (login/refresh/register/verify/reset, SSO initiate/silent), 
 
 ### External Integration Notes
 
-- **CP Elasticsearch**: raw HTTP POST to `/_search` (JDK HttpClient + Jackson), no ES client library. Filters by `idFile` (metadata_id) + `idData` (data_id). Success = message contains PRODUCTION/SANDBOX; "executed successfully" → pp_log fallback; `log.level: ERROR` → failure. No-op when unconfigured.
-- **Exensio**: `POST /v1/key/lot-wafer-lookup`; schema-fallback priority list, circuit breaker, batch/parallel tuning, optional Snowflake secondary for preflight. No-op when disabled.
-- **pp_log**: separate Oracle connection (PRODUCTION) used as enrichment fallback; independent of ES results.
-- **Snowflake**: read-only lot pre-flight only; not JPA-managed.
+For the full architecture and troubleshooting guide on Elasticsearch, Exensio API, error propagation, and UI telemetry, see [INTEGRATION_ES_EXENSIO.md](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/docs/INTEGRATION_ES_EXENSIO.md). For a line-by-line root-cause analysis of the active production log issues (ES misses, raw-SQL 503 errors, premature failures, and dropped SSE events), see [EXENSIO_ES_RUNTIME_ISSUES_ANALYSIS.md](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/docs/EXENSIO_ES_RUNTIME_ISSUES_ANALYSIS.md).
+
+- **CP Elasticsearch**: Raw HTTP POST to `/_search` (`JDK HttpClient` + Jackson, no ES client library). Filters by `idData` (data_id), `idFile` (metadata_id), `inputFileName`, `mLot`, and `@timestamp` range with a 15-minute lookback buffer (`cp.elasticsearch.lookback-buffer-seconds: 900`) to absorb clock skew. Success indicated by "Commands flow executed successfully", `output path = ` (regex extracted), `PRODUCTION`, or `SANDBOX`. `log.level: ERROR` triggers `CP_FAILED` with structured prefix `[ES Failure]`. Circuit breaker opens after 5 consecutive failures for 60s. No-op when unconfigured.
+- **pp_log**: Separate Oracle connection (PRODUCTION) polled in parallel with Elasticsearch. Authoritative source of truth: `process_code == 0` triggers CP success immediately; `process_code != 0` marks `CP_FAILED` with `[pp_log Failure]`.
+- **Exensio API & DB**: 3-tier lookup sequence: (1) Direct Oracle raw SQL via `POST /v1/key/raw-sql` on `op_log`/`df_export`/`wafer`; (2) Multi-schema fallback (`PRODUCTION` → `SANDBOX`); (3) REST endpoint `POST /v1/key/lot-wafer-lookup`; (4) Failure inspection in `dp_log` + `string_holder` for loader errors (`LOAD_FAILED`). Dead letter queue trips after 3 consecutive failures. Circuit breaker opens after 5 failures.
+- **UI Reporting & Telemetry**:
+  - `RefDbService.fetchStatuses()` aggregates v3.0 status counts for the Dashboard snapshot.
+  - Backlog is defined as `queuedForCp + elasticsearchMonitoring + cpTimeout + exensioMonitoring + completedManualVerification`.
+  - Real-time SSE stream (`GET /exensioreload/api/stage/monitor/{requestId}`) emits `ROW_UPDATE`, `STATS`, and `STUCK_RECORD_ALERT`.
+  - Frontend `RealtimeMonitoringFileListComponent` renders virtual-scrolled rows with dynamic multi-segment progress strings and intelligent `CP` vs `Exensio` error badges.
+- **Snowflake**: Read-only lot pre-flight verification; not JPA-managed.
 
 ## Development Conventions
 
@@ -249,6 +256,11 @@ Key groups: `/auth` (login/refresh/register/verify/reset, SSO initiate/silent), 
 8. **Secrets**: `REFDB_PASSWORD` (PG profile), `CP_ES_API_KEY`, `EXENSIO_PASSWORD`, AI keys via env vars — never commit values.
 9. **PG validation**: no live PG in dev workspace; use `scripts/docker-compose-pg.yml` + `pg-local` profile + `scripts/pg-verify.sh` to validate migrations against ephemeral PG 16.
 10. **Versions**: backend Spring Boot 3.2.0 (pom parent), frontend Angular 21.2.12, app version 1.0.0-SNAPSHOT (package.json says 2.1.0 for npm only).
+11. **ES & Exensio Monitoring Discrepancies**:
+    - `fetchStatuses()` and `StageStatus.accountingSum()` sum 10 statuses, excluding `DISCOVERED` and `CP_CONSUMED`. If records reside in those two states, `DataIntegrityJob` reports an accounting imbalance.
+    - ES queries use a 15-minute lookback buffer to absorb clock skew (`cp.elasticsearch.lookback-buffer-seconds: 900`).
+    - Exensio lookups prioritize raw SQL on `op_log`/`df_export` before falling back to `lot-wafer-lookup`, and inspect `dp_log` for raw loader errors.
+    - See [INTEGRATION_ES_EXENSIO.md](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/docs/INTEGRATION_ES_EXENSIO.md) for full troubleshooting runbooks.
 
 ## Repo Hygiene
 

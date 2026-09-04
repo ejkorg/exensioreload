@@ -138,13 +138,14 @@ public class ElasticsearchLogService {
             String queryJson = buildQuery(idFile, dataId, lot, since, site, filename, initialFilter);
             CpLogResult result = executeSearch(url, queryJson, idFile, dataId, lot, traceId);
 
-            // If no hit found and the configured filter is different from the broad fallback,
-            // retry once with fallback "*sender*" (case-insensitive) to improve recall.
+            // If no hit found and the configured filter is restrictive,
+            // retry once with wildcard "*" to catch configs that don't match the sender pattern
+            // (e.g. cz2_defect_klarf_18_Si).
             if (result instanceof CpLogResult.NotFound
                     && initialFilter != null
-                    && !initialFilter.equalsIgnoreCase("*sender*")) {
-                log.debug("No hits with cpConfig filter='{}'. retrying with fallback '*sender*' for dataId={} (traceId={})", initialFilter, dataId, traceId);
-                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*sender*");
+                    && !initialFilter.equals("*")) {
+                log.info("No hits with cpConfig filter='{}'. Retrying with wildcard '*' for dataId={} (traceId={})", initialFilter, dataId, traceId);
+                String fallbackQuery = buildQuery(idFile, dataId, lot, since, site, filename, "*");
                 return executeSearch(url, fallbackQuery, idFile, dataId, lot, traceId);
             }
 

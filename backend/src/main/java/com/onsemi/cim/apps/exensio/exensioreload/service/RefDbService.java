@@ -3750,10 +3750,10 @@ public class RefDbService {
         }
 
         String table = properties.getStagingTable();
+        // Do NOT change status to LOAD_FAILED! Records within timeout remain in EXENSIO_MONITORING.
         String sql = "UPDATE " + table +
-                " SET status = 'LOAD_FAILED', error_message = ?," +
-            " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " SET updated_at = " + timestampExpr() +
+                " WHERE id = ? AND status = 'EXENSIO_MONITORING'";
 
         int totalUpdated = 0;
         int batchCount = 0;
@@ -3763,8 +3763,7 @@ public class RefDbService {
 
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 for (BatchResult.RecordUpdate update : updates) {
-                    ps.setString(1, "Wafer not found in Exensio");
-                    ps.setLong(2, update.recordId());
+                    ps.setLong(1, update.recordId());
                     ps.addBatch();
                     batchCount++;
 
@@ -3785,8 +3784,8 @@ public class RefDbService {
                 }
             }
 
-            // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "LOAD_FAILED", "Wafer not found in Exensio");
+            // Broadcast SSE events keeping status as EXENSIO_MONITORING
+            broadcastBatchEvents(updates, "EXENSIO_MONITORING", "Wafer not found in Exensio yet — still monitoring");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking NOT_FOUND: {}", ex.getMessage(), ex);
@@ -3813,8 +3812,9 @@ public class RefDbService {
         }
 
         String table = properties.getStagingTable();
+        // Unresolvable API errors must transition to COMPLETED_MANUAL_VERIFICATION_REQUIRED, NOT LOAD_FAILED
         String sql = "UPDATE " + table +
-                " SET status = 'LOAD_FAILED', error_message = ?," +
+                " SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', error_message = ?," +
             " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -3827,7 +3827,7 @@ public class RefDbService {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 for (BatchResult.RecordUpdate update : updates) {
                     String errorMsg = update.errorMessage() != null ?
-                            truncate(update.errorMessage()) : "Batch processing error";
+                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed — manual verification required";
                     ps.setString(1, errorMsg);
                     ps.setLong(2, update.recordId());
                     ps.addBatch();
@@ -3851,7 +3851,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "LOAD_FAILED", "Batch processing error");
+            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio API error — manual verification required");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ERROR: {}", ex.getMessage(), ex);
@@ -4028,7 +4028,7 @@ public class RefDbService {
                         evt.put("msg", "Loaded into Exensio (retry)");
                         evt.put("exensioWaferKey", update.waferKey());
                         evt.put("exensioPgKey", update.pgKey());
-                        safeSendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual DONE retry for record {}: {}",
@@ -4080,7 +4080,7 @@ public class RefDbService {
                         evt.put("id", update.recordId());
                         evt.put("status", "LOAD_FAILED");
                         evt.put("msg", "Batch processing failed (retry)");
-                        safeSendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual FAILED retry for record {}: {}",
@@ -4108,9 +4108,8 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'LOAD_FAILED', error_message = ?," +
-            " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " SET updated_at = " + timestampExpr() +
+                " WHERE id = ? AND status = 'EXENSIO_MONITORING'";
 
         int successCount = 0;
 
@@ -4119,8 +4118,7 @@ public class RefDbService {
 
             for (BatchResult.RecordUpdate update : updates) {
                 try {
-                    ps.setString(1, "Wafer not found in Exensio");
-                    ps.setLong(2, update.recordId());
+                    ps.setLong(1, update.recordId());
                     ps.executeUpdate();
                     successCount++;
 
@@ -4128,18 +4126,18 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "LOAD_FAILED");
-                        evt.put("msg", "Wafer not found in Exensio (retry)");
-                        safeSendEvent(null, "ROW_UPDATE", evt);
+                        evt.put("status", "EXENSIO_MONITORING");
+                        evt.put("msg", "Wafer not found in Exensio yet — still monitoring (retry)");
+                        safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
-                    log.warn("Failed individual NOT_FOUND retry for record {}: {}",
+                    log.warn("Failed individual NOT_FOUND touch retry for record {}: {}",
                             update.recordId(), ex.getMessage());
                 }
             }
 
         } catch (SQLException ex) {
-            log.error("Failed retrying individual NOT_FOUND updates: {}", ex.getMessage(), ex);
+            log.error("Failed retrying individual NOT_FOUND touches: {}", ex.getMessage(), ex);
         }
 
         return successCount;
@@ -4158,7 +4156,7 @@ public class RefDbService {
 
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'LOAD_FAILED', error_message = ?," +
+                " SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', error_message = ?," +
             " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
 
@@ -4170,7 +4168,7 @@ public class RefDbService {
             for (BatchResult.RecordUpdate update : updates) {
                 try {
                     String errorMsg = update.errorMessage() != null ?
-                            truncate(update.errorMessage()) : "Batch processing error";
+                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed — manual verification required";
                     ps.setString(1, errorMsg);
                     ps.setLong(2, update.recordId());
                     ps.executeUpdate();
@@ -4180,9 +4178,9 @@ public class RefDbService {
                     if (monitorService != null) {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
-                        evt.put("status", "LOAD_FAILED");
+                        evt.put("status", "COMPLETED_MANUAL_VERIFICATION_REQUIRED");
                         evt.put("msg", "Batch processing error (retry)");
-                        safeSendEvent(null, "ROW_UPDATE", evt);
+                        safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
                     log.warn("Failed individual ERROR retry for record {}: {}",
@@ -4291,7 +4289,7 @@ public class RefDbService {
      * @param msg the message to broadcast
      */
     private void broadcastBatchEvents(List<BatchResult.RecordUpdate> updates, String status, String msg) {
-        if (monitorService == null) {
+        if (monitorService == null || updates == null || updates.isEmpty()) {
             return;
         }
 
@@ -4307,7 +4305,10 @@ public class RefDbService {
                     evt.put("exensioPgKey", update.pgKey());
                 }
 
-                safeSendEvent(null, "ROW_UPDATE", evt);
+                if (update.requestId() != null && !update.requestId().isBlank()) {
+                    safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
+                    recordStateChangeForBatcher(update.requestId(), status);
+                }
             } catch (Exception ex) {
                 log.warn("Failed broadcasting SSE event for record {}: {}",
                         update.recordId(), ex.getMessage());
