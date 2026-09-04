@@ -92,7 +92,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             sql = buildPreviewDedupedPageQuery(viewName, false, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
         }
 
-        sql.append(" order by m.end_time desc");
+        sql.append(" order by end_time desc");
         if (limit > 0) {
             sql.append(" offset ? rows fetch next ? rows only");
             sql.params.add(Math.max(offset, 0));
