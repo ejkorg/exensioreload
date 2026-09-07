@@ -167,6 +167,19 @@ When mapping individual records (`StageRecordView`):
     - `exensioIntegrationStatus = "pending"`
     - `exensioIntegrationMessage = "Monitoring Exensio load"`
 
+### 4.5 Exensio Raw SQL Error Query Fix (`ExensioClient.java`)
+[`ExensioClient.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java):
+When primary error detection via `OP_LOG` returned no records, the fallback query in `queryRawDataLoadErrorsByFile` failed with:
+```text
+HTTP 503: {"error":{"code":4302,"message":"SQL Error during call to bdapi/oracle.queryToMap on line 7314.","detail":"","http_status":503}}
+```
+**Root causes in the generated SQL:**
+1. **Invalid identifier `rf.data_id`**: The Exensio Oracle table `RAW_FILE` has no `data_id` column (`data_id` is an internal sender queue column). Querying `rf.data_id` caused `ORA-00904: invalid identifier`.
+2. **Backslash escaping in `ESCAPE '\\'`**: Caused parsing failures within Oracle/bdapi string escaping.
+
+**Fix**:
+Simplified the query to match directly on `UPPER(rf.file_name) LIKE '%<filename>%'` with standard SQL literal escaping, eliminating the invalid `rf.data_id` column and the problematic `ESCAPE` clause.
+
 ---
 
 ## 5. State Resolution Matrix (Post-Restart)
@@ -190,3 +203,4 @@ When mapping individual records (`StageRecordView`):
 2. [`backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java)
 3. [`backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/StageSessionService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/StageSessionService.java)
 4. [`backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/StageRecordMapper.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/StageRecordMapper.java)
+5. [`backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java)

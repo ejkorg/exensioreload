@@ -880,11 +880,8 @@ public class ExensioClient {
      * OP_LOG/LOT.  This catches early-loader rejections where Exensio rejects the file
      * before any LOT record is written.
      *
-     * <p>The WHERE clause matches on either:
-     * <ul>
-     *   <li>{@code rf.file_name LIKE '%<basename>%'} — using the original filename, or</li>
-     *   <li>{@code rf.data_id = '<dataId>'} — using the staging system's data ID (if column exists).</li>
-     * </ul>
+     * <p>The WHERE clause matches on {@code UPPER(rf.file_name) LIKE '%<basename>%'}
+     * using the original filename.
      *
      * <p>Results are keyed by upper-cased lot ID derived from the matched StageRecord (since
      * the LOT table may be absent; the lot is taken from our own record metadata).
@@ -896,29 +893,22 @@ public class ExensioClient {
 
         for (StageRecord rec : records) {
             String fileNameFilter = rec.filename() != null ? rec.filename().trim() : null;
-            String dataIdFilter   = rec.dataId()   != null ? rec.dataId().trim()   : null;
-            if ((fileNameFilter == null || fileNameFilter.isBlank()) &&
-                    (dataIdFilter == null || dataIdFilter.isBlank())) {
+            if (fileNameFilter == null || fileNameFilter.isBlank()) {
                 continue;
             }
 
-            // Build WHERE predicate for this record
-            List<String> predicates = new ArrayList<>();
-            if (fileNameFilter != null && !fileNameFilter.isBlank()) {
-                // Match on basename (strip path separators that don't belong in SQL)
-                String baseName = fileNameFilter.contains("/")
-                        ? fileNameFilter.substring(fileNameFilter.lastIndexOf('/') + 1)
-                        : fileNameFilter.contains("\\")
-                                ? fileNameFilter.substring(fileNameFilter.lastIndexOf('\\') + 1)
-                                : fileNameFilter;
-                predicates.add("UPPER(rf.file_name) LIKE '%" +
-                        escapeLikeLiteral(baseName.toUpperCase(Locale.ROOT)) + "%' ESCAPE '\\'");
-            }
-            if (dataIdFilter != null && !dataIdFilter.isBlank()) {
-                predicates.add("rf.data_id = '" + escapeSqlLiteral(dataIdFilter) + "'");
+            // Match on basename (strip path separators that don't belong in SQL)
+            String baseName = fileNameFilter.contains("/")
+                    ? fileNameFilter.substring(fileNameFilter.lastIndexOf('/') + 1)
+                    : fileNameFilter.contains("\\")
+                            ? fileNameFilter.substring(fileNameFilter.lastIndexOf('\\') + 1)
+                            : fileNameFilter;
+
+            if (baseName.isBlank()) {
+                continue;
             }
 
-            if (predicates.isEmpty()) continue;
+            String escapedBaseName = escapeSqlLiteral(baseName.toUpperCase(Locale.ROOT));
 
             StringBuilder fallbackSql = new StringBuilder();
             fallbackSql.append("SELECT NVL(rf.file_name, '') AS file_name, dl.error_code, ");
@@ -932,9 +922,9 @@ public class ExensioClient {
             fallbackSql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
             fallbackSql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
             fallbackSql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
-            fallbackSql.append("WHERE dl.error_code != 0 AND (");
-            fallbackSql.append(String.join(" OR ", predicates));
-            fallbackSql.append(") ORDER BY dl.start_time DESC");
+            fallbackSql.append("WHERE dl.error_code != 0 AND UPPER(rf.file_name) LIKE '%");
+            fallbackSql.append(escapedBaseName);
+            fallbackSql.append("%' ORDER BY dl.start_time DESC");
 
             String lotKey = rec.lot() != null ? rec.lot().toUpperCase(Locale.ROOT) : ("ID_" + rec.id());
 
