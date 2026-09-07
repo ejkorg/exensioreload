@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="9.16-allow-null-audit-user-id" author="exensioreload">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <or>
+                <tableExists tableName="audit_log"/>
+                <tableExists tableName="AUDIT_LOG"/>
+            </or>
+        </preConditions>
+
+        <comment>
+            Allow audit_log.user_id to be NULL for system and background job audit events.
+        </comment>
+
+        <dropNotNullConstraint tableName="audit_log" columnName="user_id" columnDataType="BIGINT"/>
+    </changeSet>
+
+</databaseChangeLog>

@@ -403,5 +403,7 @@
     <include file="db.changelog-9.14-fix-users-email-type.xml" relativeToChangelogFile="true" />
     <!-- Widen SENDER_STAGE.status to VARCHAR(64) to support COMPLETED_MANUAL_VERIFICATION_REQUIRED (38 chars) -->
     <include file="db.changelog-9.15-widen-sender-stage-status.xml" relativeToChangelogFile="true" />
+    <!-- Allow audit_log.user_id to be NULL for system and scheduled events -->
+    <include file="db.changelog-9.16-allow-null-audit-user-id.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

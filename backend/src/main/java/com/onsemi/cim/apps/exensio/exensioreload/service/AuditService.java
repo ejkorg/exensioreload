@@ -9,10 +9,16 @@ import com.onsemi.cim.apps.exensio.exensioreload.repository.EtlAuditLogRepositor
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -20,7 +26,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class AuditService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuditService.class);
@@ -28,35 +34,74 @@ public class AuditService {
     private final AuditLogRepository auditLogRepository;
     private final EtlAuditLogRepository etlAuditLogRepository;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
+    private final ObjectProvider<AppUserRepository> appUserRepositoryProvider;
 
     public AuditService(AuditLogRepository auditLogRepository,
                         EtlAuditLogRepository etlAuditLogRepository,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        PlatformTransactionManager transactionManager,
+                        ObjectProvider<AppUserRepository> appUserRepositoryProvider) {
         this.auditLogRepository = auditLogRepository;
         this.etlAuditLogRepository = etlAuditLogRepository;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.appUserRepositoryProvider = appUserRepositoryProvider;
     }
 
     /**
      * Log an audit action with details
      */
     public void logAction(Long userId, String action, String resourceType, String resourceId, Map<String, Object> details) {
-        try {
-            String detailsJson = details != null ? objectMapper.writeValueAsString(details) : null;
-            String ipAddress = getCurrentIpAddress();
-            String userAgent = getCurrentUserAgent();
+        String detailsJson = null;
+        if (details != null) {
+            try {
+                detailsJson = objectMapper.writeValueAsString(details);
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to serialize audit details for userId={}, action={}: {}", userId, action, e.getMessage());
+            }
+        }
 
-            AuditLog auditLog = new AuditLog(userId, action, resourceType, resourceId, detailsJson, ipAddress, userAgent);
-            auditLogRepository.save(auditLog);
+        String ipAddress = getCurrentIpAddress();
+        String userAgent = getCurrentUserAgent();
+
+        try {
+            final String dJson = detailsJson;
+            transactionTemplate.execute(status -> {
+                AuditLog auditLog = new AuditLog(userId, action, resourceType, resourceId, dJson, ipAddress, userAgent);
+                auditLogRepository.save(auditLog);
+                return null;
+            });
 
             logger.info("Audit log created: userId={}, action={}, resourceType={}, resourceId={}",
                     userId, action, resourceType, resourceId);
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize audit details for userId={}, action={}: {}", userId, action, e.getMessage());
-            // Still create audit log without details
-            AuditLog auditLog = new AuditLog(userId, action, resourceType, resourceId, null, getCurrentIpAddress(), getCurrentUserAgent());
-            auditLogRepository.save(auditLog);
         } catch (Exception e) {
+            // If logging failed when userId is null (e.g. before schema migration is applied),
+            // attempt fallback to a known admin/system user ID.
+            if (userId == null && appUserRepositoryProvider != null) {
+                try {
+                    AppUserRepository userRepo = appUserRepositoryProvider.getIfAvailable();
+                    if (userRepo != null) {
+                        Long fallbackUserId = userRepo.findByUsername("admin")
+                                .map(AppUser::getId)
+                                .orElse(1L);
+                        logger.warn("Retrying audit log with fallback admin userId={} after failure: {}",
+                                fallbackUserId, e.getMessage());
+                        final String dJson = detailsJson;
+                        transactionTemplate.execute(status -> {
+                            AuditLog fallbackLog = new AuditLog(fallbackUserId, action, resourceType, resourceId, dJson, ipAddress, userAgent);
+                            auditLogRepository.save(fallbackLog);
+                            return null;
+                        });
+                        logger.info("Audit log created with fallback userId={}: action={}, resourceType={}, resourceId={}",
+                                fallbackUserId, action, resourceType, resourceId);
+                        return;
+                    }
+                } catch (Exception retryEx) {
+                    logger.error("Failed fallback audit log creation for action={}: {}", action, retryEx.getMessage(), retryEx);
+                }
+            }
             logger.error("Failed to create audit log for userId={}, action={}: {}", userId, action, e.getMessage(), e);
         }
     }
@@ -116,6 +161,7 @@ public class AuditService {
     /**
      * Clean up old audit logs (for maintenance)
      */
+    @Transactional
     public void cleanupOldAuditLogs(Instant cutoffDate) {
         try {
             auditLogRepository.deleteByCreatedAtBefore(cutoffDate);
@@ -173,14 +219,14 @@ public class AuditService {
                               String etlServerName, Integer senderPort, String status,
                               String message, String remoteIp) {
         try {
-            // Create EtlAuditLog entity
-            EtlAuditLog etlAuditLog = new EtlAuditLog(
-                    requestId, userId, site, location, etlServerName, senderPort,
-                    status, message, remoteIp
-            );
-
-            // Save to repository
-            etlAuditLogRepository.save(etlAuditLog);
+            transactionTemplate.execute(txStatus -> {
+                EtlAuditLog etlAuditLog = new EtlAuditLog(
+                        requestId, userId, site, location, etlServerName, senderPort,
+                        status, message, remoteIp
+                );
+                etlAuditLogRepository.save(etlAuditLog);
+                return null;
+            });
 
             logger.info("ETL audit log created: requestId={}, userId={}, site={}, etlServerName={}, status={}",
                     requestId, userId, site, etlServerName, status);
