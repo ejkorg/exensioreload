@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioSqlUtilService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +144,8 @@ public class BatchLookupResult {
         }
 
         // Build lookups:
-        // - waferId -> wafer entries (can have multiple entries per wafer_id with different pg/ppid/end_time)
+        // - waferId / cleanWafer / waferNum -> wafer entries
+        // - lotKey:waferId / lotKey:cleanWafer / lotKey:waferNum -> wafer entries
         // - lotId -> all wafer entries under that lot
         Map<String, List<LotResult.WaferResult>> waferLookup = new HashMap<>();
         Map<String, List<LotResult.WaferResult>> lotLookup = new HashMap<>();
@@ -153,8 +155,33 @@ public class BatchLookupResult {
                 lotLookup.computeIfAbsent(lotKey, k -> new ArrayList<>()).addAll(lot.wafers());
             }
             for (LotResult.WaferResult wafer : lot.wafers()) {
-                if (wafer.waferId() != null) {
-                    waferLookup.computeIfAbsent(wafer.waferId().toUpperCase(), k -> new ArrayList<>()).add(wafer);
+                if (wafer.waferId() != null && !wafer.waferId().isBlank()) {
+                    String rawWafer = wafer.waferId().trim().toUpperCase();
+                    waferLookup.computeIfAbsent(rawWafer, k -> new ArrayList<>()).add(wafer);
+                    if (lotKey != null) {
+                        waferLookup.computeIfAbsent(lotKey + ":" + rawWafer, k -> new ArrayList<>()).add(wafer);
+                    }
+
+                    String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer.waferId());
+                    if (!cleanWafer.isBlank()) {
+                        String cleanUpper = cleanWafer.toUpperCase();
+                        waferLookup.computeIfAbsent(cleanUpper, k -> new ArrayList<>()).add(wafer);
+                        if (lotKey != null) {
+                            waferLookup.computeIfAbsent(lotKey + ":" + cleanUpper, k -> new ArrayList<>()).add(wafer);
+                        }
+                        try {
+                            int waferNum = Integer.parseInt(cleanWafer);
+                            String intStr = String.valueOf(waferNum);
+                            String pad2 = String.format("%02d", waferNum);
+                            String pad3 = String.format("%03d", waferNum);
+                            for (String variant : List.of(intStr, pad2, pad3)) {
+                                waferLookup.computeIfAbsent(variant, k -> new ArrayList<>()).add(wafer);
+                                if (lotKey != null) {
+                                    waferLookup.computeIfAbsent(lotKey + ":" + variant, k -> new ArrayList<>()).add(wafer);
+                                }
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
                 }
             }
         }
@@ -162,12 +189,33 @@ public class BatchLookupResult {
         // Map each original record to an update
         List<BatchResult.RecordUpdate> updates = new ArrayList<>();
         for (StageRecord record : originalRecords) {
-            String recordWafer = record.wafer() != null ? record.wafer().toUpperCase() : null;
-            String recordLot = record.lot() != null ? record.lot().toUpperCase() : null;
+            String recordWafer = record.wafer() != null ? record.wafer().trim().toUpperCase() : null;
+            String recordLot = record.lot() != null ? record.lot().trim().toUpperCase() : null;
 
             List<LotResult.WaferResult> candidates = null;
             if (recordWafer != null && !recordWafer.isBlank()) {
-                candidates = waferLookup.get(recordWafer);
+                if (recordLot != null) {
+                    // Try lot:exact_wafer
+                    candidates = waferLookup.get(recordLot + ":" + recordWafer);
+                    if (candidates == null || candidates.isEmpty()) {
+                        // Try lot:clean_wafer
+                        String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(recordWafer);
+                        candidates = waferLookup.get(recordLot + ":" + cleanWafer.toUpperCase());
+                        if (candidates == null || candidates.isEmpty()) {
+                            try {
+                                int wNum = Integer.parseInt(cleanWafer);
+                                candidates = waferLookup.get(recordLot + ":" + wNum);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
+                if (candidates == null || candidates.isEmpty()) {
+                    candidates = waferLookup.get(recordWafer);
+                    if (candidates == null || candidates.isEmpty()) {
+                        String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(recordWafer);
+                        candidates = waferLookup.get(cleanWafer.toUpperCase());
+                    }
+                }
             }
             if ((candidates == null || candidates.isEmpty()) && recordLot != null && !recordLot.isBlank()) {
                 candidates = lotLookup.get(recordLot);

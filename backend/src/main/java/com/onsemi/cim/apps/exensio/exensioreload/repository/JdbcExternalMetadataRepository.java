@@ -73,7 +73,6 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
         boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
                 (testPhase != null && !testPhase.isBlank()) ||
-                (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank()) ||
                 (steps != null && !steps.isEmpty()) ||
                 (recipes != null && !recipes.isEmpty()) ||
@@ -240,7 +239,6 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         String viewName = getPreviewViewName(dataType);
         boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
                 (testPhase != null && !testPhase.isBlank()) ||
-                (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank()) ||
                 (steps != null && !steps.isEmpty()) ||
                 (recipes != null && !recipes.isEmpty()) ||
@@ -1310,17 +1308,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 result.params.add(tpUpper);
             }
         }
-        if (testerType != null && !testerType.isBlank() && !"NULL".equalsIgnoreCase(testerType) && !"NONE".equalsIgnoreCase(testerType) && !"ANY".equalsIgnoreCase(testerType)) {
-            String tt = testerType.trim();
-            String ttUpper = tt.toUpperCase(Locale.ROOT);
-            if (tt.equals(ttUpper)) {
-                result.append(" and m.\"TESTER_TYPE\" = ?");
-                result.params.add(ttUpper);
-            } else {
-                result.append(" and UPPER(m.\"TESTER_TYPE\") = ?");
-                result.params.add(ttUpper);
-            }
-        }
+        // Note: testerType is a sender configuration attribute (in dtp_dist_conf.id_tester_type -> dtp_tester_type.type
+        // and dtp_simple_client_setting.tester_type), NOT a column on metadata views/tables (dtp_*_metadata / all_metadata_view).
+        // Any tester-specific filtering on metadata is defined by the sender's where_condition and applied via additionalWhereFilters.
+        // Attempting to query m."TESTER_TYPE" causes ORA-00904: "M"."TESTER_TYPE": invalid identifier.
         if (location != null && !location.isBlank()) {
             result.append(" and m.\"LOCATION\" = ?");
             result.params.add(location);

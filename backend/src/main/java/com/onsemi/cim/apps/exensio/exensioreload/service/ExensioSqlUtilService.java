@@ -80,6 +80,11 @@ public class ExensioSqlUtilService {
             return "";
         }
         String trimmed = wafer.trim();
+        // If there are trailing digits after a hyphen or underscore (e.g. IR77464-11, IR77464.1J-11, W-01, WF_05)
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[-_](\\d+)$").matcher(trimmed);
+        if (m.find()) {
+            return m.group(1);
+        }
         String cleaned = trimmed.replaceFirst("^[A-Za-z]+[-_]*", "");
         return cleaned.isEmpty() ? trimmed : cleaned;
     }

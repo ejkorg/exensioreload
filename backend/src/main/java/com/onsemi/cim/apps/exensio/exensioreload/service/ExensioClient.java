@@ -496,6 +496,11 @@ public class ExensioClient {
             for (String wafer : uniqueWafers) {
                 if (wafer != null && !wafer.isBlank()) {
                     waferIds.add(wafer);
+                    String clean = ExensioSqlUtilService.stripWaferPrefix(wafer);
+                    if (!clean.isBlank() && !clean.equalsIgnoreCase(wafer)) {
+                        waferIds.add(clean);
+                        waferIds.add(ExensioPreCheckService.zeroPadWaferId(clean));
+                    }
                 }
             }
 
@@ -617,27 +622,10 @@ public class ExensioClient {
                         .append("')");
 
                 if (!waferBlank) {
-                    String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(record.wafer());
-                    String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
-                    StringBuilder wfClause = new StringBuilder();
-                    wfClause.append(" AND (w.wf_id IN ('")
-                            .append(escapeSqlLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
-                            .append("', '")
-                            .append(escapeSqlLiteral(cleanWafer.toLowerCase(Locale.ROOT)))
-                            .append("', '")
-                            .append(escapeSqlLiteral(paddedWafer.toUpperCase(Locale.ROOT)))
-                            .append("', '")
-                            .append(escapeSqlLiteral(paddedWafer.toLowerCase(Locale.ROOT)))
-                            .append("')");
-                    try {
-                        int waferNum = Integer.parseInt(cleanWafer);
-                        wfClause.append(" OR w.wf_num = ").append(waferNum);
-                    } catch (NumberFormatException ignored) {}
-                    wfClause.append(")");
-                    clause.append(wfClause);
+                    clause.append(buildWaferMatchClause(record.wafer()));
                 }
 
-                if (!identifiers.isEmpty()) {
+                if (waferBlank && !identifiers.isEmpty()) {
                     clause.append(" AND (de.file_name IS NULL OR ")
                             .append(buildIdentifierLikeClause("de.file_name", identifiers))
                             .append(")");
@@ -968,27 +956,10 @@ public class ExensioClient {
                 .append("')");
 
         if (!isBlankOrNa(wafer)) {
-            String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer);
-            String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
-            StringBuilder wfClause = new StringBuilder();
-            wfClause.append(" AND (w.wf_id IN ('")
-                    .append(escapeSqlLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
-                    .append("', '")
-                    .append(escapeSqlLiteral(cleanWafer.toLowerCase(Locale.ROOT)))
-                    .append("', '")
-                    .append(escapeSqlLiteral(paddedWafer.toUpperCase(Locale.ROOT)))
-                    .append("', '")
-                    .append(escapeSqlLiteral(paddedWafer.toLowerCase(Locale.ROOT)))
-                    .append("')");
-            try {
-                int waferNum = Integer.parseInt(cleanWafer);
-                wfClause.append(" OR w.wf_num = ").append(waferNum);
-            } catch (NumberFormatException ignored) {}
-            wfClause.append(")");
-            where.append(wfClause);
+            where.append(buildWaferMatchClause(wafer));
         }
 
-        if (!identifiers.isEmpty()) {
+        if (isBlankOrNa(wafer) && !identifiers.isEmpty()) {
             where.append(" AND (de.file_name IS NULL OR ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
         }
 
@@ -1146,6 +1117,58 @@ public class ExensioClient {
             return "1=0";
         }
         return "(" + String.join(" OR ", parts) + ")";
+    }
+
+    private StringBuilder buildWaferMatchClause(String rawWafer) {
+        String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
+        String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
+        String twoDigitWafer = cleanWafer;
+        Integer waferNum = null;
+        try {
+            waferNum = Integer.parseInt(cleanWafer);
+            twoDigitWafer = String.format("%02d", waferNum);
+        } catch (NumberFormatException ignored) {}
+
+        StringBuilder wfClause = new StringBuilder();
+        wfClause.append(" AND (");
+
+        boolean hasOr = false;
+        if (waferNum != null) {
+            wfClause.append("w.wf_num = ").append(waferNum);
+            hasOr = true;
+        }
+
+        // Suffix matching: matches <sourceLot>-<waferNum>, <lot>-<waferNum>, etc.
+        if (hasOr) wfClause.append(" OR ");
+        wfClause.append("w.wf_id LIKE '%-").append(escapeLikeLiteral(cleanWafer)).append("'")
+                .append(" OR w.wf_id LIKE '%-").append(escapeLikeLiteral(twoDigitWafer)).append("'")
+                .append(" OR w.wf_id LIKE '%-").append(escapeLikeLiteral(paddedWafer)).append("'")
+                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(cleanWafer)).append("'")
+                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(twoDigitWafer)).append("'")
+                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(paddedWafer)).append("'");
+
+        // Direct matching: matches bare number, padded number, or original raw string
+        Set<String> directWaferIds = new LinkedHashSet<>();
+        directWaferIds.add(cleanWafer.toUpperCase(Locale.ROOT));
+        directWaferIds.add(cleanWafer.toLowerCase(Locale.ROOT));
+        directWaferIds.add(twoDigitWafer.toUpperCase(Locale.ROOT));
+        directWaferIds.add(twoDigitWafer.toLowerCase(Locale.ROOT));
+        directWaferIds.add(paddedWafer.toUpperCase(Locale.ROOT));
+        directWaferIds.add(paddedWafer.toLowerCase(Locale.ROOT));
+        if (rawWafer != null && !rawWafer.isBlank()) {
+            directWaferIds.add(rawWafer.trim().toUpperCase(Locale.ROOT));
+            directWaferIds.add(rawWafer.trim().toLowerCase(Locale.ROOT));
+        }
+
+        wfClause.append(" OR w.wf_id IN (");
+        int i = 0;
+        for (String wid : directWaferIds) {
+            if (i > 0) wfClause.append(", ");
+            wfClause.append("'").append(escapeSqlLiteral(wid)).append("'");
+            i++;
+        }
+        wfClause.append("))");
+        return wfClause;
     }
 
     private boolean isBlankOrNa(String value) {
