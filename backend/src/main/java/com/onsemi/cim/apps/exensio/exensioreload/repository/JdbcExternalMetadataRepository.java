@@ -73,6 +73,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
         boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
                 (testPhase != null && !testPhase.isBlank()) ||
+                (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank()) ||
                 (steps != null && !steps.isEmpty()) ||
                 (recipes != null && !recipes.isEmpty()) ||
@@ -158,7 +159,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
-                "select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\", COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+                "select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
         sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
@@ -221,7 +222,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // the query doesn't produce the same INFO logs as the executing call.
         // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
-        SqlWithParams sql = buildMetadataQueryInternal("select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\" from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+        SqlWithParams sql = buildMetadataQueryInternal("select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, devices, false, this.forceAllMetadataView, steps, recipes, equipmentIds, additionalWhereFilters);
         sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
@@ -239,6 +240,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         String viewName = getPreviewViewName(dataType);
         boolean hasOptionalFilters = (dataTypeExt != null && !dataTypeExt.isBlank()) ||
                 (testPhase != null && !testPhase.isBlank()) ||
+                (testerType != null && !testerType.isBlank()) ||
                 (location != null && !location.isBlank()) ||
                 (steps != null && !steps.isEmpty()) ||
                 (recipes != null && !recipes.isEmpty()) ||
@@ -275,7 +277,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         ResultSet rs = null;
         try {
             // Use quoted identifiers for Oracle compatibility
-            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\" from all_metadata_view m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from all_metadata_view m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                     start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");
@@ -881,8 +883,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT DISTINCT device FROM ").append(viewName).append(" WHERE device IS NOT NULL");
         List<Object> params = new ArrayList<>();
-        // Note: testerType is a sender configuration attribute (in dtp_dist_conf / dtp_simple_client_setting),
-        // not a column in dtp_*_metadata tables. Filtering by tester_type on metadata tables causes ORA-00904.
+        if (testerType != null && !testerType.isBlank()) {
+            String tt = testerType.trim();
+            if (!tt.isEmpty() && !"ANY".equalsIgnoreCase(tt) && !"ALL".equalsIgnoreCase(tt) && !"NONE".equalsIgnoreCase(tt) && !"NULL".equalsIgnoreCase(tt)) {
+                sql.append(" AND UPPER(tester_type) = ?");
+                params.add(tt.toUpperCase(Locale.ROOT));
+            }
+        }
         sql.append(" ORDER BY device");
         PreparedStatement ps = null;
         ResultSet rs = null;
@@ -920,56 +927,33 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         String dtNorm = dataType.trim().toLowerCase(Locale.ROOT);
         switch (dtNorm) {
             case "probe":
-                return "probe_metadata_view";
+                return "dtp_probe_view";
             case "ft":
             case "functional":
             case "functionaltest":
-                return "ft_metadata_view";
+                return "dtp_ft_view";
             case "defect":
-                return "defect_metadata_view";
+                return "dtp_defect_view";
             case "pcm":
-                return "pcm_metadata_view";
+                return "dtp_pcm_view";
             case "met":
-                return "met_metadata_view";
+                return "dtp_met_view";
             case "map":
-                return "map_metadata_view";
+                return "dtp_map_view";
             case "leh":
-                return "leh_metadata_view";
+                return "dtp_leh_view";
+            case "historical":
+                return "dtp_historical_view";
             default:
-                return "all_metadata_view";
+                return "dtp_" + dtNorm + "_view";
         }
     }
 
     /**
-     * Preview queries use the dtp_*_metadata tables instead of the legacy dtp_*_view sources.
+     * Preview queries use the dtp_*_view sources.
      */
     private String getPreviewViewName(String dataType) {
-        if (dataType == null || dataType.isBlank()) {
-            return "dtp_all_metadata";
-        }
-        String dtNorm = dataType.trim().toLowerCase(Locale.ROOT);
-        switch (dtNorm) {
-            case "ft":
-            case "functional":
-            case "functionaltest":
-                return "dtp_ft_metadata";
-            case "probe":
-                return "dtp_probe_metadata";
-            case "defect":
-                return "dtp_defect_metadata";
-            case "pcm":
-                return "dtp_pcm_metadata";
-            case "met":
-                return "dtp_met_metadata";
-            case "map":
-                return "dtp_map_metadata";
-            case "leh":
-                return "dtp_leh_metadata";
-            case "historical":
-                return "dtp_historical_metadata";
-            default:
-                return "dtp_" + dtNorm + "_metadata";
-        }
+        return getMetadataViewName(dataType);
     }
 
     /**
@@ -1202,13 +1186,6 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 // `all_metadata_view`) the identifier column may be named `id`.
                 // Alias it to `id_data` so the rest of the code that expects
                 // `id_data` continues to work with specialized views.
-                if (!"all_metadata_view".equals(viewName)) {
-                    try {
-                        effectiveSelect = effectiveSelect.replaceAll("(?i)\\bid_data\\b", "id as id_data");
-                        // Also support 'id_file' as an alias for 'id_data' if it's found in the select string
-                        effectiveSelect = effectiveSelect.replaceAll("(?i)\\bid_file\\b", "id_file as id_data");
-                    } catch (Exception ignore) {}
-                }
                 // (leave addDataTypePredicate decision to code after we determine the final
                 // effectiveSelect so behavior is consistent whether or not specialization
                 // happened — see below)
@@ -1303,10 +1280,17 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 result.params.add(tpUpper);
             }
         }
-        // Note: testerType is a sender configuration attribute (in dtp_dist_conf.id_tester_type -> dtp_tester_type.type
-        // and dtp_simple_client_setting.tester_type), NOT a column on metadata views/tables (dtp_*_metadata / all_metadata_view).
-        // Any tester-specific filtering on metadata is defined by the sender's where_condition and applied via additionalWhereFilters.
-        // Attempting to query m."TESTER_TYPE" causes ORA-00904: "M"."TESTER_TYPE": invalid identifier.
+        if (testerType != null && !testerType.isBlank() && !"NULL".equalsIgnoreCase(testerType) && !"NONE".equalsIgnoreCase(testerType) && !"ANY".equalsIgnoreCase(testerType)) {
+            String tt = testerType.trim();
+            String ttUpper = tt.toUpperCase(Locale.ROOT);
+            if (tt.equals(ttUpper)) {
+                result.append(" and m.\"TESTER_TYPE\" = ?");
+                result.params.add(ttUpper);
+            } else {
+                result.append(" and UPPER(m.\"TESTER_TYPE\") = ?");
+                result.params.add(ttUpper);
+            }
+        }
         if (location != null && !location.isBlank()) {
             result.append(" and m.\"LOCATION\" = ?");
             result.params.add(location);
@@ -1387,10 +1371,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             }
             if (!vals.isEmpty()) {
                 if (vals.size() == 1) {
-                    result.append(allUpper ? " and m.\"TESTER_ID\" = ?" : " and UPPER(m.\"TESTER_ID\") = ?");
+                    result.append(allUpper ? " and m.\"TESTER\" = ?" : " and UPPER(m.\"TESTER\") = ?");
                     result.params.add(vals.get(0));
                 } else {
-                    result.append(allUpper ? " and m.\"TESTER_ID\" IN (" : " and UPPER(m.\"TESTER_ID\") IN (");
+                    result.append(allUpper ? " and m.\"TESTER\" IN (" : " and UPPER(m.\"TESTER\") IN (");
                     for (int i = 0; i < vals.size(); i++) {
                         if (i > 0) result.append(",");
                         result.append("?");
@@ -1681,7 +1665,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                        java.util.List<String> equipmentIds,
                                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use quoted identifiers for Oracle compatibility
-        String innerSelect = "select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER_ID\", m.\"TEST_PROGRAM\", "
+        String innerSelect = "select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", "
                 + PREVIEW_ROW_NUMBER + " from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
         SqlWithParams ranked = optimized
                 ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
@@ -2117,8 +2101,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
             String[] parts = key.split(":");
             String type = parts[0];
-            // Convert field name to uppercase for Oracle quoted identifiers
-            String fieldName = "\"" + parts[1].toUpperCase(Locale.ROOT) + "\"";
+            // Convert field name to uppercase for Oracle quoted identifiers.
+            // Map TESTER_ID to TESTER if needed to match dtp_*_view columns.
+            String col = parts[1].toUpperCase(Locale.ROOT);
+            if ("TESTER_ID".equals(col)) {
+                col = "TESTER";
+            }
+            String fieldName = "\"" + col + "\"";
 
             switch (type) {
                 case "SUBSTR_IN":
