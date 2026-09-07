@@ -881,13 +881,8 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT DISTINCT device FROM ").append(viewName).append(" WHERE device IS NOT NULL");
         List<Object> params = new ArrayList<>();
-        if (testerType != null && !testerType.isBlank()) {
-            String tt = testerType.trim();
-            if (!tt.isEmpty() && !"ANY".equalsIgnoreCase(tt) && !"ALL".equalsIgnoreCase(tt) && !"NONE".equalsIgnoreCase(tt) && !"NULL".equalsIgnoreCase(tt)) {
-                sql.append(" AND UPPER(tester_type) = ?");
-                params.add(tt.toUpperCase(Locale.ROOT));
-            }
-        }
+        // Note: testerType is a sender configuration attribute (in dtp_dist_conf / dtp_simple_client_setting),
+        // not a column in dtp_*_metadata tables. Filtering by tester_type on metadata tables causes ORA-00904.
         sql.append(" ORDER BY device");
         PreparedStatement ps = null;
         ResultSet rs = null;
