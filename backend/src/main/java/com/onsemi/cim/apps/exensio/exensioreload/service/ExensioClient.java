@@ -911,8 +911,8 @@ public class ExensioClient {
                         : fileNameFilter.contains("\\")
                                 ? fileNameFilter.substring(fileNameFilter.lastIndexOf('\\') + 1)
                                 : fileNameFilter;
-                predicates.add("UPPER(rf.file_name) LIKE '%' || '" +
-                        escapeSqlLiteral(baseName.toUpperCase(Locale.ROOT)) + "' || '%' ESCAPE '\\'");
+                predicates.add("UPPER(rf.file_name) LIKE '%" +
+                        escapeLikeLiteral(baseName.toUpperCase(Locale.ROOT)) + "%' ESCAPE '\\'");
             }
             if (dataIdFilter != null && !dataIdFilter.isBlank()) {
                 predicates.add("rf.data_id = '" + escapeSqlLiteral(dataIdFilter) + "'");
