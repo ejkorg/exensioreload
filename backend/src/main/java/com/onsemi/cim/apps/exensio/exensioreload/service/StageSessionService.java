@@ -1268,6 +1268,37 @@ public class StageSessionService {
         }
         boolean esConfigured = elasticsearchProperties != null && elasticsearchProperties.isConfigured();
         boolean exensioConfigured = exensioProperties != null && exensioProperties.isConfigured();
+
+        String table = refDbService.getStagingTable();
+        String sql = "SELECT " +
+                "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
+                "FROM " + table + " WHERE request_id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, sessionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    long staged = rs.getLong(1);
+                    long queued = rs.getLong(2);
+                    long enriching = rs.getLong(3);
+                    long exensio = rs.getLong(4);
+                    long completed = rs.getLong(5);
+                    long failed = rs.getLong(6);
+                    return integrationStatusService.snapshot(
+                            sessionId, esConfigured, exensioConfigured,
+                            staged, queued, enriching, exensio, completed, failed
+                    );
+                }
+            }
+        } catch (SQLException ex) {
+            log.warn("Failed querying status counts for integration snapshot: {}", ex.getMessage());
+        }
+
         return integrationStatusService.snapshot(sessionId, esConfigured, exensioConfigured);
     }
 

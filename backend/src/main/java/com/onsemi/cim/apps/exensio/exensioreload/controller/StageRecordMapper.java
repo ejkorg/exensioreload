@@ -67,24 +67,49 @@ public class StageRecordMapper {
 
         // Determine default CP status
         String cpIntegrationStatus;
+        String cpIntegrationMessage = cpStatus != null ? cpStatus.message() : null;
         if (cpStatus != null) {
             cpIntegrationStatus = cpStatus.status();
-        } else if (record.status() != null && record.status().equals("ELASTICSEARCH_MONITORING") && cpProps.isConfigured()) {
-            cpIntegrationStatus = "pending";
         } else if (!cpProps.isConfigured()) {
             cpIntegrationStatus = "not_configured";
+        } else if (record.cpOutputPath() != null || "EXENSIO_MONITORING".equals(record.status()) || "COMPLETED".equals(record.status())) {
+            cpIntegrationStatus = "success";
+            cpIntegrationMessage = "CP logs verified";
+        } else if ("ELASTICSEARCH_MONITORING".equals(record.status())) {
+            cpIntegrationStatus = "pending";
+            cpIntegrationMessage = "Monitoring Elasticsearch logs";
+        } else if ("QUEUED_FOR_CP".equals(record.status()) || "STAGED".equals(record.status())) {
+            cpIntegrationStatus = "pending";
+            cpIntegrationMessage = "Waiting for CP dispatch";
+        } else if ("CP_TIMEOUT".equals(record.status())) {
+            cpIntegrationStatus = "timeout";
+            cpIntegrationMessage = record.errorMessage() != null ? record.errorMessage() : "Enrichment timed out";
+        } else if ("CP_FAILED".equals(record.status())) {
+            cpIntegrationStatus = "failure";
+            cpIntegrationMessage = record.errorMessage() != null ? record.errorMessage() : "CP processing failed";
         } else {
             cpIntegrationStatus = "not_configured";
         }
 
         // Determine default Exensio status
         String exensioIntegrationStatus;
+        String exensioIntegrationMessage = exensioStatus != null ? exensioStatus.message() : null;
         if (exensioStatus != null) {
             exensioIntegrationStatus = exensioStatus.status();
-        } else if (record.status() != null && record.status().equals("EXENSIO_MONITORING") && exensioProps.isConfigured()) {
-            exensioIntegrationStatus = "pending";
         } else if (!exensioProps.isConfigured()) {
             exensioIntegrationStatus = "not_configured";
+        } else if ("COMPLETED".equals(record.status()) || record.exensioWaferKey() != null) {
+            exensioIntegrationStatus = "success";
+            exensioIntegrationMessage = "Loaded in Exensio";
+        } else if ("EXENSIO_MONITORING".equals(record.status())) {
+            exensioIntegrationStatus = "pending";
+            exensioIntegrationMessage = "Monitoring Exensio load";
+        } else if ("COMPLETED_MANUAL_VERIFICATION_REQUIRED".equals(record.status())) {
+            exensioIntegrationStatus = "timeout";
+            exensioIntegrationMessage = record.errorMessage() != null ? record.errorMessage() : "Manual verification required";
+        } else if ("LOAD_FAILED".equals(record.status())) {
+            exensioIntegrationStatus = "failure";
+            exensioIntegrationMessage = record.errorMessage() != null ? record.errorMessage() : "Exensio load failed";
         } else {
             exensioIntegrationStatus = "not_configured";
         }
@@ -114,9 +139,9 @@ public class StageRecordMapper {
                 record.exensioWaferKey(),
                 record.exensioPgKey(),
                 cpIntegrationStatus,
-                cpStatus != null ? cpStatus.message() : null,
+                cpIntegrationMessage,
                 exensioIntegrationStatus,
-                exensioStatus != null ? exensioStatus.message() : null
+                exensioIntegrationMessage
         );
     }
 

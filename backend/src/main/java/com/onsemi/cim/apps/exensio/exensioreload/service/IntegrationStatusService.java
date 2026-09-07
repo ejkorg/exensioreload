@@ -72,9 +72,22 @@ public class IntegrationStatusService {
     }
 
     public Map<String, Object> snapshot(String requestId, boolean esConfigured, boolean exensioConfigured) {
+        return snapshot(requestId, esConfigured, exensioConfigured, 0, 0, 0, 0, 0, 0);
+    }
+
+    public Map<String, Object> snapshot(
+            String requestId,
+            boolean esConfigured,
+            boolean exensioConfigured,
+            long stagedCount,
+            long queuedCount,
+            long enrichingCount,
+            long exensioCount,
+            long completedCount,
+            long failedCount) {
         Map<String, Object> result = new HashMap<>();
-        result.put("elasticsearch", toMap(esStatusByRequest.get(requestId), esConfigured));
-        result.put("exensio", toMap(exensioStatusByRequest.get(requestId), exensioConfigured));
+        result.put("elasticsearch", toEsMap(esStatusByRequest.get(requestId), esConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
+        result.put("exensio", toExensioMap(exensioStatusByRequest.get(requestId), exensioConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
         return result;
     }
 
@@ -164,6 +177,137 @@ public class IntegrationStatusService {
                 break;
             }
         }
+    }
+
+    private Map<String, Object> toEsMap(
+            IntegrationStatus status,
+            boolean configured,
+            long stagedCount,
+            long queuedCount,
+            long enrichingCount,
+            long exensioCount,
+            long completedCount,
+            long failedCount) {
+        Map<String, Object> out = new HashMap<>();
+        out.put("configured", configured);
+
+        if (!configured) {
+            out.put("status", "not_configured");
+            out.put("message", "Not configured");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (status != null) {
+            out.put("status", status.status());
+            out.put("message", status.message());
+            out.put("lastAt", status.at() != null ? status.at().toString() : null);
+            return out;
+        }
+
+        // Status is null in memory (e.g. after backend restart or before first poll)
+        // Infer from record / session stage progression:
+        if (enrichingCount == 0 && (exensioCount > 0 || completedCount > 0)) {
+            // Records have already passed Elasticsearch and progressed to Exensio or Completed
+            out.put("status", "success");
+            out.put("message", "Completed");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (enrichingCount > 0) {
+            out.put("status", "pending");
+            out.put("message", "Monitoring Elasticsearch logs");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (queuedCount > 0) {
+            out.put("status", "pending");
+            out.put("message", "Waiting for CP dispatch");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (stagedCount > 0) {
+            out.put("status", "pending");
+            out.put("message", "Waiting for staging/dispatch");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (failedCount > 0 && (stagedCount + queuedCount + enrichingCount + exensioCount + completedCount == 0)) {
+            out.put("status", "failure");
+            out.put("message", "Failed");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        out.put("status", "pending");
+        out.put("message", "Waiting for first check");
+        out.put("lastAt", null);
+        return out;
+    }
+
+    private Map<String, Object> toExensioMap(
+            IntegrationStatus status,
+            boolean configured,
+            long stagedCount,
+            long queuedCount,
+            long enrichingCount,
+            long exensioCount,
+            long completedCount,
+            long failedCount) {
+        Map<String, Object> out = new HashMap<>();
+        out.put("configured", configured);
+
+        if (!configured) {
+            out.put("status", "not_configured");
+            out.put("message", "Not configured");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (status != null) {
+            out.put("status", status.status());
+            out.put("message", status.message());
+            out.put("lastAt", status.at() != null ? status.at().toString() : null);
+            return out;
+        }
+
+        // Status is null in memory
+        if (completedCount > 0 && exensioCount == 0 && enrichingCount == 0 && queuedCount == 0 && stagedCount == 0) {
+            out.put("status", "success");
+            out.put("message", "Completed");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (exensioCount > 0) {
+            out.put("status", "pending");
+            out.put("message", "Monitoring Exensio load");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (enrichingCount > 0 || queuedCount > 0 || stagedCount > 0) {
+            out.put("status", "pending");
+            out.put("message", "Awaiting previous stages");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        if (failedCount > 0 && (stagedCount + queuedCount + enrichingCount + exensioCount + completedCount == 0)) {
+            out.put("status", "failure");
+            out.put("message", "Failed");
+            out.put("lastAt", null);
+            return out;
+        }
+
+        out.put("status", "pending");
+        out.put("message", "Waiting for first check");
+        out.put("lastAt", null);
+        return out;
     }
 
     private Map<String, Object> toMap(IntegrationStatus status, boolean configured) {

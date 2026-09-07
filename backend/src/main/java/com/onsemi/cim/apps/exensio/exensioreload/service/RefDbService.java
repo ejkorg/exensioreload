@@ -1100,7 +1100,10 @@ public class RefDbService {
         if (integrationStatusService != null) {
             boolean esConfigured = elasticsearchProperties != null && elasticsearchProperties.isConfigured();
             boolean exensioConfigured = exensioProperties != null && exensioProperties.isConfigured();
-            evt.put("integration", integrationStatusService.snapshot(requestId, esConfigured, exensioConfigured));
+            evt.put("integration", integrationStatusService.snapshot(
+                    requestId, esConfigured, exensioConfigured,
+                    ready, enqueued, enriching, exensioLoading, completed, failed
+            ));
         }
 
         safeSendEvent(requestId, "STATS", evt);
