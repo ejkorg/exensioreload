@@ -159,7 +159,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
         SqlWithParams sql = buildMetadataQuery(
-                "select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+                "select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\") as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", COUNT(*) OVER() as total_count from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
         sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
@@ -222,7 +222,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // the query doesn't produce the same INFO logs as the executing call.
         // Use quoted identifiers for Oracle compatibility
         String viewName = getPreviewViewName(dataType);
-        SqlWithParams sql = buildMetadataQueryInternal("select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+        SqlWithParams sql = buildMetadataQueryInternal("select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\") as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                 start, end, null, /* dataTypeExt */ null, /* testPhase */ null, testerType, /* location */ null, lots, wafers, devices, false, this.forceAllMetadataView, steps, recipes, equipmentIds, additionalWhereFilters);
         sql.append(" order by m.\"END_TIME\" desc");
         if (limit > 0) {
@@ -277,7 +277,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         ResultSet rs = null;
         try {
             // Use quoted identifiers for Oracle compatibility
-            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from all_metadata_view m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
+            SqlWithParams sql = buildMetadataQuery("select DISTINCT m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\") as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\" from all_metadata_view m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"",
                     start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
             if (limit > 0) {
                 sql.append(" fetch first ").append(String.valueOf(limit)).append(" rows only");
@@ -1255,12 +1255,13 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         if (dataTypeExt != null && !dataTypeExt.isBlank() && !"NULL".equalsIgnoreCase(dataTypeExt) && !"NONE".equalsIgnoreCase(dataTypeExt) && !"ANY".equalsIgnoreCase(dataTypeExt)) {
             String dte = dataTypeExt.trim();
             String dteUpper = dte.toUpperCase(Locale.ROOT);
-            // In metadata views, the parameter is called test_phase, but when navigating from modern models
-            // we use dataTypeExt. If the query is against *_metadata_view, data_type_ext column might not exist.
-            // Map it to test_phase if we are dealing with legacy views which all have test_phase instead of data_type_ext
-            boolean isLegacyView = effectiveSelect != null && effectiveSelect.toLowerCase(Locale.ROOT).contains("_metadata_view");
-            String colName = isLegacyView ? "m.\"TEST_PHASE\"" : "m.\"DATA_TYPE_EXT\"";
-            
+            // dtp_xxx_view and dtp_*_metadata_view both expose TEST_PHASE.
+            // Only all_metadata_view has a DATA_TYPE_EXT column.
+            // So: if the effective SELECT references all_metadata_view, use DATA_TYPE_EXT;
+            // otherwise (dtp_xxx_view / dtp_*_metadata_view) use TEST_PHASE.
+            boolean isAllMetadataView = effectiveSelect != null && effectiveSelect.toLowerCase(Locale.ROOT).contains("all_metadata_view");
+            String colName = isAllMetadataView ? "m.\"DATA_TYPE_EXT\"" : "m.\"TEST_PHASE\"";
+
             if (dte.equals(dteUpper)) {
                 result.append(" and " + colName + " = ?");
                 result.params.add(dteUpper);
@@ -1641,7 +1642,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
     }
 
     private static final String PREVIEW_ROW_NUMBER =
-            "ROW_NUMBER() OVER (PARTITION BY m.\"LOT\", NVL(TRIM(m.\"WAFER\"), ' '), NVL(TRIM(f.\"FILE_NAME\"), ' ') "
+            "ROW_NUMBER() OVER (PARTITION BY m.\"LOT\", NVL(TRIM(m.\"WAFER\"), ' '), NVL(TRIM(COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\")), ' ') "
                     + "ORDER BY m.\"END_TIME\" DESC NULLS LAST, m.\"ID\" DESC) rn";
 
     /**
@@ -1665,7 +1666,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                        java.util.List<String> equipmentIds,
                                                        java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use quoted identifiers for Oracle compatibility
-        String innerSelect = "select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", f.\"FILE_NAME\" as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", "
+        String innerSelect = "select m.\"LOT\", m.\"ID\" as metadata_id, m.\"ID_DATA\", m.\"END_TIME\", m.\"WAFER\", m.\"DEVICE\", COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\") as original_file_name, m.\"STEP\", m.\"TESTER\" as tester_id, m.\"TEST_PROGRAM\", "
                 + PREVIEW_ROW_NUMBER + " from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
         SqlWithParams ranked = optimized
                 ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
@@ -1696,7 +1697,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                                                         java.util.List<String> equipmentIds,
                                                         java.util.Map<String, java.util.List<String>> additionalWhereFilters) {
         // Use quoted identifiers for Oracle compatibility
-        String innerSelect = "select distinct m.\"LOT\", m.\"WAFER\", f.\"FILE_NAME\" as original_file_name from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
+        String innerSelect = "select distinct m.\"LOT\", m.\"WAFER\", COALESCE(m.\"ORIGINAL_FILE_NAME\", f.\"FILE_NAME\") as original_file_name from " + viewName + " m left join dtp_file f on f.\"ID\" = m.\"ID_FILE\"";
         SqlWithParams inner = optimized
                 ? buildOptimizedMetadataQuery(innerSelect, start, end, dataType, lots, wafers, devices)
                 : buildMetadataQuery(innerSelect, start, end, dataType, dataTypeExt, testPhase, testerType, location, lots, wafers, devices, steps, recipes, equipmentIds, additionalWhereFilters);
@@ -2102,10 +2103,12 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
             String[] parts = key.split(":");
             String type = parts[0];
             // Convert field name to uppercase for Oracle quoted identifiers.
-            // Map TESTER_ID to TESTER if needed to match dtp_*_view columns.
+            // Map aliases to dtp_*_view columns.
             String col = parts[1].toUpperCase(Locale.ROOT);
             if ("TESTER_ID".equals(col)) {
                 col = "TESTER";
+            } else if ("FILE_NAME".equals(col)) {
+                col = "ORIGINAL_FILE_NAME";
             }
             String fieldName = "\"" + col + "\"";
 
