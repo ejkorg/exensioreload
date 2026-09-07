@@ -1,4 +1,4 @@
-﻿import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,6 +17,7 @@ import {
 } from '../api/backend.service';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
@@ -115,6 +116,7 @@ interface DashboardErrorDetails {
     GlassCheckboxComponent,
     GlassDeviceFilterComponent,
     StateLegendTooltipComponent,
+    DualTimestampComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],

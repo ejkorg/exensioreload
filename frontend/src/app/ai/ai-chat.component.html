@@ -137,7 +137,9 @@
                 <span class="confidence" [class.low]="message.confidence < 0.6">
                   {{ (message.confidence * 100).toFixed(0) }}% confidence
                 </span>
-                <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+                <span class="timestamp">
+                  <app-dual-timestamp [value]="message.timestamp" layout="inline"></app-dual-timestamp>
+                </span>
               </div>
             }
           </div>

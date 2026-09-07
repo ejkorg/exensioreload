@@ -19,6 +19,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AiService } from './ai.service';
 import { ChatMessage, SuggestedAction } from './ai.types';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-ai-chat',
@@ -32,6 +33,7 @@ import { ChatMessage, SuggestedAction } from './ai.types';
     MatFormFieldModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
+    DualTimestampComponent,
   ],
   templateUrl: './ai-chat.component.html',
   styleUrls: ['./ai-chat.component.scss'],

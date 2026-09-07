@@ -6,6 +6,7 @@ import { MonitoringFileItem, MonitoringPaginationService } from '../services/mon
 import { GlassButtonComponent } from './glass-button.component';
 import { GlassIconComponent } from './glass-icon.component';
 import { GlassInputComponent } from './glass-input.component';
+import { DualTimestampComponent } from './dual-timestamp.component';
 
 @Component({
   selector: 'app-realtime-monitoring-file-list',
@@ -17,6 +18,7 @@ import { GlassInputComponent } from './glass-input.component';
     GlassInputComponent,
     GlassButtonComponent,
     GlassTooltipDirective,
+    DualTimestampComponent,
   ],
   template: `
     <div class="realtime-file-list glass-panel">
@@ -138,7 +140,7 @@ import { GlassInputComponent } from './glass-input.component';
               <div class="col-lot">{{ file.lot || '-' }}</div>
               <div class="col-wafer">{{ file.wafer || '-' }}</div>
               <div class="col-updated">
-                <span class="time-ago">{{ getTimeAgo(file.updatedAt) }}</span>
+                <app-dual-timestamp [value]="file.updatedAt"></app-dual-timestamp>
                 <app-glass-icon *ngIf="file.cpOutputPath || file.errorMessage"
                   [name]="isExpanded(file) ? 'expand_less' : 'expand_more'"
                   [size]="14" color="muted">
@@ -361,7 +363,7 @@ import { GlassInputComponent } from './glass-input.component';
 
       .table-header {
         display: grid;
-        grid-template-columns: 120px 1fr 100px 80px 120px;
+        grid-template-columns: 120px 1fr 100px 80px 180px;
         gap: 1rem;
         padding: 0.75rem 1.25rem;
         background: rgba(255, 255, 255, 0.02);
@@ -386,7 +388,7 @@ import { GlassInputComponent } from './glass-input.component';
 
       .table-row {
         display: grid;
-        grid-template-columns: 120px 1fr 100px 80px 120px;
+        grid-template-columns: 120px 1fr 100px 80px 180px;
         gap: 1rem;
         padding: 0.5rem 1.25rem;
         font-size: 0.875rem;
@@ -629,8 +631,16 @@ import { GlassInputComponent } from './glass-input.component';
       }
 
       .col-lot,
-      .col-wafer,
+      .col-wafer {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+
       .col-updated {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
         font-size: 0.875rem;
         color: var(--text-muted);
       }

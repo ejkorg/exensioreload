@@ -12,6 +12,7 @@ import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.direct
 import { ToastService } from '../shared/services/toast.service';
 import { UserFormDialogComponent } from './user-form-dialog.component';
 import { User, UserService, UserStatistics } from './user.service';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-user-list',
@@ -24,6 +25,7 @@ import { User, UserService, UserStatistics } from './user.service';
     GlassIconComponent,
     GlassTooltipDirective,
     GlassPaginationComponent,
+    DualTimestampComponent,
   ],
   templateUrl: './user-list.component.html',
   styleUrls: ['./user-list.component.scss'],

@@ -9,6 +9,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService, StageRecordView } from '../api/backend.service';
 import { ToastService } from '../shared/services/toast.service';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 interface MetricCardDetailData {
   state: string;
@@ -30,6 +31,7 @@ interface MetricCardDetailData {
     MatTableModule,
     MatPaginatorModule,
     MatDialogModule,
+    DualTimestampComponent,
   ],
   templateUrl: './metric-card-detail-sidebar.component.html',
   styleUrls: ['./metric-card-detail-sidebar.component.scss'],

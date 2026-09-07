@@ -468,7 +468,7 @@
 
       <div class="error-code-section" *ngIf="errorDetails() as details">
         <span class="error-code">{{ details.code }}</span>
-        <span class="error-time">{{ formatUtcTimestamp(details.timestamp) }}</span>
+        <span class="error-time"><app-dual-timestamp [value]="details.timestamp" layout="inline"></app-dual-timestamp></span>
       </div>
 
       <div class="retry-info" *ngIf="errorDetails() as details">

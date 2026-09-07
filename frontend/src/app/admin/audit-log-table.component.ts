@@ -7,6 +7,7 @@ import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.directive';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { AuditService, EtlAuditLog } from './audit.service';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-audit-log-table',
@@ -17,7 +18,8 @@ import { AuditService, EtlAuditLog } from './audit.service';
     GlassSelectComponent,
     GlassIconComponent,
     GlassTooltipDirective,
-    GlassPaginationComponent
+    GlassPaginationComponent,
+    DualTimestampComponent,
   ],
   template: `
     <div class="audit-container">
@@ -87,10 +89,7 @@ import { AuditService, EtlAuditLog } from './audit.service';
           <tbody>
             <tr *ngFor="let log of dataSource(); trackBy: trackById">
               <td>
-                <div class="time-cell">
-                  <span class="time-value">{{ formatUtcTimestamp(log.timestamp) }}</span>
-                  <span class="time-seconds">{{ formatUtcSeconds(log.timestamp) }}s</span>
-                </div>
+                <app-dual-timestamp [value]="log.timestamp"></app-dual-timestamp>
               </td>
               <td>
                 <div class="request-id-cell">

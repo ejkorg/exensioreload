@@ -71,9 +71,7 @@
       <ng-container matColumnDef="updated">
         <th mat-header-cell>Updated</th>
         <td mat-cell *matCellDef="let record">
-          <span class="updated-text" [title]="formatDate(record.updated || record.updatedAt)">
-            {{ formatDate(record.updated || record.updatedAt) }}
-          </span>
+          <app-dual-timestamp [value]="record.updated || record.updatedAt"></app-dual-timestamp>
         </td>
       </ng-container>
 

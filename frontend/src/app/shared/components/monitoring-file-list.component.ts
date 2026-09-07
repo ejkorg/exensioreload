@@ -6,6 +6,7 @@ import { GlassButtonComponent } from './glass-button.component';
 import { GlassIconComponent } from './glass-icon.component';
 import { GlassInputComponent } from './glass-input.component';
 import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.component';
+import { DualTimestampComponent } from './dual-timestamp.component';
 
 @Component({
   selector: 'app-monitoring-file-list',
@@ -17,6 +18,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
     GlassButtonComponent,
     GlassTooltipDirective,
     GlassPaginationComponent,
+    DualTimestampComponent,
   ],
   template: `
     <div class="file-list-container glass-panel">
@@ -101,6 +103,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
           <div class="col-lot">Lot</div>
           <div class="col-wafer" *ngIf="showWaferColumn()">Wafer</div>
           <div class="col-message">Message</div>
+          <div class="col-updated">Updated</div>
         </div>
 
         <div class="table-body">
@@ -129,6 +132,9 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             <div class="col-wafer" *ngIf="showWaferColumn()">{{ file.wafer || '-' }}</div>
             <div class="col-message" [glassTooltip]="file.message">
               {{ file.message }}
+            </div>
+            <div class="col-updated">
+              <app-dual-timestamp [value]="file.updatedAt"></app-dual-timestamp>
             </div>
 
             <!-- Expanded Details -->
@@ -311,7 +317,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
 
       .table-header {
         display: grid;
-        grid-template-columns: 140px 1fr 120px 100px 200px;
+        grid-template-columns: 140px 1fr 100px 80px 180px 180px;
         gap: 1rem;
         padding: 0.75rem 1rem;
         background: rgba(255, 255, 255, 0.02);
@@ -331,7 +337,7 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
 
       .table-row {
         display: grid;
-        grid-template-columns: 140px 1fr 120px 100px 200px;
+        grid-template-columns: 140px 1fr 100px 80px 180px 180px;
         gap: 1rem;
         padding: 0.75rem 1rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.03);

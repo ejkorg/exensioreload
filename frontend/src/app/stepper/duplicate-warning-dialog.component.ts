@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassDialogRef, GLASS_DIALOG_DATA } from '../shared/services/glass-dialog.service';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 export interface DuplicatePayloadInfo {
   metadataId: string;
@@ -35,7 +36,7 @@ const PAGE_SIZE = 25;
 @Component({
   selector: 'app-duplicate-warning-dialog',
   standalone: true,
-  imports: [CommonModule, GlassIconComponent, GlassButtonComponent],
+  imports: [CommonModule, GlassIconComponent, GlassButtonComponent, DualTimestampComponent],
   template: `
     <div class="dialog-container glass-panel">
       <!-- Header -->
@@ -102,7 +103,7 @@ const PAGE_SIZE = 25;
                   &nbsp;&bull; Last by <strong>{{ dup.lastRequestedBy }}</strong>
                 </ng-container>
                 <ng-container *ngIf="dup.stagedAt">
-                  &nbsp;&bull; {{ formatDate(dup.stagedAt) }}
+                  &nbsp;&bull; <app-dual-timestamp [value]="dup.stagedAt" layout="inline"></app-dual-timestamp>
                 </ng-container>
               </span>
             </div>

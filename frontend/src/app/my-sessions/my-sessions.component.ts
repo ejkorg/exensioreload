@@ -30,6 +30,7 @@ import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading
 import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
 import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '../shared/utils/datetime.util';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-my-sessions',
@@ -44,6 +45,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
     GlassLoadingOverlayComponent,
     GlassSelectComponent,
     SiteNamePipe,
+    DualTimestampComponent,
   ],
   template: `
     <div class="container glass-panel">
@@ -176,7 +178,9 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               <td>
                 <span class="status-badge" [class]="session.status.toLowerCase()">{{ session.status }}</span>
               </td>
-              <td class="date-cell">{{ formatShortDate(session.updatedAt) }}</td>
+              <td class="date-cell">
+                <app-dual-timestamp [value]="session.updatedAt"></app-dual-timestamp>
+              </td>
               <td class="table-actions-cell" (click)="$event.stopPropagation()">
                 <app-glass-button
                   *ngIf="canResumeMonitoring(session)"
@@ -285,7 +289,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
                 >
                   {{ selectedDetail()?.status || session.status }}
                 </span>
-                <span class="head-updated">Updated: {{ formatShortDate(session.updatedAt) }}</span>
+                <span class="head-updated">Updated: <app-dual-timestamp [value]="session.updatedAt" layout="inline"></app-dual-timestamp></span>
                 <app-glass-button
                   variant="secondary"
                   size="small"
@@ -557,8 +561,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
                         <td class="ft-col-status">
                           <span class="status-badge" [class]="f.status.toLowerCase()">{{ f.status }}</span>
                         </td>
-                        <td class="ft-col-date ft-date">{{ formatShortDate(f.createdAt) }}</td>
-                        <td class="ft-col-date ft-date ft-endtime">{{ formatEndTime(f.endTime) }}</td>
+                        <td class="ft-col-date ft-date">
+                          <app-dual-timestamp [value]="f.createdAt"></app-dual-timestamp>
+                        </td>
+                        <td class="ft-col-date ft-date ft-endtime">
+                          <app-dual-timestamp [value]="f.endTime"></app-dual-timestamp>
+                        </td>
                       </tr>
                       <tr *ngIf="filteredFiles().length === 0" class="ft-empty-row">
                         <td colspan="7" class="ft-empty-cell">No files match the current filter.</td>

@@ -6,6 +6,7 @@ import { GlassButtonComponent } from './glass-button.component';
 import { GlassInputComponent } from './glass-input.component';
 import { GlassCheckboxComponent } from './glass-checkbox.component';
 import { GlassIconComponent } from './glass-icon.component';
+import { DualTimestampComponent } from './dual-timestamp.component';
 
 @Component({
     selector: 'app-alert-configuration',
@@ -16,7 +17,8 @@ import { GlassIconComponent } from './glass-icon.component';
         GlassButtonComponent,
         GlassInputComponent,
         GlassCheckboxComponent,
-        GlassIconComponent
+        GlassIconComponent,
+        DualTimestampComponent,
     ],
     template: `
         <div class="alert-config-container">
@@ -146,7 +148,9 @@ import { GlassIconComponent } from './glass-icon.component';
                                     <div class="alert-details">
                                         <p><strong>{{ alert.alertType }}</strong></p>
                                         <p>Current Value: {{ alert.currentValue }} / Threshold: {{ alert.threshold }}</p>
-                                        <p class="timestamp">{{ formatTime(alert.triggered_at) }}</p>
+                                        <div class="timestamp">
+                                            <app-dual-timestamp [value]="alert.triggered_at" layout="inline"></app-dual-timestamp>
+                                        </div>
                                     </div>
                                     <div class="alert-actions">
                                         @if (!alert.acknowledged) {
