@@ -64,6 +64,11 @@ public class CpLogMonitor {
     private final AtomicLong failureCount = new AtomicLong(0);
     private final AtomicLong timeoutCount = new AtomicLong(0);
 
+    // Tracks when CP success was detected in ES, to measure the pp_log grace period
+    private final java.util.Map<Long, Instant> cpSuccessDetectedAt = new java.util.concurrent.ConcurrentHashMap<>();
+    // Tracks when ES timeout occurred, to measure the post-timeout pp_log grace period
+    private final java.util.Map<Long, Instant> esTimeoutDetectedAt = new java.util.concurrent.ConcurrentHashMap<>();
+
     public CpLogMonitor(RefDbService refDbService,
                         ElasticsearchLogService elasticsearchLogService,
                         ExensioClient exensioClient,
@@ -209,9 +214,11 @@ public class CpLogMonitor {
         }
 
         // --- Step 2: Consolidate results ---
-        // Priority: pp_log Success > ES Success > pp_log Failure > ES Failure > NotFound
+        // Priority: pp_log Success > pp_log Failure > ES Failure > ES Success (with pp_log grace) > NotFound
         // pp_log is the production source of truth — if it has the record, that's final.
         if (ppLogResult instanceof PpLogResult.Success ppSuccess) {
+            cpSuccessDetectedAt.remove(stageRecordId);
+            esTimeoutDetectedAt.remove(stageRecordId);
             log.info("CP enrichment success (pp_log) for record id={} dataId={}: output={}",
                     record.id(), record.dataId(), ppSuccess.outputDirectory());
             String statusMsg = String.format("CP enrichment completed via pp_log: %s", ppSuccess.outputDirectory());
@@ -223,20 +230,9 @@ public class CpLogMonitor {
             return;
         }
 
-        if (esResult instanceof CpLogResult.Success success) {
-            log.info("CP enrichment success (ES) for record id={} dataId={}: path={} target={} traceId={}",
-                    record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
-            String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
-                    success.outputPath(), success.outputTarget(), success.traceId());
-            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
-            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
-            successCount.incrementAndGet();
-            pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
-            emitRowUpdateSse(record, requestId);
-            return;
-        }
-
         if (ppLogResult instanceof PpLogResult.Failure ppFailure) {
+            cpSuccessDetectedAt.remove(stageRecordId);
+            esTimeoutDetectedAt.remove(stageRecordId);
             log.info("CP enrichment failure (pp_log) for record id={} dataId={}: {}",
                     record.id(), record.dataId(), ppFailure.errorMessage());
             String statusMsg = String.format(
@@ -251,6 +247,8 @@ public class CpLogMonitor {
         }
 
         if (esResult instanceof CpLogResult.Failure failure) {
+            cpSuccessDetectedAt.remove(stageRecordId);
+            esTimeoutDetectedAt.remove(stageRecordId);
             String errorMessage = truncateErrorMessage(failure.errorMessage());
             log.info("CP enrichment failure (ES) for record id={} dataId={}: {}",
                     record.id(), record.dataId(), errorMessage);
@@ -266,9 +264,68 @@ public class CpLogMonitor {
             return;
         }
 
+        if (esResult instanceof CpLogResult.Success success) {
+            // Check if pp_log is configured and should be given a grace period to confirm before proceeding to Exensio
+            if (hasPpLog) {
+                Instant detectedAt = cpSuccessDetectedAt.computeIfAbsent(stageRecordId, id -> Instant.now());
+                int graceMinutes = ppLogDbProperties.getGracePeriodMinutes();
+                boolean graceExpired = java.time.Duration.between(detectedAt, Instant.now()).toMinutes() >= graceMinutes;
+
+                if (!graceExpired) {
+                    long minutesWaited = java.time.Duration.between(detectedAt, Instant.now()).toMinutes();
+                    log.debug("CP succeeded in ES for record id={} dataId={} — awaiting pp_log confirmation (grace period {}/{} min)",
+                            record.id(), record.dataId(), minutesWaited, graceMinutes);
+                    String statusMsg = String.format("CP succeeded (ES) — awaiting pp_log confirmation (%dm grace)", graceMinutes);
+                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "awaiting_pp_log", statusMsg);
+                    emitRowUpdateSse(record, requestId);
+                    return;
+                } else {
+                    log.info("pp_log grace period ({} min) expired for record id={} dataId={} — proceeding to Exensio monitoring (bypassed pp_log)",
+                            graceMinutes, record.id(), record.dataId());
+                    cpSuccessDetectedAt.remove(stageRecordId);
+                }
+            }
+
+            cpSuccessDetectedAt.remove(stageRecordId);
+            esTimeoutDetectedAt.remove(stageRecordId);
+            log.info("CP enrichment success (ES) for record id={} dataId={}: path={} target={} traceId={}",
+                    record.id(), record.dataId(), success.outputPath(), success.outputTarget(), success.traceId());
+            String statusMsg = String.format("CP enrichment success: %s -> %s (traceId=%s)",
+                    success.outputPath(), success.outputTarget(), success.traceId());
+            integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
+            integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
+            successCount.incrementAndGet();
+            pipelineOrchestrator.onCpEnrichmentSuccess(record, success.outputPath(), success.outputTarget());
+            emitRowUpdateSse(record, requestId);
+            return;
+        }
+
         // --- Step 3: Both ES and pp_log returned NotFound ---
         if (isTimedOut(record)) {
+            // If pp_log is available, give it a dedicated post-timeout grace period before escalating to Exensio
+            if (hasPpLog) {
+                Instant timeoutAt = esTimeoutDetectedAt.computeIfAbsent(stageRecordId, id -> Instant.now());
+                int graceMinutes = ppLogDbProperties.getGracePeriodMinutes();
+                boolean graceExpired = java.time.Duration.between(timeoutAt, Instant.now()).toMinutes() >= graceMinutes;
+
+                if (!graceExpired) {
+                    long minutesWaited = java.time.Duration.between(timeoutAt, Instant.now()).toMinutes();
+                    log.debug("ES timed out for record id={} dataId={}, awaiting pp_log before Exensio escalation (grace period {}/{} min)",
+                            record.id(), record.dataId(), minutesWaited, graceMinutes);
+                    String statusMsg = String.format("ES window ended — awaiting pp_log before Exensio escalation (%dm grace)", graceMinutes);
+                    integrationStatusService.updateCpStatusForRecord(stageRecordId, "awaiting_pp_log", statusMsg);
+                    emitRowUpdateSse(record, requestId);
+                    return;
+                } else {
+                    log.info("pp_log grace period ({} min) expired after ES timeout for record id={} dataId={} — escalating to Exensio",
+                            graceMinutes, record.id(), record.dataId());
+                    esTimeoutDetectedAt.remove(stageRecordId);
+                }
+            }
+
             timeoutCount.incrementAndGet();
+            cpSuccessDetectedAt.remove(stageRecordId);
+            esTimeoutDetectedAt.remove(stageRecordId);
             
             // Build diagnostic summary of what was checked
             String diagnosticSummary = buildTimeoutDiagnosticSummary(record);
@@ -321,6 +378,8 @@ public class CpLogMonitor {
         log.info("resolveStuckEnrichmentRecords: {} record(s) found in ENRICHMENT with no enrichment sources — resolving immediately", stuck.size());
         String reason = "No enrichment sources configured (ES url blank, pp_log disabled) — bypassing enrichment wait";
         for (StageRecord record : stuck) {
+            cpSuccessDetectedAt.remove(record.id());
+            esTimeoutDetectedAt.remove(record.id());
             totalRecordsProcessed.incrementAndGet();
             tryExensioDirectLookup(record, record.requestId(), record.id(), reason);
         }
@@ -389,6 +448,8 @@ public class CpLogMonitor {
                     record.lot(), record.metadataId(), minutesStuck, timeoutMinutes);
             
             try {
+                cpSuccessDetectedAt.remove(record.id());
+                esTimeoutDetectedAt.remove(record.id());
                 refDbService.markCompletedManualVerify(record, message);
                 log.info("Auto-remediated stuck record: id={}, lot={}", record.id(), record.lot());
             } catch (Exception e) {

@@ -56,6 +56,13 @@ public class PpLogDbProperties {
      */
     private String serverTimezone = "UTC";
 
+    /**
+     * Grace period in minutes to give pp_log to record preprocessing completion
+     * before escalating to Exensio monitoring.
+     * Defaults to 3 minutes.
+     */
+    private int gracePeriodMinutes = 3;
+
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
@@ -74,6 +81,8 @@ public class PpLogDbProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getServerTimezone() { return serverTimezone; }
     public void setServerTimezone(String serverTimezone) { this.serverTimezone = serverTimezone == null ? "UTC" : serverTimezone; }
+    public int getGracePeriodMinutes() { return gracePeriodMinutes; }
+    public void setGracePeriodMinutes(int gracePeriodMinutes) { this.gracePeriodMinutes = gracePeriodMinutes; }
 
     /** Returns true if a separate pp_log host is configured. */
     public boolean isConfigured() {

@@ -250,7 +250,7 @@ Fallthrough:
   └─ Return CpLogResult.NotFound
 ```
 
-### 2.4 Parallel Query with Oracle `pp_log`
+### 2.4 Parallel Query with Oracle `pp_log` & Pre-Exensio Grace Period
 
 In production, `CpLogMonitor.processRecord()` queries **both Elasticsearch and the production Oracle `pp_log` table concurrently** using `CompletableFuture.supplyAsync()`:
 
@@ -270,23 +270,31 @@ sequenceDiagram
     alt pp_log Success (processCode == 0)
         M->>DB: markCpSuccess() / advance to EXENSIO_MONITORING
         M->>UI: emit ROW_UPDATE (status=success, target=PP_LOG)
-    else ES Success (PRODUCTION / SANDBOX)
-        M->>DB: markCpSuccess() / advance to EXENSIO_MONITORING
-        M->>UI: emit ROW_UPDATE (status=success, target=ES)
     else pp_log Failure (processCode != 0)
         M->>DB: markCpFailed("[pp_log Failure]...")
         M->>UI: emit ROW_UPDATE (status=failure)
     else ES Failure (log.level == ERROR)
         M->>DB: markCpFailed("[ES Failure]...")
         M->>UI: emit ROW_UPDATE (status=failure)
+    else ES Success (Awaiting pp_log Grace Period)
+        alt Within pp_log Grace Period (default 3m)
+            M->>UI: emit ROW_UPDATE (status=awaiting_pp_log)
+        else Grace Period Expired
+            M->>DB: markCpSuccess() / advance to EXENSIO_MONITORING
+            M->>UI: emit ROW_UPDATE (status=success, target=ES)
+        end
     else Both NotFound
         alt Elapsed > enrichmentTimeoutMinutes (15m)
-            alt Exensio is configured
-                M->>DB: markExensioMonitoringPending()
-                M->>UI: emit ROW_UPDATE (status=timeout, assuming success)
-            else Exensio NOT configured
-                M->>DB: markCpTimeout()
-                M->>UI: emit ROW_UPDATE (status=timeout)
+            alt Within pp_log Post-Timeout Grace Period (3m)
+                M->>UI: emit ROW_UPDATE (status=awaiting_pp_log)
+            else Grace Period Expired
+                alt Exensio is configured
+                    M->>DB: markExensioMonitoringPending()
+                    M->>UI: emit ROW_UPDATE (status=timeout, assuming success)
+                else Exensio NOT configured
+                    M->>DB: markCpTimeout()
+                    M->>UI: emit ROW_UPDATE (status=timeout)
+                end
             end
         else Within timeout
             M->>UI: emit ROW_UPDATE (status=not_found, retrying)
@@ -294,7 +302,21 @@ sequenceDiagram
     end
 ```
 
-**Precedence Rule**: `pp_log` is the authoritative manufacturing record. If `pp_log` reports success, it wins immediately, even if ES has not indexed the log yet.
+#### Precedence & Grace Period Rules
+
+1. **`pp_log` Authoritative Precedence**:
+   `pp_log` is the production source of truth. If `pp_log` reports success (`process_code == 0`), it wins immediately, providing the exact `output_directory` even before ES has finished log shipping.
+2. **Fail-Fast Error Detection**:
+   If `pp_log` records `process_code != 0`, the record is marked `CP_FAILED` immediately. This prevents wasting 15–30 minutes polling the Exensio API for a file that was rejected during CP preprocessing.
+3. **Dedicated `pp_log` Grace Period (`refdb.pplog.grace-period-minutes`, default: 3m)**:
+   - CP writes to `pp_log` upon completion of preprocessing. If ES completes or times out first, jumping to Exensio monitoring immediately causes Exensio API queries to return `empty response` because the loader has not yet received the file.
+   - When ES reports success or reaches its timeout threshold, `CpLogMonitor` allows up to `grace-period-minutes` for `pp_log` to record preprocessing completion.
+4. **Transparent Fallthrough for Flows Bypassing `pp_log`**:
+   - Because not all manufacturing data flows pass through `pp_log`, `NotFound` in `pp_log` is **never treated as a failure**.
+   - Once the grace period expires with `NotFound`, the record smoothly falls through to `EXENSIO_MONITORING`.
+5. **Resilient Lot-Only Fallback Query in `RefDbService`**:
+   - `RefDbService.queryPpLog()` first attempts a matching query using `lot`, timestamp, and a 15-character filename prefix (`LOWER(SUBSTR(file_name, 1, 15))`).
+   - If that query returns no rows, it automatically executes a secondary fallback query matching by `lot` and timestamp alone, ensuring that filename prefix variations (e.g. drop directory path prefixes) do not result in false `NotFound` results.
 
 ### 2.5 Clock Skew, Lookback Buffers & Timezone Handling
 

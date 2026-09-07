@@ -4278,6 +4278,30 @@ public class RefDbService {
         } catch (SQLException ex) {
             log.warn("pp_log query failed for lot={} discoveredFilename={} enrichmentStartedAt={}: {}", lot, discoveredFilename, enrichmentStartedAt, ex.getMessage());
         }
+
+        // Resilient fallback: If filename prefix match returned no result, try matching by lot and timestamp alone
+        if (result == null && hasFilename) {
+            String fallbackSql = "SELECT output_directory, log_message, process_code FROM pp_log " +
+                    "WHERE lot = ? AND process_datetime >= ? " +
+                    "ORDER BY process_datetime DESC FETCH FIRST 1 ROWS ONLY";
+            try (Connection connection = ppLogDataSource.getConnection();
+                 PreparedStatement ps = connection.prepareStatement(fallbackSql)) {
+                ps.setString(1, lot);
+                ps.setTimestamp(2, sinceTs);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        result = new PpLogRow(
+                            rs.getString("output_directory"),
+                            rs.getString("log_message"),
+                            rs.getInt("process_code")
+                        );
+                        log.info("pp_log matched via lot-only fallback for lot={} (filename prefix did not match)", lot);
+                    }
+                }
+            } catch (SQLException ex) {
+                log.debug("pp_log fallback query failed for lot={}: {}", lot, ex.getMessage());
+            }
+        }
         long elapsed = System.currentTimeMillis() - start;
         log.debug("pp_log query for lot={} discoveredFilename={} enrichmentStartedAt={} completed in {}ms (found={})",
                 lot, discoveredFilename, enrichmentStartedAt, elapsed, result != null);
