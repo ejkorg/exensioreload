@@ -645,7 +645,7 @@ export class MonitoringFileListComponent {
       } else if (status === 'QUEUED_FOR_CP') {
         files = files.filter((f) => f.status === 'QUEUED_FOR_CP');
       } else if (status === 'ELASTICSEARCH_MONITORING') {
-        files = files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'PROCESSING');
+        files = files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING');
       } else if (status === 'EXENSIO_MONITORING') {
         files = files.filter((f) => f.status === 'EXENSIO_MONITORING');
       } else if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {

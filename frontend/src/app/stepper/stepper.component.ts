@@ -65,15 +65,15 @@ interface WaferMonitoringRow {
   wafer: string;
   filename: string;
   status: MonitoringFile['status'];
-  errorMessage?: string;
+  errorMessage?: string | null;
   cpOutputPath?: string | null;
   cpOutputTarget?: string | null;
-  cpIntegrationStatus?: string;
-  cpIntegrationMessage?: string;
-  exensioIntegrationStatus?: string;
-  exensioIntegrationMessage?: string;
+  cpIntegrationStatus?: string | null;
+  cpIntegrationMessage?: string | null;
+  exensioIntegrationStatus?: string | null;
+  exensioIntegrationMessage?: string | null;
   message?: string;
-  updatedAt?: string;
+  updatedAt?: string | null;
 }
 
 interface DiscoveryFiltersSnapshot {
@@ -1026,15 +1026,15 @@ export class StepperComponent implements OnInit, OnDestroy {
             wafer: file.wafer || '',
             filename: file.filename || '',
             status: mappedStatus,
-            errorMessage: file.errorMessage || undefined,
+            errorMessage: file.errorMessage ?? undefined,
             cpOutputPath: file.cpOutputPath,
             cpOutputTarget: file.cpOutputTarget,
-            cpIntegrationStatus: file.cpIntegrationStatus,
-            cpIntegrationMessage: file.cpIntegrationMessage,
-            exensioIntegrationStatus: file.exensioIntegrationStatus,
-            exensioIntegrationMessage: file.exensioIntegrationMessage,
-            message: this.getStatusMessage(mappedStatus, file.errorMessage),
-            updatedAt: file.updatedAt || file.updated,
+            cpIntegrationStatus: file.cpIntegrationStatus ?? undefined,
+            cpIntegrationMessage: file.cpIntegrationMessage ?? undefined,
+            exensioIntegrationStatus: file.exensioIntegrationStatus ?? undefined,
+            exensioIntegrationMessage: file.exensioIntegrationMessage ?? undefined,
+            message: this.getStatusMessage(mappedStatus, file.errorMessage ?? undefined),
+            updatedAt: file.updatedAt || file.updated || undefined,
           };
         },
       );
@@ -1056,15 +1056,15 @@ export class StepperComponent implements OnInit, OnDestroy {
         wafer,
         filename,
         status: mappedStatus,
-        errorMessage: matched?.errorMessage || undefined,
+        errorMessage: matched?.errorMessage ?? undefined,
         cpOutputPath: matched?.cpOutputPath,
         cpOutputTarget: matched?.cpOutputTarget,
-        cpIntegrationStatus: matched?.cpIntegrationStatus,
-        cpIntegrationMessage: matched?.cpIntegrationMessage,
-        exensioIntegrationStatus: matched?.exensioIntegrationStatus,
-        exensioIntegrationMessage: matched?.exensioIntegrationMessage,
-        message: this.getStatusMessage(mappedStatus, matched?.errorMessage),
-        updatedAt: matched?.updatedAt || matched?.updated,
+        cpIntegrationStatus: matched?.cpIntegrationStatus ?? undefined,
+        cpIntegrationMessage: matched?.cpIntegrationMessage ?? undefined,
+        exensioIntegrationStatus: matched?.exensioIntegrationStatus ?? undefined,
+        exensioIntegrationMessage: matched?.exensioIntegrationMessage ?? undefined,
+        message: this.getStatusMessage(mappedStatus, matched?.errorMessage ?? undefined),
+        updatedAt: matched?.updatedAt || matched?.updated || undefined,
       };
     });
 
@@ -1091,14 +1091,14 @@ export class StepperComponent implements OnInit, OnDestroy {
           wafer: row.wafer || '',
           status: row.status,
           message: row.message || this.getStatusMessage(row.status),
-          errorMessage: row.errorMessage,
+          errorMessage: row.errorMessage ?? undefined,
           cpOutputPath: row.cpOutputPath,
           cpOutputTarget: row.cpOutputTarget,
-          cpIntegrationStatus: row.cpIntegrationStatus,
-          cpIntegrationMessage: row.cpIntegrationMessage,
-          exensioIntegrationStatus: row.exensioIntegrationStatus,
-          exensioIntegrationMessage: row.exensioIntegrationMessage,
-          updatedAt: row.updatedAt,
+          cpIntegrationStatus: row.cpIntegrationStatus ?? undefined,
+          cpIntegrationMessage: row.cpIntegrationMessage ?? undefined,
+          exensioIntegrationStatus: row.exensioIntegrationStatus ?? undefined,
+          exensioIntegrationMessage: row.exensioIntegrationMessage ?? undefined,
+          updatedAt: row.updatedAt ?? undefined,
         }) as MonitoringFile,
     );
   });

@@ -43,18 +43,18 @@ export interface MonitoringFile {
     | 'LOAD_FAILED'
     | 'CANCELLED';
   message: string;
-  errorMessage?: string;
+  errorMessage?: string | null;
   startTime?: Date;
   endTime?: Date;
   duration?: string;
-  updatedAt?: string;
+  updatedAt?: string | null;
   cpOutputPath?: string | null;
   cpOutputTarget?: string | null;
   // Integration status fields for detail line display
-  cpIntegrationStatus?: string; // "success" | "pending" | "failure" | "timeout" | "not_found" | "error" | "not_configured"
-  cpIntegrationMessage?: string;
-  exensioIntegrationStatus?: string; // "success" | "pending" | "failure" | "not_found" | "error" | "not_configured"
-  exensioIntegrationMessage?: string;
+  cpIntegrationStatus?: string | null; // "success" | "pending" | "failure" | "timeout" | "not_found" | "error" | "not_configured"
+  cpIntegrationMessage?: string | null;
+  exensioIntegrationStatus?: string | null; // "success" | "pending" | "failure" | "not_found" | "error" | "not_configured"
+  exensioIntegrationMessage?: string | null;
 }
 
 export interface ActivityEvent {
