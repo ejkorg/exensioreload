@@ -69,6 +69,10 @@ import { GlassInputComponent } from './glass-input.component';
                 (click)="statusFilter.set('EXENSIO_MONITORING')">
           Exensio Monitoring
         </button>
+        <button class="filter-chip"
+                [class.active]="statusFilter() === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
+                (click)="statusFilter.set('COMPLETED_MANUAL_VERIFICATION_REQUIRED')">
+          Verify in Exensio
         </button>
         <button class="filter-chip"
                 [class.active]="statusFilter() === 'COMPLETED'"
@@ -710,6 +714,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   exensioLoadingCount = this.countByStatus('EXENSIO_MONITORING');
   processingCount = this.countByStatus('ELASTICSEARCH_MONITORING'); // legacy alias
   completedCount = this.countByStatus('COMPLETED');
+  manualVerificationCount = this.countByStatus('COMPLETED_MANUAL_VERIFICATION_REQUIRED');
   errorCount = this.countByStatus('ERROR');
 
   // Computed: Filter files by status and search
@@ -719,7 +724,23 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
     const search = this.searchText().toLowerCase();
 
     if (status !== 'all') {
-      files = files.filter((f: MonitoringFileItem) => f.status === status);
+      if (status === 'READY') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'READY');
+      } else if (status === 'QUEUED_FOR_CP') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'QUEUED_FOR_CP');
+      } else if (status === 'ELASTICSEARCH_MONITORING') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'ELASTICSEARCH_MONITORING');
+      } else if (status === 'EXENSIO_MONITORING') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'EXENSIO_MONITORING');
+      } else if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' || f.status === 'CP_TIMEOUT');
+      } else if (status === 'COMPLETED') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'COMPLETED');
+      } else if (status === 'ERROR') {
+        files = files.filter((f: MonitoringFileItem) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED');
+      } else {
+        files = files.filter((f: MonitoringFileItem) => f.status === status);
+      }
     }
 
     if (search) {
@@ -799,8 +820,14 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
         return 'Enrichment Processing'; // legacy compat
       case 'COMPLETED':
         return 'Completed';
+      case 'CP_FAILED':
+        return 'Enrichment Failed';
+      case 'LOAD_FAILED':
+        return 'Load Failed';
       case 'ERROR':
         return 'Failed';
+      case 'CANCELLED':
+        return 'Cancelled';
       default:
         return status;
     }
@@ -814,14 +841,22 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
         return 'schedule_send';
       case 'ELASTICSEARCH_MONITORING':
         return 'hourglass_empty';
+      case 'CP_TIMEOUT':
+        return 'schedule';
       case 'EXENSIO_MONITORING':
         return 'cloud_upload';
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
+        return 'schedule';
       case 'PROCESSING':
         return 'hourglass_empty';
       case 'COMPLETED':
         return 'check_circle';
+      case 'CP_FAILED':
+      case 'LOAD_FAILED':
       case 'ERROR':
         return 'error';
+      case 'CANCELLED':
+        return 'cancel';
       default:
         return 'help';
     }
@@ -834,15 +869,20 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
       case 'QUEUED_FOR_CP':
         return 'warning';
       case 'ELASTICSEARCH_MONITORING':
-        return 'primary';
       case 'EXENSIO_MONITORING':
-        return 'primary';
       case 'PROCESSING':
         return 'primary';
+      case 'CP_TIMEOUT':
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
+        return 'warning';
       case 'COMPLETED':
         return 'success';
+      case 'CP_FAILED':
+      case 'LOAD_FAILED':
       case 'ERROR':
         return 'error';
+      case 'CANCELLED':
+        return 'muted';
       default:
         return 'default';
     }

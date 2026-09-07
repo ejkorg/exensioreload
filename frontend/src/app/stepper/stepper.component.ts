@@ -15,7 +15,6 @@ import {
   StageRecordView,
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
-import { ActivityFeedComponent } from '../shared/components/activity-feed.component';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { DateRange, GlassDateRangeComponent } from '../shared/components/glass-date-range.component';
@@ -66,6 +65,15 @@ interface WaferMonitoringRow {
   wafer: string;
   filename: string;
   status: MonitoringFile['status'];
+  errorMessage?: string;
+  cpOutputPath?: string | null;
+  cpOutputTarget?: string | null;
+  cpIntegrationStatus?: string;
+  cpIntegrationMessage?: string;
+  exensioIntegrationStatus?: string;
+  exensioIntegrationMessage?: string;
+  message?: string;
+  updatedAt?: string;
 }
 
 interface DiscoveryFiltersSnapshot {
@@ -118,7 +126,6 @@ interface DuplicateStageContext {
     MonitoringStatsComponent,
     MonitoringFileListComponent,
     LotWaferProgressComponent,
-    ActivityFeedComponent,
     GlassSenderSelectorComponent,
     GlassLoadingOverlayComponent,
     SiteNamePipe,
@@ -195,7 +202,6 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   private monitoringStopped = signal(false);
-  showActivityFeed = signal(true);
 
   monitorUiState = computed<'no-session' | 'connecting' | 'waiting' | 'live' | 'polling' | 'completed' | 'stopped'>(
     () => {
@@ -940,11 +946,11 @@ export class StepperComponent implements OnInit, OnDestroy {
       ? files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED').length
       : 0;
 
-    const processing = enrichmentCount + enrichmentTimeoutCount + exensioLoadingCount + exensioTimeoutCount;
+    const processing = enrichmentCount + enrichmentTimeoutCount + exensioLoadingCount;
 
-    const processed = completed + failed;
+    const processed = completed + failed + exensioTimeoutCount;
     const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
-    const successRate = processed > 0 ? Math.round((completed / processed) * 100) : 0;
+    const successRate = processed > 0 ? Math.round(((completed + exensioTimeoutCount) / processed) * 100) : 0;
 
     // Calculate throughput and ETA
     const startTime = session?.createdAt ? new Date(session.createdAt) : null;
@@ -1013,12 +1019,24 @@ export class StepperComponent implements OnInit, OnDestroy {
 
     if (previewRows.length === 0) {
       return files.map(
-        (file: StageRecordView): WaferMonitoringRow => ({
-          lot: file.lot || '',
-          wafer: file.wafer || '',
-          filename: file.filename || '',
-          status: this.mapBackendStatus(file.status),
-        }),
+        (file: StageRecordView): WaferMonitoringRow => {
+          const mappedStatus = this.mapBackendStatus(file.status);
+          return {
+            lot: file.lot || '',
+            wafer: file.wafer || '',
+            filename: file.filename || '',
+            status: mappedStatus,
+            errorMessage: file.errorMessage || undefined,
+            cpOutputPath: file.cpOutputPath,
+            cpOutputTarget: file.cpOutputTarget,
+            cpIntegrationStatus: file.cpIntegrationStatus,
+            cpIntegrationMessage: file.cpIntegrationMessage,
+            exensioIntegrationStatus: file.exensioIntegrationStatus,
+            exensioIntegrationMessage: file.exensioIntegrationMessage,
+            message: this.getStatusMessage(mappedStatus, file.errorMessage),
+            updatedAt: file.updatedAt || file.updated,
+          };
+        },
       );
     }
 
@@ -1031,12 +1049,22 @@ export class StepperComponent implements OnInit, OnDestroy {
       const byFile = filename ? byLotFilename.get(`${lot}::${filename}`) : undefined;
       const fallbackLot = firstByLot.get(lot);
       const matched = exact || byFile || fallbackLot;
+      const mappedStatus = matched ? this.mapBackendStatus(matched.status) : ('READY' as MonitoringFile['status']);
 
       return {
         lot,
         wafer,
         filename,
-        status: matched ? this.mapBackendStatus(matched.status) : ('READY' as MonitoringFile['status']),
+        status: mappedStatus,
+        errorMessage: matched?.errorMessage || undefined,
+        cpOutputPath: matched?.cpOutputPath,
+        cpOutputTarget: matched?.cpOutputTarget,
+        cpIntegrationStatus: matched?.cpIntegrationStatus,
+        cpIntegrationMessage: matched?.cpIntegrationMessage,
+        exensioIntegrationStatus: matched?.exensioIntegrationStatus,
+        exensioIntegrationMessage: matched?.exensioIntegrationMessage,
+        message: this.getStatusMessage(mappedStatus, matched?.errorMessage),
+        updatedAt: matched?.updatedAt || matched?.updated,
       };
     });
 
@@ -1062,23 +1090,17 @@ export class StepperComponent implements OnInit, OnDestroy {
           lot: row.lot || '',
           wafer: row.wafer || '',
           status: row.status,
-          message: row.status,
-          errorMessage: undefined,
-          updatedAt: undefined,
+          message: row.message || this.getStatusMessage(row.status),
+          errorMessage: row.errorMessage,
+          cpOutputPath: row.cpOutputPath,
+          cpOutputTarget: row.cpOutputTarget,
+          cpIntegrationStatus: row.cpIntegrationStatus,
+          cpIntegrationMessage: row.cpIntegrationMessage,
+          exensioIntegrationStatus: row.exensioIntegrationStatus,
+          exensioIntegrationMessage: row.exensioIntegrationMessage,
+          updatedAt: row.updatedAt,
         }) as MonitoringFile,
     );
-  });
-
-  // Convert SessionActivityEvent to ActivityEvent for the activity feed
-  activityFeedEvents = computed(() => {
-    return this.stagingSession.activities().map((event: SessionActivityEvent) => ({
-      id: event.id,
-      timestamp: event.timestamp.toISOString(),
-      type: event.type,
-      message: event.message,
-      icon: event.icon,
-      color: event.color,
-    }));
   });
 
   // Map backend LotWaferProgress to frontend LotProgress interface
@@ -3589,13 +3611,52 @@ export class StepperComponent implements OnInit, OnDestroy {
     return `${hours}h ${mins}m`;
   }
 
+  private getStatusMessage(status: string, fallbackMessage?: string): string {
+    if (fallbackMessage && fallbackMessage.trim() !== '') {
+      return fallbackMessage;
+    }
+    switch (status) {
+      case 'READY':
+        return 'Ready';
+      case 'QUEUED_FOR_CP':
+        return 'Waiting in enrichment queue';
+      case 'ELASTICSEARCH_MONITORING':
+        return 'Monitoring Elasticsearch logs';
+      case 'CP_TIMEOUT':
+        return 'Enrichment monitoring timed out';
+      case 'EXENSIO_MONITORING':
+        return 'Monitoring Exensio loading';
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
+        return 'Manual verification required in Exensio';
+      case 'COMPLETED':
+        return 'Successfully loaded into Exensio';
+      case 'CP_FAILED':
+        return 'Enrichment processing failed';
+      case 'LOAD_FAILED':
+        return 'Exensio load failed';
+      case 'ERROR':
+        return 'Processing failed';
+      case 'CANCELLED':
+        return 'Operation cancelled';
+      default:
+        return status;
+    }
+  }
+
   private mapBackendStatus(status: string): MonitoringFile['status'] {
     const normalized = (status || '').toUpperCase();
-    if (normalized === 'DONE' || normalized === 'COMPLETED') return 'COMPLETED';
+    if (normalized === 'COMPLETED' || normalized === 'DONE') return 'COMPLETED';
     if (normalized === 'ELASTICSEARCH_MONITORING' || normalized === 'DISPATCHING') return 'ELASTICSEARCH_MONITORING';
+    if (normalized === 'CP_TIMEOUT') return 'CP_TIMEOUT';
     if (normalized === 'EXENSIO_MONITORING') return 'EXENSIO_MONITORING';
-    if (normalized === 'PROCESSING' || normalized === 'QUEUED_FOR_CP') return 'ELASTICSEARCH_MONITORING'; // legacy compat
-    if (normalized === 'FAILED' || normalized === 'ERROR') return 'ERROR';
+    if (normalized === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') return 'COMPLETED_MANUAL_VERIFICATION_REQUIRED';
+    if (normalized === 'PROCESSING') return 'ELASTICSEARCH_MONITORING'; // legacy compat
+    if (normalized === 'CP_FAILED' || normalized === 'FAILED') return 'CP_FAILED';
+    if (normalized === 'LOAD_FAILED') return 'LOAD_FAILED';
+    if (normalized === 'ERROR') return 'ERROR';
+    if (normalized === 'CANCELLED') return 'CANCELLED';
+    if (normalized === 'QUEUED_FOR_CP' || normalized === 'QUEUED' || normalized === 'ENQUEUED') return 'QUEUED_FOR_CP';
+    if (normalized === 'STAGED' || normalized === 'PENDING' || normalized === 'READY') return 'READY';
     return 'READY';
   }
 

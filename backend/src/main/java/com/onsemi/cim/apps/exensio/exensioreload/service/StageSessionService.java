@@ -520,7 +520,7 @@ public class StageSessionService {
 
         String table = refDbService.getStagingTable();
         String sql = "SELECT COALESCE(lot, '-'), COALESCE(wafer, '-'), COUNT(*), " +
-                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
                 "FROM " + table + " WHERE request_id = ? GROUP BY lot, wafer ORDER BY lot, wafer";
 
@@ -551,7 +551,7 @@ public class StageSessionService {
 
         String table = refDbService.getStagingTable();
         String sql = "SELECT COALESCE(lot, '-'), COALESCE(wafer, '-'), COUNT(*), " +
-                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
                 "FROM " + table + " WHERE request_id = ? GROUP BY lot, wafer ORDER BY lot, wafer";
 
@@ -852,7 +852,7 @@ public class StageSessionService {
         String sql = "SELECT COUNT(*), " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
                 "FROM " + table + " WHERE request_id = ?";
         try (Connection connection = dataSource.getConnection();
@@ -874,7 +874,7 @@ public class StageSessionService {
         StringBuilder sql = new StringBuilder("SELECT CAST(")
                 .append(timestampExpr)
                 .append(" AS DATE) AS day_bucket, ")
-                .append("SUM(CASE WHEN UPPER(status) = 'COMPLETED' THEN 1 ELSE 0 END) AS done_count, ")
+                .append("SUM(CASE WHEN UPPER(status) IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END) AS done_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) NOT LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS failed_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS cancelled_count, ")
@@ -1275,7 +1275,7 @@ public class StageSessionService {
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
                 "FROM " + table + " WHERE request_id = ?";
         try (Connection connection = dataSource.getConnection();

@@ -28,6 +28,18 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             <button class="filter-chip" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">
               All
             </button>
+            <button class="filter-chip" [class.active]="statusFilter() === 'READY'" (click)="statusFilter.set('READY')">
+              <app-glass-icon name="check" [size]="14"></app-glass-icon>
+              Staged
+            </button>
+            <button
+              class="filter-chip"
+              [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
+              (click)="statusFilter.set('QUEUED_FOR_CP')"
+            >
+              <app-glass-icon name="clock" [size]="14"></app-glass-icon>
+              Queued
+            </button>
             <button
               class="filter-chip"
               [class.active]="statusFilter() === 'ELASTICSEARCH_MONITORING'"
@@ -46,10 +58,18 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             </button>
             <button
               class="filter-chip"
+              [class.active]="statusFilter() === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
+              (click)="statusFilter.set('COMPLETED_MANUAL_VERIFICATION_REQUIRED')"
+            >
+              <app-glass-icon name="schedule" [size]="14"></app-glass-icon>
+              Verify in Exensio
+            </button>
+            <button
+              class="filter-chip"
               [class.active]="statusFilter() === 'COMPLETED'"
               (click)="statusFilter.set('COMPLETED')"
             >
-              <app-glass-icon name="check" [size]="14"></app-glass-icon>
+              <app-glass-icon name="check_circle" [size]="14"></app-glass-icon>
               Completed
             </button>
             <button class="filter-chip" [class.active]="statusFilter() === 'ERROR'" (click)="statusFilter.set('ERROR')">
@@ -90,8 +110,9 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
             [class.status-ready]="file.status === 'READY'"
             [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
             [class.status-processing]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
+            [class.status-manual-verification]="file.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
             [class.status-completed]="file.status === 'COMPLETED'"
-            [class.status-error]="file.status === 'ERROR'"
+            [class.status-error]="file.status === 'ERROR' || file.status === 'CP_FAILED' || file.status === 'LOAD_FAILED'"
             (click)="toggleExpand(file)"
           >
             <div class="col-status">
@@ -355,14 +376,23 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
         color: #94a3b8;
       }
 
-      .status-badge.status-enqueued {
+      .status-badge.status-enqueued,
+      .status-badge.status-queued_for_cp {
         background: rgba(245, 158, 11, 0.15);
         color: #f59e0b;
       }
 
-      .status-badge.status-processing {
+      .status-badge.status-processing,
+      .status-badge.status-elasticsearch_monitoring,
+      .status-badge.status-exensio_monitoring {
         background: rgba(129, 140, 248, 0.15);
         color: var(--accent-color);
+      }
+
+      .status-badge.status-completed_manual_verification_required,
+      .status-badge.status-cp_timeout {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
       }
 
       .status-badge.status-completed {
@@ -370,7 +400,9 @@ import { GlassPaginationComponent, PaginationEvent } from './glass-pagination.co
         color: #10b981;
       }
 
-      .status-badge.status-error {
+      .status-badge.status-error,
+      .status-badge.status-cp_failed,
+      .status-badge.status-load_failed {
         background: rgba(239, 68, 68, 0.15);
         color: #ef4444;
       }
@@ -608,7 +640,23 @@ export class MonitoringFileListComponent {
     const status = this.statusFilter();
 
     if (status !== 'all') {
-      files = files.filter((f) => f.status === status);
+      if (status === 'READY') {
+        files = files.filter((f) => f.status === 'READY');
+      } else if (status === 'QUEUED_FOR_CP') {
+        files = files.filter((f) => f.status === 'QUEUED_FOR_CP');
+      } else if (status === 'ELASTICSEARCH_MONITORING') {
+        files = files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'PROCESSING');
+      } else if (status === 'EXENSIO_MONITORING') {
+        files = files.filter((f) => f.status === 'EXENSIO_MONITORING');
+      } else if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
+        files = files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' || f.status === 'CP_TIMEOUT');
+      } else if (status === 'COMPLETED') {
+        files = files.filter((f) => f.status === 'COMPLETED');
+      } else if (status === 'ERROR') {
+        files = files.filter((f) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED');
+      } else {
+        files = files.filter((f) => f.status === status);
+      }
     }
 
     if (search) {
@@ -658,8 +706,14 @@ export class MonitoringFileListComponent {
         return 'Enrichment Processing'; // legacy compat
       case 'COMPLETED':
         return 'Completed';
+      case 'CP_FAILED':
+        return 'Enrichment Failed';
+      case 'LOAD_FAILED':
+        return 'Load Failed';
       case 'ERROR':
         return 'Failed';
+      case 'CANCELLED':
+        return 'Cancelled';
       default:
         return status;
     }
@@ -673,14 +727,22 @@ export class MonitoringFileListComponent {
         return 'clock';
       case 'ELASTICSEARCH_MONITORING':
         return 'refresh';
+      case 'CP_TIMEOUT':
+        return 'schedule';
       case 'EXENSIO_MONITORING':
         return 'cloud_upload';
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
+        return 'schedule';
       case 'PROCESSING':
         return 'refresh';
       case 'COMPLETED':
         return 'check_circle';
+      case 'CP_FAILED':
+      case 'LOAD_FAILED':
       case 'ERROR':
         return 'error';
+      case 'CANCELLED':
+        return 'cancel';
       default:
         return 'info';
     }
@@ -693,15 +755,20 @@ export class MonitoringFileListComponent {
       case 'QUEUED_FOR_CP':
         return 'warning';
       case 'ELASTICSEARCH_MONITORING':
-        return 'primary';
       case 'EXENSIO_MONITORING':
-        return 'primary';
       case 'PROCESSING':
         return 'primary';
+      case 'CP_TIMEOUT':
+      case 'COMPLETED_MANUAL_VERIFICATION_REQUIRED':
+        return 'warning';
       case 'COMPLETED':
         return 'success';
+      case 'CP_FAILED':
+      case 'LOAD_FAILED':
       case 'ERROR':
         return 'error';
+      case 'CANCELLED':
+        return 'muted';
       default:
         return 'default';
     }

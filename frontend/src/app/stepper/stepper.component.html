@@ -968,24 +968,9 @@
             ></app-lot-wafer-progress>
           </section>
 
-          <!-- File List and Activity Feed in Grid -->
-          <div class="monitoring-grid">
+          <!-- File List -->
+          <div class="monitoring-file-list-wrapper">
             <app-monitoring-file-list [files]="monitoringFiles()"></app-monitoring-file-list>
-            <div class="activity-feed-column" [class.collapsed]="!showActivityFeed()">
-              <button
-                class="activity-toggle-btn"
-                type="button"
-                (click)="showActivityFeed.set(!showActivityFeed())"
-                [attr.aria-expanded]="showActivityFeed()"
-                [attr.title]="showActivityFeed() ? 'Hide activity feed' : 'Show activity feed'"
-              >
-                <app-glass-icon
-                  [name]="showActivityFeed() ? 'chevron_right' : 'chevron_left'"
-                  [size]="16"
-                ></app-glass-icon>
-              </button>
-              <app-activity-feed [events]="activityFeedEvents()"></app-activity-feed>
-            </div>
           </div>
         </div>
       </div>

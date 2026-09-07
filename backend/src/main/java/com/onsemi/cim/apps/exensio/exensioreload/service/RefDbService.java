@@ -1090,11 +1090,11 @@ public class RefDbService {
         evt.put("cancelled", cancelled);
         evt.put("errorCount", failed);
 
-        double progress = total > 0 ? ((completed + failed) * 100.0 / total) : 0;
+        double progress = total > 0 ? ((completed + exensioTimeout + failed) * 100.0 / total) : 0;
         evt.put("progress", progress);
-        // Success rate counts only completed out of all terminal (completed + failed)
-        long terminal = completed + failed;
-        double successRate = terminal > 0 ? (completed * 100.0 / terminal) : 100.0;
+        // Success rate counts completed + manual verification out of all terminal
+        long terminal = completed + exensioTimeout + failed;
+        double successRate = terminal > 0 ? ((completed + exensioTimeout) * 100.0 / terminal) : 100.0;
         evt.put("successRate", successRate);
         evt.put("sessionStatuses", statuses);
         if (integrationStatusService != null) {
@@ -1102,7 +1102,7 @@ public class RefDbService {
             boolean exensioConfigured = exensioProperties != null && exensioProperties.isConfigured();
             evt.put("integration", integrationStatusService.snapshot(
                     requestId, esConfigured, exensioConfigured,
-                    ready, enqueued, enriching, exensioLoading, completed, failed
+                    ready, enqueued, enriching, exensioLoading, completed + exensioTimeout, failed
             ));
         }
 

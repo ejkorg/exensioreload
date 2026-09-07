@@ -505,10 +505,13 @@ import { GlassIconComponent } from './glass-icon.component';
       .status-pending {
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
+      }
+
+      .status-pending.active-monitoring {
         animation: pulse-integration 3s ease-in-out infinite;
       }
 
-      .status-pending app-glass-icon {
+      .status-pending.active-monitoring app-glass-icon {
         animation: spin-icon 2s linear infinite;
       }
 
@@ -665,13 +668,20 @@ export class MonitoringStatsComponent {
     entry: { configured: boolean; status: string; message: string; lastAt?: string | null },
   ) {
     const status = (entry?.status || 'pending').toLowerCase();
+    const message = entry?.message || this.statusLabel(status);
+    const isActivelyMonitoring =
+      status === 'pending' &&
+      (message.toLowerCase().includes('monitoring') ||
+        message.toLowerCase().includes('retrying') ||
+        message.toLowerCase().includes('enriching'));
+    const statusClass = this.statusClass(status) + (isActivelyMonitoring ? ' active-monitoring' : '');
     return {
       name,
       status,
-      message: entry?.message || this.statusLabel(status),
+      message,
       lastAt: entry?.lastAt || null,
-      statusClass: this.statusClass(status),
-      icon: this.statusIcon(status),
+      statusClass,
+      icon: this.statusIcon(status, message),
     };
   }
 
@@ -714,7 +724,7 @@ export class MonitoringStatsComponent {
     }
   }
 
-  private statusIcon(status: string): string {
+  private statusIcon(status: string, message?: string): string {
     switch (status) {
       case 'success':
         return 'check_circle';
@@ -727,8 +737,13 @@ export class MonitoringStatsComponent {
       case 'not_configured':
         return 'settings';
       case 'pending':
-      default:
+      default: {
+        const msg = (message || '').toLowerCase();
+        if (msg.includes('monitoring') || msg.includes('retrying') || msg.includes('enriching')) {
+          return 'refresh';
+        }
         return 'clock';
+      }
     }
   }
 

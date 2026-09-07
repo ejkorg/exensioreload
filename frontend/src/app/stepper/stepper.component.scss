@@ -331,9 +331,17 @@
 
   app-monitoring-stats,
   .lot-progress-collapsible,
+  .monitoring-file-list-wrapper,
   .monitoring-grid {
     display: block;
   }
+}
+
+.monitoring-file-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  width: 100%;
 }
 
 .monitoring-grid {
