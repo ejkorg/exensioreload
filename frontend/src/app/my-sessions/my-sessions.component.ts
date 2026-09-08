@@ -59,7 +59,18 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
           <span class="page-title">My <span class="accent">Staging Sessions</span></span>
           <span class="filter-badge" *ngIf="siteFilter()">{{ siteFilter() | siteName }}</span>
         </div>
-        <span class="page-subtitle">Track active and historical staging sessions.</span>
+        <div class="page-header-right">
+          <div class="quick-stats">
+            <span class="stat-pill stat-pill--active" *ngIf="activeSessionCount() > 0">
+              <span class="stat-dot"></span>
+              {{ activeSessionCount() }} Active
+            </span>
+            <span class="stat-pill stat-pill--total">
+              {{ total() }} Total
+            </span>
+          </div>
+          <span class="page-subtitle">Track active and historical staging sessions.</span>
+        </div>
       </div>
 
       <div class="session-filters">
@@ -175,8 +186,11 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
                   <span class="progress-pct">{{ session.progress | number: '1.0-0' }}%</span>
                 </div>
               </td>
-              <td>
-                <span class="status-badge" [class]="session.status.toLowerCase()">{{ session.status }}</span>
+               <td>
+                <span class="status-badge" [class]="session.status.toLowerCase()">
+                  <app-glass-icon [name]="getStatusIcon(session.status)" [size]="12"></app-glass-icon>
+                  {{ session.status }}
+                </span>
               </td>
               <td class="date-cell">
                 <app-dual-timestamp [value]="session.updatedAt"></app-dual-timestamp>
@@ -287,6 +301,7 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
                   class="status-badge"
                   [class]="selectedDetail()?.status?.toLowerCase() || session.status.toLowerCase()"
                 >
+                  <app-glass-icon [name]="getStatusIcon(selectedDetail()?.status || session.status)" [size]="12"></app-glass-icon>
                   {{ selectedDetail()?.status || session.status }}
                 </span>
                 <span class="head-updated">Updated: <app-dual-timestamp [value]="session.updatedAt" layout="inline"></app-dual-timestamp></span>
@@ -614,32 +629,89 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       }
       .page-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 1rem;
         flex-wrap: wrap;
-        padding-bottom: 0.125rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(167, 139, 250, 0.12);
       }
       .page-header-left {
         display: flex;
         align-items: center;
+        gap: 0.75rem;
+      }
+      .page-header-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
         gap: 0.5rem;
       }
       .page-title {
-        font-size: 1.05rem;
+        font-size: 1.125rem;
         font-weight: 700;
         color: rgba(226, 232, 255, 0.95);
-        line-height: 1;
+        line-height: 1.2;
+      }
+      .quick-stats {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        border: 1px solid transparent;
+      }
+      .stat-pill--active {
+        background: rgba(245, 158, 11, 0.14);
+        color: #f59e0b;
+        border-color: rgba(245, 158, 11, 0.25);
+      }
+      .stat-pill--active .stat-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #f59e0b;
+        animation: pulse-dot 2s ease-in-out infinite;
+      }
+      .stat-pill--total {
+        background: rgba(129, 140, 248, 0.12);
+        color: #a5b4fc;
+        border-color: rgba(129, 140, 248, 0.2);
       }
       .page-subtitle {
         font-size: 0.78rem;
         color: var(--text-muted);
+      }
+      @keyframes pulse-dot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
       }
       :host-context(body.light-theme) .page-title {
         color: #1e293b;
       }
       :host-context(body.light-theme) .page-subtitle {
         color: #64748b;
+      }
+      :host-context(body.light-theme) .page-header {
+        border-bottom-color: rgba(99, 102, 241, 0.12);
+      }
+      :host-context(body.light-theme) .stat-pill--active {
+        background: rgba(245, 158, 11, 0.1);
+        color: #d97706;
+        border-color: rgba(245, 158, 11, 0.2);
+      }
+      :host-context(body.light-theme) .stat-pill--total {
+        background: rgba(99, 102, 241, 0.08);
+        color: #4f46e5;
+        border-color: rgba(99, 102, 241, 0.15);
       }
       .table-wrap {
         overflow: auto;
@@ -795,19 +867,27 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       .hub-table tbody tr {
         cursor: pointer;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 10px;
       }
       .hub-table tbody tr:last-child td {
         border-bottom: none;
       }
       .hub-table tbody tr:hover {
         background: linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(56, 189, 248, 0.07) 100%);
+        box-shadow: 0 2px 8px rgba(129, 140, 248, 0.1);
       }
       .hub-table tbody tr.active {
-        background: rgba(129, 140, 248, 0.1);
+        background: rgba(129, 140, 248, 0.12);
         border-left: 3px solid rgba(129, 140, 248, 0.6);
       }
       .hub-table tbody tr.active td:first-child {
         padding-left: calc(0.75rem - 3px);
+      }
+      .hub-table tbody tr td:first-child {
+        border-radius: 10px 0 0 10px;
+      }
+      .hub-table tbody tr td:last-child {
+        border-radius: 0 10px 10px 0;
       }
       .col-num {
         text-align: right;
@@ -824,19 +904,32 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       .progress-wrap {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.625rem;
+        min-width: 120px;
       }
       .progress-bar-track {
         flex: 1;
-        height: 6px;
+        height: 8px;
         border-radius: 999px;
-        background: rgba(100, 116, 139, 0.25);
+        background: rgba(100, 116, 139, 0.2);
         overflow: hidden;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
       }
       .progress-bar-fill {
         height: 100%;
         border-radius: 999px;
-        transition: width 0.4s ease;
+        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+      .progress-bar-fill::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 50%;
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
+        border-radius: 999px;
       }
       .progress-bar-fill.fill-done {
         background: linear-gradient(90deg, #10b981, #34d399);
@@ -848,10 +941,10 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         background: linear-gradient(90deg, #818cf8, #38bdf8);
       }
       .progress-pct {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        min-width: 32px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--text-main);
+        min-width: 36px;
         text-align: right;
       }
       .session-id-cell {
@@ -882,109 +975,168 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       .mono {
         font-family: monospace;
       }
+      /* Status badges - aligned with stepper .summary-status-badge */
       .status-badge {
-        padding: 0.2rem 0.55rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.75rem;
         border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.03em;
+        font-size: 0.65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        border: 1px solid transparent;
         white-space: nowrap;
       }
-      .status-badge.completed {
-        background: rgba(16, 185, 129, 0.18);
+      .status-badge app-glass-icon {
+        flex-shrink: 0;
+      }
+      .status-badge.completed,
+      .status-badge.done {
+        background: rgba(16, 185, 129, 0.12);
         color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-color: rgba(16, 185, 129, 0.25);
       }
       .status-badge.monitoring,
-      .status-badge.dispatching,
-      .status-badge.staging {
-        background: rgba(245, 158, 11, 0.16);
+      .status-badge.dispatching {
+        background: rgba(245, 158, 11, 0.12);
         color: #f59e0b;
-        border: 1px solid rgba(245, 158, 11, 0.22);
+        border-color: rgba(245, 158, 11, 0.25);
+      }
+      .status-badge.staging {
+        background: rgba(56, 189, 248, 0.12);
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.25);
       }
       .status-badge.partially_failed,
-      .status-badge.cancelled {
-        background: rgba(239, 68, 68, 0.18);
+      .status-badge.failed,
+      .status-badge.error {
+        background: rgba(239, 68, 68, 0.12);
         color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.22);
+        border-color: rgba(239, 68, 68, 0.25);
+      }
+      .status-badge.cancelled {
+        background: rgba(148, 163, 184, 0.12);
+        color: #94a3b8;
+        border-color: rgba(148, 163, 184, 0.2);
       }
       .status-badge.ready {
-        background: rgba(129, 140, 248, 0.16);
+        background: rgba(129, 140, 248, 0.12);
         color: #a5b4fc;
-        border: 1px solid rgba(129, 140, 248, 0.22);
+        border-color: rgba(129, 140, 248, 0.2);
       }
-      .status-badge.enqueued {
-        background: rgba(245, 158, 11, 0.16);
-        color: #f59e0b;
-        border: 1px solid rgba(245, 158, 11, 0.22);
-      }
+      .status-badge.enqueued,
       .status-badge.processing {
-        background: rgba(56, 189, 248, 0.16);
-        color: #38bdf8;
-        border: 1px solid rgba(56, 189, 248, 0.22);
+        background: rgba(245, 158, 11, 0.12);
+        color: #f59e0b;
+        border-color: rgba(245, 158, 11, 0.25);
       }
-      .status-badge.error {
-        background: rgba(239, 68, 68, 0.18);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.22);
+      /* Pulse animation for active statuses */
+      .status-badge.monitoring app-glass-icon,
+      .status-badge.dispatching app-glass-icon,
+      .status-badge.staging app-glass-icon {
+        animation: pulse-dot 2s ease-in-out infinite;
       }
-      .status-badge.done {
-        background: rgba(16, 185, 129, 0.18);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.25);
+      :host-context(body.light-theme) .status-badge.completed,
+      :host-context(body.light-theme) .status-badge.done {
+        background: rgba(16, 185, 129, 0.1);
+        color: #059669;
+        border-color: rgba(16, 185, 129, 0.2);
       }
-      .pagination {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        justify-content: center;
-        padding: 0.25rem 0;
+      :host-context(body.light-theme) .status-badge.monitoring,
+      :host-context(body.light-theme) .status-badge.dispatching {
+        background: rgba(245, 158, 11, 0.1);
+        color: #d97706;
+        border-color: rgba(245, 158, 11, 0.2);
       }
-      .pagination-info {
-        font-size: 0.82rem;
-        color: var(--text-muted);
-        padding: 0 0.5rem;
+      :host-context(body.light-theme) .status-badge.staging {
+        background: rgba(2, 132, 199, 0.1);
+        color: #0284c7;
+        border-color: rgba(2, 132, 199, 0.2);
       }
-      .pagination-info strong {
-        color: rgba(226, 232, 255, 0.9);
+      :host-context(body.light-theme) .status-badge.partially_failed,
+      :host-context(body.light-theme) .status-badge.failed,
+      :host-context(body.light-theme) .status-badge.error {
+        background: rgba(220, 38, 38, 0.1);
+        color: #dc2626;
+        border-color: rgba(220, 38, 38, 0.2);
       }
-      .pagination-range {
-        margin-left: 0.35rem;
-        font-size: 0.75rem;
-        opacity: 0.75;
+      :host-context(body.light-theme) .status-badge.cancelled {
+        background: rgba(148, 163, 184, 0.1);
+        color: #64748b;
+        border-color: rgba(148, 163, 184, 0.15);
+      }
+      :host-context(body.light-theme) .status-badge.ready {
+        background: rgba(99, 102, 241, 0.08);
+        color: #4f46e5;
+        border-color: rgba(99, 102, 241, 0.15);
+      }
+      :host-context(body.light-theme) .status-badge.enqueued,
+      :host-context(body.light-theme) .status-badge.processing {
+        background: rgba(217, 119, 6, 0.1);
+        color: #d97706;
+        border-color: rgba(217, 119, 6, 0.18);
       }
       .page-btn {
         display: inline-flex;
         align-items: center;
         gap: 0.25rem;
-        height: 32px;
-        padding: 0 0.65rem;
-        border-radius: 8px;
-        border: 1px solid rgba(167, 139, 250, 0.24);
-        background: rgba(67, 56, 132, 0.35);
+        height: 36px;
+        padding: 0 0.75rem;
+        border-radius: 10px;
+        border: 1px solid rgba(167, 139, 250, 0.2);
+        background: rgba(67, 56, 132, 0.4);
+        backdrop-filter: blur(8px);
         color: rgba(226, 232, 255, 0.9);
         font-size: 0.8rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.18s ease;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         white-space: nowrap;
       }
       .page-btn:hover:not(:disabled) {
         border-color: rgba(167, 139, 250, 0.5);
-        background: rgba(99, 102, 241, 0.32);
+        background: rgba(99, 102, 241, 0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+      }
+      .page-btn:active:not(:disabled) {
+        transform: translateY(0);
       }
       .page-btn:disabled {
-        opacity: 0.35;
+        opacity: 0.4;
         cursor: not-allowed;
+        transform: none;
+      }
+      .pagination-info {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        padding: 0 0.75rem;
+        font-weight: 500;
+      }
+      .pagination-info strong {
+        color: rgba(226, 232, 255, 0.95);
+        font-weight: 700;
+      }
+      .pagination-range {
+        margin-left: 0.35rem;
+        font-size: 0.75rem;
+        opacity: 0.7;
       }
       :host-context(body.light-theme) .page-btn {
-        border-color: rgba(99, 102, 241, 0.22);
-        background: rgba(99, 102, 241, 0.08);
+        border-color: rgba(99, 102, 241, 0.2);
+        background: rgba(255, 255, 255, 0.8);
         color: #334155;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       }
       :host-context(body.light-theme) .page-btn:hover:not(:disabled) {
-        border-color: rgba(99, 102, 241, 0.42);
-        background: rgba(99, 102, 241, 0.16);
+        border-color: rgba(99, 102, 241, 0.4);
+        background: rgba(99, 102, 241, 0.1);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+      }
+      :host-context(body.light-theme) .pagination-info strong {
+        color: #1e293b;
       }
       .filter-badge {
         margin-left: 0.5rem;
@@ -1988,32 +2140,35 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        align-items: center;
+        align-items: flex-start;
         position: sticky;
         top: 0;
         z-index: 2;
         padding: 1.5rem 2rem;
-        background: linear-gradient(to bottom, rgba(31, 23, 61, 0.98), rgba(31, 23, 61, 0.85));
-        backdrop-filter: blur(12px);
-        border-bottom: 1px solid rgba(167, 139, 250, 0.15);
+        background: linear-gradient(135deg, rgba(31, 23, 61, 0.98) 0%, rgba(22, 17, 52, 0.95) 100%);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgba(167, 139, 250, 0.12);
         flex-shrink: 0;
       }
       .detail-head-left {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.5rem;
         min-width: 0;
       }
       .detail-head h3 {
-        font-size: 0.95rem;
+        font-size: 1rem;
         font-weight: 700;
         margin: 0;
         color: rgba(226, 232, 255, 0.95);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
       }
       .head-meta {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.75rem;
         flex-wrap: wrap;
       }
       .modal-body {
@@ -2044,64 +2199,94 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       }
       .metrics-cards {
         display: flex;
-        gap: 1rem;
+        gap: 0.75rem;
         flex-wrap: wrap;
         padding: 0.25rem 0;
       }
       .metric-card {
         flex: 1;
         min-width: 100px;
-        padding: 1.25rem 1rem;
+        padding: 1rem;
         border-radius: 14px;
         border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.25rem;
-        transition: transform 0.2s ease;
+        gap: 0.375rem;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+      }
+      .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        opacity: 0.6;
       }
       .metric-card:hover {
-        transform: translateY(-2px);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      }
+      .metric-card app-glass-icon {
+        margin-bottom: 0.25rem;
       }
       .metric-value {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
         line-height: 1;
       }
       .metric-label {
-        font-size: 0.72rem;
-        font-weight: 500;
-        opacity: 0.75;
+        font-size: 0.68rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
+        opacity: 0.8;
       }
       .metric-card--total {
-        background: rgba(129, 140, 248, 0.12);
-        border-color: rgba(129, 140, 248, 0.22);
+        background: rgba(129, 140, 248, 0.08);
+        border-color: rgba(129, 140, 248, 0.2);
         color: #a5b4fc;
+      }
+      .metric-card--total::before {
+        background: linear-gradient(90deg, #818cf8, #a5b4fc);
       }
       .metric-card--staged {
-        background: rgba(129, 140, 248, 0.12);
-        border-color: rgba(129, 140, 248, 0.22);
+        background: rgba(129, 140, 248, 0.08);
+        border-color: rgba(129, 140, 248, 0.2);
         color: #a5b4fc;
       }
+      .metric-card--staged::before {
+        background: linear-gradient(90deg, #818cf8, #60a5fa);
+      }
       .metric-card--enqueued {
-        background: rgba(245, 158, 11, 0.12);
-        border-color: rgba(245, 158, 11, 0.22);
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.2);
         color: #f59e0b;
       }
+      .metric-card--enqueued::before {
+        background: linear-gradient(90deg, #f59e0b, #fbbf24);
+      }
       .metric-card--done {
-        background: rgba(16, 185, 129, 0.12);
-        border-color: rgba(16, 185, 129, 0.22);
+        background: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.2);
         color: #10b981;
       }
+      .metric-card--done::before {
+        background: linear-gradient(90deg, #10b981, #34d399);
+      }
       .metric-card--failed {
-        background: rgba(239, 68, 68, 0.12);
-        border-color: rgba(239, 68, 68, 0.22);
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.2);
         color: #ef4444;
       }
+      .metric-card--failed::before {
+        background: linear-gradient(90deg, #ef4444, #f87171);
+      }
       .metric-card--failed.zero {
-        opacity: 0.45;
+        opacity: 0.4;
       }
       .status-row {
         display: flex;
@@ -2922,11 +3107,45 @@ export class MySessionsComponent implements OnInit, OnDestroy {
   paginationRangeStart = computed(() => (this.total() === 0 ? 0 : this.page() * this.size() + 1));
   paginationRangeEnd = computed(() => Math.min((this.page() + 1) * this.size(), this.total()));
 
+  /** Count of sessions currently in active (non-terminal) states */
+  activeSessionCount = computed(() => {
+    const activeStatuses = ['STAGING', 'MONITORING', 'DISPATCHING', 'READY', 'ENQUEUED', 'PROCESSING'];
+    return this.sessions().filter((s) => activeStatuses.includes((s.status || '').toUpperCase())).length;
+  });
+
   getProgressClass(session: StagingSessionSummary): string {
     const s = (session.status || '').toUpperCase();
     if (s === 'COMPLETED') return 'fill-done';
     if (s === 'PARTIALLY_FAILED' || s === 'CANCELLED') return 'fill-failed';
     return 'fill-active';
+  }
+
+  /** Get icon name for session status */
+  getStatusIcon(status: string): string {
+    const s = (status || '').toUpperCase();
+    switch (s) {
+      case 'COMPLETED':
+      case 'DONE':
+        return 'check_circle';
+      case 'MONITORING':
+      case 'DISPATCHING':
+        return 'refresh';
+      case 'STAGING':
+        return 'upload';
+      case 'PARTIALLY_FAILED':
+      case 'FAILED':
+      case 'ERROR':
+        return 'error';
+      case 'CANCELLED':
+        return 'cancel';
+      case 'READY':
+        return 'schedule';
+      case 'ENQUEUED':
+      case 'PROCESSING':
+        return 'hourglass_empty';
+      default:
+        return 'help';
+    }
   }
 
   onPageSizeChange(event: Event) {
