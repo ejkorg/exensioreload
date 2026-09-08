@@ -410,6 +410,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         flex: 1;
         min-height: 0;
         overflow-y: auto;
+        min-width: 1650px;
       }
 
       .table-row {
@@ -423,6 +424,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         cursor: pointer;
         transition: background 0.15s ease;
         align-items: center;
+        min-width: 1650px;
       }
 
       .table-row:hover {

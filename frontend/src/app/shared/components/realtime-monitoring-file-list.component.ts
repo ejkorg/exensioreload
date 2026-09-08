@@ -555,6 +555,7 @@ import { GlassInputComponent } from './glass-input.component';
 
       .table-row-wrapper {
         border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        min-width: 1650px;
       }
 
       .table-row {
@@ -567,6 +568,7 @@ import { GlassInputComponent } from './glass-input.component';
         transition: background 0.15s ease;
         align-items: center;
         min-height: 64px;
+        min-width: 1650px;
       }
 
       .table-row.expandable {

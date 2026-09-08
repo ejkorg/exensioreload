@@ -155,13 +155,19 @@ export interface WaferProgress {
       .lot-name {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.75rem;
+      }
+
+      .lot-name app-glass-icon {
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
       }
 
       .lot-label {
         font-size: 0.9375rem;
         font-weight: 600;
         color: var(--text-main);
+        margin-left: 0.25rem;
       }
 
       .lot-stats {
