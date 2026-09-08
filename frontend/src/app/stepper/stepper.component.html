@@ -44,242 +44,307 @@
         <!-- Single unified card for all filters -->
         <section class="config-card-unified glass-panel">
           <div class="card-header-inline">
-            <span class="card-title">Filter Configuration</span>
+            <div class="header-title-group">
+              <span class="card-title">Filter Configuration</span>
+              <span class="card-subtitle">Define target environment, pipeline attributes, time boundaries, and lot criteria</span>
+            </div>
             <button
               class="reset-filters-btn"
               (click)="resetStep1()"
               title="Reset all configuration filters and start fresh"
               aria-label="Reset all configuration filters and start fresh"
             >
-              <app-glass-icon name="restart_alt" [size]="16"></app-glass-icon>
+              <app-glass-icon name="restart_alt" [size]="15"></app-glass-icon>
               <span>Reset Filters</span>
             </button>
           </div>
 
-          <!-- Environment & Site in one row -->
-          <div class="form-row">
-            <!-- Admin: full dropdown. User role: read-only PROD label -->
-            <ng-container *ngIf="isAdminUser(); else envReadOnly">
-              <app-glass-select
-                label="Environment"
-                placeholder="Select Env"
-                [ngModel]="selectedEnv()"
-                (ngModelChange)="onEnvChange($event)"
-                [options]="envOptions()"
-              >
-              </app-glass-select>
-            </ng-container>
-            <ng-template #envReadOnly>
-              <div class="env-readonly-field">
-                <span class="env-readonly-label">ENVIRONMENT</span>
-                <div class="env-readonly-box">PROD</div>
-              </div>
-            </ng-template>
-
-            <app-glass-select
-              label="Site / DTP Instance"
-              placeholder="Select Site"
-              [ngModel]="selectedSite()"
-              (ngModelChange)="onSiteChange($event)"
-              [disabled]="!isSiteEnabled()"
-              [options]="siteOptions()"
-            >
-            </app-glass-select>
-          </div>
-
-          <div class="divider"></div>
-
-          <!-- Filter criteria in compact rows -->
-          <div class="form-row">
-            <app-glass-select
-              label="Location"
-              [ngModel]="selectedLocation()"
-              (ngModelChange)="onLocationChange($event)"
-              [disabled]="!areFiltersEnabled()"
-              [options]="locations()"
-            >
-            </app-glass-select>
-
-            <app-glass-select
-              label="Data Type"
-              [ngModel]="selectedDataType()"
-              (ngModelChange)="onDataTypeChange($event)"
-              [disabled]="!areFiltersEnabled()"
-              [options]="dataTypes()"
-            >
-            </app-glass-select>
-
-            <app-glass-select
-              label="Tester Type"
-              [ngModel]="selectedTesterType()"
-              (ngModelChange)="onTesterTypeChange($event)"
-              [disabled]="!areFiltersEnabled()"
-              [options]="testerTypes()"
-            >
-            </app-glass-select>
-          </div>
-
-          <div class="form-row">
-            <app-glass-select
-              label="Data Type Ext"
-              [ngModel]="selectedDataTypeExt()"
-              (ngModelChange)="onDataTypeExtChange($event)"
-              [disabled]="!areFiltersEnabled()"
-              [options]="dataTypeExt()"
-            >
-            </app-glass-select>
-
-            <div class="test-phase-field">
-              <app-glass-select
-                label="Test Phase"
-                [ngModel]="selectedTestPhase()"
-                (ngModelChange)="onTestPhaseChange($event)"
-                [disabled]="!areFiltersEnabled()"
-                [options]="testPhases()"
-              >
-              </app-glass-select>
-
-              <div class="test-phase-loading" *ngIf="testPhasesLoading()">
-                <span class="mini-spinner"></span>
-                <span>Loading test phases...</span>
+          <!-- Subpanel 1: Target Scope & Pipeline Classification -->
+          <div class="form-subpanel">
+            <div class="subpanel-header">
+              <div class="subpanel-title-wrap">
+                <app-glass-icon name="tune" [size]="16" class="subpanel-icon"></app-glass-icon>
+                <span class="subpanel-title">Target Scope & Pipeline</span>
               </div>
             </div>
 
-            <div class="checkbox-wrapper" *ngIf="isAdminUser()">
-              <app-glass-checkbox
-                label="Historical Mode"
-                [checked]="historicalMode()"
-                (checkedChange)="onHistoricalModeChange($event)"
-              >
-              </app-glass-checkbox>
-            </div>
-          </div>
-
-          <!-- Time range + device filter (admin) on one row -->
-          <div class="form-row time-device-row" *ngIf="showDateRangePanel() || isAdminUser()">
-            <app-glass-date-range
-              *ngIf="showDateRangePanel()"
-              label="Time Range"
-              [inline]="true"
-              [includeTime]="true"
-              [ngModel]="dateRange()"
-              (ngModelChange)="dateRange.set($event)"
-            >
-            </app-glass-date-range>
-
-            <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-select
-                label="Device (Admin)"
-                placeholder="Enter device or pattern (e.g. FNB7*)"
-                [editable]="true"
-                [multiple]="false"
-                [options]="deviceOptions()"
-                [ngModel]="deviceFilter()"
-                (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
-                [disabled]="!selectedDataType()"
-                prefixIcon="devices"
-              >
-              </app-glass-select>
-              <div class="device-hint">
-                Type freely, or use the search icon to pick from loaded devices. Use * as a wildcard.
+            <!-- Primary 4-Col Grid: Environment, Site, Location, DataType -->
+            <div class="grid-4-col">
+              <div class="form-field-cell">
+                <!-- Admin: full dropdown. User role: read-only PROD label -->
+                <ng-container *ngIf="isAdminUser(); else envReadOnly">
+                  <app-glass-select
+                    label="Environment"
+                    placeholder="Select Env"
+                    [ngModel]="selectedEnv()"
+                    (ngModelChange)="onEnvChange($event)"
+                    [options]="envOptions()"
+                  >
+                  </app-glass-select>
+                </ng-container>
+                <ng-template #envReadOnly>
+                  <div class="env-readonly-field">
+                    <span class="env-readonly-label">ENVIRONMENT</span>
+                    <div class="env-readonly-box">PROD</div>
+                  </div>
+                </ng-template>
               </div>
-              <div class="device-loading" *ngIf="devicesLoading()">
-                <span class="mini-spinner"></span>
-                <span>Loading devices...</span>
+
+              <div class="form-field-cell">
+                <app-glass-select
+                  label="Site / DTP Instance"
+                  placeholder="Select Site"
+                  [ngModel]="selectedSite()"
+                  (ngModelChange)="onSiteChange($event)"
+                  [disabled]="!isSiteEnabled()"
+                  [options]="siteOptions()"
+                >
+                </app-glass-select>
+              </div>
+
+              <div class="form-field-cell">
+                <app-glass-select
+                  label="Location"
+                  [ngModel]="selectedLocation()"
+                  (ngModelChange)="onLocationChange($event)"
+                  [disabled]="!areFiltersEnabled()"
+                  [options]="locations()"
+                >
+                </app-glass-select>
+              </div>
+
+              <div class="form-field-cell">
+                <app-glass-select
+                  label="Data Type"
+                  [ngModel]="selectedDataType()"
+                  (ngModelChange)="onDataTypeChange($event)"
+                  [disabled]="!areFiltersEnabled()"
+                  [options]="dataTypes()"
+                >
+                </app-glass-select>
               </div>
             </div>
 
-            <!-- New filter fields for dtp_*_metadata tables (admin only) -->
-            <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-input
-                label="Step (Admin)"
-                placeholder="Enter step values, comma or newline separated"
-                [ngModel]="stepFilter()"
-                (ngModelChange)="stepFilter.set($event); stepFilterControl.setValue($event, { emitEvent: false })"
-                prefixIcon="filter_list"
-              >
-              </app-glass-input>
-            </div>
+            <!-- Secondary 4-Col Grid: Tester Type, DataTypeExt, TestPhase, Historical Mode Toggle -->
+            <div class="grid-4-col grid-mt">
+              <div class="form-field-cell">
+                <app-glass-select
+                  label="Tester Type"
+                  [ngModel]="selectedTesterType()"
+                  (ngModelChange)="onTesterTypeChange($event)"
+                  [disabled]="!areFiltersEnabled()"
+                  [options]="testerTypes()"
+                >
+                </app-glass-select>
+              </div>
 
-            <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-input
-                label="Recipe (Admin)"
-                placeholder="Enter recipe (test_program) values, comma or newline separated"
-                [ngModel]="recipeFilter()"
-                (ngModelChange)="recipeFilter.set($event); recipeFilterControl.setValue($event, { emitEvent: false })"
-                prefixIcon="science"
-              >
-              </app-glass-input>
-            </div>
+              <div class="form-field-cell">
+                <app-glass-select
+                  label="Data Type Ext"
+                  [ngModel]="selectedDataTypeExt()"
+                  (ngModelChange)="onDataTypeExtChange($event)"
+                  [disabled]="!areFiltersEnabled()"
+                  [options]="dataTypeExt()"
+                >
+                </app-glass-select>
+              </div>
 
-            <div class="device-field" *ngIf="isAdminUser()">
-              <app-glass-input
-                label="Equipment ID (Admin)"
-                placeholder="Enter equipment ID (tester_id) values, comma or newline separated"
-                [ngModel]="equipmentIdFilter()"
-                (ngModelChange)="equipmentIdFilter.set($event); equipmentIdFilterControl.setValue($event, { emitEvent: false })"
-                prefixIcon="precision_manufacturing"
-              >
-              </app-glass-input>
+              <div class="form-field-cell">
+                <div class="test-phase-field">
+                  <app-glass-select
+                    label="Test Phase"
+                    [ngModel]="selectedTestPhase()"
+                    (ngModelChange)="onTestPhaseChange($event)"
+                    [disabled]="!areFiltersEnabled()"
+                    [options]="testPhases()"
+                  >
+                  </app-glass-select>
+
+                  <div class="test-phase-loading" *ngIf="testPhasesLoading()">
+                    <span class="mini-spinner"></span>
+                    <span>Loading test phases...</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-field-cell" *ngIf="isAdminUser()">
+                <div
+                  class="historical-mode-card"
+                  [class.active]="historicalMode()"
+                  (click)="onHistoricalModeChange(!historicalMode())"
+                  role="button"
+                  tabindex="0"
+                  title="Toggle Historical Mode to scan older archive records"
+                >
+                  <div class="historical-icon-wrap">
+                    <app-glass-icon name="history" [size]="18"></app-glass-icon>
+                  </div>
+                  <div class="historical-text-wrap">
+                    <span class="historical-card-title">Historical Mode</span>
+                    <span class="historical-card-desc">Scan archive records</span>
+                  </div>
+                  <div class="historical-switch">
+                    <div class="switch-indicator" [class.checked]="historicalMode()"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="divider"></div>
-
-          <!-- Sender Selection Section -->
-          <div class="sender-prereq-hint" *ngIf="!senderPrerequisitesMet()">
-            Sender selection appears after Site, Location, and Data Type are selected.
-          </div>
-
-          <div class="sender-section" *ngIf="senderPrerequisitesMet()">
-            <div class="section-header-inline">
-              <span class="section-label">Sender Configuration</span>
-              <span *ngIf="senderAutoResolved()" class="auto-badge">
-                <app-glass-icon name="check_circle" [size]="16"></app-glass-icon>
-                Auto-Resolved
-              </span>
+          <!-- Subpanel 2: Dedicated Time Range Window -->
+          <div class="form-subpanel time-range-subpanel" *ngIf="showDateRangePanel()">
+            <div class="subpanel-header">
+              <div class="subpanel-title-wrap">
+                <app-glass-icon name="clock" [size]="16" class="subpanel-icon"></app-glass-icon>
+                <span class="subpanel-title">Time Range Window</span>
+                <span class="subpanel-tag">Active Range</span>
+              </div>
+              <span class="subpanel-hint">Filter discovered files within specific start and end timestamps</span>
             </div>
 
-            <app-glass-sender-selector
-              [senderOptions]="senderOptions()"
-              [selectedSenderId]="selectedSenderId()"
-              [selectedSenderName]="getSelectedSenderName()"
-              [senderAutoResolved]="senderAutoResolved()"
-              [senderLookupLoading]="senderLookupLoading()"
-              [senderFallback]="senderFallback()"
-              [canFindSender]="!!selectedSite() && !!selectedLocation() && !!selectedDataType()"
-              [showFindSenderButton]="
-                !!selectedSite() && !!selectedLocation() && !!selectedDataType() && !senderAutoResolved()
-              "
-              (senderSelected)="onSenderSelected($event)"
-              (findSender)="onFindSenderClick()"
-            >
-            </app-glass-sender-selector>
+            <div class="time-range-body">
+              <app-glass-date-range
+                label="Time Range"
+                [inline]="true"
+                [includeTime]="true"
+                [ngModel]="dateRange()"
+                (ngModelChange)="dateRange.set($event)"
+              >
+              </app-glass-date-range>
+            </div>
           </div>
 
-          <div class="divider"></div>
+          <!-- Subpanel 3: Advanced Manufacturing Criteria (Admin) -->
+          <div class="form-subpanel admin-filters-subpanel" *ngIf="isAdminUser()">
+            <div class="subpanel-header">
+              <div class="subpanel-title-wrap">
+                <app-glass-icon name="filter_list" [size]="16" class="subpanel-icon"></app-glass-icon>
+                <span class="subpanel-title">Manufacturing Criteria</span>
+                <span class="subpanel-tag admin-tag">Admin Filters</span>
+              </div>
+              <span class="subpanel-hint">Refine discovery across devices, steps, test recipes, and equipment</span>
+            </div>
 
-          <!-- Lot/Wafer pairs - more compact -->
-          <div class="lot-wafer-section">
-            <div class="section-header-inline">
-              <span class="section-label">Lot / Wafer Filters</span>
-              <button class="collapse-toggle-btn" type="button" (click)="toggleLotWaferFilters()">
-                {{ showLotWaferFilters() ? 'Hide' : 'Show' }}
-              </button>
+            <div class="admin-criteria-grid">
+              <div class="criteria-field">
+                <app-glass-select
+                  label="Device (Admin)"
+                  placeholder="Enter device or pattern (e.g. FNB7*)"
+                  [editable]="true"
+                  [multiple]="false"
+                  [options]="deviceOptions()"
+                  [ngModel]="deviceFilter()"
+                  (ngModelChange)="deviceFilter.set($event); deviceFilterControl.setValue($event, { emitEvent: false })"
+                  [disabled]="!selectedDataType()"
+                  prefixIcon="devices"
+                >
+                </app-glass-select>
+                <div class="device-loading" *ngIf="devicesLoading()">
+                  <span class="mini-spinner"></span>
+                  <span>Loading devices...</span>
+                </div>
+              </div>
+
+              <div class="criteria-field">
+                <app-glass-input
+                  label="Step (Admin)"
+                  placeholder="e.g. CP1, PRB1"
+                  [ngModel]="stepFilter()"
+                  (ngModelChange)="stepFilter.set($event); stepFilterControl.setValue($event, { emitEvent: false })"
+                  prefixIcon="filter_list"
+                >
+                </app-glass-input>
+              </div>
+
+              <div class="criteria-field">
+                <app-glass-input
+                  label="Recipe / Program (Admin)"
+                  placeholder="e.g. RECIPE_A, PROG_*"
+                  [ngModel]="recipeFilter()"
+                  (ngModelChange)="recipeFilter.set($event); recipeFilterControl.setValue($event, { emitEvent: false })"
+                  prefixIcon="science"
+                >
+                </app-glass-input>
+              </div>
+
+              <div class="criteria-field">
+                <app-glass-input
+                  label="Equipment ID (Admin)"
+                  placeholder="e.g. TST-01, TST-02"
+                  [ngModel]="equipmentIdFilter()"
+                  (ngModelChange)="equipmentIdFilter.set($event); equipmentIdFilterControl.setValue($event, { emitEvent: false })"
+                  prefixIcon="precision_manufacturing"
+                >
+                </app-glass-input>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subpanel 4: Sender Configuration -->
+          <div class="form-subpanel sender-subpanel">
+            <div class="sender-prereq-hint" *ngIf="!senderPrerequisitesMet()">
+              <app-glass-icon name="info" [size]="16"></app-glass-icon>
+              <span>Sender configuration unlocks automatically after selecting Site, Location, and Data Type.</span>
+            </div>
+
+            <div class="sender-section" *ngIf="senderPrerequisitesMet()">
+              <div class="subpanel-header">
+                <div class="subpanel-title-wrap">
+                  <app-glass-icon name="sensors" [size]="16" class="subpanel-icon"></app-glass-icon>
+                  <span class="subpanel-title">Sender Configuration</span>
+                  <span *ngIf="senderAutoResolved()" class="auto-badge">
+                    <app-glass-icon name="check_circle" [size]="14"></app-glass-icon>
+                    Auto-Resolved
+                  </span>
+                </div>
+              </div>
+
+              <app-glass-sender-selector
+                [senderOptions]="senderOptions()"
+                [selectedSenderId]="selectedSenderId()"
+                [selectedSenderName]="getSelectedSenderName()"
+                [senderAutoResolved]="senderAutoResolved()"
+                [senderLookupLoading]="senderLookupLoading()"
+                [senderFallback]="senderFallback()"
+                [canFindSender]="!!selectedSite() && !!selectedLocation() && !!selectedDataType()"
+                [showFindSenderButton]="
+                  !!selectedSite() && !!selectedLocation() && !!selectedDataType() && !senderAutoResolved()
+                "
+                (senderSelected)="onSenderSelected($event)"
+                (findSender)="onFindSenderClick()"
+              >
+              </app-glass-sender-selector>
+            </div>
+          </div>
+
+          <!-- Subpanel 5: Lot / Wafer Criteria -->
+          <div class="form-subpanel lot-wafer-subpanel">
+            <div class="subpanel-header">
+              <div class="subpanel-title-wrap">
+                <app-glass-icon name="layers" [size]="16" class="subpanel-icon"></app-glass-icon>
+                <span class="subpanel-title">Lot / Wafer Criteria</span>
+                <span class="subpanel-tag count-tag">{{ lotWaferPairs().length }} {{ lotWaferPairs().length === 1 ? 'pair' : 'pairs' }}</span>
+              </div>
+
+              <div class="lot-wafer-header-actions">
+                <button
+                  class="bulk-add-btn-sleek"
+                  type="button"
+                  (click)="onBulkAddLotsClick()"
+                  aria-label="Bulk add lots"
+                  title="Paste or upload multiple lots at once"
+                >
+                  <app-glass-icon name="upload_file" [size]="15"></app-glass-icon>
+                  <span>Bulk Add Lots</span>
+                </button>
+
+                <button class="collapse-toggle-btn" type="button" (click)="toggleLotWaferFilters()">
+                  {{ showLotWaferFilters() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
             </div>
 
             <ng-container *ngIf="showLotWaferFilters()">
-              <button
-                class="bulk-add-lots-btn"
-                type="button"
-                (click)="onBulkAddLotsClick()"
-                aria-label="Bulk add lots"
-                title="Paste or upload multiple lots at once"
-              >
-                <app-glass-icon name="upload_file" [size]="18"></app-glass-icon>
-                <span>Bulk Add Lots</span>
-              </button>
-
               <div class="pairs-list-compact">
                 <div *ngFor="let pair of lotWaferPairs(); let i = index" class="pair-row-compact">
                   <app-glass-input
@@ -307,19 +372,19 @@
                     [attr.aria-label]="'Remove pair ' + (i + 1)"
                     [title]="lotWaferPairs().length === 1 ? 'Cannot remove last pair' : 'Remove this lot/wafer pair'"
                   >
-                    <app-glass-icon name="delete" [size]="20"></app-glass-icon>
+                    <app-glass-icon name="delete" [size]="18"></app-glass-icon>
                   </button>
                 </div>
               </div>
 
               <button
-                class="add-pair-btn"
+                class="add-pair-btn-sleek"
                 (click)="addPair()"
                 aria-label="Add another lot/wafer pair"
                 title="Add another lot/wafer pair"
               >
-                <app-glass-icon name="add" [size]="18"></app-glass-icon>
-                <span>Add Pair</span>
+                <app-glass-icon name="add" [size]="16"></app-glass-icon>
+                <span>Add Lot/Wafer Pair</span>
               </button>
             </ng-container>
           </div>

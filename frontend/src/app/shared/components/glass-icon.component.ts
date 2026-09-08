@@ -116,6 +116,24 @@ import { Component, Input } from '@angular/core';
           />
         </g>
 
+        <!-- Upload File -->
+        <g *ngSwitchCase="'upload_file'">
+          <path
+            d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
         <!-- Download -->
         <g *ngSwitchCase="'download'">
           <path
@@ -172,6 +190,17 @@ import { Component, Input } from '@angular/core';
 
         <!-- Refresh -->
         <g *ngSwitchCase="'refresh'">
+          <path
+            d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.3"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- Restart Alt -->
+        <g *ngSwitchCase="'restart_alt'">
           <path
             d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.3"
             stroke="currentColor"
@@ -331,6 +360,19 @@ import { Component, Input } from '@angular/core';
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- Filter List -->
+        <g *ngSwitchCase="'filter_list'">
+          <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" fill="currentColor" />
+        </g>
+
+        <!-- Tune -->
+        <g *ngSwitchCase="'tune'">
+          <path
+            d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"
+            fill="currentColor"
           />
         </g>
 
