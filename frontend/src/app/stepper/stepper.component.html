@@ -385,164 +385,130 @@
       </section>
 
       <div class="preview-container-optimized glass-panel">
-        <div class="table-toolbar">
-          <div class="toolbar-left">
-            <app-glass-checkbox
-              label="Page"
-              [checked]="allCurrentPageSelected()"
-              [indeterminate]="someCurrentPageSelected()"
-              (checkedChange)="toggleAll()"
-            >
-            </app-glass-checkbox>
-
-            <button
-              *ngIf="hasMultiplePreviewPages()"
-              class="toolbar-btn"
-              (click)="selectAllPages()"
-              [attr.aria-label]="'Use stage all for ' + previewTotal() + ' discovered items'"
-              title="Use Stage All for {{ previewTotal() | number }} discovered items"
-            >
-              <app-glass-icon name="done_all" [size]="20"></app-glass-icon>
-            </button>
-
-            <button
-              *ngIf="selectedRows().size > 0"
-              class="toolbar-btn"
-              (click)="deselectAll()"
-              aria-label="Clear selection"
-              title="Clear selection"
-            >
-              <app-glass-icon name="close" [size]="20"></app-glass-icon>
-            </button>
-
-            <span class="selection-badge" *ngIf="selectedRows().size > 0"> {{ selectedRows().size }} selected </span>
-
-            <span class="selection-hint" *ngIf="selectedRows().size === 0">
-              Click row selects same lot+filename wafers • Ctrl/Cmd+Click for per-row multi-select
-            </span>
-
-            <!-- Navigation buttons -->
-            <div class="nav-buttons" *ngIf="hasMultiplePreviewPages()">
-              <button
-                class="toolbar-btn"
-                (click)="goToFirstPage()"
-                [disabled]="pageIndex() === 0"
-                aria-label="First page"
-                title="First page"
+        <!-- Unified Modern 2-Tier Discovery Control Ribbon -->
+        <div class="discovery-control-ribbon">
+          <!-- Tier 1: Selection Management & Primary Actions -->
+          <div class="discovery-actions-bar">
+            <div class="actions-left">
+              <app-glass-checkbox
+                label="Page"
+                [checked]="allCurrentPageSelected()"
+                [indeterminate]="someCurrentPageSelected()"
+                (checkedChange)="toggleAll()"
+                [glassTooltip]="'Select all rows on the current page'"
               >
-                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
-                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+              </app-glass-checkbox>
+
+              <button
+                *ngIf="hasMultiplePreviewPages()"
+                class="toolbar-btn"
+                (click)="selectAllPages()"
+                [attr.aria-label]="'Use stage all for ' + previewTotal() + ' discovered items'"
+                title="Use Stage All for {{ previewTotal() | number }} discovered items"
+              >
+                <app-glass-icon name="done_all" [size]="18"></app-glass-icon>
               </button>
 
               <button
-                class="toolbar-btn"
-                (click)="goToPreviousPage()"
-                [disabled]="pageIndex() === 0"
-                aria-label="Previous page"
-                title="Previous page"
+                *ngIf="selectedRows().size > 0"
+                class="toolbar-btn btn-clear-selection"
+                (click)="deselectAll()"
+                aria-label="Clear selection"
+                title="Clear selection"
               >
-                <app-glass-icon name="arrow_back" [size]="18"></app-glass-icon>
+                <app-glass-icon name="close" [size]="18"></app-glass-icon>
               </button>
 
-              <span class="page-indicator"> Page {{ pageIndex() + 1 }} of {{ totalPages() }} </span>
+              <span class="selection-badge" *ngIf="selectedRows().size > 0">
+                <span class="badge-count">{{ selectedRows().size | number }}</span>
+                <span class="badge-label">selected</span>
+              </span>
 
-              <button
-                class="toolbar-btn"
-                (click)="goToNextPage()"
-                [disabled]="pageIndex() >= totalPages() - 1"
-                aria-label="Next page"
-                title="Next page"
-              >
-                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
-              </button>
+              <span class="selection-hint" *ngIf="selectedRows().size === 0">
+                Click row selects same lot+filename family • Ctrl/Cmd+Click for individual select
+              </span>
+            </div>
 
-              <button
-                class="toolbar-btn"
-                (click)="goToLastPage()"
-                [disabled]="pageIndex() >= totalPages() - 1"
-                aria-label="Last page"
-                title="Last page"
+            <div class="actions-right">
+              <app-glass-button
+                variant="secondary"
+                size="small"
+                class="check-exensio-btn"
+                [loading]="exensioCheckLoading()"
+                [disabled]="exensioCheckLoading() || previewRows().length === 0"
+                (clicked)="checkExensio()"
+                [glassTooltip]="'Check Exensio status in parallel across PRODUCTION and SANDBOX schemas'"
               >
-                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
-                <app-glass-icon name="arrow_forward" [size]="18"></app-glass-icon>
-              </button>
+                <app-glass-icon name="fact_check" [size]="16"></app-glass-icon>
+                <span>Check Exensio</span>
+              </app-glass-button>
             </div>
           </div>
 
-          <div class="toolbar-right">
-            <app-glass-select
-              class="file-type-filter"
-              label="File Type"
-              placeholder="All Types"
-              [ngModel]="selectedFileType()"
-              (ngModelChange)="onFileTypeChange($event)"
-              [options]="fileTypeOptions()"
-            >
-            </app-glass-select>
+          <!-- Tier 2: Filtering & Global Search Ribbon -->
+          <div class="discovery-filters-bar" *ngIf="previewTotal() > 0">
+            <div class="filter-group-status">
+              <span class="filter-label">Quick Filters:</span>
+              <div class="filter-pills">
+                <button
+                  type="button"
+                  class="filter-pill"
+                  [class.active]="exensioStatusFilter() === 'all'"
+                  (click)="setExensioStatusFilter('all')"
+                >
+                  Show All
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill pill-missing"
+                  [class.active]="exensioStatusFilter() === 'missing'"
+                  (click)="setExensioStatusFilter('missing')"
+                >
+                  Show Missing Only
+                </button>
+                <button
+                  type="button"
+                  class="filter-pill pill-existing"
+                  [class.active]="exensioStatusFilter() === 'existing'"
+                  (click)="setExensioStatusFilter('existing')"
+                >
+                  Show Existing Only
+                </button>
+              </div>
+            </div>
 
-            <app-glass-select
-              class="device-filter"
-              label="Device"
-              placeholder="All Devices"
-              [ngModel]="previewDeviceFilter()"
-              (ngModelChange)="onPreviewDeviceFilterChange($event)"
-              [options]="previewDeviceOptions()"
-              [multiple]="true"
-            >
-            </app-glass-select>
+            <div class="filter-group-inputs">
+              <app-glass-select
+                class="device-filter-compact"
+                label="Device"
+                placeholder="All Devices"
+                [ngModel]="previewDeviceFilter()"
+                (ngModelChange)="onPreviewDeviceFilterChange($event)"
+                [options]="previewDeviceOptions()"
+                [multiple]="true"
+              >
+              </app-glass-select>
 
-            <app-glass-button
-              variant="secondary"
-              size="small"
-              class="check-exensio-btn"
-              [loading]="exensioCheckLoading()"
-              [disabled]="exensioCheckLoading() || previewRows().length === 0"
-              (clicked)="checkExensio()"
-              [glassTooltip]="'Check Exensio status in parallel across PRODUCTION and SANDBOX schemas'"
-            >
-              <app-glass-icon name="fact_check" [size]="16"></app-glass-icon>
-              <span>Check Exensio</span>
-            </app-glass-button>
+              <app-glass-select
+                class="file-type-filter-compact"
+                label="File Type"
+                placeholder="All Types"
+                [ngModel]="selectedFileType()"
+                (ngModelChange)="onFileTypeChange($event)"
+                [options]="fileTypeOptions()"
+              >
+              </app-glass-select>
 
-            <app-glass-input
-              class="search-field-compact"
-              label="Search"
-              placeholder="Search lot, wafer, or filename..."
-              prefixIcon="search"
-              [ngModel]="filterText()"
-              (ngModelChange)="filterText.set($event); pageIndex.set(0)"
-            >
-            </app-glass-input>
-          </div>
-        </div>
-
-        <div class="quick-filter-toolbar" *ngIf="previewTotal() > 0">
-          <span class="filter-label">Quick Filters:</span>
-          <div class="filter-pills">
-            <button
-              type="button"
-              class="filter-pill"
-              [class.active]="exensioStatusFilter() === 'all'"
-              (click)="setExensioStatusFilter('all')"
-            >
-              Show All
-            </button>
-            <button
-              type="button"
-              class="filter-pill pill-missing"
-              [class.active]="exensioStatusFilter() === 'missing'"
-              (click)="setExensioStatusFilter('missing')"
-            >
-              Show Missing Only
-            </button>
-            <button
-              type="button"
-              class="filter-pill pill-existing"
-              [class.active]="exensioStatusFilter() === 'existing'"
-              (click)="setExensioStatusFilter('existing')"
-            >
-              Show Existing Only
-            </button>
+              <app-glass-input
+                class="search-field-modern"
+                label="Search"
+                placeholder="Search lot, wafer, tester, recipe, step, file..."
+                prefixIcon="search"
+                [ngModel]="filterText()"
+                (ngModelChange)="filterText.set($event); pageIndex.set(0)"
+              >
+              </app-glass-input>
+            </div>
           </div>
         </div>
 
@@ -551,13 +517,17 @@
             <thead>
               <tr>
                 <th class="col-select"></th>
-                <th>Lot</th>
-                <th *ngIf="showWaferColumn()">Wafer</th>
-                <th>Exensio Status</th>
-                <th>Device</th>
-                <th>Metadata ID</th>
-                <th>Data ID</th>
-                <th>Filename</th>
+                <th class="col-lot">Lot</th>
+                <th class="col-wafer" *ngIf="showWaferColumn()">Wafer</th>
+                <th class="col-step">Step</th>
+                <th class="col-tester">Tester</th>
+                <th class="col-recipe">Test Program / Recipe</th>
+                <th class="col-target">Target Bound</th>
+                <th class="col-status">Exensio Status</th>
+                <th class="col-device">Device</th>
+                <th class="col-meta-id">Metadata ID</th>
+                <th class="col-data-id">Data ID</th>
+                <th class="col-filename">Filename</th>
               </tr>
             </thead>
             <tbody>
@@ -571,13 +541,41 @@
                 (keydown.enter)="toggleSelectionByRow(row)"
                 (keydown.space)="$event.preventDefault(); toggleSelectionByRow(row)"
               >
-                <td class="col-select">
+                <td class="col-select" (click)="$event.stopPropagation()">
                   <app-glass-checkbox [checked]="isRowSelected(row)" (checkedChange)="onCheckboxToggle(row, $event)">
                   </app-glass-checkbox>
                 </td>
-                <td>{{ row.lot }}</td>
-                <td *ngIf="showWaferColumn()">{{ row.wafer || '-' }}</td>
-                <td>
+                <td class="col-lot cell-bold">{{ row.lot }}</td>
+                <td class="col-wafer cell-center" *ngIf="showWaferColumn()">{{ row.wafer || '-' }}</td>
+                <td class="col-step">
+                  <span class="step-badge" *ngIf="row.step; else emptyStep">{{ row.step }}</span>
+                  <ng-template #emptyStep><span class="cell-empty">-</span></ng-template>
+                </td>
+                <td class="col-tester">
+                  <span class="tester-badge" *ngIf="row.testerId; else emptyTester">{{ row.testerId }}</span>
+                  <ng-template #emptyTester><span class="cell-empty">-</span></ng-template>
+                </td>
+                <td class="col-recipe">
+                  <span class="recipe-code" *ngIf="row.testProgram; else emptyRecipe" [glassTooltip]="row.testProgram">
+                    {{ row.testProgram }}
+                  </span>
+                  <ng-template #emptyRecipe><span class="cell-empty">-</span></ng-template>
+                </td>
+                <td class="col-target">
+                  <span
+                    class="target-badge"
+                    [ngClass]="{
+                      'badge-prod': getTargetBoundForRow(row) === 'PRODUCTION',
+                      'badge-sandbox': getTargetBoundForRow(row) === 'SANDBOX',
+                      'badge-unresolved': getTargetBoundForRow(row) === '-'
+                    }"
+                    [glassTooltip]="getTargetBoundReason(row)"
+                  >
+                    <span class="target-dot"></span>
+                    {{ getTargetBoundForRow(row) === 'PRODUCTION' ? 'PROD BOUND' : (getTargetBoundForRow(row) === 'SANDBOX' ? 'SANDBOX BOUND' : '-') }}
+                  </span>
+                </td>
+                <td class="col-status">
                   <span
                     class="exensio-status-badge"
                     [ngClass]="{
@@ -591,10 +589,10 @@
                     {{ getExensioStatusForRow(row) }}
                   </span>
                 </td>
-                <td>{{ row.device || 'N/A' }}</td>
-                <td>{{ row.metadataId || 'N/A' }}</td>
-                <td>{{ row.dataId || 'N/A' }}</td>
-                <td class="filename-cell-compact" [glassTooltip]="row.filename">
+                <td class="col-device">{{ row.device || 'N/A' }}</td>
+                <td class="col-meta-id cell-mono">{{ row.metadataId || 'N/A' }}</td>
+                <td class="col-data-id cell-mono">{{ row.dataId || 'N/A' }}</td>
+                <td class="col-filename filename-cell-compact" [glassTooltip]="row.filename">
                   {{ row.filename }}
                 </td>
               </tr>

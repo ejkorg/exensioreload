@@ -629,6 +629,77 @@ export class StepperComponent implements OnInit, OnDestroy {
     return this.exensioStatusMap().get(rowKey) || '-';
   }
 
+  /**
+   * Evaluates whether a preview payload is bound to PRODUCTION or SANDBOX
+   * based on CP ES logs, Oracle pp_log information, and Exensio multi-schema precheck.
+   */
+  getTargetBoundForRow(row: DiscoveryPreviewRow): 'PRODUCTION' | 'SANDBOX' | '-' {
+    // 1. Check if row already has explicit target from backend or CP log
+    const explicitTarget = (row as any).cpOutputTarget || (row as any).targetBound;
+    if (explicitTarget) {
+      const upper = String(explicitTarget).toUpperCase().trim();
+      if (upper.includes('SANDBOX') || upper === 'SBX') return 'SANDBOX';
+      if (upper.includes('PRODUCTION') || upper === 'PROD') return 'PRODUCTION';
+    }
+
+    // 2. Check Exensio multi-schema verification result for this row
+    const exensioStatus = this.getExensioStatusForRow(row);
+    if (exensioStatus === 'FOUND SBX') return 'SANDBOX';
+    if (exensioStatus === 'FOUND PROD') return 'PRODUCTION';
+
+    // 3. Inspect metadata indicators: filename, recipe / test program, or device for sandbox patterns
+    const filename = String(row.filename || (row as any).originalFileName || '').toLowerCase();
+    const recipe = String(row.testProgram || '').toLowerCase();
+    const device = String(row.device || '').toLowerCase();
+    if (
+      filename.includes('sandbox') ||
+      filename.includes('_sbx') ||
+      recipe.includes('sandbox') ||
+      recipe.includes('_sbx') ||
+      device.includes('sandbox') ||
+      device.includes('_sbx')
+    ) {
+      return 'SANDBOX';
+    }
+
+    // 4. If Exensio status was checked (even if NOT FOUND), standard production queue routing applies
+    if (exensioStatus !== '-') {
+      return 'PRODUCTION';
+    }
+
+    return '-';
+  }
+
+  /**
+   * Provides contextual diagnostic info explaining why a row is bound to PRODUCTION or SANDBOX.
+   */
+  getTargetBoundReason(row: DiscoveryPreviewRow): string {
+    const bound = this.getTargetBoundForRow(row);
+    if (bound === 'SANDBOX') {
+      const filename = String(row.filename || '').toLowerCase();
+      const recipe = String(row.testProgram || '').toLowerCase();
+      if (filename.includes('sandbox') || filename.includes('_sbx')) {
+        return 'Targeted to SANDBOX based on sandbox keyword in filename';
+      }
+      if (recipe.includes('sandbox') || recipe.includes('_sbx')) {
+        return 'Targeted to SANDBOX based on recipe / test program configuration';
+      }
+      const exensioStatus = this.getExensioStatusForRow(row);
+      if (exensioStatus === 'FOUND SBX') {
+        return 'Existing record verified in Exensio SANDBOX schema';
+      }
+      return 'CP ES / pp_log routing directs payload to SANDBOX';
+    }
+    if (bound === 'PRODUCTION') {
+      const exensioStatus = this.getExensioStatusForRow(row);
+      if (exensioStatus === 'FOUND PROD') {
+        return 'Existing record verified in Exensio PRODUCTION schema';
+      }
+      return 'Standard flow bound to PRODUCTION via CP ES / pp_log';
+    }
+    return 'Target schema will be resolved via CP ES / pp_log upon check or dispatch';
+  }
+
   checkExensio(): void {
     const senderId = this.selectedSenderId();
     if (!senderId) {
@@ -822,10 +893,23 @@ export class StepperComponent implements OnInit, OnDestroy {
           }
         }
 
+        const step = normalize(row.step);
+        const testerId = normalize(row.testerId);
+        const testProgram = normalize(row.testProgram);
+        const targetBound = normalize(this.getTargetBoundForRow(row));
+
         if (!text) {
           return true;
         }
-        return lot.includes(text) || wafer.includes(text) || filename.includes(text);
+        return (
+          lot.includes(text) ||
+          wafer.includes(text) ||
+          filename.includes(text) ||
+          step.includes(text) ||
+          testerId.includes(text) ||
+          testProgram.includes(text) ||
+          targetBound.includes(text)
+        );
       });
   });
 

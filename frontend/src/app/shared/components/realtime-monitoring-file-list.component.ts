@@ -166,7 +166,8 @@ import { DualTimestampComponent } from './dual-timestamp.component';
                 <span class="cp-target-badge"
                       [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
                       [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
-                      [class.badge-unknown]="file.cpOutputTarget === 'UNKNOWN' || !file.cpOutputTarget">
+                      [class.badge-unknown]="file.cpOutputTarget === 'UNKNOWN' || !file.cpOutputTarget"
+                      [glassTooltip]="file.cpOutputTarget === 'SANDBOX' ? 'Routed to SANDBOX schema via CP ES / pp_log' : (file.cpOutputTarget === 'PRODUCTION' ? 'Routed to PRODUCTION schema via CP ES / pp_log' : 'Target schema pending resolution')">
                   {{ file.cpOutputTarget || 'UNKNOWN' }}
                 </span>
               </div>

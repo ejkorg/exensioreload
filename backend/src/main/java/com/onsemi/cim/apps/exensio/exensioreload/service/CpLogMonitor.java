@@ -188,7 +188,7 @@ public class CpLogMonitor {
                     RefDbService.PpLogRow row = refDbService.queryPpLog(record.lot(), ppLogLookback, record.filename());
                     if (row != null) {
                         if (row.processCode() == 0) {
-                            return new PpLogResult.Success(row.outputDirectory());
+                            return new PpLogResult.Success(row.outputDirectory(), row.logMessage());
                         }
                         return new PpLogResult.Failure(row.logMessage());
                     }
@@ -221,11 +221,14 @@ public class CpLogMonitor {
             esTimeoutDetectedAt.remove(stageRecordId);
             log.info("CP enrichment success (pp_log) for record id={} dataId={}: output={}",
                     record.id(), record.dataId(), ppSuccess.outputDirectory());
-            String statusMsg = String.format("CP enrichment completed via pp_log: %s", ppSuccess.outputDirectory());
+            boolean isSandbox = (ppSuccess.outputDirectory() != null && ppSuccess.outputDirectory().toLowerCase().contains("sandbox")) ||
+                                (ppSuccess.logMessage() != null && ppSuccess.logMessage().toLowerCase().contains("sandbox"));
+            String target = isSandbox ? "SANDBOX" : "PRODUCTION";
+            String statusMsg = String.format("CP enrichment completed via pp_log (%s): %s", target, ppSuccess.outputDirectory());
             integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
             integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
             successCount.incrementAndGet();
-            pipelineOrchestrator.onCpEnrichmentSuccess(record, ppSuccess.outputDirectory(), "PP_LOG");
+            pipelineOrchestrator.onCpEnrichmentSuccess(record, ppSuccess.outputDirectory(), target);
             emitRowUpdateSse(record, requestId);
             return;
         }
@@ -687,7 +690,11 @@ public class CpLogMonitor {
     // ── pp_log parallel query result ──────────────────────────────────────────
 
     sealed interface PpLogResult {
-        record Success(String outputDirectory) implements PpLogResult {}
+        record Success(String outputDirectory, String logMessage) implements PpLogResult {
+            public Success(String outputDirectory) {
+                this(outputDirectory, null);
+            }
+        }
         record Failure(String errorMessage) implements PpLogResult {}
         record NotFound() implements PpLogResult {}
     }

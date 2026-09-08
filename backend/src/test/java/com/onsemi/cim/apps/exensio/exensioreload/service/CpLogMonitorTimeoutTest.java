@@ -289,7 +289,7 @@ class CpLogMonitorTimeoutTest {
         // Verify: markEnrichmentTimeout was NOT called
         verify(refDbService, never()).markCpTimeout(any(), anyString());
         
-        // Verify: Success path was taken via pp_log result
-        verify(pipelineOrchestrator, times(1)).onCpEnrichmentSuccess(any(), eq("/output/dir"), eq("PP_LOG"));
+        // Verify: Success path was taken via pp_log result (resolved to PRODUCTION since output dir is not sandbox)
+        verify(pipelineOrchestrator, times(1)).onCpEnrichmentSuccess(any(), eq("/output/dir"), eq("PRODUCTION"));
     }
 }
