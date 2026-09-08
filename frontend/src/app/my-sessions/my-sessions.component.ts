@@ -74,9 +74,9 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
       </div>
 
       <div class="session-filters">
-        <div class="filter-grid">
+        <div class="filter-row">
           <div class="filter-search-wrap">
-            <app-glass-icon name="search" [size]="15" class="filter-search-icon"></app-glass-icon>
+            <app-glass-icon name="search" [size]="14" class="filter-search-icon"></app-glass-icon>
             <input
               class="filter-input filter-input--search"
               type="text"
@@ -86,45 +86,47 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
             />
           </div>
 
-          <app-glass-select
-            label="Sender"
-            prefixIcon="send"
-            placeholder="All Senders"
-            [options]="glassSenderFilterOptions()"
-            [ngModel]="senderIdFilter()"
-            (ngModelChange)="onSenderSelectChange($event)"
-          ></app-glass-select>
+          <div class="filter-selects">
+            <app-glass-select
+              label="Sender"
+              prefixIcon="send"
+              placeholder="All Senders"
+              [options]="glassSenderFilterOptions()"
+              [ngModel]="senderIdFilter()"
+              (ngModelChange)="onSenderSelectChange($event)"
+            ></app-glass-select>
 
-          <app-glass-select
-            *ngIf="showUserColumn()"
-            label="User"
-            prefixIcon="person"
-            placeholder="All Users"
-            [options]="glassUserFilterOptions()"
-            [ngModel]="usernameFilter()"
-            (ngModelChange)="onUsernameSelectChange($event)"
-          ></app-glass-select>
+            <app-glass-select
+              *ngIf="showUserColumn()"
+              label="User"
+              prefixIcon="person"
+              placeholder="All Users"
+              [options]="glassUserFilterOptions()"
+              [ngModel]="usernameFilter()"
+              (ngModelChange)="onUsernameSelectChange($event)"
+            ></app-glass-select>
 
-          <app-glass-select
-            label="Status"
-            prefixIcon="flag"
-            placeholder="All Status"
-            [options]="statusSelectOptions"
-            [ngModel]="statusFilter()"
-            (ngModelChange)="onStatusSelectChange($event)"
-          ></app-glass-select>
+            <app-glass-select
+              label="Status"
+              prefixIcon="flag"
+              placeholder="All Status"
+              [options]="statusSelectOptions"
+              [ngModel]="statusFilter()"
+              (ngModelChange)="onStatusSelectChange($event)"
+            ></app-glass-select>
 
-          <app-glass-device-filter
-            label="Device"
-            placeholder="All devices"
-            [disabled]="false"
-            (deviceChange)="onDeviceFilterChange($event)"
-          ></app-glass-device-filter>
-        </div>
+            <app-glass-device-filter
+              label="Device"
+              placeholder="All devices"
+              [disabled]="false"
+              (deviceChange)="onDeviceFilterChange($event)"
+            ></app-glass-device-filter>
+          </div>
 
-        <div class="filter-actions">
-          <app-glass-button variant="secondary" (clicked)="clearSessionFilters()">Clear</app-glass-button>
-          <app-glass-button variant="primary" (clicked)="applySessionFilters()">Apply</app-glass-button>
+          <div class="filter-actions">
+            <app-glass-button variant="secondary" size="small" (clicked)="clearSessionFilters()">Clear</app-glass-button>
+            <app-glass-button variant="primary" size="small" (clicked)="applySessionFilters()">Apply</app-glass-button>
+          </div>
         </div>
       </div>
 
@@ -721,70 +723,107 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         backdrop-filter: blur(8px);
       }
       .session-filters {
-        padding: 1rem;
-        background: rgba(30, 22, 68, 0.5);
-        border: 1px solid rgba(167, 139, 250, 0.16);
-        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        background: rgba(30, 22, 68, 0.4);
+        border: 1px solid rgba(167, 139, 250, 0.12);
+        border-radius: 12px;
       }
-      .filter-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
+      .filter-row {
+        display: flex;
+        align-items: center;
         gap: 0.75rem;
-        align-items: end;
+        flex-wrap: wrap;
       }
-      @media (max-width: 1100px) {
-        .filter-grid { grid-template-columns: repeat(2, 1fr); }
-      }
-      @media (max-width: 640px) {
-        .filter-grid { grid-template-columns: 1fr; }
-      }
-      .filter-grid app-glass-select,
-      .filter-grid app-glass-device-filter { width: 100%; }
       .filter-search-wrap {
         position: relative;
         display: flex;
         align-items: center;
+        flex: 1;
+        min-width: 200px;
+        max-width: 320px;
       }
       .filter-search-icon {
         position: absolute;
-        left: 0.85rem;
+        left: 0.75rem;
         pointer-events: none;
-        opacity: 0.55;
+        opacity: 0.5;
         z-index: 1;
       }
+      .filter-selects {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .filter-selects app-glass-select,
+      .filter-selects app-glass-device-filter {
+        min-width: 140px;
+        max-width: 180px;
+      }
       .filter-input {
-        height: 56px;
+        height: 40px;
         width: 100%;
-        border-radius: 14px;
+        border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(16px);
+        backdrop-filter: blur(8px);
         color: rgba(226, 232, 255, 0.94);
-        padding: 0 1rem;
-        font-size: 0.9375rem;
+        padding: 0 0.875rem;
+        font-size: 0.875rem;
         cursor: text;
         outline: none;
         box-sizing: border-box;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
       }
       .filter-input--search {
-        padding-left: 2.5rem;
+        padding-left: 2.25rem;
       }
       .filter-input:focus {
-        border-color: rgba(167, 139, 250, 0.65);
-        box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
+        border-color: rgba(167, 139, 250, 0.6);
+        box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.1);
       }
       .filter-input:hover {
-        border-color: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.12);
       }
       .filter-actions {
         display: flex;
-        justify-content: flex-end;
         align-items: center;
-        gap: 0.75rem;
-        margin-top: 1.25rem;
-        padding-top: 1.25rem;
-        border-top: 1px solid rgba(167, 139, 250, 0.15);
+        gap: 0.5rem;
+        margin-left: auto;
+      }
+      @media (max-width: 900px) {
+        .filter-row {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .filter-search-wrap {
+          max-width: 100%;
+        }
+        .filter-selects {
+          width: 100%;
+        }
+        .filter-selects app-glass-select,
+        .filter-selects app-glass-device-filter {
+          flex: 1;
+          max-width: none;
+        }
+        .filter-actions {
+          margin-left: 0;
+          justify-content: flex-end;
+        }
+      }
+      :host-context(body.light-theme) .session-filters {
+        background: rgba(240, 238, 255, 0.5);
+        border-color: rgba(99, 102, 241, 0.12);
+      }
+      :host-context(body.light-theme) .filter-input {
+        border-color: rgba(99, 102, 241, 0.15);
+        background-color: rgba(255, 255, 255, 0.85);
+        color: #1e293b;
+      }
+      :host-context(body.light-theme) .filter-input:focus {
+        border-color: rgba(99, 102, 241, 0.5);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08);
       }
       .table-meta-bar {
         display: flex;
@@ -1657,19 +1696,19 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         padding: 2rem; /* breathing room so modal doesn't touch viewport edges */
       }
       .detail-modal {
-        width: min(1100px, 100%);
-        max-width: 1100px;
-        max-height: 92vh; /* constrain height to viewport */
+        width: min(1200px, 100%);
+        max-width: 1200px;
+        max-height: 95vh; /* constrain height to viewport */
         min-height: 160px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        border-radius: 12px;
+        border-radius: 16px;
         border: none;
         background: linear-gradient(165deg, rgba(31, 23, 61, 0.97) 0%, rgba(22, 17, 52, 0.95) 100%);
         backdrop-filter: blur(14px) saturate(118%);
         -webkit-backdrop-filter: blur(14px) saturate(118%);
-        box-shadow: 0 12px 40px rgba(2,8,23,0.6);
+        box-shadow: 0 20px 60px rgba(2, 8, 23, 0.7), 0 0 0 1px rgba(167, 139, 250, 0.1);
       }
       .files-section {
         display: flex;
@@ -1678,6 +1717,8 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         border-radius: 14px;
         border: 1px solid rgba(167, 139, 250, 0.2);
         overflow: hidden;
+        flex: 1;
+        min-height: 200px;
       }
       .files-section-header {
         display: flex;
@@ -1721,8 +1762,10 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         display: flex;
         flex-direction: column;
         background: rgba(18, 12, 42, 0.6);
-        max-height: 480px;
+        max-height: none;
         overflow: hidden;
+        flex: 1;
+        min-height: 0;
       }
       .files-toolbar {
         display: flex;
