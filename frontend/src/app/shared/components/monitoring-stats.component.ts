@@ -2,12 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { IntegrationStatusSnapshot } from '../../api/backend.service';
 import { MonitoringStats } from '../services/monitoring.service';
+import { DualTimestampComponent } from './dual-timestamp.component';
 import { GlassIconComponent } from './glass-icon.component';
 
 @Component({
   selector: 'app-monitoring-stats',
   standalone: true,
-  imports: [CommonModule, GlassIconComponent],
+  imports: [CommonModule, GlassIconComponent, DualTimestampComponent],
   template: `
     <div class="monitoring-stats">
       <!-- Overview Cards - 7 State Pipeline -->
@@ -162,15 +163,26 @@ import { GlassIconComponent } from './glass-icon.component';
 
       <!-- Integration Status -->
       <div class="integration-status glass-panel" *ngIf="integrationItems().length > 0">
-        <div class="integration-header">Integrations</div>
+        <div class="integration-header">
+          <app-glass-icon name="hub" [size]="18" color="primary"></app-glass-icon>
+          <span>Integrations</span>
+        </div>
         <div class="integration-grid">
           <div class="integration-row" *ngFor="let item of integrationItems()">
-            <div class="integration-name">{{ item.name }}</div>
+            <div class="integration-name-section">
+              <app-glass-icon name="settings_ethernet" [size]="16" color="muted"></app-glass-icon>
+              <span class="integration-name">{{ item.name }}</span>
+            </div>
             <div class="integration-state" [ngClass]="item.statusClass">
-              <app-glass-icon [name]="item.icon" [size]="16" color="muted"></app-glass-icon>
+              <app-glass-icon [name]="item.icon" [size]="14"></app-glass-icon>
               <span class="integration-label">{{ item.message }}</span>
             </div>
-            <div class="integration-time" *ngIf="item.lastAt">{{ item.lastAt }}</div>
+            <div class="integration-time" *ngIf="item.lastAt">
+              <app-dual-timestamp [value]="item.lastAt"></app-dual-timestamp>
+            </div>
+            <div class="integration-time-placeholder" *ngIf="!item.lastAt">
+              <span class="no-timestamp">—</span>
+            </div>
           </div>
         </div>
       </div>
@@ -426,88 +438,125 @@ import { GlassIconComponent } from './glass-icon.component';
       }
 
       .integration-status {
-        padding: 0.875rem 1rem;
+        padding: 1rem 1.25rem;
       }
 
       .integration-header {
-        font-size: 0.875rem;
-        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
         color: var(--text-main);
-        margin-bottom: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       }
 
       .integration-grid {
         display: grid;
-        gap: 0.65rem;
+        gap: 0.75rem;
       }
 
       .integration-row {
         display: grid;
-        grid-template-columns: 160px 1fr auto;
-        gap: 0.75rem;
+        grid-template-columns: 180px 1fr 160px;
+        gap: 1rem;
         align-items: center;
+        padding: 0.75rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.2s ease;
+      }
+
+      .integration-row:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
+      }
+
+      .integration-name-section {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
       }
 
       .integration-name {
-        font-size: 0.8rem;
-        font-weight: 600;
+        font-size: 0.875rem;
+        font-weight: 700;
         color: var(--text-main);
+        letter-spacing: 0.02em;
       }
 
       .integration-state {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 999px;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 8px;
         font-size: 0.75rem;
         font-weight: 600;
         background: rgba(255, 255, 255, 0.05);
         color: var(--text-muted);
         width: fit-content;
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
       .integration-label {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 300px;
+        max-width: 280px;
       }
 
       .integration-time {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-align: right;
-        white-space: nowrap;
+        display: flex;
+        justify-content: flex-end;
       }
 
-      .integration-row {
-        transition: background 0.3s ease;
+      .integration-time-placeholder {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .no-timestamp {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        opacity: 0.5;
       }
 
       .status-success {
         color: #10b981;
-        background: rgba(16, 185, 129, 0.12);
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.3);
       }
       .status-warning {
         color: #f59e0b;
-        background: rgba(245, 158, 11, 0.12);
+        background: rgba(245, 158, 11, 0.15);
+        border-color: rgba(245, 158, 11, 0.3);
         animation: pulse-integration 2.5s ease-in-out infinite;
       }
       .status-error {
         color: #ef4444;
-        background: rgba(239, 68, 68, 0.12);
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.3);
       }
       .status-muted {
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
       }
       .status-pending {
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
       }
 
       .status-pending.active-monitoring {
+        color: var(--accent-color);
+        background: rgba(129, 140, 248, 0.15);
+        border-color: rgba(129, 140, 248, 0.3);
         animation: pulse-integration 3s ease-in-out infinite;
       }
 
@@ -517,6 +566,22 @@ import { GlassIconComponent } from './glass-icon.component';
 
       .status-warning app-glass-icon {
         animation: pulse-icon 2.5s ease-in-out infinite;
+      }
+
+      .status-success app-glass-icon {
+        color: #10b981;
+      }
+
+      .status-error app-glass-icon {
+        color: #ef4444;
+      }
+
+      .status-warning app-glass-icon {
+        color: #f59e0b;
+      }
+
+      .status-pending.active-monitoring app-glass-icon {
+        color: var(--accent-color);
       }
 
       @keyframes pulse-integration {

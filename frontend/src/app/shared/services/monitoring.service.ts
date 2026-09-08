@@ -55,6 +55,10 @@ export interface MonitoringFile {
   cpIntegrationMessage?: string | null;
   exensioIntegrationStatus?: string | null; // "success" | "pending" | "failure" | "not_found" | "error" | "not_configured"
   exensioIntegrationMessage?: string | null;
+  // Manufacturing context fields
+  step?: string | null; // Test step (e.g., "CP1", "PRB1")
+  testerId?: string | null; // Tester equipment ID (e.g., "TST-02")
+  testProgram?: string | null; // Recipe/program name (e.g., "RECIPE_A")
 }
 
 export interface ActivityEvent {

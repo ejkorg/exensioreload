@@ -19,7 +19,18 @@ export interface MonitoringFileItem {
   filename: string;
   lot: string;
   wafer?: string;
-  status: 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED';
+  status:
+    | 'READY'
+    | 'QUEUED_FOR_CP'
+    | 'ELASTICSEARCH_MONITORING'
+    | 'CP_TIMEOUT'
+    | 'EXENSIO_MONITORING'
+    | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'
+    | 'COMPLETED'
+    | 'ERROR'
+    | 'CP_FAILED'
+    | 'LOAD_FAILED'
+    | 'CANCELLED';
   message: string;
   errorMessage?: string | null;
   updatedAt?: string;
@@ -32,6 +43,10 @@ export interface MonitoringFileItem {
   exensioIntegrationMessage?: string | null;
   /** Tracks if this file was updated in the current real-time update cycle (for UI indicators) */
   isRecentlyUpdated?: boolean;
+  // ➕ NEW: Manufacturing context fields
+  step?: string | null; // Test step (e.g., "CP1", "PRB1")
+  testerId?: string | null; // Tester equipment ID (e.g., "TST-02")
+  testProgram?: string | null; // Recipe/program name (e.g., "RECIPE_A")
 }
 
 /**
@@ -378,7 +393,18 @@ export class MonitoringPaginationService implements OnDestroy {
    */
   private mapBackendStatus(
     status: string,
-  ): 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED' {
+  ):
+    | 'READY'
+    | 'QUEUED_FOR_CP'
+    | 'ELASTICSEARCH_MONITORING'
+    | 'CP_TIMEOUT'
+    | 'EXENSIO_MONITORING'
+    | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'
+    | 'COMPLETED'
+    | 'ERROR'
+    | 'CP_FAILED'
+    | 'LOAD_FAILED'
+    | 'CANCELLED' {
     const normalized = (status || '').toUpperCase();
     if (normalized === 'COMPLETED' || normalized === 'DONE') return 'COMPLETED';
     if (normalized === 'ELASTICSEARCH_MONITORING' || normalized === 'DISPATCHING') return 'ELASTICSEARCH_MONITORING';

@@ -3,10 +3,10 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { GlassTooltipDirective } from '../directives/glass-tooltip.directive';
 import { MonitoringFileItem, MonitoringPaginationService } from '../services/monitoring-pagination.service';
+import { DualTimestampComponent } from './dual-timestamp.component';
 import { GlassButtonComponent } from './glass-button.component';
 import { GlassIconComponent } from './glass-icon.component';
 import { GlassInputComponent } from './glass-input.component';
-import { DualTimestampComponent } from './dual-timestamp.component';
 
 @Component({
   selector: 'app-realtime-monitoring-file-list',
@@ -22,128 +22,242 @@ import { DualTimestampComponent } from './dual-timestamp.component';
   ],
   template: `
     <div class="realtime-file-list glass-panel">
-      <!-- Header -->
-      <div class="file-list-header">
-        <div class="header-left">
-          <h3>Staged Files <span class="file-count">({{ state().totalCount | number }})</span></h3>
-          <div class="stream-indicator" [class.live]="state().streamStatus === 'live'"
-                                        [class.polling]="state().streamStatus === 'polling'"
-                                        [class.connecting]="state().streamStatus === 'connecting'"
-                                        [glassTooltip]="streamStatusTooltip()">
-            <div class="indicator-dot"></div>
-            <span class="indicator-text">{{ state().streamStatus === 'live' ? 'Live Updates' : state().streamStatus === 'polling' ? 'Polling Updates' : 'Connecting...' }}</span>
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TIER 1: MONITORING METRICS & STREAM STATUS              -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div class="monitoring-metrics-bar">
+        <div class="metrics-left">
+          <div class="metric-item">
+            <app-glass-icon name="dashboard" [size]="16" color="primary"></app-glass-icon>
+            <span class="metric-value">{{ state().totalCount }}</span>
+            <span class="metric-label">files</span>
+          </div>
+
+          <div
+            class="stream-status-indicator"
+            [class.live]="state().streamStatus === 'live'"
+            [class.polling]="state().streamStatus === 'polling'"
+            [class.connecting]="state().streamStatus === 'connecting'"
+            [glassTooltip]="streamStatusTooltip()"
+          >
+            <div class="status-dot"></div>
+            <span class="status-text">{{ streamStatusLabel() }}</span>
+          </div>
+
+          <div class="metric-item" *ngIf="elapsedTime()">
+            <app-glass-icon name="schedule" [size]="16" color="muted"></app-glass-icon>
+            <span class="metric-label">Elapsed:</span>
+            <span class="metric-value">{{ elapsedTime() }}</span>
+          </div>
+
+          <div class="metric-item" *ngIf="throughput() > 0">
+            <app-glass-icon name="speed" [size]="16" color="muted"></app-glass-icon>
+            <span class="metric-value">{{ throughput() }}</span>
+            <span class="metric-label">files/min</span>
           </div>
         </div>
-        <div class="header-right">
-          <app-glass-input
-            placeholder="Search files..."
-            prefixIcon="search"
-            [value]="searchText()"
-            (valueChange)="searchText.set($event)">
-          </app-glass-input>
+
+        <div class="metrics-right">
+          <app-glass-button
+            variant="icon"
+            size="small"
+            [glassTooltip]="'Refresh monitoring data'"
+            (clicked)="refreshMonitoring()"
+          >
+            <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+          </app-glass-button>
         </div>
       </div>
 
-      <!-- Status Filters -->
-      <div class="status-filters-bar">
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'all'"
-                (click)="statusFilter.set('all')">
-          All ({{ allCount() }})
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'READY'"
-                (click)="statusFilter.set('READY')">
-          Ready
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
-                (click)="statusFilter.set('QUEUED_FOR_CP')">
-          In Queue
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'ELASTICSEARCH_MONITORING'"
-                (click)="statusFilter.set('ELASTICSEARCH_MONITORING')">
-          Enrichment
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'EXENSIO_MONITORING'"
-                (click)="statusFilter.set('EXENSIO_MONITORING')">
-          Exensio Monitoring
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
-                (click)="statusFilter.set('COMPLETED_MANUAL_VERIFICATION_REQUIRED')">
-          Verify in Exensio
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'COMPLETED'"
-                (click)="statusFilter.set('COMPLETED')">
-          Completed
-        </button>
-        <button class="filter-chip"
-                [class.active]="statusFilter() === 'ERROR'"
-                (click)="statusFilter.set('ERROR')">
-          Failed
-        </button>
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TIER 2: FILTERS & SEARCH                                -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div class="monitoring-filters-bar">
+        <div class="filters-left">
+          <button
+            class="status-filter-pill"
+            [class.active]="statusFilter() === 'all'"
+            (click)="statusFilter.set('all')"
+          >
+            All <span class="pill-count">({{ allCount() }})</span>
+          </button>
+
+          <button
+            class="status-filter-pill status-ready"
+            [class.active]="statusFilter() === 'READY'"
+            (click)="statusFilter.set('READY')"
+            *ngIf="readyCount() > 0"
+          >
+            <app-glass-icon name="check" [size]="14"></app-glass-icon>
+            Ready <span class="pill-count">({{ readyCount() }})</span>
+          </button>
+
+          <button
+            class="status-filter-pill status-queued"
+            [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
+            (click)="statusFilter.set('QUEUED_FOR_CP')"
+            *ngIf="enqueuedCount() > 0"
+          >
+            <app-glass-icon name="schedule_send" [size]="14"></app-glass-icon>
+            Queued <span class="pill-count">({{ enqueuedCount() }})</span>
+          </button>
+
+          <button
+            class="status-filter-pill status-processing"
+            [class.active]="statusFilter() === 'processing'"
+            (click)="statusFilter.set('processing')"
+            *ngIf="processingCount() > 0"
+          >
+            <app-glass-icon name="autorenew" [size]="14"></app-glass-icon>
+            Processing <span class="pill-count">({{ processingCount() }})</span>
+          </button>
+
+          <button
+            class="status-filter-pill status-completed"
+            [class.active]="statusFilter() === 'COMPLETED'"
+            (click)="statusFilter.set('COMPLETED')"
+            *ngIf="completedCount() > 0"
+          >
+            <app-glass-icon name="check_circle" [size]="14"></app-glass-icon>
+            Completed <span class="pill-count">({{ completedCount() }})</span>
+          </button>
+
+          <button
+            class="status-filter-pill status-failed"
+            [class.active]="statusFilter() === 'ERROR'"
+            (click)="statusFilter.set('ERROR')"
+            *ngIf="errorCount() > 0"
+          >
+            <app-glass-icon name="error" [size]="14"></app-glass-icon>
+            Failed <span class="pill-count">({{ errorCount() }})</span>
+          </button>
+        </div>
+
+        <div class="filters-right">
+          <app-glass-input
+            class="search-input-compact"
+            placeholder="Search..."
+            prefixIcon="search"
+            [value]="searchText()"
+            (valueChange)="searchText.set($event)"
+          >
+          </app-glass-input>
+
+          <app-glass-button variant="secondary" size="small" [glassTooltip]="'Export to CSV'" (clicked)="exportCSV()">
+            <app-glass-icon name="download" [size]="16"></app-glass-icon>
+          </app-glass-button>
+        </div>
       </div>
 
-      <!-- File Table -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TABLE: ENHANCED WITH NEW COLUMNS                        -->
+      <!-- ═══════════════════════════════════════════════════════ -->
       <div class="file-table-wrapper">
         <div class="table-header">
           <div class="col-status">Status</div>
           <div class="col-filename">Filename</div>
           <div class="col-lot">Lot</div>
           <div class="col-wafer">Wafer</div>
+          <div class="col-step">Step</div>
+          <div class="col-tester">Tester</div>
+          <div class="col-recipe">Recipe</div>
+          <div class="col-schema">Schema</div>
+          <div class="col-pipeline">Pipeline Status</div>
           <div class="col-updated">Updated</div>
         </div>
 
-        <cdk-virtual-scroll-viewport itemSize="64" class="table-viewport"
-                                     (scrolledIndexChange)="onVirtualScrollIndexChange($event)">
-          <div class="table-row-wrapper"
-               *cdkVirtualFor="let file of filteredFiles()">
-            <div class="table-row"
-               [class.status-ready]="file.status === 'READY'"
-               [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
-               [class.status-processing]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
-               [class.status-completed]="file.status === 'COMPLETED'"
-               [class.status-error]="file.status === 'ERROR'"
-               [class.recently-updated]="file.isRecentlyUpdated"
-               [class.expandable]="!!(file.errorMessage || file.cpOutputPath)"
-               (click)="toggleExpand(file)">
-
+        <cdk-virtual-scroll-viewport
+          itemSize="64"
+          class="table-viewport"
+          (scrolledIndexChange)="onVirtualScrollIndexChange($event)"
+        >
+          <div class="table-row-wrapper" *cdkVirtualFor="let file of filteredFiles()">
+            <div
+              class="table-row"
+              [class.status-ready]="file.status === 'READY'"
+              [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
+              [class.status-processing]="isProcessingStatus(file.status)"
+              [class.status-completed]="file.status === 'COMPLETED'"
+              [class.status-error]="isErrorStatus(file.status)"
+              [class.recently-updated]="file.isRecentlyUpdated"
+              [class.expandable]="!!(file.errorMessage || file.cpOutputPath)"
+              (click)="toggleExpand(file)"
+            >
+              <!-- Status Badge (Icon Only) -->
               <div class="col-status">
-                <div class="status-badge" [class]="'status-' + file.status.toLowerCase()">
-                  <app-glass-icon
-                    [name]="getStatusIcon(file.status)"
-                    [size]="14"
-                    [color]="getStatusColor(file.status)">
+                <div class="status-badge-compact" [class]="'badge-' + file.status.toLowerCase()">
+                  <app-glass-icon [name]="getStatusIcon(file.status)" [size]="16" [color]="getStatusColor(file.status)">
                   </app-glass-icon>
-                  <span class="status-text">{{ getStatusLabel(file.status) }}</span>
-                </div>
-                <div class="recently-updated-badge" *ngIf="file.isRecentlyUpdated">
-                  <app-glass-icon name="rate_increase" [size]="12" color="success"></app-glass-icon>
                 </div>
               </div>
 
+              <!-- Filename -->
               <div class="col-filename" [glassTooltip]="file.filename">
-                <div class="filename-main">{{ file.filename }}</div>
-                <div class="file-detail-line"
-                     [class.detail-error]="getDetailLineColor(file) === 'error'"
-                     [class.detail-success]="getDetailLineColor(file) === 'success'"
-                     [class.detail-warning]="getDetailLineColor(file) === 'warning'"
-                     [class.detail-muted]="getDetailLineColor(file) === 'muted'"
-                     [glassTooltip]="isErrorTruncated(file) ? getFullErrorMessage(file) : null">
+                <div class="filename-text">{{ file.filename }}</div>
+              </div>
+
+              <!-- Lot -->
+              <div class="col-lot">{{ file.lot || '-' }}</div>
+
+              <!-- Wafer -->
+              <div class="col-wafer">{{ file.wafer || '-' }}</div>
+
+              <!-- Step -->
+              <div class="col-step">
+                <span class="step-badge" *ngIf="file.step">{{ file.step }}</span>
+                <span *ngIf="!file.step" class="text-muted">-</span>
+              </div>
+
+              <!-- Tester -->
+              <div class="col-tester">
+                <span class="tester-badge" *ngIf="file.testerId">{{ file.testerId }}</span>
+                <span *ngIf="!file.testerId" class="text-muted">-</span>
+              </div>
+
+              <!-- Recipe -->
+              <div class="col-recipe">
+                <span class="recipe-code" *ngIf="file.testProgram" [glassTooltip]="file.testProgram">
+                  {{ file.testProgram }}
+                </span>
+                <span *ngIf="!file.testProgram" class="text-muted">-</span>
+              </div>
+
+              <!-- Schema Bound -->
+              <div class="col-schema">
+                <span
+                  class="schema-badge"
+                  [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
+                  [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
+                  [class.badge-pending]="!file.cpOutputTarget || file.cpOutputTarget === 'UNKNOWN'"
+                  [glassTooltip]="getSchemaTooltip(file)"
+                >
+                  {{ file.cpOutputTarget || '-' }}
+                </span>
+              </div>
+
+              <!-- Pipeline Status -->
+              <div class="col-pipeline">
+                <div
+                  class="pipeline-status"
+                  [class.status-success]="getDetailLineColor(file) === 'success'"
+                  [class.status-error]="getDetailLineColor(file) === 'error'"
+                  [class.status-warning]="getDetailLineColor(file) === 'warning'"
+                  [class.status-muted]="getDetailLineColor(file) === 'muted'"
+                  [glassTooltip]="isErrorTruncated(file) ? getFullErrorMessage(file) : null"
+                >
                   {{ getDetailLine(file) }}
                 </div>
               </div>
-              <div class="col-lot">{{ file.lot || '-' }}</div>
-              <div class="col-wafer">{{ file.wafer || '-' }}</div>
+
+              <!-- Updated -->
               <div class="col-updated">
                 <app-dual-timestamp [value]="file.updatedAt"></app-dual-timestamp>
-                <app-glass-icon *ngIf="file.cpOutputPath || file.errorMessage"
+                <app-glass-icon
+                  *ngIf="file.cpOutputPath || file.errorMessage"
                   [name]="isExpanded(file) ? 'expand_less' : 'expand_more'"
-                  [size]="14" color="muted">
+                  [size]="14"
+                  color="muted"
+                >
                 </app-glass-icon>
               </div>
             </div>
@@ -153,9 +267,13 @@ import { DualTimestampComponent } from './dual-timestamp.component';
               <div class="error-details" *ngIf="file.errorMessage">
                 <app-glass-icon name="error" [size]="16" color="error"></app-glass-icon>
                 <div class="error-content">
-                  <span class="error-source-badge" *ngIf="detectErrorSourceForDisplay(file) as src"
-                        [class.source-cp]="src === 'CP'"
-                        [class.source-exensio]="src === 'Exensio'">{{ src }}</span>
+                  <span
+                    class="error-source-badge"
+                    *ngIf="detectErrorSourceForDisplay(file) as src"
+                    [class.source-cp]="src === 'CP'"
+                    [class.source-exensio]="src === 'Exensio'"
+                    >{{ src }}</span
+                  >
                   <span class="error-message">{{ file.errorMessage }}</span>
                 </div>
               </div>
@@ -163,11 +281,13 @@ import { DualTimestampComponent } from './dual-timestamp.component';
                 <app-glass-icon name="folder" [size]="14" color="muted"></app-glass-icon>
                 <span class="cp-output-label">Output Path:</span>
                 <span class="cp-output-path">{{ file.cpOutputPath }}</span>
-                <span class="cp-target-badge"
-                      [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
-                      [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
-                      [class.badge-unknown]="file.cpOutputTarget === 'UNKNOWN' || !file.cpOutputTarget"
-                      [glassTooltip]="file.cpOutputTarget === 'SANDBOX' ? 'Routed to SANDBOX schema via CP ES / pp_log' : (file.cpOutputTarget === 'PRODUCTION' ? 'Routed to PRODUCTION schema via CP ES / pp_log' : 'Target schema pending resolution')">
+                <span
+                  class="cp-target-badge"
+                  [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
+                  [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
+                  [class.badge-unknown]="file.cpOutputTarget === 'UNKNOWN' || !file.cpOutputTarget"
+                  [glassTooltip]="getSchemaTooltip(file)"
+                >
                   {{ file.cpOutputTarget || 'UNKNOWN' }}
                 </span>
               </div>
@@ -177,7 +297,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
           <!-- Empty State -->
           <div class="empty-state" *ngIf="filteredFiles().length === 0 && !state().isLoading">
             <app-glass-icon name="search" [size]="48" color="muted"></app-glass-icon>
-            <p>{{ state().totalCount === 0 ? 'No files staged yet' : 'No files match filter' }}</p>
+            <p>{{ state().totalCount === 0 ? 'No files in monitoring' : 'No files match filter' }}</p>
           </div>
 
           <!-- Loading State -->
@@ -198,15 +318,12 @@ import { DualTimestampComponent } from './dual-timestamp.component';
             variant="secondary"
             size="small"
             [disabled]="state().currentPage === 0"
-            (clicked)="previousPage()">
+            (clicked)="previousPage()"
+          >
             <app-glass-icon name="chevron_left" [size]="16"></app-glass-icon>
             Previous
           </app-glass-button>
-          <app-glass-button
-            variant="secondary"
-            size="small"
-            [disabled]="!state().hasMore"
-            (clicked)="nextPage()">
+          <app-glass-button variant="secondary" size="small" [disabled]="!state().hasMore" (clicked)="nextPage()">
             Next
             <app-glass-icon name="chevron_right" [size]="16"></app-glass-icon>
           </app-glass-button>
@@ -224,42 +341,58 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         overflow: hidden;
       }
 
-      .file-list-header {
+      // ═══════════════════════════════════════════════════════
+      // TIER 1: MONITORING METRICS BAR
+      // ═══════════════════════════════════════════════════════
+
+      .monitoring-metrics-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 1.25rem;
+        padding: 1rem 1.25rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
         gap: 1rem;
       }
 
-      .header-left {
+      .metrics-left {
         display: flex;
         align-items: center;
         gap: 1.5rem;
+        flex-wrap: wrap;
       }
 
-      .header-left h3 {
-        margin: 0;
-        font-size: 1.0625rem;
+      .metrics-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .metric-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+      }
+
+      .metric-value {
         font-weight: 700;
         color: var(--text-main);
       }
 
-      .file-count {
-        font-size: 0.875rem;
-        font-weight: 500;
+      .metric-label {
         color: var(--text-muted);
+        font-weight: 500;
       }
 
-      .stream-indicator {
+      .stream-status-indicator {
         display: flex;
         align-items: center;
         gap: 0.5rem;
         padding: 0.375rem 0.75rem;
-        border-radius: 6px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
@@ -267,45 +400,46 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         color: var(--text-muted);
       }
 
-      .indicator-dot {
+      .status-dot {
         width: 6px;
         height: 6px;
         border-radius: 50%;
         background: var(--text-muted);
-        animation: pulse 0.5s linear;
+        animation: pulse-dot 2s ease-in-out infinite;
       }
 
-      .stream-indicator.live {
+      .stream-status-indicator.live {
         background: rgba(16, 185, 129, 0.1);
         border-color: rgba(16, 185, 129, 0.3);
         color: #10b981;
       }
 
-      .stream-indicator.live .indicator-dot {
+      .stream-status-indicator.live .status-dot {
         background: #10b981;
       }
 
-      .stream-indicator.polling {
+      .stream-status-indicator.polling {
         background: rgba(245, 158, 11, 0.1);
         border-color: rgba(245, 158, 11, 0.3);
         color: #f59e0b;
       }
 
-      .stream-indicator.polling .indicator-dot {
+      .stream-status-indicator.polling .status-dot {
         background: #f59e0b;
       }
 
-      .stream-indicator.connecting {
+      .stream-status-indicator.connecting {
         background: rgba(129, 140, 248, 0.1);
         border-color: rgba(129, 140, 248, 0.3);
         color: var(--accent-color);
       }
 
-      .stream-indicator.connecting .indicator-dot {
+      .stream-status-indicator.connecting .status-dot {
         background: var(--accent-color);
+        animation: pulse-dot 0.8s ease-in-out infinite;
       }
 
-      @keyframes pulse {
+      @keyframes pulse-dot {
         0%,
         100% {
           opacity: 1;
@@ -315,28 +449,43 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         }
       }
 
-      .header-right {
-        min-width: 250px;
-      }
+      // ═══════════════════════════════════════════════════════
+      // TIER 2: MONITORING FILTERS BAR
+      // ═══════════════════════════════════════════════════════
 
-      .status-filters-bar {
+      .monitoring-filters-bar {
         display: flex;
-        gap: 0.5rem;
-        padding: 0.75rem 1.25rem;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.875rem 1.25rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        overflow-x: auto;
+        gap: 1rem;
         flex-wrap: wrap;
       }
 
-      .filter-chip {
+      .filters-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .filters-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .status-filter-pill {
         display: flex;
         align-items: center;
         gap: 0.375rem;
-        padding: 0.375rem 0.75rem;
+        padding: 0.5rem 0.875rem;
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        font-size: 0.75rem;
+        border-radius: 10px;
+        font-size: 0.8125rem;
         font-weight: 600;
         color: var(--text-muted);
         cursor: pointer;
@@ -344,27 +493,44 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         white-space: nowrap;
       }
 
-      .filter-chip:hover {
+      .status-filter-pill:hover {
         background: rgba(255, 255, 255, 0.08);
         border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-1px);
       }
 
-      .filter-chip.active {
+      .status-filter-pill.active {
         background: rgba(129, 140, 248, 0.15);
         border-color: var(--accent-color);
         color: var(--accent-color);
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.3);
       }
+
+      .pill-count {
+        font-size: 0.75rem;
+        opacity: 0.8;
+      }
+
+      .search-input-compact {
+        width: 220px;
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // TABLE: ENHANCED GRID WITH NEW COLUMNS
+      // ═══════════════════════════════════════════════════════
 
       .file-table-wrapper {
         flex: 1;
         display: flex;
         flex-direction: column;
         min-height: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
 
       .table-header {
         display: grid;
-        grid-template-columns: 120px 1fr 100px 80px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
         padding: 0.75rem 1.25rem;
         background: rgba(255, 255, 255, 0.02);
@@ -374,13 +540,17 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        sticky: top;
+        position: sticky;
+        top: 0;
         z-index: 10;
+        backdrop-filter: blur(10px);
+        min-width: 1650px;
       }
 
       .table-viewport {
         flex: 1;
         min-height: 0;
+        min-width: 1650px;
       }
 
       .table-row-wrapper {
@@ -389,14 +559,14 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .table-row {
         display: grid;
-        grid-template-columns: 120px 1fr 100px 80px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
-        padding: 0.5rem 1.25rem;
+        padding: 0.75rem 1.25rem;
         font-size: 0.875rem;
         color: var(--text-main);
         transition: background 0.15s ease;
         align-items: center;
-        min-height: 60px;
+        min-height: 64px;
       }
 
       .table-row.expandable {
@@ -413,7 +583,171 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .table-row.recently-updated {
         background: rgba(16, 185, 129, 0.05) !important;
+        animation: highlight-update 0.5s ease-out;
       }
+
+      @keyframes highlight-update {
+        0% {
+          background: rgba(16, 185, 129, 0.2);
+        }
+        100% {
+          background: rgba(16, 185, 129, 0.05);
+        }
+      }
+
+      // Status Badge Compact (icon only)
+      .status-badge-compact {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+
+      .status-badge-compact.badge-ready {
+        background: rgba(148, 163, 184, 0.15);
+      }
+
+      .status-badge-compact.badge-queued_for_cp {
+        background: rgba(245, 158, 11, 0.15);
+      }
+
+      .status-badge-compact.badge-elasticsearch_monitoring,
+      .status-badge-compact.badge-exensio_monitoring {
+        background: rgba(129, 140, 248, 0.15);
+      }
+
+      .status-badge-compact.badge-completed {
+        background: rgba(16, 185, 129, 0.15);
+      }
+
+      .status-badge-compact.badge-error,
+      .status-badge-compact.badge-cp_failed,
+      .status-badge-compact.badge-load_failed {
+        background: rgba(239, 68, 68, 0.15);
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // NEW COLUMN BADGES
+      // ═══════════════════════════════════════════════════════
+
+      // Step Badge (cyan pill)
+      .step-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+        border: 1px solid rgba(6, 182, 212, 0.3);
+      }
+
+      // Tester Badge (purple monospace pill)
+      .tester-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: rgba(168, 85, 247, 0.15);
+        color: #a855f7;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+      }
+
+      // Recipe Code (monospace)
+      .recipe-code {
+        font-family: 'Courier New', monospace;
+        font-size: 0.75rem;
+        color: var(--text-main);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        max-width: 120px;
+      }
+
+      // Schema Badge (PRODUCTION/SANDBOX with glow)
+      .schema-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        min-width: 80px;
+      }
+
+      .schema-badge.badge-production {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        box-shadow:
+          0 0 12px rgba(16, 185, 129, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .schema-badge.badge-sandbox {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        box-shadow:
+          0 0 12px rgba(245, 158, 11, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .schema-badge.badge-pending {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      // Pipeline Status Column (rich detail line)
+      .col-pipeline {
+        overflow: hidden;
+      }
+
+      .pipeline-status {
+        font-size: 0.75rem;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+
+      .pipeline-status.status-success {
+        color: #10b981;
+      }
+
+      .pipeline-status.status-error {
+        color: #ef4444;
+      }
+
+      .pipeline-status.status-warning {
+        color: #f59e0b;
+      }
+
+      .pipeline-status.status-muted {
+        color: var(--text-muted);
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // EXPANDED ROW DETAILS
+      // ═══════════════════════════════════════════════════════
 
       .row-expanded {
         padding: 0.75rem 1.25rem;
@@ -432,19 +766,11 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         padding: 0.5rem 0.75rem;
       }
 
-      .error-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #ef4444;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        white-space: nowrap;
-      }
-
-      .error-message {
-        font-size: 0.8125rem;
-        color: var(--text-main);
-        line-height: 1.4;
+      .error-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
       }
 
       .error-source-badge {
@@ -457,8 +783,6 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         text-transform: uppercase;
         letter-spacing: 0.06em;
         white-space: nowrap;
-        margin-right: 0.375rem;
-        vertical-align: middle;
       }
 
       .error-source-badge.source-cp {
@@ -471,6 +795,12 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         background: rgba(129, 140, 248, 0.15);
         color: var(--accent-color);
         border: 1px solid rgba(129, 140, 248, 0.3);
+      }
+
+      .error-message {
+        font-size: 0.8125rem;
+        color: var(--text-main);
+        line-height: 1.4;
       }
 
       .cp-output-details {
@@ -490,11 +820,10 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        white-space: nowrap;
       }
 
       .cp-output-path {
-        font-family: monospace;
+        font-family: 'Courier New', monospace;
         font-size: 0.8rem;
         color: var(--text-main);
         word-break: break-all;
@@ -510,7 +839,6 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        white-space: nowrap;
       }
 
       .cp-target-badge.badge-production {
@@ -531,64 +859,6 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         border: 1px solid rgba(148, 163, 184, 0.2);
       }
 
-      .col-status {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .status-badge.status-ready {
-        background: rgba(148, 163, 184, 0.15);
-        color: #94a3b8;
-      }
-
-      .status-badge.status-enqueued {
-        background: rgba(245, 158, 11, 0.15);
-        color: #f59e0b;
-      }
-
-      .status-badge.status-processing {
-        background: rgba(129, 140, 248, 0.15);
-        color: var(--accent-color);
-      }
-
-      .status-badge.status-completed {
-        background: rgba(16, 185, 129, 0.15);
-        color: #10b981;
-      }
-
-      .status-badge.status-error {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-      }
-
-      .status-text {
-        display: none;
-      }
-
-      .recently-updated-badge {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: rgba(16, 185, 129, 0.2);
-        animation: pulse 0.6s ease-in-out;
-      }
-
       .col-filename {
         overflow: hidden;
         display: flex;
@@ -597,38 +867,12 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         min-height: 0;
       }
 
-      .filename-main {
+      .filename-text {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-size: 0.875rem;
         color: var(--text-main);
-      }
-
-      .file-detail-line {
-        font-size: 0.75rem;
-        line-height: 1.2;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-weight: 500;
-        letter-spacing: 0.02em;
-      }
-
-      .file-detail-line.detail-success {
-        color: #10b981;
-      }
-
-      .file-detail-line.detail-error {
-        color: #ef4444;
-      }
-
-      .file-detail-line.detail-warning {
-        color: #f59e0b;
-      }
-
-      .file-detail-line.detail-muted {
-        color: var(--text-muted);
       }
 
       .col-lot,
@@ -646,11 +890,33 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         color: var(--text-muted);
       }
 
-      .time-ago {
-        display: inline-block;
-        font-size: 0.75rem;
+      .text-muted {
         color: var(--text-muted);
       }
+
+      // ═══════════════════════════════════════════════════════
+      // CUSTOM SCROLLBAR
+      // ═══════════════════════════════════════════════════════
+
+      .file-table-wrapper::-webkit-scrollbar {
+        height: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 5px;
+      }
+
+      .file-table-wrapper::-webkit-scrollbar-thumb {
+        background: rgba(129, 140, 248, 0.3);
+        border-radius: 5px;
+        transition: background 0.2s ease;
+      }
+
+      .file-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: rgba(129, 140, 248, 0.5);
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // EMPTY & LOADING STATES
+      // ═══════════════════════════════════════════════════════
 
       .empty-state,
       .loading-state {
@@ -684,6 +950,10 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         }
       }
 
+      // ═══════════════════════════════════════════════════════
+      // PAGINATION FOOTER
+      // ═══════════════════════════════════════════════════════
+
       .pagination-footer {
         display: flex;
         justify-content: space-between;
@@ -710,7 +980,7 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   protected paginationService = inject(MonitoringPaginationService);
 
   // Signals for UI
-  statusFilter = signal<'all' | 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED'>('all');
+  statusFilter = signal<'all' | 'READY' | 'QUEUED_FOR_CP' | 'processing' | 'COMPLETED' | 'ERROR'>('all');
   searchText = signal('');
   expandedFiles = signal<Set<number | string>>(new Set());
 
@@ -739,16 +1009,16 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
         files = files.filter((f: MonitoringFileItem) => f.status === 'READY');
       } else if (status === 'QUEUED_FOR_CP') {
         files = files.filter((f: MonitoringFileItem) => f.status === 'QUEUED_FOR_CP');
-      } else if (status === 'ELASTICSEARCH_MONITORING') {
-        files = files.filter((f: MonitoringFileItem) => f.status === 'ELASTICSEARCH_MONITORING');
-      } else if (status === 'EXENSIO_MONITORING') {
-        files = files.filter((f: MonitoringFileItem) => f.status === 'EXENSIO_MONITORING');
-      } else if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
-        files = files.filter((f: MonitoringFileItem) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' || f.status === 'CP_TIMEOUT');
+      } else if (status === 'processing') {
+        files = files.filter(
+          (f: MonitoringFileItem) => f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'EXENSIO_MONITORING',
+        );
       } else if (status === 'COMPLETED') {
         files = files.filter((f: MonitoringFileItem) => f.status === 'COMPLETED');
       } else if (status === 'ERROR') {
-        files = files.filter((f: MonitoringFileItem) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED');
+        files = files.filter(
+          (f: MonitoringFileItem) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED',
+        );
       } else {
         files = files.filter((f: MonitoringFileItem) => f.status === status);
       }
@@ -759,7 +1029,10 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
         (f: MonitoringFileItem) =>
           f.filename.toLowerCase().includes(search) ||
           f.lot.toLowerCase().includes(search) ||
-          f.wafer?.toLowerCase().includes(search),
+          f.wafer?.toLowerCase().includes(search) ||
+          f.step?.toLowerCase().includes(search) ||
+          f.testerId?.toLowerCase().includes(search) ||
+          f.testProgram?.toLowerCase().includes(search),
       );
     }
 
@@ -767,6 +1040,122 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
   });
 
   Math = Math;
+
+  /**
+   * Get elapsed time from monitoring start
+   */
+  elapsedTime = computed(() => {
+    // TODO: Calculate from monitoring start timestamp
+    // For now, return empty to hide the metric
+    return '';
+  });
+
+  /**
+   * Get throughput (files/min)
+   */
+  throughput = computed(() => {
+    // TODO: Calculate from completed files and elapsed time
+    // For now, return 0 to hide the metric
+    return 0;
+  });
+
+  /**
+   * Combined count for "Processing" filter
+   */
+  processingCount = computed(() => {
+    const items = this.state().items;
+    return items.filter((f: MonitoringFileItem) =>
+      f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'EXENSIO_MONITORING'
+    ).length;
+  });
+
+  /**
+   * Check if status is processing
+   */
+  isProcessingStatus(status: string): boolean {
+    return status === 'ELASTICSEARCH_MONITORING' || status === 'EXENSIO_MONITORING';
+  }
+
+  /**
+   * Check if status is error
+   */
+  isErrorStatus(status: string): boolean {
+    return status === 'ERROR' || status === 'CP_FAILED' || status === 'LOAD_FAILED';
+  }
+
+  /**
+   * Get schema bound tooltip
+   */
+  getSchemaTooltip(file: MonitoringFileItem): string {
+    const target = file.cpOutputTarget;
+    const cpStatus = file.cpIntegrationStatus;
+
+    if (!target || target === 'UNKNOWN') {
+      if (cpStatus === 'pending' || cpStatus === 'not_configured') {
+        return 'Schema bound pending enrichment completion';
+      }
+      return 'Schema bound could not be determined';
+    }
+
+    if (target === 'PRODUCTION') {
+      return 'Routed to PRODUCTION schema via CP Elasticsearch / pp_log analysis';
+    }
+
+    if (target === 'SANDBOX') {
+      return 'Routed to SANDBOX schema via CP Elasticsearch / pp_log analysis';
+    }
+
+    return '';
+  }
+
+  /**
+   * Refresh monitoring data
+   */
+  refreshMonitoring(): void {
+    this.paginationService.loadFirstPage();
+  }
+
+  /**
+   * Export filtered files to CSV
+   */
+  exportCSV(): void {
+    const files = this.filteredFiles();
+    const headers = [
+      'Status',
+      'Filename',
+      'Lot',
+      'Wafer',
+      'Step',
+      'Tester',
+      'Recipe',
+      'Schema',
+      'Pipeline Status',
+      'Error'
+    ];
+
+    const rows = files.map((f) => [
+      f.status,
+      f.filename,
+      f.lot,
+      f.wafer || '',
+      f.step || '',
+      f.testerId || '',
+      f.testProgram || '',
+      f.cpOutputTarget || '',
+      this.getDetailLine(f),
+      f.errorMessage || ''
+    ]);
+
+    const csv = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(','))].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `monitoring-files-${new Date().toISOString()}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
 
   ngOnInit(): void {
     // Load first page on init
@@ -779,7 +1168,19 @@ export class RealtimeMonitoringFileListComponent implements OnInit, OnDestroy {
 
   // Helper: Count files by status
   private countByStatus(
-    status: 'all' | 'READY' | 'QUEUED_FOR_CP' | 'ELASTICSEARCH_MONITORING' | 'CP_TIMEOUT' | 'EXENSIO_MONITORING' | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' | 'COMPLETED' | 'ERROR' | 'CP_FAILED' | 'LOAD_FAILED' | 'CANCELLED',
+    status:
+      | 'all'
+      | 'READY'
+      | 'QUEUED_FOR_CP'
+      | 'ELASTICSEARCH_MONITORING'
+      | 'CP_TIMEOUT'
+      | 'EXENSIO_MONITORING'
+      | 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'
+      | 'COMPLETED'
+      | 'ERROR'
+      | 'CP_FAILED'
+      | 'LOAD_FAILED'
+      | 'CANCELLED',
   ) {
     return computed(() => {
       const items = this.state().items;

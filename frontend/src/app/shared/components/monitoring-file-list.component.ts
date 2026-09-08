@@ -22,87 +22,101 @@ import { DualTimestampComponent } from './dual-timestamp.component';
   ],
   template: `
     <div class="file-list-container glass-panel">
-      <!-- Toolbar -->
-      <div class="file-list-toolbar">
-        <div class="toolbar-left">
-          <span class="file-count">{{ filteredFiles().length }} files</span>
-          <div class="status-filters">
-            <button class="filter-chip" [class.active]="statusFilter() === 'all'" (click)="statusFilter.set('all')">
-              All
-            </button>
-            <button class="filter-chip" [class.active]="statusFilter() === 'READY'" (click)="statusFilter.set('READY')">
-              <app-glass-icon name="check" [size]="14"></app-glass-icon>
-              Staged
-            </button>
-            <button
-              class="filter-chip"
-              [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
-              (click)="statusFilter.set('QUEUED_FOR_CP')"
-            >
-              <app-glass-icon name="clock" [size]="14"></app-glass-icon>
-              Queued
-            </button>
-            <button
-              class="filter-chip"
-              [class.active]="statusFilter() === 'ELASTICSEARCH_MONITORING'"
-              (click)="statusFilter.set('ELASTICSEARCH_MONITORING')"
-            >
-              <app-glass-icon name="refresh" [size]="14"></app-glass-icon>
-              Enrichment Processing
-            </button>
-            <button
-              class="filter-chip"
-              [class.active]="statusFilter() === 'EXENSIO_MONITORING'"
-              (click)="statusFilter.set('EXENSIO_MONITORING')"
-            >
-              <app-glass-icon name="cloud_upload" [size]="14"></app-glass-icon>
-              Exensio Monitoring
-            </button>
-            <button
-              class="filter-chip"
-              [class.active]="statusFilter() === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
-              (click)="statusFilter.set('COMPLETED_MANUAL_VERIFICATION_REQUIRED')"
-            >
-              <app-glass-icon name="schedule" [size]="14"></app-glass-icon>
-              Verify in Exensio
-            </button>
-            <button
-              class="filter-chip"
-              [class.active]="statusFilter() === 'COMPLETED'"
-              (click)="statusFilter.set('COMPLETED')"
-            >
-              <app-glass-icon name="check_circle" [size]="14"></app-glass-icon>
-              Completed
-            </button>
-            <button class="filter-chip" [class.active]="statusFilter() === 'ERROR'" (click)="statusFilter.set('ERROR')">
-              <app-glass-icon name="error" [size]="14"></app-glass-icon>
-              Failed
-            </button>
+
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TIER 1: MONITORING METRICS                                -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div class="monitoring-metrics-bar">
+        <div class="metrics-left">
+          <div class="metric-item">
+            <app-glass-icon name="dashboard" [size]="16" color="primary"></app-glass-icon>
+            <span class="metric-value">{{ filteredFiles().length }}</span>
+            <span class="metric-label">files</span>
           </div>
         </div>
-        <div class="toolbar-right">
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TIER 2: FILTERS & SEARCH                                  -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div class="monitoring-filters-bar">
+        <div class="filters-left">
+          <button class="status-filter-pill"
+                  [class.active]="statusFilter() === 'all'"
+                  (click)="statusFilter.set('all')">
+            All <span class="pill-count">({{ allCount() }})</span>
+          </button>
+
+          <button class="status-filter-pill status-ready"
+                  [class.active]="statusFilter() === 'READY'"
+                  (click)="statusFilter.set('READY')"
+                  *ngIf="readyCount() > 0">
+            <app-glass-icon name="check" [size]="14"></app-glass-icon>
+            Ready <span class="pill-count">({{ readyCount() }})</span>
+          </button>
+
+          <button class="status-filter-pill status-queued"
+                  [class.active]="statusFilter() === 'QUEUED_FOR_CP'"
+                  (click)="statusFilter.set('QUEUED_FOR_CP')"
+                  *ngIf="enqueuedCount() > 0">
+            <app-glass-icon name="schedule_send" [size]="14"></app-glass-icon>
+            Queued <span class="pill-count">({{ enqueuedCount() }})</span>
+          </button>
+
+          <button class="status-filter-pill status-processing"
+                  [class.active]="statusFilter() === 'processing'"
+                  (click)="statusFilter.set('processing')"
+                  *ngIf="processingCount() > 0">
+            <app-glass-icon name="autorenew" [size]="14"></app-glass-icon>
+            Processing <span class="pill-count">({{ processingCount() }})</span>
+          </button>
+
+          <button class="status-filter-pill status-completed"
+                  [class.active]="statusFilter() === 'COMPLETED'"
+                  (click)="statusFilter.set('COMPLETED')"
+                  *ngIf="completedCount() > 0">
+            <app-glass-icon name="check_circle" [size]="14"></app-glass-icon>
+            Completed <span class="pill-count">({{ completedCount() }})</span>
+          </button>
+
+          <button class="status-filter-pill status-failed"
+                  [class.active]="statusFilter() === 'ERROR'"
+                  (click)="statusFilter.set('ERROR')"
+                  *ngIf="errorCount() > 0">
+            <app-glass-icon name="error" [size]="14"></app-glass-icon>
+            Failed <span class="pill-count">({{ errorCount() }})</span>
+          </button>
+        </div>
+
+        <div class="filters-right">
           <app-glass-input
-            class="search-input"
-            placeholder="Search files..."
+            class="search-input-compact"
+            placeholder="Search..."
             prefixIcon="search"
             [value]="searchText()"
-            (valueChange)="searchText.set($event)"
-          >
+            (valueChange)="searchText.set($event)">
           </app-glass-input>
-          <app-glass-button class="export-btn" variant="icon" [glassTooltip]="'Export to CSV'" (clicked)="exportCSV()">
-            <app-glass-icon name="download" [size]="20"></app-glass-icon>
+
+          <app-glass-button variant="secondary" size="small" [glassTooltip]="'Export to CSV'" (clicked)="exportCSV()">
+            <app-glass-icon name="download" [size]="16"></app-glass-icon>
           </app-glass-button>
         </div>
       </div>
 
-      <!-- Virtual Scrolling Table -->
-      <div class="file-list-table">
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TABLE: ENHANCED WITH NEW COLUMNS                          -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div class="file-table-wrapper">
         <div class="table-header">
           <div class="col-status">Status</div>
           <div class="col-filename">Filename</div>
           <div class="col-lot">Lot</div>
-          <div class="col-wafer" *ngIf="showWaferColumn()">Wafer</div>
-          <div class="col-message">Message</div>
+          <div class="col-wafer">Wafer</div>
+          <div class="col-step">Step</div>
+          <div class="col-tester">Tester</div>
+          <div class="col-recipe">Recipe</div>
+          <div class="col-schema">Schema</div>
+          <div class="col-pipeline">Pipeline Status</div>
           <div class="col-updated">Updated</div>
         </div>
 
@@ -112,29 +126,86 @@ import { DualTimestampComponent } from './dual-timestamp.component';
             *ngFor="let file of paginatedFiles()"
             [class.status-ready]="file.status === 'READY'"
             [class.status-enqueued]="file.status === 'QUEUED_FOR_CP'"
-            [class.status-processing]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
-            [class.status-manual-verification]="file.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED'"
+            [class.status-processing]="isProcessingStatus(file.status)"
             [class.status-completed]="file.status === 'COMPLETED'"
-            [class.status-error]="file.status === 'ERROR' || file.status === 'CP_FAILED' || file.status === 'LOAD_FAILED'"
+            [class.status-error]="isErrorStatus(file.status)"
             (click)="toggleExpand(file)"
           >
+            <!-- Status Badge (Icon Only) -->
             <div class="col-status">
-              <div class="status-badge" [class]="'status-' + file.status.toLowerCase()">
+              <div class="status-badge-compact" [class]="'badge-' + file.status.toLowerCase()">
                 <app-glass-icon [name]="getStatusIcon(file.status)" [size]="16" [color]="getStatusColor(file.status)">
                 </app-glass-icon>
-                <span class="status-text">{{ getStatusLabel(file.status) }}</span>
               </div>
             </div>
+
+            <!-- Filename -->
             <div class="col-filename" [glassTooltip]="file.filename">
-              {{ file.filename }}
+              <div class="filename-text">{{ file.filename }}</div>
             </div>
-            <div class="col-lot">{{ file.lot }}</div>
-            <div class="col-wafer" *ngIf="showWaferColumn()">{{ file.wafer || '-' }}</div>
-            <div class="col-message" [glassTooltip]="file.message">
-              {{ file.message }}
+
+            <!-- Lot -->
+            <div class="col-lot">{{ file.lot || '-' }}</div>
+
+            <!-- Wafer -->
+            <div class="col-wafer">{{ file.wafer || '-' }}</div>
+
+            <!-- Step -->
+            <div class="col-step">
+              <span class="step-badge" *ngIf="file.step">{{ file.step }}</span>
+              <span *ngIf="!file.step" class="text-muted">-</span>
             </div>
+
+            <!-- Tester -->
+            <div class="col-tester">
+              <span class="tester-badge" *ngIf="file.testerId">{{ file.testerId }}</span>
+              <span *ngIf="!file.testerId" class="text-muted">-</span>
+            </div>
+
+            <!-- Recipe -->
+            <div class="col-recipe">
+              <span class="recipe-code" *ngIf="file.testProgram" [glassTooltip]="file.testProgram">
+                {{ file.testProgram }}
+              </span>
+              <span *ngIf="!file.testProgram" class="text-muted">-</span>
+            </div>
+
+            <!-- Schema Bound -->
+            <div class="col-schema">
+              <span
+                class="schema-badge"
+                [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
+                [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
+                [class.badge-pending]="!file.cpOutputTarget || file.cpOutputTarget === 'UNKNOWN'"
+                [glassTooltip]="getSchemaTooltip(file)"
+              >
+                {{ file.cpOutputTarget || '-' }}
+              </span>
+            </div>
+
+            <!-- Pipeline Status -->
+            <div class="col-pipeline">
+              <div
+                class="pipeline-status"
+                [class.status-success]="getDetailLine(file).hasError === false && file.status === 'COMPLETED'"
+                [class.status-error]="getDetailLine(file).hasError"
+                [class.status-warning]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
+                [class.status-muted]="file.status === 'READY' || file.status === 'QUEUED_FOR_CP'"
+                [glassTooltip]="getErrorSummary(file)?.fullText || null"
+              >
+                {{ getDetailLine(file).text }}
+              </div>
+            </div>
+
+            <!-- Updated -->
             <div class="col-updated">
               <app-dual-timestamp [value]="file.updatedAt"></app-dual-timestamp>
+              <app-glass-icon
+                *ngIf="file.cpOutputPath || file.errorMessage"
+                [name]="isExpanded(file) ? 'expand_less' : 'expand_more'"
+                [size]="14"
+                color="muted">
+              </app-glass-icon>
             </div>
 
             <!-- Expanded Details -->
@@ -162,7 +233,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
                     [class.badge-production]="file.cpOutputTarget === 'PRODUCTION'"
                     [class.badge-sandbox]="file.cpOutputTarget === 'SANDBOX'"
                     [class.badge-unknown]="file.cpOutputTarget === 'UNKNOWN' || !file.cpOutputTarget"
-                    [glassTooltip]="file.cpOutputTarget === 'SANDBOX' ? 'Routed to SANDBOX schema via CP ES / pp_log' : (file.cpOutputTarget === 'PRODUCTION' ? 'Routed to PRODUCTION schema via CP ES / pp_log' : 'Target schema pending resolution')"
+                    [glassTooltip]="getSchemaTooltip(file)"
                   >
                     {{ file.cpOutputTarget || 'UNKNOWN' }}
                   </span>
@@ -199,128 +270,128 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         overflow: hidden;
       }
 
-      .file-list-toolbar {
+      // ═══════════════════════════════════════════════════════
+      // TIER 1: MONITORING METRICS BAR
+      // ═══════════════════════════════════════════════════════
+
+      .monitoring-metrics-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+        gap: 1rem;
+      }
+
+      .metrics-left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .metric-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+      }
+
+      .metric-value {
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .metric-label {
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // TIER 2: MONITORING FILTERS BAR
+      // ═══════════════════════════════════════════════════════
+
+      .monitoring-filters-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.875rem 1.25rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         gap: 1rem;
         flex-wrap: wrap;
       }
 
-      .toolbar-left {
+      .filters-left {
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 0.5rem;
         flex: 1;
         min-width: 0;
       }
 
-      .toolbar-right {
+      .filters-right {
         display: flex;
         align-items: center;
         gap: 0.5rem;
       }
 
-      .file-count {
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: var(--text-main);
-        white-space: nowrap;
-      }
-
-      .status-filters {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-
-      .filter-chip {
+      .status-filter-pill {
         display: flex;
         align-items: center;
         gap: 0.375rem;
-        padding: 0.375rem 0.75rem;
+        padding: 0.5rem 0.875rem;
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
+        border-radius: 10px;
         font-size: 0.8125rem;
+        font-weight: 600;
         color: var(--text-muted);
         cursor: pointer;
         transition: all 0.2s ease;
         white-space: nowrap;
       }
 
-      .filter-chip:hover {
+      .status-filter-pill:hover {
         background: rgba(255, 255, 255, 0.08);
         border-color: rgba(255, 255, 255, 0.2);
-      }
-
-      .filter-chip.active {
-        background: rgba(129, 140, 248, 0.15);
-        border-color: var(--accent-color);
-        color: var(--accent-color);
-      }
-
-      .search-input {
-        width: 250px;
-      }
-
-      app-glass-button.export-btn {
-        display: inline-flex;
-      }
-
-      app-glass-button.export-btn ::ng-deep .glass-btn {
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        color: #e2e8f0;
-        box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
-      }
-
-      app-glass-button.export-btn ::ng-deep .glass-btn:hover:not(:disabled) {
-        background: rgba(129, 140, 248, 0.16);
-        border-color: rgba(129, 140, 248, 0.45);
-        color: #c7d2fe;
         transform: translateY(-1px);
       }
 
-      app-glass-button.export-btn ::ng-deep .glass-btn:disabled {
-        opacity: 0.45;
+      .status-filter-pill.active {
+        background: rgba(129, 140, 248, 0.15);
+        border-color: var(--accent-color);
+        color: var(--accent-color);
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.3);
       }
 
-      app-glass-button.export-btn ::ng-deep app-glass-icon {
-        color: currentColor;
-        opacity: 1;
+      .pill-count {
+        font-size: 0.75rem;
+        opacity: 0.8;
       }
 
-      :host-context(body.light-theme) app-glass-button.export-btn ::ng-deep .glass-btn {
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        color: #334155;
-        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+      .search-input-compact {
+        width: 220px;
       }
 
-      :host-context(body.light-theme) app-glass-button.export-btn ::ng-deep .glass-btn:hover:not(:disabled) {
-        background: rgba(238, 242, 255, 1);
-        border-color: rgba(79, 70, 229, 0.42);
-        color: #3730a3;
-      }
+      // ═══════════════════════════════════════════════════════
+      // TABLE: ENHANCED GRID WITH NEW COLUMNS
+      // ═══════════════════════════════════════════════════════
 
-      .file-list-table {
+      .file-table-wrapper {
         flex: 1;
         display: flex;
         flex-direction: column;
         min-height: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
 
       .table-header {
         display: grid;
-        grid-template-columns: 140px 1fr 100px 80px 180px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
-        padding: 0.75rem 1rem;
+        padding: 0.75rem 1.25rem;
         background: rgba(255, 255, 255, 0.02);
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         font-size: 0.75rem;
@@ -328,6 +399,11 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+        min-width: 1650px;
       }
 
       .table-body {
@@ -338,9 +414,9 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .table-row {
         display: grid;
-        grid-template-columns: 140px 1fr 100px 80px 180px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
-        padding: 0.75rem 1rem;
+        padding: 0.75rem 1.25rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         font-size: 0.875rem;
         color: var(--text-main);
@@ -361,89 +437,185 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         opacity: 0.7;
       }
 
-      .col-status {
+      // Status Badge Compact (icon only)
+      .status-badge-compact {
         display: flex;
         align-items: center;
-      }
-
-      .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.375rem 0.75rem;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
         border-radius: 8px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
       }
 
-      .status-badge.status-ready {
+      .status-badge-compact.badge-ready {
         background: rgba(148, 163, 184, 0.15);
-        color: #94a3b8;
       }
 
-      .status-badge.status-enqueued,
-      .status-badge.status-queued_for_cp {
+      .status-badge-compact.badge-queued_for_cp {
         background: rgba(245, 158, 11, 0.15);
-        color: #f59e0b;
       }
 
-      .status-badge.status-processing,
-      .status-badge.status-elasticsearch_monitoring,
-      .status-badge.status-exensio_monitoring {
+      .status-badge-compact.badge-elasticsearch_monitoring,
+      .status-badge-compact.badge-exensio_monitoring {
         background: rgba(129, 140, 248, 0.15);
-        color: var(--accent-color);
       }
 
-      .status-badge.status-completed_manual_verification_required,
-      .status-badge.status-cp_timeout {
-        background: rgba(245, 158, 11, 0.15);
-        color: #f59e0b;
-      }
-
-      .status-badge.status-completed {
+      .status-badge-compact.badge-completed {
         background: rgba(16, 185, 129, 0.15);
-        color: #10b981;
       }
 
-      .status-badge.status-error,
-      .status-badge.status-cp_failed,
-      .status-badge.status-load_failed {
+      .status-badge-compact.badge-error,
+      .status-badge-compact.badge-cp_failed,
+      .status-badge-compact.badge-load_failed {
         background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
       }
 
-      .status-text {
-        display: none;
+      // ═══════════════════════════════════════════════════════
+      // NEW COLUMN BADGES
+      // ═══════════════════════════════════════════════════════
+
+      // Step Badge (cyan pill)
+      .step-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+        border: 1px solid rgba(6, 182, 212, 0.3);
       }
 
-      @media (min-width: 1024px) {
-        .status-text {
-          display: inline;
-        }
+      // Tester Badge (purple monospace pill)
+      .tester-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: rgba(168, 85, 247, 0.15);
+        color: #a855f7;
+        border: 1px solid rgba(168, 85, 247, 0.3);
       }
 
-      .col-filename {
-        font-family: monospace;
-        font-size: 0.8125rem;
+      // Recipe Code (monospace)
+      .recipe-code {
+        font-family: 'Courier New', monospace;
+        font-size: 0.75rem;
+        color: var(--text-main);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        display: inline-block;
+        max-width: 120px;
+      }
+
+      // Schema Badge (PRODUCTION/SANDBOX with glow)
+      .schema-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        min-width: 80px;
+      }
+
+      .schema-badge.badge-production {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        box-shadow:
+          0 0 12px rgba(16, 185, 129, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .schema-badge.badge-sandbox {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        box-shadow:
+          0 0 12px rgba(245, 158, 11, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+
+      .schema-badge.badge-pending {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      // Pipeline Status Column (rich detail line)
+      .col-pipeline {
+        overflow: hidden;
+      }
+
+      .pipeline-status {
+        font-size: 0.75rem;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+
+      .pipeline-status.status-success {
+        color: #10b981;
+      }
+
+      .pipeline-status.status-error {
+        color: #ef4444;
+      }
+
+      .pipeline-status.status-warning {
+        color: #f59e0b;
+      }
+
+      .pipeline-status.status-muted {
+        color: var(--text-muted);
+      }
+
+      .col-filename {
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-height: 0;
+      }
+
+      .filename-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.875rem;
+        color: var(--text-main);
       }
 
       .col-lot,
       .col-wafer {
-        font-weight: 500;
+        font-size: 0.875rem;
+        color: var(--text-muted);
       }
 
-      .col-message {
+      .text-muted {
         color: var(--text-muted);
-        font-size: 0.8125rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
+
+      // ═══════════════════════════════════════════════════════
+      // EXPANDED ROW DETAILS
+      // ═══════════════════════════════════════════════════════
 
       .row-expanded {
         grid-column: 1 / -1;
@@ -467,15 +639,6 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .error-content {
         flex: 1;
-      }
-
-      .error-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #ef4444;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.375rem;
       }
 
       .error-message {
@@ -572,6 +735,10 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         border: 1px solid rgba(148, 163, 184, 0.2);
       }
 
+      // ═══════════════════════════════════════════════════════
+      // EMPTY STATE & CUSTOM SCROLLBAR
+      // ═══════════════════════════════════════════════════════
+
       .empty-state {
         display: flex;
         flex-direction: column;
@@ -586,44 +753,20 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         font-size: 0.9375rem;
       }
 
-      @media (max-width: 1024px) {
-        .table-header,
-        .table-row {
-          grid-template-columns: 100px 1fr 100px 80px;
-        }
-
-        .col-message {
-          display: none;
-        }
+      .file-table-wrapper::-webkit-scrollbar {
+        height: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 5px;
       }
 
-      @media (max-width: 768px) {
-        .file-list-toolbar {
-          flex-direction: column;
-          align-items: stretch;
-        }
+      .file-table-wrapper::-webkit-scrollbar-thumb {
+        background: rgba(129, 140, 248, 0.3);
+        border-radius: 5px;
+        transition: background 0.2s ease;
+      }
 
-        .toolbar-left,
-        .toolbar-right {
-          width: 100%;
-        }
-
-        .search-input {
-          width: 100%;
-        }
-
-        app-glass-button.export-btn {
-          align-self: flex-end;
-        }
-
-        .table-header,
-        .table-row {
-          grid-template-columns: 1fr 100px 80px;
-        }
-
-        .col-lot {
-          display: none;
-        }
+      .file-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: rgba(129, 140, 248, 0.5);
       }
     `,
   ],
@@ -635,11 +778,23 @@ export class MonitoringFileListComponent {
 
   private _files = signal<MonitoringFile[]>([]);
   searchText = signal('');
-  statusFilter = signal<string>('all');
+  statusFilter = signal<'all' | 'READY' | 'QUEUED_FOR_CP' | 'processing' | 'COMPLETED' | 'ERROR'>('all');
   expandedFiles = signal<Set<string | number>>(new Set());
 
   pageIndex = signal(0);
   pageSize = signal(10);
+
+  // Computed: Count files by status
+  allCount = computed(() => this._files().length);
+  readyCount = computed(() => this._files().filter((f) => f.status === 'READY').length);
+  enqueuedCount = computed(() => this._files().filter((f) => f.status === 'QUEUED_FOR_CP').length);
+  processingCount = computed(() =>
+    this._files().filter((f) => f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'EXENSIO_MONITORING').length
+  );
+  completedCount = computed(() => this._files().filter((f) => f.status === 'COMPLETED').length);
+  errorCount = computed(() =>
+    this._files().filter((f) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED').length
+  );
 
   filteredFiles = computed(() => {
     let files = this._files();
@@ -651,18 +806,12 @@ export class MonitoringFileListComponent {
         files = files.filter((f) => f.status === 'READY');
       } else if (status === 'QUEUED_FOR_CP') {
         files = files.filter((f) => f.status === 'QUEUED_FOR_CP');
-      } else if (status === 'ELASTICSEARCH_MONITORING') {
-        files = files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING');
-      } else if (status === 'EXENSIO_MONITORING') {
-        files = files.filter((f) => f.status === 'EXENSIO_MONITORING');
-      } else if (status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') {
-        files = files.filter((f) => f.status === 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' || f.status === 'CP_TIMEOUT');
+      } else if (status === 'processing') {
+        files = files.filter((f) => f.status === 'ELASTICSEARCH_MONITORING' || f.status === 'EXENSIO_MONITORING');
       } else if (status === 'COMPLETED') {
         files = files.filter((f) => f.status === 'COMPLETED');
       } else if (status === 'ERROR') {
         files = files.filter((f) => f.status === 'ERROR' || f.status === 'CP_FAILED' || f.status === 'LOAD_FAILED');
-      } else {
-        files = files.filter((f) => f.status === status);
       }
     }
 
@@ -672,17 +821,53 @@ export class MonitoringFileListComponent {
           f.filename.toLowerCase().includes(search) ||
           (f.lot ?? '').toLowerCase().includes(search) ||
           (f.wafer ?? '').toLowerCase().includes(search) ||
-          f.message.toLowerCase().includes(search),
+          (f.step ?? '').toLowerCase().includes(search) ||
+          (f.testerId ?? '').toLowerCase().includes(search) ||
+          (f.testProgram ?? '').toLowerCase().includes(search),
       );
     }
 
     return files;
   });
 
-  /** Hide the Wafer column when no file in the current list has a wafer value */
-  showWaferColumn = computed(() =>
-    this._files().some((f) => f.wafer != null && f.wafer.trim() !== '' && f.wafer !== '-'),
-  );
+  /**
+   * Check if status is processing
+   */
+  isProcessingStatus(status: string): boolean {
+    return status === 'ELASTICSEARCH_MONITORING' || status === 'EXENSIO_MONITORING';
+  }
+
+  /**
+   * Check if status is error
+   */
+  isErrorStatus(status: string): boolean {
+    return status === 'ERROR' || status === 'CP_FAILED' || status === 'LOAD_FAILED';
+  }
+
+  /**
+   * Get schema bound tooltip
+   */
+  getSchemaTooltip(file: MonitoringFile): string {
+    const target = file.cpOutputTarget;
+    const cpStatus = file.cpIntegrationStatus;
+
+    if (!target || target === 'UNKNOWN') {
+      if (cpStatus === 'pending' || cpStatus === 'not_configured') {
+        return 'Schema bound pending enrichment completion';
+      }
+      return 'Schema bound could not be determined';
+    }
+
+    if (target === 'PRODUCTION') {
+      return 'Routed to PRODUCTION schema via CP Elasticsearch / pp_log analysis';
+    }
+
+    if (target === 'SANDBOX') {
+      return 'Routed to SANDBOX schema via CP Elasticsearch / pp_log analysis';
+    }
+
+    return '';
+  }
 
   paginatedFiles = computed(() => {
     const all = this.filteredFiles();
@@ -1085,8 +1270,30 @@ export class MonitoringFileListComponent {
 
   exportCSV() {
     const files = this.filteredFiles();
-    const headers = ['Status', 'Filename', 'Lot', 'Wafer', 'Message', 'Error'];
-    const rows = files.map((f) => [f.status, f.filename, f.lot, f.wafer || '', f.message, f.errorMessage || '']);
+    const headers = [
+      'Status',
+      'Filename',
+      'Lot',
+      'Wafer',
+      'Step',
+      'Tester',
+      'Recipe',
+      'Schema',
+      'Pipeline Status',
+      'Error'
+    ];
+    const rows = files.map((f) => [
+      f.status,
+      f.filename,
+      f.lot,
+      f.wafer || '',
+      f.step || '',
+      f.testerId || '',
+      f.testProgram || '',
+      f.cpOutputTarget || '',
+      this.getDetailLine(f).text,
+      f.errorMessage || ''
+    ]);
 
     const csv = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(','))].join('\n');
 
