@@ -33,7 +33,17 @@
             "styles": [
               "src/styles.scss"
             ],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "canvg",
+              "core-js",
+              "dompurify",
+              "html2canvas",
+              "jspdf",
+              "raf",
+              "rgbcolor",
+              "xlsx"
+            ]
           },
           "configurations": {
             "production": {

@@ -26,7 +26,6 @@ import {
   StagingSessionDetail,
 } from '../api/backend.service';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
-import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
@@ -137,7 +136,6 @@ interface DashboardErrorDetails {
     RouterModule,
     BulkActionsComponent,
     GlassCheckboxComponent,
-    GlassDeviceFilterComponent,
     StateLegendTooltipComponent,
     DualTimestampComponent,
     TimeSeriesChartComponent,
