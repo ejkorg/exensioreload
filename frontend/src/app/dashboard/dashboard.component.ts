@@ -1,5 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -12,6 +21,7 @@ import {
   DashboardSenderSnapshot,
   DashboardSiteSnapshot,
   DashboardSnapshot,
+  IntegrationStatusSnapshot,
   LimitsConfig,
   StagingSessionDetail,
 } from '../api/backend.service';
@@ -22,9 +32,22 @@ import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
 import { BulkActionsComponent, SelectableItem } from './bulk-actions.component';
+import { ExportMenuComponent } from './components/export-menu.component';
+import { DashboardFilterBarComponent } from './components/filter-bar.component';
+import { IntegrationStatusCardComponent } from './components/integration-status-card.component';
+import { LayoutCustomizerComponent } from './components/layout-customizer.component';
+import { LiveActivityFeedComponent } from './components/live-activity-feed.component';
+import { PipelineFlowComponent } from './components/pipeline-flow.component';
+import { SenderDetailPanelComponent, SenderDetailView } from './components/sender-detail-panel.component';
+import { TimeSeriesChartComponent } from './components/time-series-chart.component';
 import { MetricCardDetailSidebarComponent } from './metric-card-detail-sidebar.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
 import { SiteDetailModalComponent } from './site-detail-modal.component';
+import { DashboardExportData, ExportService } from './services/export.service';
+import { AlertThresholdService, AlertLevel } from './services/alert-threshold.service';
+import { DashboardStateService } from './services/dashboard-state.service';
+import { MetricsHistoryService } from './services/metrics-history.service';
+import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
 import { StateLegendTooltipComponent } from './state-legend-tooltip.component';
 import { StateLegendService } from './state-legend.service';
 
@@ -117,6 +140,14 @@ interface DashboardErrorDetails {
     GlassDeviceFilterComponent,
     StateLegendTooltipComponent,
     DualTimestampComponent,
+    TimeSeriesChartComponent,
+    LiveActivityFeedComponent,
+    IntegrationStatusCardComponent,
+    ExportMenuComponent,
+    SenderDetailPanelComponent,
+    PipelineFlowComponent,
+    DashboardFilterBarComponent,
+    LayoutCustomizerComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
@@ -168,6 +199,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   selectedSenderIds = signal<Set<number>>(new Set<number>());
 
+  /** Per-sender rolling backlog history (points per 10s poll), used for sparklines (Req 2.1). */
+  private readonly senderBacklogHistory = new Map<number, number[]>();
+  private static readonly SPARK_MAX_POINTS = 60;
+  private static readonly SPARK_WIDTH = 100;
+  private static readonly SPARK_HEIGHT = 30;
+
   selectableItems = computed<SelectableItem[]>(() =>
     this.topSenders().map((s: SenderPerformance) => ({
       id: s.senderId,
@@ -193,6 +230,90 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!s) return 0;
     const maxCapacity = s.global.enqueued + s.global.ready + s.global.completed + 1;
     return Math.round((s.global.enqueued / maxCapacity) * 100);
+  });
+
+  /** Circumference of the 88px ring (r=38): 2π×38 ≈ 238.76. */
+  private static readonly RING_CIRCUMFERENCE = 2 * Math.PI * 38;
+
+  /** Stroke-dashoffset that renders the health ring proportionally (Req 4.1). */
+  healthRingOffset = computed(() => {
+    const score = Math.max(0, Math.min(100, this.overallHealthScore()));
+    return DashboardComponent.RING_CIRCUMFERENCE * (1 - score / 100);
+  });
+
+  /** Per-state counts for the pipeline flow visualization (Req 19.1). */
+  pipelineCounts = computed<Record<string, number>>(() => {
+    const g = this.snapshot()?.global;
+    return {
+      staged: g?.staged ?? 0,
+      enqueued: g?.enqueued ?? g?.queuedForCp ?? 0,
+      enriching: g?.enriching ?? g?.elasticsearchMonitoring ?? 0,
+      exensio: g?.exensioLoading ?? g?.exensioMonitoring ?? 0,
+      completed: g?.completed ?? 0,
+      timeout: g?.enrichmentTimeout ?? g?.cpTimeout ?? 0,
+      verify: g?.exensioTimeout ?? g?.completedManualVerification ?? 0,
+      failed: g?.failed ?? g?.cpFailed ?? 0,
+      cancelled: g?.cancelled ?? 0,
+    };
+  });
+
+  /** Flash the matching KPI card when a flow node is clicked (Req 19.2). */
+  onFlowStateClick(stateKey: string): void {
+    const label: Record<string, string> = {
+      staged: 'Staged',
+      enqueued: 'Queued for Enrichment',
+      enriching: 'Enrichment Processing',
+      exensio: 'Exensio Monitoring',
+      completed: 'Completed',
+      timeout: 'Enrichment Monitoring Timeout',
+      verify: 'Completed — Verify in Exensio',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+    };
+    const key = this.getMetricChangeKey(label[stateKey] ?? stateKey);
+    this.changedMetrics.set(new Set([key]));
+    setTimeout(() => this.changedMetrics.set(new Set<string>()), 800);
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.metric-card'));
+    const target = cards.find((c) => c.textContent?.toLowerCase().includes((label[stateKey] ?? stateKey).toLowerCase()));
+    target?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ── Comparison mode (Req 13.1, 13.3, 13.4) ────────────────────────
+
+  readonly compareActive = signal(false);
+  readonly compareMinutes = signal(30);
+
+  toggleCompareMode(): void {
+    this.compareActive.update((v) => !v);
+  }
+
+  setCompareWindow(minutes: number): void {
+    this.compareMinutes.set(minutes);
+  }
+
+  /** Delta rows: current window vs the equal-length window before it. */
+  compareRows = computed(() => {
+    const history = this.metricHistory();
+    if (history.length < 2) return [];
+
+    const winMs = this.compareMinutes() * 60_000;
+    const now = history[history.length - 1].timestamp;
+    const current = history.filter((h) => h.timestamp >= now - winMs);
+    const previous = history.filter((h) => h.timestamp >= now - 2 * winMs && h.timestamp < now - winMs);
+
+    const sum = (list: MetricSnapshot[], key: keyof MetricSnapshot): number =>
+      list.reduce((total, h) => total + (Number(h[key]) || 0), 0);
+
+    const row = (label: string, key: 'backlog' | 'enqueued' | 'completed') => {
+      const cur = sum(current, key);
+      const prev = sum(previous, key);
+      const delta = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
+      const direction = delta > 0.05 ? '▲' : delta < -0.05 ? '▼' : '—';
+      const up = delta >= 0;
+      return { label, current: cur, previous: prev, deltaPct: Math.round(delta), direction, up, significant: Math.abs(delta) >= 20 };
+    };
+
+    return [row('Backlog', 'backlog'), row('Enqueued', 'enqueued'), row('Completed', 'completed')];
   });
 
   metricTrends = computed(() => {
@@ -442,6 +563,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private autoRetryTimeout?: ReturnType<typeof setTimeout>;
   private retryCountdownInterval?: ReturnType<typeof setInterval>;
   private toast: ToastService;
+  private metricsHistory = inject(MetricsHistoryService);
+  private exportService = inject(ExportService);
+  private predictive = inject(PredictiveAnalyticsService);
+  private dashState = inject(DashboardStateService);
+  private alertThresholds = inject(AlertThresholdService);
+
+  /** Sender list filtering (Requirement 5.1 / 5.3). */
+  senderSearch = signal('');
+  siteFilter = signal('');
+
+  /** Distinct operational sites for the site selector (Req 5.1). */
+  siteOptions = computed(() => {
+    const sites = this.snapshot()?.sites ?? [];
+    return Array.from(new Set(sites.map((s) => s.site))).sort();
+  });
+
+  /** True when sender list filters are active (drives "Clear all filters"). */
+  miniFiltersActive = computed(() => (this.senderSearch() || '').trim().length > 0 || this.siteFilter() !== '');
+
+  miniFilterCount = computed(() => ((this.senderSearch() || '').trim() ? 1 : 0) + (this.siteFilter() ? 1 : 0));
+
+  /** Sender opened in the deep-dive analytics panel (Requirement 2.5). */
+  selectedSenderDetail = signal<SenderDetailView | null>(null);
+  /** Stable snapshot of the selected sender's backlog history (avoid re-creation per CD). */
+  detailBacklogHistory = signal<number[]>([]);
+
+  /** Live activity feed panel (present in template below supporting metrics). */
+  @ViewChild('activityFeed', { static: false }) activityFeed?: LiveActivityFeedComponent;
+
+  /** Latest integration health snapshot (Requirement 15/18) — polled 30s. */
+  integrationSnapshot = signal<IntegrationStatusSnapshot | null>(null);
+  private integrationPollTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private backend: BackendService,
@@ -471,6 +624,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Connect to dashboard state stream for real-time timeout state updates
     // Requirements 7.1, 7.2, 7.3, 7.4
     this.connectDashboardStateStream();
+
+    // Poll integration health every 30 seconds (Requirement 15.5).
+    this.refreshIntegrationSnapshot();
+    this.integrationPollTimer = setInterval(() => this.refreshIntegrationSnapshot(), 30_000);
+
+    // Restore persisted filter state (Requirement 5.4 round-trip via DashboardStateService).
+    const savedFilters = this.dashState.filters();
+    if (savedFilters?.senderSearch) this.senderSearch.set(savedFilters.senderSearch);
+    if (savedFilters?.siteIds?.length) this.siteFilter.set(savedFilters.siteIds[0]);
   }
 
   ngOnDestroy() {
@@ -478,6 +640,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.stateStreamSub?.unsubscribe();
     if (this.freshnessPollInterval) {
       clearInterval(this.freshnessPollInterval);
+    }
+    if (this.integrationPollTimer) {
+      clearInterval(this.integrationPollTimer);
     }
     this.clearRetryTimers();
   }
@@ -498,6 +663,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   onDeviceFilterChange(selectedDevices: string[]): void {
     this.devices.set(selectedDevices);
+    this.dashState.applyFilters({ devices: selectedDevices });
     this.refresh();
   }
 
@@ -608,6 +774,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.changedMetrics.set(changed);
         this.previousSnapshot.set(this.snapshot());
         this.snapshot.set(snap);
+        this.recordSenderBacklogs(snap);
         this.lastUpdated.set(new Date());
         this.dataFreshness.set('fresh');
         this.loading.set(false);
@@ -634,6 +801,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
           }
           return updated;
         });
+
+        // Mirror into MetricsHistoryService so the time-series charts (Requirement 1.1)
+        // consume a single throttled source rather than duplicating buffers.
+        this.metricsHistory.appendSnapshot(newSnapshot.timestamp, {
+          backlog: newSnapshot.backlog,
+          ready: newSnapshot.ready,
+          enqueued: newSnapshot.enqueued,
+          completed: newSnapshot.completed,
+          failed: snap.global.failed ?? 0,
+          cancelled: snap.global.cancelled ?? 0,
+        });
       },
       error: (err: unknown) => {
         console.error('Failed to load dashboard', err);
@@ -644,7 +822,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
         this.retryAttempts++;
 
-        const delayMs = Math.min(this.retryBaseDelayMs * Math.pow(2, this.retryAttempts - 1), 30000);
+        const delayMs = Math.min(this.retryBaseDelayMs * Math.pow(2, this.retryAttempts - 1), 80000); // Req 10.3: 5/10/20/40/80s
 
         this.error.set(parsed.message);
         this.errorDetails.set({
@@ -681,6 +859,85 @@ export class DashboardComponent implements OnInit, OnDestroy {
       `Dashboard Error\nCode: ${details?.code ?? 'UNKNOWN'}\nAttempts: ${details?.retryAttempts ?? 0}/${details?.maxRetries ?? this.maxRetries}`,
     );
     window.open(`/support?error=${payload}`, '_blank', 'noopener');
+  }
+
+  /** Fetch the active session's integration snapshot (Requirement 15.5 poll). */
+  private refreshIntegrationSnapshot(): void {
+    const sessionId = this.activeMonitoringSession()?.sessionId;
+    if (!sessionId) {
+      this.integrationSnapshot.set(null);
+      return;
+    }
+    this.backend.getStagingSession(sessionId).subscribe({
+      next: (detail: StagingSessionDetail) => {
+        if (detail?.integration) {
+          this.integrationSnapshot.set(detail.integration);
+        }
+      },
+      // Non-fatal: card simply keeps the last known state (or "not configured").
+    });
+  }
+
+  /** Gather a full dashboard snapshot for exports (Requirement 8). Arrow keeps `this`. */
+  readonly gatherExportData = (): DashboardExportData => {
+    const s = this.snapshot();
+    const snap = s?.global;
+
+    const summaryRows: (string | number)[][] = [
+      ['Backlog', snap?.backlog ?? 0],
+      ['Ready', snap?.ready ?? 0],
+      ['Enqueued', snap?.enqueued ?? 0],
+      ['Completed', snap?.completed ?? 0],
+      ['Failed', snap?.failed ?? 0],
+      ['Health Score', `${this.overallHealthScore()}%`],
+    ];
+    if (this.lastUpdated()) {
+      summaryRows.push(['Last Updated', this.lastUpdated()!.toISOString()]);
+    }
+
+    const senderRows = this.topSenders().map((sender) => [
+      sender.senderId,
+      sender.senderLabel,
+      sender.site,
+      sender.backlog,
+      sender.throughput,
+      `${sender.successRate}%`,
+    ]);
+
+    const siteRows = (s?.sites ?? []).map((site) => [
+      site.site,
+      site.metrics?.backlog ?? 0,
+      site.metrics?.completed ?? 0,
+      site.metrics?.failed ?? 0,
+    ]);
+
+    const historyRows = this.metricHistory().map((h) => [
+      new Date(h.timestamp).toISOString(),
+      h.backlog,
+      h.ready,
+      h.enqueued,
+      h.completed,
+    ]);
+
+    const filters: string[] = [];
+    if (this.devices().length > 0) filters.push(`device-${this.devices().join('_')}`);
+
+    return {
+      summary: { name: 'Summary', headers: ['Metric', 'Value'], rows: summaryRows },
+      senders: {
+        name: 'Senders',
+        headers: ['Sender ID', 'Name', 'Site', 'Backlog', 'Throughput/hr', 'Success Rate'],
+        rows: senderRows,
+      },
+      sites: { name: 'Sites', headers: ['Site', 'Backlog', 'Completed', 'Failed'], rows: siteRows },
+      history: {
+        name: 'History',
+        headers: ['Timestamp', 'Backlog', 'Ready', 'Enqueued', 'Completed'],
+        rows: historyRows,
+      },
+      filters,
+      pdfElements: ['.health-card', '.metrics-grid', '.trends-grid'],
+    };
   }
 
   private autoRetry(): void {
@@ -821,6 +1078,46 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (ratio > 1) return 'critical';
     if (ratio >= 0.75) return 'warning';
     return 'normal';
+  }
+
+  /**
+   * Record the current backlog for every sender on each snapshot poll.
+   * Kept in-memory only (10s cadence × 60 points ≈ last 10 minutes for sparklines).
+   */
+  private recordSenderBacklogs(snap: DashboardSnapshot): void {
+    for (const site of snap.sites ?? []) {
+      for (const sender of site.senders ?? []) {
+        const backlog = sender.metrics?.backlog ?? sender.backlog ?? 0;
+        const history = this.senderBacklogHistory.get(sender.senderId) ?? [];
+        history.push(backlog);
+        if (history.length > DashboardComponent.SPARK_MAX_POINTS) {
+          history.shift();
+        }
+        this.senderBacklogHistory.set(sender.senderId, history);
+      }
+    }
+  }
+
+  /** Latest known backlog for a sender (sparkline tail). */
+  senderCurrentBacklog(senderId: number): number {
+    const history = this.senderBacklogHistory.get(senderId);
+    return history && history.length > 0 ? history[history.length - 1] : 0;
+  }
+
+  /** SVG polyline `points` string for the sender sparkline (Req 2.1). */
+  senderSparklinePoints(senderId: number): string {
+    const history = this.senderBacklogHistory.get(senderId);
+    if (!history || history.length === 0) return '';
+    const n = history.length;
+    const max = Math.max(...history, 1);
+    const stepX = n > 1 ? DashboardComponent.SPARK_WIDTH / (n - 1) : 0;
+    return history
+      .map((value, i) => {
+        const x = n > 1 ? i * stepX : DashboardComponent.SPARK_WIDTH / 2;
+        const y = DashboardComponent.SPARK_HEIGHT - (value / max) * DashboardComponent.SPARK_HEIGHT;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
   }
 
   getFileListLabel(loaded: number, total: number, cap: number): string {
@@ -1155,5 +1452,106 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.lastUpdated.set(new Date());
     this.lastUpdatePulse.set(true);
     setTimeout(() => this.lastUpdatePulse.set(false), 300);
+
+    // Push a live-activity entry (Requirement 11) for the transition batch.
+    const before = (event.beforeState || 'UNKNOWN').replace(/_/g, ' ');
+    const after = (afterState || 'UNKNOWN').replace(/_/g, ' ');
+    this.activityFeed?.pushFileTransition({
+      label: event.requestId ? `batch ${event.requestId.slice(0, 6)}` : 'pipeline',
+      oldState: `${before} ×${count}`,
+      newState: `${after} ×${count}`,
+    });
+  }
+
+  // ── Sender filtering (Req 5.1, 5.3, 5.5) ─────────────────────────
+
+  /** Update sender search text and persist it through DashboardStateService. */
+  onSenderSearchText(value: string): void {
+    this.senderSearch.set(value);
+    this.dashState.applyFilters({ senderSearch: value });
+  }
+
+  onSiteFilterSelect(value: string): void {
+    this.siteFilter.set(value);
+    this.dashState.applyFilters({ siteIds: value ? [value] : [] });
+  }
+
+  clearMiniFilters(): void {
+    this.senderSearch.set('');
+    this.siteFilter.set('');
+    this.dashState.applyFilters({ senderSearch: '', siteIds: [] });
+  }
+
+  /** Layout customization (Req 12.2): is this dashboard section visible? */
+  sectionVisible(sectionId: string): boolean {
+    const section = this.dashState.layout().sections.find((s) => s.id === sectionId);
+    return section ? section.visible : true;
+  }
+
+  /** True when a site filter is active and this sender is from another site. */
+  senderHiddenBySite(sender: SenderPerformance): boolean {
+    const site = this.siteFilter();
+    return site !== '' && sender.site !== site;
+  }
+
+  /** True when search is active and the sender does not match (Req 5.3 dimming). */
+  senderHiddenBySearch(sender: SenderPerformance): boolean {
+    const query = (this.senderSearch() || '').trim().toLowerCase();
+    if (!query) return false;
+    const haystack = `${sender.senderLabel} ${sender.senderId} ${sender.site}`.toLowerCase();
+    return !haystack.includes(query);
+  }
+
+  isSenderDimmed(sender: SenderPerformance): boolean {
+    return this.senderHiddenBySite(sender) || this.senderHiddenBySearch(sender);
+  }
+
+  // ── Capacity projection badge (Req 10.3 / 14.2-14.4) ─────────────
+
+  /**
+   * Compute a small capacity projection for a sender from its rolling backlog
+   * history. Returns undefined when there is not enough data yet.
+   */
+  senderCapacity(sender: SenderPerformance): { level: 'warning' | 'critical'; timeToCapacity: number } | undefined {
+    const samples = this.senderBacklogHistory.get(sender.senderId);
+    if (!samples || samples.length < 2) return undefined;
+
+    const now = Date.now();
+    const backlogSamples = samples.map((value, i) => ({
+      timestamp: now - (samples.length - 1 - i) * 10_000, // ~10s cadence
+      value,
+    }));
+
+    const projection = this.predictive.evaluate(sender.senderId, backlogSamples, this.getBacklogCapacity(sender), now);
+    if (!projection || projection.level === 'none') return undefined;
+    return { level: projection.level, timeToCapacity: projection.timeToCapacity };
+  }
+
+  /** Evaluate configured threshold breaches for a sender (Req 3.2 / 21.2). */
+  senderThresholdLevel(sender: SenderPerformance): AlertLevel | null {
+    return this.alertThresholds.evaluateLevel(sender.senderId, {
+      backlog: sender.backlog,
+      errorRate: Math.max(0, Math.round((100 - sender.successRate) * 10) / 10),
+      throughput: sender.throughput,
+    });
+  }
+
+  // ── Sender detail panel (Req 2.5) ────────────────────────────────
+
+  openSenderDetail(sender: SenderPerformance): void {
+    this.selectedSenderDetail.set({
+      senderId: sender.senderId,
+      label: sender.senderLabel,
+      site: sender.site,
+      backlog: sender.backlog,
+      throughput: sender.throughput,
+      successRate: sender.successRate,
+    });
+    this.detailBacklogHistory.set([...(this.senderBacklogHistory.get(sender.senderId) ?? [])]);
+  }
+
+  closeSenderDetail(): void {
+    this.selectedSenderDetail.set(null);
+    this.detailBacklogHistory.set([]);
   }
 }

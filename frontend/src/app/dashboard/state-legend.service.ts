@@ -11,6 +11,92 @@ export interface StateDefinition {
   tooltip: string;
 }
 
+/** Integration health statuses (Requirement 18: Elasticsearch / Exensio). */
+export type IntegrationStatus =
+  | 'success'
+  | 'pending'
+  | 'failure'
+  | 'timeout'
+  | 'not_found'
+  | 'error'
+  | 'not_configured';
+
+export interface IntegrationStatusDefinition {
+  color: string;
+  icon: string;
+  label: string;
+  description: string;
+}
+
+const integrationStatuses: ReadonlyMap<IntegrationStatus, IntegrationStatusDefinition> = new Map<
+  IntegrationStatus,
+  IntegrationStatusDefinition
+>([
+  [
+    'success',
+    {
+      color: '#10b981',
+      icon: 'check_circle',
+      label: 'Connected',
+      description: 'Integration is healthy and responding',
+    },
+  ],
+  [
+    'pending',
+    {
+      color: '#3b82f6',
+      icon: 'hourglass_empty',
+      label: 'Monitoring...',
+      description: 'Checking integration health',
+    },
+  ],
+  [
+    'failure',
+    {
+      color: '#ef4444',
+      icon: 'error',
+      label: 'Failed',
+      description: 'Integration connection failed',
+    },
+  ],
+  [
+    'timeout',
+    {
+      color: '#f59e0b',
+      icon: 'warning',
+      label: 'Timeout',
+      description: 'Integration did not respond in time',
+    },
+  ],
+  [
+    'not_found',
+    {
+      color: '#f59e0b',
+      icon: 'warning',
+      label: 'Not Found',
+      description: 'Integration endpoint not reachable',
+    },
+  ],
+  [
+    'error',
+    {
+      color: '#ef4444',
+      icon: 'error',
+      label: 'Error',
+      description: 'Integration returned an error',
+    },
+  ],
+  [
+    'not_configured',
+    {
+      color: '#6b7280',
+      icon: 'settings',
+      label: 'Not Configured',
+      description: 'Integration has not been set up',
+    },
+  ],
+]);
+
 @Injectable({
   providedIn: 'root',
 })
@@ -251,5 +337,41 @@ May be re-activated through manual intervention.`,
       result += '\n(Terminal state)';
     }
     return result;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Integration status support (Requirement 18.7)
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Get the visual definition (color/icon/label/description) for an integration
+   * status value. Single source of truth used by the Integrations status card.
+   */
+  getIntegrationStatus(status: string | null | undefined): IntegrationStatusDefinition {
+    const key = (status || 'not_configured') as IntegrationStatus;
+    return integrationStatuses.get(key) ?? integrationStatuses.get('not_configured')!;
+  }
+
+  /**
+   * Tooltip content for either a pipeline state label or an integration status.
+   */
+  getTooltipContent(type: 'pipeline' | 'integration', key: string): string {
+    if (type === 'pipeline') {
+      const state = this.getStateByLabel(key);
+      return state ? state.description : '';
+    }
+    const status = integrationStatuses.get(key as IntegrationStatus);
+    return status ? status.description : '';
+  }
+
+  /** All integration status definitions (drives legend/filter UI). */
+  getAllIntegrationStatuses(): { key: IntegrationStatus; definition: IntegrationStatusDefinition }[] {
+    return Array.from(integrationStatuses.entries()).map(([key, definition]) => ({ key, definition }));
+  }
+
+  /** True when the integration status is terminal (healthy or definitively broken). */
+  isIntegrationTerminal(status: string | null | undefined): boolean {
+    const s = (status || '').toLowerCase();
+    return s === 'success' || s === 'failure' || s === 'error' || s === 'not_configured';
   }
 }

@@ -25,6 +25,8 @@
           <mat-icon aria-hidden="true">insights</mat-icon>
           <span class="btn-label">Analytics</span>
         </button>
+        <app-export-menu [dataProvider]="gatherExportData"></app-export-menu>
+        <app-layout-customizer></app-layout-customizer>
         <button
           mat-stroked-button
           (click)="refresh()"
@@ -113,16 +115,22 @@
     </button>
   </div>
 
-  <!-- Device Filter Bar -->
-  <div class="dashboard-filter-bar glass-panel" *ngIf="!loading() && !error() && snapshot()">
-    <div class="filter-controls">
-      <app-glass-device-filter (deviceChange)="onDeviceFilterChange($event)"></app-glass-device-filter>
-    </div>
-  </div>
+  <!-- Filter Bar: devices + sender search + site (Req 5.1/5.3) -->
+  <app-dashboard-filter-bar
+    *ngIf="!loading() && !error() && snapshot()"
+    [siteOptions]="siteOptions()"
+    [senderSearch]="senderSearch()"
+    [siteFilter]="siteFilter()"
+    [activeCount]="miniFilterCount()"
+    (deviceChange)="onDeviceFilterChange($event)"
+    (senderSearchChange)="onSenderSearchText($event)"
+    (siteFilterChange)="onSiteFilterSelect($event)"
+    (clearFilters)="clearMiniFilters()"
+  ></app-dashboard-filter-bar>
 
   <div class="dashboard-content" *ngIf="!error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
     <!-- Health Overview Card -->
-    <section class="health-section" aria-labelledby="health-heading">
+    <section class="health-section" [class.layout-hidden]="!sectionVisible('health')" aria-labelledby="health-heading">
       <div class="health-card glass-panel">
         <div class="health-header">
           <h3 id="health-heading">System Health</h3>
@@ -137,8 +145,40 @@
         </div>
         <div class="health-metrics">
           <div class="health-score">
-            <div class="score-value" aria-label="Overall success rate">{{ overallHealthScore() }}%</div>
-            <div class="score-label">Success Rate</div>
+            <svg
+              class="health-ring-svg"
+              width="88"
+              height="88"
+              viewBox="0 0 88 88"
+              role="img"
+              [attr.aria-label]="'Overall success rate ' + overallHealthScore() + ' percent'"
+            >
+              <circle class="ring-track" cx="44" cy="44" r="38"></circle>
+              <circle
+                class="ring-fill"
+                cx="44"
+                cy="44"
+                r="38"
+                [style.stroke]="getHealthStatusColor(overallHealthScore())"
+                [style.stroke-dashoffset]="healthRingOffset()"
+              ></circle>
+              <text
+                class="ring-text"
+                x="50%"
+                y="52%"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                [attr.fill]="getHealthStatusColor(overallHealthScore())"
+              >
+                {{ overallHealthScore() }}%
+              </text>
+            </svg>
+            <div class="score-copy">
+              <div class="score-label">Success Rate</div>
+              <div class="score-status" [style.color]="getHealthStatusColor(overallHealthScore())">
+                {{ getHealthStatusLabel(overallHealthScore()) }}
+              </div>
+            </div>
           </div>
           <div
             class="health-bar"
@@ -172,7 +212,7 @@
     </section>
 
     <!-- Primary KPI Metrics -->
-    <section class="metrics-section" aria-labelledby="kpi-heading">
+    <section class="metrics-section" [class.layout-hidden]="!sectionVisible('metrics')" aria-labelledby="kpi-heading">
       <h2 class="section-title" id="kpi-heading">Pipeline State Overview</h2>
       <div class="metrics-grid" role="region" aria-label="Pipeline state cards - 7 processing stages">
         <div
@@ -231,8 +271,14 @@
       </div>
     </section>
 
+    <!-- Pipeline Flow Visualization (Requirement 19) -->
+    <section class="flow-section" [class.layout-hidden]="!sectionVisible('flow')" aria-labelledby="flow-heading">
+      <h2 class="section-title" id="flow-heading">Pipeline Flow</h2>
+      <app-pipeline-flow [counts]="pipelineCounts()" (stateClick)="onFlowStateClick($event)"></app-pipeline-flow>
+    </section>
+
     <!-- Supporting Metrics Row -->
-    <section class="supporting-metrics">
+    <section class="supporting-metrics" [class.layout-hidden]="!sectionVisible('supporting')">
       <h2 class="section-title">Infrastructure</h2>
       <div class="metrics-row glass-panel infrastructure-banner">
         <div
@@ -249,8 +295,89 @@
       </div>
     </section>
 
+    <!-- Live Pipeline Trends (Requirement 1.1 - time-series charts) -->
+    <section class="trends-section" [class.layout-hidden]="!sectionVisible('trends')" aria-labelledby="trends-heading">
+      <div class="trends-head-row">
+        <h2 class="section-title" id="trends-heading">Live Pipeline Trends</h2>
+        <div class="compare-controls" *ngIf="compareActive()">
+          <span class="compare-label">Window</span>
+          <button
+            type="button"
+            class="compare-preset"
+            [class.active]="compareMinutes() === 15"
+            (click)="setCompareWindow(15)"
+          >15m</button>
+          <button
+            type="button"
+            class="compare-preset"
+            [class.active]="compareMinutes() === 30"
+            (click)="setCompareWindow(30)"
+          >30m</button>
+          <button
+            type="button"
+            class="compare-preset"
+            [class.active]="compareMinutes() === 60"
+            (click)="setCompareWindow(60)"
+          >1h</button>
+        </div>
+        <button type="button" class="compare-toggle" [class.active]="compareActive()" (click)="toggleCompareMode()">
+          {{ compareActive() ? 'Comparison on' : 'Compare periods' }}
+        </button>
+      </div>
+
+      <div class="compare-strip" *ngIf="compareActive() && compareRows().length > 0">
+        @for (row of compareRows(); track row.label) {
+          <span
+            class="compare-chip"
+            [class.up]="row.up"
+            [class.down]="!row.up && row.direction === '▼'"
+            [class.flat]="row.direction === '—'"
+            [class.significant]="row.significant"
+            matTooltip="Current vs previous window — values: {{ row.current }} vs {{ row.previous }}"
+          >
+            {{ row.label }}
+            <span class="chip-delta">{{ row.direction }} {{ row.deltaPct }}%</span>
+          </span>
+        }
+      </div>
+      <div class="trends-grid">
+        <app-time-series-chart
+          metricKey="backlog"
+          displayLabel="Backlog"
+          windowInput="6h"
+        ></app-time-series-chart>
+        <app-time-series-chart
+          metricKey="enqueued"
+          displayLabel="Enqueued"
+          windowInput="6h"
+        ></app-time-series-chart>
+        <app-time-series-chart
+          metricKey="completed"
+          displayLabel="Completed"
+          windowInput="6h"
+        ></app-time-series-chart>
+        <app-time-series-chart
+          metricKey="failed"
+          displayLabel="Failed"
+          windowInput="6h"
+        ></app-time-series-chart>
+      </div>
+    </section>
+
+    <!-- Live Activity Feed (Requirement 11) -->
+    <section class="activity-section" [class.layout-hidden]="!sectionVisible('activity')" aria-labelledby="activity-heading">
+      <h2 class="section-title" id="activity-heading">Live Activity</h2>
+      <app-live-activity-feed #activityFeed></app-live-activity-feed>
+    </section>
+
+    <!-- Integrations Health (Requirement 15 / 18) -->
+    <section class="integrations-section" [class.layout-hidden]="!sectionVisible('integrations')" aria-labelledby="integrations-heading">
+      <h2 class="section-title" id="integrations-heading">Integrations</h2>
+      <app-integration-status-card [snapshot]="integrationSnapshot()"></app-integration-status-card>
+    </section>
+
     <!-- Top Senders Performance -->
-    <section class="senders-section" *ngIf="topSenders().length > 0">
+    <section class="senders-section" [class.layout-hidden]="!sectionVisible('senders')" *ngIf="topSenders().length > 0">
       <h2 class="section-title">Top Senders by Backlog</h2>
       <div class="senders-grid">
         <div
@@ -259,9 +386,12 @@
           [class.alert]="sender.alert"
           [class.top-sender]="index === 0"
           [class.critical]="sender.isCritical"
+          [class.border-warning]="getBacklogStatus(sender) === 'warning'"
+          [class.border-critical]="getBacklogStatus(sender) === 'critical'"
+          [class.dimmed]="isSenderDimmed(sender)"
           [class.updated]="changedMetrics().has('sender-' + sender.senderId)"
           [class.bulk-selected]="selectedSenderIds().has(sender.senderId)"
-          [style.opacity]="1 - index * 0.05"
+          [style.opacity]="isSenderDimmed(sender) ? 0.35 : 1 - index * 0.05"
         >
           <!-- Phase 4.2: per-card selection checkbox -->
           <div class="sender-select-checkbox" (click)="toggleSenderSelection(sender.senderId, $event)">
@@ -273,7 +403,15 @@
             </app-glass-checkbox>
           </div>
           <div class="sender-header">
-            <div class="sender-info">
+            <div
+              class="sender-info sender-info-clickable"
+              (click)="openSenderDetail(sender)"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="openSenderDetail(sender)"
+              (keydown.space)="openSenderDetail(sender)"
+              [attr.aria-label]="'Open analytics for ' + sender.senderLabel"
+            >
               <h4 class="sender-name">{{ sender.senderLabel }}</h4>
               <span class="sender-site">{{ sender.site }}</span>
             </div>
@@ -313,6 +451,13 @@
               <span class="item-value" [class.good]="sender.successRate >= 95">{{ sender.successRate }}%</span>
             </div>
           </div>
+          @if (senderSparklinePoints(sender.senderId); as pts) {
+            <div class="sender-spark" aria-hidden="true">
+              <svg viewBox="0 0 100 30" preserveAspectRatio="none" class="spark-svg">
+                <polyline [attr.points]="pts" fill="none" stroke="currentColor" stroke-width="1.5"></polyline>
+              </svg>
+            </div>
+          }
           <div class="backlog-indicator" [matTooltip]="getBacklogTooltip(sender)">
             <div class="backlog-track">
               <div
@@ -335,6 +480,39 @@
             >
               {{ getBacklogStatus(sender) | titlecase }}
             </span>
+            @if (senderCapacity(sender); as cap) {
+              <span
+                class="capacity-badge"
+                [class.cap-warning]="cap.level === 'warning'"
+                [class.cap-critical]="cap.level === 'critical'"
+                [matTooltip]="
+                  cap.timeToCapacity >= 0
+                    ? 'Projected at capacity in ~' + cap.timeToCapacity + ' min'
+                    : 'Projected backlog trend'
+                "
+              >
+                @if (cap.level === 'critical') {
+                  <mat-icon>error</mat-icon>
+                } @else {
+                  <mat-icon>warning</mat-icon>
+                }
+                CAPACITY {{ cap.level === 'critical' ? 'CRITICAL' : 'WARNING' }}
+                @if (cap.timeToCapacity >= 0) {
+                  · {{ cap.timeToCapacity }}m
+                }
+              </span>
+            }
+            @if (senderThresholdLevel(sender); as tl) {
+              <span
+                class="capacity-badge threshold-badge"
+                [class.cap-warning]="tl === 'warning'"
+                [class.cap-critical]="tl === 'critical'"
+                matTooltip="Custom threshold breached — click the bell to adjust"
+              >
+                <mat-icon>notifications_active</mat-icon>
+                THRESHOLD {{ tl | uppercase }}
+              </span>
+            }
             <button
               mat-stroked-button
               class="dispatch-quick-action"
@@ -351,7 +529,7 @@
     </section>
 
     <!-- Sites Overview -->
-    <section class="sites-section">
+    <section class="sites-section" [class.layout-hidden]="!sectionVisible('sites')">
       <div class="section-header">
         <h2 class="section-title">Active Sites</h2>
         <span class="site-count">{{ snapshot()?.sites?.length || 0 }} operational</span>
@@ -502,6 +680,20 @@
     (selectionChanged)="onBulkSelectionChanged($event)"
   >
   </app-bulk-actions>
+
+  <!-- Sender deep-dive analytics panel (Req 2.5) -->
+  <div
+    class="sender-detail-overlay"
+    *ngIf="selectedSenderDetail()"
+    (click)="closeSenderDetail()"
+  >
+    <app-sender-detail-panel
+      [sender]="selectedSenderDetail()"
+      [backlogHistory]="detailBacklogHistory()"
+      (closed)="closeSenderDetail()"
+      (click)="$event.stopPropagation()"
+    ></app-sender-detail-panel>
+  </div>
 </div>
 
 <!-- Empty State - No Sites -->
