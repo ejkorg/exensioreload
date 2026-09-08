@@ -620,6 +620,12 @@ integration (DashboardStateService/AlertThresholdService wiring).
 - Tasks ticked this pass: **5, 5.1, 5.3, 11.1, 21.2**. Remaining unticked core: 11.2,
   19.x (partial), 16.x/17.x (partial), 23 checkpoint items, and all test `*` tasks.
 
+**Dependency fix (npm ERESOLVE):** `chartjs-plugin-streaming@2.0.0` peers with
+`chart.js@^3`, so the charting stack is pinned to the stable v3 line:
+`chart.js@^3.9.1`, `chartjs-adapter-date-fns@^2.0.0`, `date-fns@^2.30.0`,
+`chartjs-plugin-streaming@^2.0.0`. Chart component code is v3-compatible
+(no v4-only APIs used).
+
 
 
 
