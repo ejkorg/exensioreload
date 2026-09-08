@@ -63,13 +63,13 @@ const TONE_HEX: Record<PipelineFlowNode['tone'], string> = {
           <button
             type="button"
             class="flow-node"
-            [class.has-count]="(counts()?.[node.key] ?? 0) > 0"
+            [class.has-count]="(counts?.[node.key] ?? 0) > 0"
             (click)="stateClick.emit(node.key)"
             [style.borderColor]="toneHex(node.tone)"
             [style.color]="toneHex(node.tone)"
           >
             <span class="node-count" [style.background]="toneHex(node.tone)">
-              {{ counts()?.[node.key] ?? 0 }}
+              {{ counts?.[node.key] ?? 0 }}
             </span>
             <span class="node-label">{{ node.label }}</span>
           </button>
@@ -81,13 +81,13 @@ const TONE_HEX: Record<PipelineFlowNode['tone'], string> = {
           <button
             type="button"
             class="flow-branch-chip"
-            [class.has-count]="(counts()?.[branch.key] ?? 0) > 0"
+            [class.has-count]="(counts?.[branch.key] ?? 0) > 0"
             (click)="stateClick.emit(branch.key)"
             [style.color]="toneHex(branch.tone)"
             [style.borderColor]="toneHex(branch.tone)"
           >
             <span class="branch-dot" [style.background]="toneHex(branch.tone)"></span>
-            {{ branch.label }} · {{ counts()?.[branch.key] ?? 0 }}
+            {{ branch.label }} · {{ counts?.[branch.key] ?? 0 }}
           </button>
         }
       </div>

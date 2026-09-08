@@ -232,7 +232,8 @@ export class LiveActivityFeedComponent {
     return 'event-info';
   }
 
-  private shortState(state: string): string {
+  /** Shorten verbose state names for feed display. */
+  shortState(state: string): string {
     const label = state.includes('(') ? state.substring(0, state.indexOf('(')).trim() : state;
     switch (label) {
       case 'ELASTICSEARCH_MONITORING':

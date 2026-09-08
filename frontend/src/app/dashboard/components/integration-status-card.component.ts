@@ -225,7 +225,8 @@ export class IntegrationStatusCardComponent {
     this.retryRequested.emit(service);
   }
 
-  private iconText(icon: string): string {
+  /** Template helper: glyph per StateLegend icon key. */
+  iconText(icon: string): string {
     switch (icon) {
       case 'check_circle':
         return '✓';
@@ -242,14 +243,13 @@ export class IntegrationStatusCardComponent {
     }
   }
 
-  private pillBackground(color: string): string {
+  pillBackground(color: string): string {
     return this.hexToRgba(color, 0.12);
   }
 
-  private pillBorder(color: string): string {
+  pillBorder(color: string): string {
     return this.hexToRgba(color, 0.3);
   }
-
   private hexToRgba(hex: string, alpha: number): string {
     const clean = hex.replace('#', '');
     const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;

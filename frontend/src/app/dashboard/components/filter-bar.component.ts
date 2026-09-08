@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { GlassDeviceFilterComponent } from '../../../shared/components/glass-device-filter.component';
+import { GlassDeviceFilterComponent } from '../../shared/components/glass-device-filter.component';
 
 /**
  * FilterBarComponent — unified dashboard filter controls (Requirement 5.1).

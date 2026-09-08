@@ -243,7 +243,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy {
           legend: { display: false },
           tooltip: {
             enabled: false, // custom glass tooltip (Req 1.3) — see ChartTooltipComponent
-            external: (context) => this.renderExternalTooltip(context as never),
+            external: (context: {
+              tooltip?: {
+                opacity?: number;
+                dataPoints?: Array<{ dataIndex?: number }>;
+                caretX?: number;
+                caretY?: number;
+              };
+            }) => this.renderExternalTooltip(context),
           },
         },
         scales: {

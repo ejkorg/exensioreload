@@ -228,7 +228,8 @@ export class ExportMenuComponent implements OnDestroy {
     }
   }
 
-  private glyph(icon: string): string {
+  /** Template helper: map a material-ish icon key to a safe glyph. */
+  glyph(icon: string): string {
     switch (icon) {
       case 'table_chart':
         return '▦';

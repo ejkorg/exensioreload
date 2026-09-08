@@ -1087,7 +1087,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private recordSenderBacklogs(snap: DashboardSnapshot): void {
     for (const site of snap.sites ?? []) {
       for (const sender of site.senders ?? []) {
-        const backlog = sender.metrics?.backlog ?? sender.backlog ?? 0;
+        const backlog = sender.metrics?.backlog ?? 0;
         const history = this.senderBacklogHistory.get(sender.senderId) ?? [];
         history.push(backlog);
         if (history.length > DashboardComponent.SPARK_MAX_POINTS) {
