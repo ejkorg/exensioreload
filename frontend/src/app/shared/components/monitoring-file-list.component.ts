@@ -191,7 +191,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
                 [class.status-error]="getDetailLine(file).hasError"
                 [class.status-warning]="file.status === 'ELASTICSEARCH_MONITORING' || file.status === 'EXENSIO_MONITORING'"
                 [class.status-muted]="file.status === 'READY' || file.status === 'QUEUED_FOR_CP'"
-                [glassTooltip]="getErrorSummary(file)?.fullText || null"
+                [glassTooltip]="getErrorSummary(file)?.fullText || ''"
               >
                 {{ getDetailLine(file).text }}
               </div>
