@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { GlassDeviceFilterComponent } from '../../shared/components/glass-device-filter.component';
+import { GlassSelectComponent } from '../../shared/components/glass-select.component';
 
 /**
  * FilterBarComponent — unified dashboard filter controls (Requirement 5.1).
@@ -12,7 +14,7 @@ import { GlassDeviceFilterComponent } from '../../shared/components/glass-device
 @Component({
   selector: 'app-dashboard-filter-bar',
   standalone: true,
-  imports: [CommonModule, MatIconModule, GlassDeviceFilterComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, GlassDeviceFilterComponent, GlassSelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="dashboard-filter-bar glass-panel">
@@ -30,13 +32,13 @@ import { GlassDeviceFilterComponent } from '../../shared/components/glass-device
           />
         </label>
 
-        <label class="mini-filter site-filter">
-          <mat-icon aria-hidden="true">location_on</mat-icon>
-          <select [value]="siteFilter" (change)="siteFilterChange.emit($any($event.target).value)" aria-label="Filter by site">
-            <option value="">All sites</option>
-            <option *ngFor="let site of siteOptions" [value]="site">{{ site }}</option>
-          </select>
-        </label>
+         <app-glass-select
+           label="Site"
+           placeholder="All sites"
+           [options]="siteOptions"
+           [ngModel]="siteFilter"
+           (ngModelChange)="siteFilterChange.emit($event)"
+        ></app-glass-select>
 
         <button type="button" class="clear-filters-btn" *ngIf="activeCount > 0" (click)="clearFilters.emit()">
           Clear filters ({{ activeCount }})
@@ -112,6 +114,12 @@ import { GlassDeviceFilterComponent } from '../../shared/components/glass-device
       }
       .clear-filters-btn:hover {
         background: rgba(239, 68, 68, 0.2);
+      }
+
+      /* Match the device & site glass-selects in both height and width (Req dashboard polish). */
+      app-glass-select,
+      app-glass-device-filter {
+        min-width: 150px;
       }
 
       @media (max-width: 768px) {
