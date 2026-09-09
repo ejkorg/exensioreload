@@ -652,6 +652,14 @@ export class BackendService {
     return this.http.get<DashboardSnapshot>(`${this.apiUrl}/dashboard/snapshot`, { params });
   }
 
+  /**
+   * Get integration health status (Elasticsearch + Exensio).
+   * Works independently of active sessions - always returns current health.
+   */
+  getIntegrationStatus(): Observable<IntegrationStatusSnapshot> {
+    return this.http.get<IntegrationStatusSnapshot>(`${this.apiUrl}/dashboard/integration-status`);
+  }
+
   // ========================================================================
   // Environment & Instance Management
   // ========================================================================

@@ -859,20 +859,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     window.open(`/support?error=${payload}`, '_blank', 'noopener');
   }
 
-  /** Fetch the active session's integration snapshot (Requirement 15.5 poll). */
+  /** Fetch integration health status (Requirement 15.5 poll). */
   private refreshIntegrationSnapshot(): void {
-    const sessionId = this.activeMonitoringSession()?.sessionId;
-    if (!sessionId) {
-      this.integrationSnapshot.set(null);
-      return;
-    }
-    this.backend.getStagingSession(sessionId).subscribe({
-      next: (detail: StagingSessionDetail) => {
-        if (detail?.integration) {
-          this.integrationSnapshot.set(detail.integration);
-        }
+    // Use dedicated endpoint - works independently of active sessions
+    this.backend.getIntegrationStatus().subscribe({
+      next: (snapshot: IntegrationStatusSnapshot) => {
+        this.integrationSnapshot.set(snapshot);
       },
       // Non-fatal: card simply keeps the last known state (or "not configured").
+      error: () => this.integrationSnapshot.set(null),
     });
   }
 

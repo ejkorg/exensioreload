@@ -48,6 +48,9 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardSnapshot;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardWaferBreakdown;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.service.IntegrationStatusService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageStatus;
@@ -63,14 +66,36 @@ public class DashboardController {
 
     private final RefDbService refDbService;
     private final StageRecordMapper mapper;
+    private final IntegrationStatusService integrationStatusService;
+    private final CpElasticsearchProperties elasticsearchProperties;
+    private final ExensioProperties exensioProperties;
 
     // SSE emitters for real-time dashboard state updates (keyed by "dashboard" for global broadcast)
     private final Map<String, Set<SseEmitter>> dashboardEmitters = new ConcurrentHashMap<>();
 
     public DashboardController(RefDbService refDbService,
-                               StageRecordMapper mapper) {
+                               StageRecordMapper mapper,
+                               IntegrationStatusService integrationStatusService,
+                               CpElasticsearchProperties elasticsearchProperties,
+                               ExensioProperties exensioProperties) {
         this.refDbService = refDbService;
         this.mapper = mapper;
+        this.integrationStatusService = integrationStatusService;
+        this.elasticsearchProperties = elasticsearchProperties;
+        this.exensioProperties = exensioProperties;
+    }
+
+    /**
+     * Get integration health status independent of active sessions.
+     * Returns real-time health checks for Elasticsearch and Exensio.
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/integration-status")
+    public ResponseEntity<Map<String, Object>> getIntegrationStatus() {
+        boolean esConfigured = elasticsearchProperties.isConfigured();
+        boolean exensioConfigured = exensioProperties.isConfigured();
+        Map<String, Object> snapshot = integrationStatusService.snapshot(null, esConfigured, exensioConfigured);
+        return ResponseEntity.ok(snapshot);
     }
 
     /**
