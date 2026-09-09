@@ -45,6 +45,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 token = queryToken;
             }
         }
+        if (token == null && request.getRequestURI().contains("/dashboard/states")) {
+            String queryToken = request.getParameter("token");
+            if (queryToken != null && !queryToken.isEmpty()) {
+                token = queryToken;
+            }
+        }
 
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.extractUsername(token);

@@ -1,8 +1,9 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import { catchError, map, timeout } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { AuthService } from '../auth/auth.service';
 
 // ============================================================================
 // Dashboard Interfaces
@@ -600,6 +601,7 @@ export interface CoveragePoint {
 })
 export class BackendService {
   private apiUrl = environment.apiUrl;
+  private authService = inject(AuthService);
 
   constructor(private http: HttpClient) {}
 
@@ -1254,7 +1256,11 @@ export class BackendService {
    */
   connectDashboardStateStream(): Observable<StateChangeEvent> {
     return new Observable<StateChangeEvent>((observer) => {
-      const url = `${this.apiUrl}/dashboard/states`;
+      // Get auth token for SSE (EventSource can't send custom headers)
+      const token = this.authService.getToken();
+      const url = token
+        ? `${this.apiUrl}/dashboard/states?token=${encodeURIComponent(token)}`
+        : `${this.apiUrl}/dashboard/states`;
 
       try {
         const eventSource = new EventSource(url);
