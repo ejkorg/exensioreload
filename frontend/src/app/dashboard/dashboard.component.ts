@@ -13,7 +13,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Router, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subscription, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
@@ -597,6 +597,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   constructor(
     private backend: BackendService,
     private router: Router,
+    private route: ActivatedRoute,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
     protected legendService: StateLegendService,
@@ -631,6 +632,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const savedFilters = this.dashState.filters();
     if (savedFilters?.senderSearch) this.senderSearch.set(savedFilters.senderSearch);
     if (savedFilters?.siteIds?.length) this.siteFilter.set(savedFilters.siteIds[0]);
+
+    // Apply site filter from URL query parameter (e.g., ?site=CZ4-CZ2-PROD)
+    this.route.queryParams.subscribe((params) => {
+      const siteParam = params['site'];
+      if (siteParam && !this.siteFilter()) {
+        this.siteFilter.set(siteParam);
+        this.dashState.applyFilters({ siteIds: [siteParam] });
+      }
+    });
   }
 
   ngOnDestroy() {

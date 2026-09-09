@@ -9,10 +9,6 @@ export const routes: Routes = [
     canActivate: [AuthGuard],
     children: [
       { path: '', loadComponent: () => import('./dashboard/dashboard.component').then((m) => m.DashboardComponent) },
-      {
-        path: 'site/:siteId/dashboard',
-        loadComponent: () => import('./dashboard/site-dashboard.component').then((m) => m.SiteDashboardComponent),
-      },
       { path: 'alerts', loadComponent: () => import('./alerts/alerts.component').then((m) => m.AlertsComponent) },
       {
         path: 'analytics',

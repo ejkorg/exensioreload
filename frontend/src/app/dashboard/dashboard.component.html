@@ -597,11 +597,12 @@
             <button
               mat-stroked-button
               class="view-dashboard"
-              [routerLink]="['/site', site.site, 'dashboard']"
+              [routerLink]="[]"
+              [queryParams]="{ site: site.site }"
               (click)="$event.stopPropagation()"
             >
               <mat-icon>insights</mat-icon>
-              Site Dashboard
+              View Site
             </button>
           </div>
         </div>
