@@ -52,11 +52,22 @@ public class ElasticsearchHealthIndicator implements HealthIndicator {
                 healthCheckUrl = url + "/_cluster/health";
             }
 
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(healthCheckUrl))
                     .timeout(java.time.Duration.ofSeconds(2))
-                    .GET()
-                    .build();
+                    .GET();
+
+            // Add authentication if configured
+            if (props.getApiKey() != null && !props.getApiKey().isBlank()) {
+                requestBuilder.header("Authorization", "ApiKey " + props.getApiKey());
+            } else if (props.getUsername() != null && !props.getUsername().isBlank()
+                    && props.getPassword() != null && !props.getPassword().isBlank()) {
+                String auth = props.getUsername() + ":" + props.getPassword();
+                String encodedAuth = java.util.Base64.getEncoder().encodeToString(auth.getBytes());
+                requestBuilder.header("Authorization", "Basic " + encodedAuth);
+            }
+
+            HttpRequest request = requestBuilder.build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
