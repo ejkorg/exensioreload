@@ -739,7 +739,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 0.875rem;
-        align-items: end;
+        align-items: start;
       }
 
       .filter-search-wrap {
@@ -757,6 +757,10 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         color: rgba(203, 213, 225, 0.8);
         text-transform: uppercase;
         letter-spacing: 0.03em;
+
+        app-glass-icon {
+          color: rgba(167, 139, 250, 0.7);
+        }
       }
 
       .filter-input {

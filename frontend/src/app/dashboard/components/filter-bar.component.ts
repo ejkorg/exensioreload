@@ -74,7 +74,7 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 0.875rem;
-        align-items: end;
+        align-items: start;
       }
 
       .search-filter-wrap {
