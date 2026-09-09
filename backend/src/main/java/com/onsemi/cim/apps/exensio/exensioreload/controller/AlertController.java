@@ -99,8 +99,9 @@ public class AlertController {
 
     /**
      * Update thresholds for a sender.
+     * Requires ADMIN or SUPER_ADMIN role.
      */
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPER_ADMIN')")
     @PutMapping("/sender/{senderId}/thresholds")
     public AlertThreshold updateThresholds(@PathVariable int senderId,
                                             @RequestBody AlertThreshold thresholds) {
@@ -118,8 +119,9 @@ public class AlertController {
 
     /**
      * Update global alert configuration.
+     * Requires ADMIN or SUPER_ADMIN role.
      */
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPER_ADMIN')")
     @PutMapping("/configuration")
     public AlertConfiguration updateConfiguration(@RequestBody AlertConfiguration config) {
         if (config != null) {

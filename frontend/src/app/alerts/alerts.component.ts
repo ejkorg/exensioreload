@@ -6,8 +6,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatBadgeModule } from '@angular/material/badge';
-import { PageEvent } from '@angular/material/paginator';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { FormsModule } from '@angular/forms';
 import { BackendService, AlertConfiguration } from '../api/backend.service';
+import { AuthService } from '../auth/auth.service';
 
 interface Alert {
   alertId: string;
@@ -36,6 +40,10 @@ interface Alert {
     MatTabsModule,
     MatChipsModule,
     MatBadgeModule,
+    MatSlideToggleModule,
+    MatInputModule,
+    MatFormFieldModule,
+    FormsModule,
   ],
   template: `
     <div class="alerts-container">
@@ -152,39 +160,95 @@ interface Alert {
         }
       </div>
 
-      <!-- Configuration Section -->
-      <div class="config-section">
-        <h2>Notification Configuration</h2>
-        <div class="config-cards">
-          <div class="config-card" [class.enabled]="config().emailNotifications?.enabled">
-            <mat-icon>email</mat-icon>
-            <div class="config-info">
+      <!-- Configuration Section (Admin Only) -->
+      @if (isAdmin()) {
+        <div class="config-section">
+          <div class="config-section-header">
+            <h2>Notification Configuration</h2>
+            <span class="admin-badge">Admin Only</span>
+          </div>
+
+          <!-- Email Notifications -->
+          <div class="config-card" [class.enabled]="editConfig.emailNotifications?.enabled">
+            <div class="config-header">
+              <mat-icon>email</mat-icon>
               <span class="config-title">Email Notifications</span>
-              <span class="config-status">
-                {{ config().emailNotifications?.enabled ? 'Enabled' : 'Disabled' }}
-              </span>
+              <mat-slide-toggle
+                [(ngModel)]="editConfig.emailNotifications.enabled"
+                color="primary">
+              </mat-slide-toggle>
             </div>
+            @if (editConfig.emailNotifications?.enabled) {
+              <div class="config-fields">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Recipients (comma-separated)</mat-label>
+                  <input matInput
+                         [(ngModel)]="editConfig.emailRecipients"
+                         placeholder="user1@example.com, user2@example.com">
+                </mat-form-field>
+              </div>
+            }
           </div>
-          <div class="config-card" [class.enabled]="config().webhookNotifications?.enabled">
-            <mat-icon>webhook</mat-icon>
-            <div class="config-info">
+
+          <!-- Webhook Notifications -->
+          <div class="config-card" [class.enabled]="editConfig.webhookNotifications?.enabled">
+            <div class="config-header">
+              <mat-icon>webhook</mat-icon>
               <span class="config-title">Webhook</span>
-              <span class="config-status">
-                {{ config().webhookNotifications?.enabled ? 'Enabled' : 'Disabled' }}
-              </span>
+              <mat-slide-toggle
+                [(ngModel)]="editConfig.webhookNotifications.enabled"
+                color="primary">
+              </mat-slide-toggle>
             </div>
+            @if (editConfig.webhookNotifications?.enabled) {
+              <div class="config-fields">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Webhook URL</mat-label>
+                  <input matInput
+                         [(ngModel)]="editConfig.webhookNotifications.url"
+                         placeholder="https://your-service.com/webhook">
+                </mat-form-field>
+              </div>
+            }
           </div>
-          <div class="config-card" [class.enabled]="config().slackNotifications?.enabled">
-            <mat-icon>chat</mat-icon>
-            <div class="config-info">
+
+          <!-- Slack Notifications -->
+          <div class="config-card" [class.enabled]="editConfig.slackNotifications?.enabled">
+            <div class="config-header">
+              <mat-icon>chat</mat-icon>
               <span class="config-title">Slack</span>
-              <span class="config-status">
-                {{ config().slackNotifications?.enabled ? 'Enabled' : 'Disabled' }}
-              </span>
+              <mat-slide-toggle
+                [(ngModel)]="editConfig.slackNotifications.enabled"
+                color="primary">
+              </mat-slide-toggle>
             </div>
+            @if (editConfig.slackNotifications?.enabled) {
+              <div class="config-fields">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Slack Webhook URL</mat-label>
+                  <input matInput
+                         [(ngModel)]="editConfig.slackNotifications.webhookUrl"
+                         placeholder="https://hooks.slack.com/services/...">
+                </mat-form-field>
+              </div>
+            }
+          </div>
+
+          <!-- Save Button -->
+          <div class="config-actions">
+            <button mat-raised-button color="primary" (click)="saveConfiguration()" [disabled]="configSaving()">
+              <mat-icon>save</mat-icon>
+              {{ configSaving() ? 'Saving...' : 'Save Configuration' }}
+            </button>
+            @if (configSaved()) {
+              <span class="success-message">
+                <mat-icon>check_circle</mat-icon>
+                Configuration saved successfully
+              </span>
+            }
           </div>
         </div>
-      </div>
+      }
     </div>
   `,
   styles: [`
@@ -432,32 +496,37 @@ interface Alert {
       padding: 1.5rem;
     }
 
-    .config-section h2 {
-      margin: 0 0 1rem;
+    .config-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .config-section-header h2 {
+      margin: 0;
       font-size: 1.2rem;
     }
 
-    .config-cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-
-    @media (max-width: 768px) {
-      .config-cards {
-        grid-template-columns: 1fr;
-      }
+    .admin-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .config-card {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
       padding: 1rem;
+      margin-bottom: 1rem;
       border-radius: 10px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.08);
       opacity: 0.6;
+      transition: all 0.2s ease;
     }
 
     .config-card.enabled {
@@ -466,35 +535,65 @@ interface Alert {
       background: rgba(16, 185, 129, 0.08);
     }
 
-    .config-card mat-icon {
+    .config-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .config-header mat-icon {
       font-size: 1.5rem;
       width: 1.5rem;
       height: 1.5rem;
     }
 
-    .config-card.enabled mat-icon {
+    .config-card.enabled .config-header mat-icon {
       color: #10b981;
     }
 
-    .config-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .config-title {
+    .config-header .config-title {
+      flex: 1;
       font-weight: 600;
       font-size: 0.9rem;
     }
 
-    .config-status {
-      font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.5);
+    .config-fields {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .full-width {
+      width: 100%;
+    }
+
+    .config-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .success-message {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #10b981;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .success-message mat-icon {
+      font-size: 1.2rem;
+      width: 1.2rem;
+      height: 1.2rem;
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AlertsComponent implements OnInit {
   private backend = inject(BackendService);
+  private authService = inject(AuthService);
 
   alerts = signal<Alert[]>([]);
   config = signal<AlertConfiguration>({
@@ -504,6 +603,22 @@ export class AlertsComponent implements OnInit {
     defaultSeverity: undefined,
     retentionDays: undefined
   });
+
+  // Editable config copy for admin users
+  editConfig: {
+    emailNotifications: { enabled: boolean; recipients: string[] };
+    webhookNotifications: { enabled: boolean; url: string };
+    slackNotifications: { enabled: boolean; webhookUrl: string };
+    emailRecipients: string;
+  } = {
+    emailNotifications: { enabled: false, recipients: [] },
+    webhookNotifications: { enabled: false, url: '' },
+    slackNotifications: { enabled: false, webhookUrl: '' },
+    emailRecipients: ''
+  };
+
+  configSaving = signal(false);
+  configSaved = signal(false);
 
   selectedFilter = signal<string>('all');
 
@@ -544,7 +659,23 @@ export class AlertsComponent implements OnInit {
 
   private loadConfiguration(): void {
     this.backend.getAlertConfiguration().subscribe({
-      next: (config) => this.config.set(config)
+      next: (config) => {
+        this.config.set(config);
+        // Populate editable config for admin users
+        this.editConfig.emailNotifications = {
+          enabled: config.emailNotifications?.enabled ?? false,
+          recipients: config.emailNotifications?.recipients ?? []
+        };
+        this.editConfig.emailRecipients = (config.emailNotifications?.recipients ?? []).join(', ');
+        this.editConfig.webhookNotifications = {
+          enabled: config.webhookNotifications?.enabled ?? false,
+          url: config.webhookNotifications?.url ?? ''
+        };
+        this.editConfig.slackNotifications = {
+          enabled: config.slackNotifications?.enabled ?? false,
+          webhookUrl: config.slackNotifications?.webhookUrl ?? ''
+        };
+      }
     });
   }
 
@@ -573,6 +704,44 @@ export class AlertsComponent implements OnInit {
     this.alerts.update(current =>
       current.filter(a => a.alertId !== alert.alertId)
     );
+  }
+
+  /** Check if current user has admin or superadmin role */
+  isAdmin(): boolean {
+    const user = this.authService.currentUser();
+    if (!user) return false;
+    return user.roles?.some(r =>
+      r === 'ROLE_ADMIN' || r === 'ROLE_SUPER_ADMIN' || r === 'ADMIN' || r === 'SUPER_ADMIN'
+    ) ?? false;
+  }
+
+  /** Save alert configuration (admin only) */
+  saveConfiguration(): void {
+    this.configSaving.set(true);
+
+    const configToSave: AlertConfiguration = {
+      emailNotifications: {
+        enabled: this.editConfig.emailNotifications.enabled,
+        recipients: this.editConfig.emailRecipients
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0)
+      },
+      webhookNotifications: this.editConfig.webhookNotifications,
+      slackNotifications: this.editConfig.slackNotifications
+    };
+
+    this.backend.updateAlertConfiguration(configToSave).subscribe({
+      next: (savedConfig) => {
+        this.config.set(savedConfig);
+        this.configSaving.set(false);
+        this.configSaved.set(true);
+        setTimeout(() => this.configSaved.set(false), 3000);
+      },
+      error: () => {
+        this.configSaving.set(false);
+      }
+    });
   }
 
   formatTime(timestamp: string): string {
