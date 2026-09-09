@@ -10,10 +10,13 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
 
@@ -21,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
@@ -29,6 +33,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -59,10 +64,94 @@ public class DashboardController {
     private final RefDbService refDbService;
     private final StageRecordMapper mapper;
 
+    // SSE emitters for real-time dashboard state updates (keyed by "dashboard" for global broadcast)
+    private final Map<String, Set<SseEmitter>> dashboardEmitters = new ConcurrentHashMap<>();
+
     public DashboardController(RefDbService refDbService,
                                StageRecordMapper mapper) {
         this.refDbService = refDbService;
         this.mapper = mapper;
+    }
+
+    /**
+     * SSE endpoint for real-time dashboard state change events.
+     * Emits CP_TIMEOUT and COMPLETED_MANUAL_VERIFICATION_REQUIRED events when records
+     * transition to timeout states.
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping(value = "/states", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamStateChanges(jakarta.servlet.http.HttpServletResponse response) {
+        response.setContentType("text/event-stream");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Connection", "keep-alive");
+        response.setHeader("X-Accel-Buffering", "no");
+
+        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L); // 30 minute timeout
+        String channel = "dashboard";
+
+        dashboardEmitters.computeIfAbsent(channel, k -> ConcurrentHashMap.newKeySet()).add(emitter);
+
+        emitter.onCompletion(() -> {
+            log.debug("Dashboard state SSE emitter completed");
+            removeEmitter(channel, emitter);
+        });
+        emitter.onTimeout(() -> {
+            log.debug("Dashboard state SSE emitter timeout");
+            removeEmitter(channel, emitter);
+        });
+        emitter.onError(e -> {
+            log.debug("Dashboard state SSE emitter error: {}", e.getMessage());
+            removeEmitter(channel, emitter);
+        });
+
+        // Send initial connection event
+        try {
+            emitter.send(SseEmitter.event().comment("Dashboard state stream connected"));
+        } catch (Exception e) {
+            log.debug("Failed to send initial SSE event: {}", e.getMessage());
+        }
+
+        return emitter;
+    }
+
+    private void removeEmitter(String channel, SseEmitter emitter) {
+        Set<SseEmitter> emitters = dashboardEmitters.get(channel);
+        if (emitters != null) {
+            emitters.remove(emitter);
+        }
+    }
+
+    /**
+     * Broadcast a state change event to all connected dashboard SSE clients.
+     * Called by the monitoring service when records transition to timeout states.
+     */
+    public void broadcastStateChange(String eventType, String requestId,
+                                      String beforeState, String afterState, int count) {
+        String channel = "dashboard";
+        Set<SseEmitter> emitters = dashboardEmitters.get(channel);
+        if (emitters == null || emitters.isEmpty()) {
+            return;
+        }
+
+        Map<String, Object> eventData = Map.of(
+            "timestamp", Instant.now().toString(),
+            "requestId", requestId,
+            "beforeState", beforeState,
+            "afterState", afterState,
+            "count", count
+        );
+
+        Set<SseEmitter> failed = new HashSet<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().name(eventType).data(eventData));
+            } catch (Exception e) {
+                failed.add(emitter);
+            }
+        }
+        // Clean up failed emitters
+        emitters.removeAll(failed);
     }
 
     /**
