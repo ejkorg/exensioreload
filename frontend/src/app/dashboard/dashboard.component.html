@@ -128,6 +128,16 @@
     (clearFilters)="clearMiniFilters()"
   ></app-dashboard-filter-bar>
 
+  <!-- Active Site Filter Banner -->
+  <div class="site-filter-banner" *ngIf="siteFilter()">
+    <mat-icon class="filter-icon">filter_list</mat-icon>
+    <span class="filter-text">Viewing site: <strong>{{ siteFilter() }}</strong></span>
+    <button mat-button class="clear-site-filter" (click)="clearSiteFilter()">
+      <mat-icon>close</mat-icon>
+      Clear Filter
+    </button>
+  </div>
+
   <div class="dashboard-content" *ngIf="!error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
     <!-- Health Overview Card -->
     <section class="health-section" [class.layout-hidden]="!sectionVisible('health')" aria-labelledby="health-heading">

@@ -1485,6 +1485,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.dashState.applyFilters({ senderSearch: '', siteIds: [] });
   }
 
+  /** Clear only the site filter and update URL */
+  clearSiteFilter(): void {
+    this.siteFilter.set('');
+    this.dashState.applyFilters({ siteIds: [] });
+    // Remove site query parameter from URL
+    this.router.navigate([], {
+      queryParams: { site: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   /** Layout customization (Req 12.2): is this dashboard section visible? */
   sectionVisible(sectionId: string): boolean {
     const section = this.dashState.layout().sections.find((s) => s.id === sectionId);
