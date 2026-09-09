@@ -1,8 +1,18 @@
-import { Component, Input, forwardRef, signal, computed, ElementRef, ViewChild, ViewChildren, QueryList } from '@angular/core';
+import { OverlayModule } from '@angular/cdk/overlay';
 import { CommonModule } from '@angular/common';
+import {
+  Component,
+  computed,
+  ElementRef,
+  forwardRef,
+  Input,
+  QueryList,
+  signal,
+  ViewChild,
+  ViewChildren,
+} from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { OverlayModule } from '@angular/cdk/overlay';
 
 export interface GlassOption {
   value: any;
@@ -17,11 +27,17 @@ export interface GlassOption {
     {
       provide: NG_VALUE_ACCESSOR,
       useExisting: forwardRef(() => GlassSelectComponent),
-      multi: true
-    }
+      multi: true,
+    },
   ],
   template: `
-    <div class="glass-select-container" [class.is-open]="isOpen()" [class.has-value]="hasValue()" [class.disabled]="disabled" (keydown)="onContainerKeydown($event)">
+    <div
+      class="glass-select-container"
+      [class.is-open]="isOpen()"
+      [class.has-value]="hasValue()"
+      [class.disabled]="disabled"
+      (keydown)="onContainerKeydown($event)"
+    >
       <label *ngIf="label" class="floating-label">{{ label }}</label>
 
       <div
@@ -100,268 +116,281 @@ export interface GlassOption {
       </ng-template>
     </div>
   `,
-  styles: [`
-    :host {
-      display: block;
-      width: 100%;
-    }
-
-    .glass-select-container {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .floating-label {
-      font-size: 0.6875rem; // 11px - matches input component
-      font-weight: 700;
-      color: rgba(167, 139, 250, 0.85);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .select-trigger {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 1rem; // 12px 16px
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      cursor: pointer;
-      transition: all 0.3s ease;
-      min-height: 56px; // Matches input component
-      box-sizing: border-box;
-    }
-
-    /* Light theme support */
-    :host-context(body.light-theme) .select-trigger {
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(0, 0, 0, 0.15);
-    }
-
-    .select-trigger:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    :host-context(body.light-theme) .select-trigger:hover {
-      background: rgba(255, 255, 255, 1);
-      border-color: rgba(0, 0, 0, 0.25);
-    }
-
-    .is-open .select-trigger {
-      border-color: var(--accent-color);
-      box-shadow: 0 0 20px rgba(129, 140, 248, 0.15);
-    }
-
-    :host-context(body.light-theme) .is-open .select-trigger {
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-    }
-
-    .selected-content {
-      flex: 1;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      overflow: hidden;
-    }
-
-    .selected-label {
-      color: #fff;
-      font-size: 0.9375rem; // 15px - matches input font size
-      font-weight: 500;
-      line-height: 1.5; // Comfortable line height
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    :host-context(body.light-theme) .selected-label {
-      color: var(--text-main);
-    }
-
-    .placeholder {
-      color: var(--text-muted);
-      font-size: 0.875rem; // 14px - slightly smaller for placeholder
-      font-weight: 400;
-    }
-
-    :host-context(body.light-theme) .placeholder {
-      color: rgba(0, 0, 0, 0.4);
-    }
-
-    .prefix-icon, .chevron-icon {
-      color: rgba(167, 139, 250, 0.7);
-      font-size: 1.1rem;
-      width: 1.1rem;
-      height: 1.1rem;
-      flex-shrink: 0;
-    }
-
-    .is-open .chevron-icon {
-      transform: rotate(180deg);
-      color: #a78bfa;
-    }
-
-    .editable-trigger {
-      cursor: text;
-    }
-
-    .editable-input {
-      flex: 1;
-      min-width: 0;
-      border: none;
-      outline: none;
-      background: transparent;
-      color: #fff;
-      font-size: 0.9375rem;
-      font-weight: 500;
-      line-height: 1.5;
-      font-family: inherit;
-      padding: 0;
-    }
-
-    :host-context(body.light-theme) .editable-input {
-      color: var(--text-main);
-    }
-
-    .editable-input::placeholder {
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-
-    :host-context(body.light-theme) .editable-input::placeholder {
-      color: rgba(0, 0, 0, 0.4);
-    }
-
-    .custom-option {
-      font-style: italic;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      margin-bottom: 0.25rem;
-    }
-
-    .glass-dropdown-panel.light-theme .custom-option {
-      border-bottom-color: rgba(0, 0, 0, 0.08);
-    }
-
-    /* Dropdown Panel */
-    .glass-dropdown-panel {
-      margin-top: 8px;
-      max-height: 300px;
-      overflow-y: auto;
-      padding: 0.5rem;
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 14px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-      animation: fadeIn 0.2s ease-out;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-    }
-
-    .glass-dropdown-panel.light-theme {
-      background: #ffffff !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .glass-option {
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.2s ease;
-      outline: none;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .glass-option::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 255, 255, 0.06);
-      transition: left 0.3s ease-out;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .glass-option > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .glass-dropdown-panel.light-theme .glass-option {
-      color: var(--text-main);
-    }
-
-    .glass-option:hover,
-    .is-highlighted {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-
-      &::before {
-        left: 100%;
+  styles: [
+    `
+      :host {
+        display: block;
+        width: 100%;
       }
-    }
 
-    .glass-dropdown-panel.light-theme .glass-option:hover,
-    .glass-dropdown-panel.light-theme .is-highlighted {
-      background: rgba(79, 70, 229, 0.08);
-      color: var(--text-main);
-
-      &::before {
-        left: 100%;
+      .glass-select-container {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
       }
-    }
 
-    .is-selected {
-      background: rgba(129, 140, 248, 0.15) !important;
-      color: var(--accent-color) !important;
-      font-weight: 600;
-    }
+      .floating-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: rgba(203, 213, 225, 0.8);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        margin-bottom: 0.375rem;
+      }
 
-    .glass-dropdown-panel.light-theme .is-selected {
-      background: rgba(79, 70, 229, 0.12) !important;
-      color: var(--accent-color) !important;
-    }
+      .select-trigger {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0 0.875rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 40px;
+        box-sizing: border-box;
+      }
 
-    .check-icon {
+      /* Light theme support */
+      :host-context(body.light-theme) .select-trigger {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(0, 0, 0, 0.15);
+      }
+
+      .select-trigger:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      :host-context(body.light-theme) .select-trigger:hover {
+        background: rgba(255, 255, 255, 1);
+        border-color: rgba(0, 0, 0, 0.25);
+      }
+
+      .is-open .select-trigger {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 20px rgba(129, 140, 248, 0.15);
+      }
+
+      :host-context(body.light-theme) .is-open .select-trigger {
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      }
+
+      .selected-content {
+        flex: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        overflow: hidden;
+      }
+
+      .selected-label {
+        color: #fff;
+        font-size: 0.84rem;
+        font-weight: 500;
+        line-height: 1.4;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      :host-context(body.light-theme) .selected-label {
+        color: var(--text-main);
+      }
+
+      .placeholder {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        font-weight: 400;
+      }
+
+      :host-context(body.light-theme) .placeholder {
+        color: rgba(0, 0, 0, 0.4);
+      }
+
+      .prefix-icon,
+      .chevron-icon {
+        color: rgba(167, 139, 250, 0.7);
         font-size: 1.1rem;
         width: 1.1rem;
         height: 1.1rem;
-    }
+        flex-shrink: 0;
+      }
 
-    .no-options {
+      .is-open .chevron-icon {
+        transform: rotate(180deg);
+        color: #a78bfa;
+      }
+
+      .editable-trigger {
+        cursor: text;
+      }
+
+      .editable-input {
+        flex: 1;
+        min-width: 0;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: #fff;
+        font-size: 0.84rem;
+        font-weight: 500;
+        line-height: 1.4;
+        font-family: inherit;
+        padding: 0;
+      }
+
+      :host-context(body.light-theme) .editable-input {
+        color: var(--text-main);
+      }
+
+      .editable-input::placeholder {
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+
+      :host-context(body.light-theme) .editable-input::placeholder {
+        color: rgba(0, 0, 0, 0.4);
+      }
+
+      .custom-option {
+        font-style: italic;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 0.25rem;
+      }
+
+      .glass-dropdown-panel.light-theme .custom-option {
+        border-bottom-color: rgba(0, 0, 0, 0.08);
+      }
+
+      /* Dropdown Panel */
+      .glass-dropdown-panel {
+        margin-top: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 0.5rem;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        animation: fadeIn 0.2s ease-out;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+
+      .glass-dropdown-panel.light-theme {
+        background: #ffffff !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+        box-shadow:
+          0 10px 40px rgba(0, 0, 0, 0.12),
+          0 4px 12px rgba(0, 0, 0, 0.08) !important;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .glass-option {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+        outline: none;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .glass-option::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.06);
+        transition: left 0.3s ease-out;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .glass-option > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .glass-dropdown-panel.light-theme .glass-option {
+        color: var(--text-main);
+      }
+
+      .glass-option:hover,
+      .is-highlighted {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+
+        &::before {
+          left: 100%;
+        }
+      }
+
+      .glass-dropdown-panel.light-theme .glass-option:hover,
+      .glass-dropdown-panel.light-theme .is-highlighted {
+        background: rgba(79, 70, 229, 0.08);
+        color: var(--text-main);
+
+        &::before {
+          left: 100%;
+        }
+      }
+
+      .is-selected {
+        background: rgba(129, 140, 248, 0.15) !important;
+        color: var(--accent-color) !important;
+        font-weight: 600;
+      }
+
+      .glass-dropdown-panel.light-theme .is-selected {
+        background: rgba(79, 70, 229, 0.12) !important;
+        color: var(--accent-color) !important;
+      }
+
+      .check-icon {
+        font-size: 1.1rem;
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+
+      .no-options {
         padding: 1rem;
         color: var(--text-muted);
         text-align: center;
         font-style: italic;
-    }
+      }
 
-    .disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      .select-trigger { pointer-events: none; }
-    }
-  `]
+      .disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        .select-trigger {
+          pointer-events: none;
+        }
+      }
+    `,
+  ],
 })
 export class GlassSelectComponent implements ControlValueAccessor {
   @Input() label: string = '';
@@ -380,7 +409,9 @@ export class GlassSelectComponent implements ControlValueAccessor {
     this._options = val || [];
     this.optionsSignal.set(this._options);
   }
-  get options(): (GlassOption | string)[] { return this._options; }
+  get options(): (GlassOption | string)[] {
+    return this._options;
+  }
   private _options: (GlassOption | string)[] = [];
 
   @ViewChild('trigger') triggerElement!: ElementRef;
@@ -410,8 +441,8 @@ export class GlassSelectComponent implements ControlValueAccessor {
 
   constructor() {}
 
-  onChange: any = () => { };
-  onTouched: any = () => { };
+  onChange: any = () => {};
+  onTouched: any = () => {};
 
   isLightTheme(): boolean {
     return document.body.classList.contains('light-theme');
@@ -733,14 +764,14 @@ export class GlassSelectComponent implements ControlValueAccessor {
     if (this.multiple) {
       if (!Array.isArray(current) || current.length === 0) return '';
       const labels = current.map((v: any) => {
-        const opt = (this._options as any[]).find(o => this.getOptionValue(o) === v);
+        const opt = (this._options as any[]).find((o) => this.getOptionValue(o) === v);
         return opt ? this.getOptionLabel(opt) : v;
       });
       if (labels.length > 2) return `${labels.length} items selected`;
       return labels.join(', ');
     } else {
-      const opt = (this._options as any[]).find(o => this.getOptionValue(o) === current);
-      return opt ? this.getOptionLabel(opt) : (typeof current === 'string' ? current : '');
+      const opt = (this._options as any[]).find((o) => this.getOptionValue(o) === current);
+      return opt ? this.getOptionLabel(opt) : typeof current === 'string' ? current : '';
     }
   }
 
