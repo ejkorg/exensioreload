@@ -577,6 +577,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return Array.from(new Set(sites.map((s) => s.site))).sort();
   });
 
+  /** Sites to display in Active Sites section - filtered by sender search */
+  filteredSites = computed(() => {
+    const sites = this.snapshot()?.sites ?? [];
+    const query = (this.senderSearch() || '').trim().toLowerCase();
+    if (!query) return sites;
+
+    // Only show sites that have at least one sender matching the search
+    return sites.filter((site) =>
+      site.senders.some(
+        (sender) =>
+          sender.senderLabel.toLowerCase().includes(query) ||
+          String(sender.senderId).includes(query) ||
+          sender.site.toLowerCase().includes(query)
+      )
+    );
+  });
+
   /** True when sender list filters are active (drives "Clear all filters"). */
   miniFiltersActive = computed(() => (this.senderSearch() || '').trim().length > 0 || this.siteFilter() !== '');
 

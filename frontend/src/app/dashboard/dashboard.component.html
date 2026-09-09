@@ -544,10 +544,10 @@
         <h2 class="section-title">Active Sites</h2>
         <span class="site-count">{{ snapshot()?.sites?.length || 0 }} operational</span>
       </div>
-      <div class="sites-grid" *ngIf="snapshot() as snap; else loadingState">
+      <div class="sites-grid" *ngIf="filteredSites() as sites; else loadingState">
         <div
-          *ngFor="let site of snap.sites"
-          class="site-panel"
+          *ngFor="let site of sites"
+          class="site-card glass-panel"
           [class.site-card-selected]="siteFilter() === site.site"
           (click)="onSiteClick(site)"
           role="button"
@@ -610,8 +610,13 @@
         </div>
       </div>
       <ng-template #loadingState>
-        <div class="skeleton-grid">
+        <div class="skeleton-grid" *ngIf="!snapshot()">
           <div class="skeleton-card" *ngFor="let i of [1, 2, 3, 4]"></div>
+        </div>
+        <div class="empty-state-container" *ngIf="snapshot() && filteredSites().length === 0">
+          <mat-icon class="empty-icon">search_off</mat-icon>
+          <h3>No Matching Sites</h3>
+          <p>No sites have senders matching your search. Try a different search term.</p>
         </div>
       </ng-template>
     </section>
