@@ -112,7 +112,9 @@ public class DashboardController {
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no");
 
-        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L); // 30 minute timeout
+        // Use 2-minute timeout with heartbeat to keep connection alive
+        // Frontend will reconnect with fresh token when needed
+        SseEmitter emitter = new SseEmitter(2 * 60 * 1000L);
         String channel = "dashboard";
 
         dashboardEmitters.computeIfAbsent(channel, k -> ConcurrentHashMap.newKeySet()).add(emitter);
@@ -137,7 +139,32 @@ public class DashboardController {
             log.debug("Failed to send initial SSE event: {}", e.getMessage());
         }
 
+        // Send periodic heartbeat to keep connection alive
+        sendHeartbeat(emitter);
+
         return emitter;
+    }
+
+    /**
+     * Send periodic heartbeat comments to keep SSE connection alive.
+     */
+    private void sendHeartbeat(SseEmitter emitter) {
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                // Send heartbeat every 30 seconds
+                for (int i = 0; i < 4; i++) { // 4 heartbeats = 2 minutes total
+                    Thread.sleep(30_000);
+                    try {
+                        emitter.send(SseEmitter.event().comment("heartbeat"));
+                    } catch (Exception e) {
+                        // Connection closed, stop heartbeat
+                        break;
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     private void removeEmitter(String channel, SseEmitter emitter) {

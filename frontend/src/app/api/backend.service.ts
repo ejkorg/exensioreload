@@ -1264,52 +1264,80 @@ export class BackendService {
    */
   connectDashboardStateStream(): Observable<StateChangeEvent> {
     return new Observable<StateChangeEvent>((observer) => {
-      // Get auth token for SSE (EventSource can't send custom headers)
-      const token = this.authService.getToken();
-      const url = token
-        ? `${this.apiUrl}/dashboard/states?token=${encodeURIComponent(token)}`
-        : `${this.apiUrl}/dashboard/states`;
+      let eventSource: EventSource | null = null;
+      let reconnectAttempts = 0;
+      const maxReconnectAttempts = 5;
+      let isDisposed = false;
 
-      try {
-        const eventSource = new EventSource(url);
+      const connect = () => {
+        if (isDisposed) return;
 
-        eventSource.addEventListener('CP_TIMEOUT', (event: any) => {
-          try {
-            const data: StateChangeEvent = JSON.parse(event.data);
-            observer.next(data);
-          } catch (e) {
-            console.error('Failed to parse ENRICHMENT_TIMEOUT event:', e);
+        // Get fresh auth token for SSE (EventSource can't send custom headers)
+        const token = this.authService.getToken();
+        const url = token
+          ? `${this.apiUrl}/dashboard/states?token=${encodeURIComponent(token)}`
+          : `${this.apiUrl}/dashboard/states`;
+
+        try {
+          eventSource = new EventSource(url);
+
+          eventSource.addEventListener('CP_TIMEOUT', (event: any) => {
+            try {
+              const data: StateChangeEvent = JSON.parse(event.data);
+              observer.next(data);
+              reconnectAttempts = 0; // Reset on successful data
+            } catch (e) {
+              console.error('Failed to parse CP_TIMEOUT event:', e);
+            }
+          });
+
+          eventSource.addEventListener('COMPLETED_MANUAL_VERIFICATION_REQUIRED', (event: any) => {
+            try {
+              const data: StateChangeEvent = JSON.parse(event.data);
+              observer.next(data);
+              reconnectAttempts = 0; // Reset on successful data
+            } catch (e) {
+              console.error('Failed to parse COMPLETED_MANUAL_VERIFICATION_REQUIRED event:', e);
+            }
+          });
+
+          eventSource.addEventListener('error', () => {
+            if (isDisposed) return;
+
+            console.warn('Dashboard state stream error, attempting reconnect...');
+            eventSource?.close();
+
+            // Attempt to reconnect with exponential backoff
+            if (reconnectAttempts < maxReconnectAttempts) {
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Max 30s delay
+              reconnectAttempts++;
+              setTimeout(connect, delay);
+            } else {
+              console.error('Dashboard state stream: max reconnect attempts reached');
+              observer.error(new Error('Dashboard state stream closed'));
+            }
+          });
+
+          eventSource.onopen = () => {
+            console.log('Dashboard state stream connected');
+            reconnectAttempts = 0;
+          };
+        } catch (error) {
+          if (!isDisposed) {
+            console.error('Failed to connect to dashboard state stream:', error);
+            observer.error(error);
           }
-        });
+        }
+      };
 
-        eventSource.addEventListener('COMPLETED_MANUAL_VERIFICATION_REQUIRED', (event: any) => {
-          try {
-            const data: StateChangeEvent = JSON.parse(event.data);
-            observer.next(data);
-          } catch (e) {
-            console.error('Failed to parse EXENSIO_TIMEOUT event:', e);
-          }
-        });
+      // Initial connection
+      connect();
 
-        eventSource.addEventListener('error', () => {
-          console.error('Dashboard state stream error');
-          eventSource.close();
-          observer.error(new Error('Dashboard state stream closed'));
-        });
-
-        eventSource.onopen = () => {
-          console.log('Dashboard state stream connected');
-        };
-
-        // Cleanup function
-        return () => {
-          eventSource.close();
-        };
-      } catch (error) {
-        console.error('Failed to connect to dashboard state stream:', error);
-        observer.error(error);
-        return () => {};
-      }
+      // Cleanup function
+      return () => {
+        isDisposed = true;
+        eventSource?.close();
+      };
     });
   }
 }
