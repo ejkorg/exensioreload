@@ -16,8 +16,20 @@ Environment="JAVA_OPTS=-Duser.timezone=UTC -Xmx2g -Xms512m -XX:+UseG1GC"
 
 # Application configuration via environment variables
 Environment="SPRING_PROFILES_ACTIVE=production"
+# IMPORTANT: CP_ES_URL should be the BASE URL only (e.g., https://elasticsearch:9200)
+# DO NOT include the index pattern or /_search endpoint - the backend will add these automatically
 Environment="CP_ES_URL=https://your-elasticsearch:9200"
 Environment="CP_ES_API_KEY=your-api-key-here"
+# OR use basic auth instead of API key:
+# Environment="CP_ES_USERNAME=your-username"
+# Environment="CP_ES_PASSWORD=your-password"
+
+# Exensio integration (set EXENSIO_ENABLED=true to activate)
+Environment="EXENSIO_ENABLED=true"
+Environment="EXENSIO_ENV=PROD"
+Environment="EXENSIO_PROD_URL=https://your-exensio-api:8080/api"
+Environment="EXENSIO_USERNAME=your-username"
+Environment="EXENSIO_PASSWORD=your-password"
 
 # Optional: Set OS timezone as well (defense in depth)
 Environment="TZ=UTC"
