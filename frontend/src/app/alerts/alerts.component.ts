@@ -156,30 +156,30 @@ interface Alert {
       <div class="config-section">
         <h2>Notification Configuration</h2>
         <div class="config-cards">
-          <div class="config-card" [class.enabled]="config.emailNotifications?.enabled">
+          <div class="config-card" [class.enabled]="config().emailNotifications?.enabled">
             <mat-icon>email</mat-icon>
             <div class="config-info">
               <span class="config-title">Email Notifications</span>
               <span class="config-status">
-                {{ config.emailNotifications?.enabled ? 'Enabled' : 'Disabled' }}
+                {{ config().emailNotifications?.enabled ? 'Enabled' : 'Disabled' }}
               </span>
             </div>
           </div>
-          <div class="config-card" [class.enabled]="config.webhookNotifications?.enabled">
+          <div class="config-card" [class.enabled]="config().webhookNotifications?.enabled">
             <mat-icon>webhook</mat-icon>
             <div class="config-info">
               <span class="config-title">Webhook</span>
               <span class="config-status">
-                {{ config.webhookNotifications?.enabled ? 'Enabled' : 'Disabled' }}
+                {{ config().webhookNotifications?.enabled ? 'Enabled' : 'Disabled' }}
               </span>
             </div>
           </div>
-          <div class="config-card" [class.enabled]="config.slackNotifications?.enabled">
+          <div class="config-card" [class.enabled]="config().slackNotifications?.enabled">
             <mat-icon>chat</mat-icon>
             <div class="config-info">
               <span class="config-title">Slack</span>
               <span class="config-status">
-                {{ config.slackNotifications?.enabled ? 'Enabled' : 'Disabled' }}
+                {{ config().slackNotifications?.enabled ? 'Enabled' : 'Disabled' }}
               </span>
             </div>
           </div>
@@ -501,8 +501,8 @@ export class AlertsComponent implements OnInit {
     emailNotifications: { enabled: false, recipients: [] },
     webhookNotifications: { enabled: false, url: '' },
     slackNotifications: { enabled: false, webhookUrl: '' },
-    defaultSeverity: null,
-    retentionDays: null
+    defaultSeverity: undefined,
+    retentionDays: undefined
   });
 
   selectedFilter = signal<string>('all');
