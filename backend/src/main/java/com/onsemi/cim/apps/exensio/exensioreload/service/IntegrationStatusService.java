@@ -95,8 +95,11 @@ public class IntegrationStatusService {
             long completedCount,
             long failedCount) {
         Map<String, Object> result = new HashMap<>();
-        result.put("elasticsearch", toEsMap(esStatusByRequest.get(requestId), esConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
-        result.put("exensio", toExensioMap(exensioStatusByRequest.get(requestId), exensioConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
+        // Handle null requestId (e.g., when called without an active session)
+        IntegrationStatus esStatus = requestId != null ? esStatusByRequest.get(requestId) : null;
+        IntegrationStatus exStatus = requestId != null ? exensioStatusByRequest.get(requestId) : null;
+        result.put("elasticsearch", toEsMap(esStatus, esConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
+        result.put("exensio", toExensioMap(exStatus, exensioConfigured, stagedCount, queuedCount, enrichingCount, exensioCount, completedCount, failedCount));
         return result;
     }
 
