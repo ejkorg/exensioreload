@@ -841,8 +841,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       :host-context(body.light-theme) .filter-label {
         color: #475569;
       }
-        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08);
-      }
+
       .table-meta-bar {
         display: flex;
         align-items: center;
