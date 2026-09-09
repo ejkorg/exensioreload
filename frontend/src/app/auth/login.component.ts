@@ -394,8 +394,12 @@ export class LoginComponent implements OnInit {
     // ssoEnabled is already populated by APP_INITIALIZER before this page renders
     this.ssoEnabled.set(this.auth.ssoEnabled);
 
-    // Attempt silent SSO on page load if SSO is enabled and user is not coming from logout
-    if (this.auth.ssoEnabled && reason !== 'logout' && reason !== 'expired') {
+    // Attempt silent SSO on page load if:
+    // - SSO is enabled
+    // - User is not coming from logout or expired session
+    // - Silent SSO has not already failed (prevents infinite loop)
+    const silentFailed = this.route.snapshot.queryParamMap.get('silent') === 'failed';
+    if (this.auth.ssoEnabled && reason !== 'logout' && reason !== 'expired' && !silentFailed) {
       this.attemptSilentSso();
     }
   }
