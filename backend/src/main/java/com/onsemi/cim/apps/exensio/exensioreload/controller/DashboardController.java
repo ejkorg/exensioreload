@@ -265,7 +265,7 @@ public class DashboardController {
 
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     @GetMapping("/snapshot")
-    public DashboardSnapshot snapshot(@RequestParam(required = false) java.util.List<String> devices) {
+    public ResponseEntity<DashboardSnapshot> snapshot(@RequestParam(required = false) java.util.List<String> devices) {
         // GET /api/dashboard/snapshot - Get dashboard snapshot with optional device filtering
         // Requirements: 4.2, 7.1, 7.2
         long startTime = System.currentTimeMillis();
@@ -325,8 +325,14 @@ public class DashboardController {
 
         sites.sort(Comparator.comparingLong((DashboardSiteSnapshot s) -> s.metrics().backlog()).reversed());
 
+        DashboardSnapshot result = new DashboardSnapshot(Instant.now(), globalAcc.toTotals(), List.copyOf(sites));
         log.debug("Dashboard snapshot: total took {}ms, returning {} sites", System.currentTimeMillis() - startTime, sites.size());
-        return new DashboardSnapshot(Instant.now(), globalAcc.toTotals(), List.copyOf(sites));
+
+        // Add HTTP caching headers - allow browser to cache for 5 seconds
+        return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.maxAge(5, java.util.concurrent.TimeUnit.SECONDS).cachePrivate())
+                .eTag(String.valueOf(result.hashCode()))
+                .body(result);
     }
 
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")

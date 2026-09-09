@@ -63,6 +63,11 @@ public class RefDbService {
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
+    // Simple time-based cache for dashboard snapshot (5 second TTL)
+    private volatile List<StageStatus> cachedStatuses;
+    private volatile long cacheTimestamp;
+    private static final long CACHE_TTL_MS = 5000; // 5 seconds
+
     public RefDbService(RefDbProperties properties,
                         PpLogDbProperties ppLogDbProperties,
                         com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService monitorService,
@@ -374,8 +379,18 @@ public class RefDbService {
             log.error("SQLException during stagePayloads", ex);
             throw new IllegalStateException("Failed staging payloads", ex);
         }
+        // Invalidate cache when data changes
+        invalidateCache();
         log.info("stagePayloads completed successfully: inserted={} requeued={} duplicates={}", inserted, requeued, duplicates.size());
         return new StageResult(inserted, duplicates, requeued);
+    }
+
+    /**
+     * Invalidates the dashboard cache. Call this when stage data changes.
+     */
+    public void invalidateCache() {
+        cachedStatuses = null;
+        cacheTimestamp = 0;
     }
 
     /** Returns int[2]: [0]=freshInserted, [1]=requeued */
@@ -1112,6 +1127,16 @@ public class RefDbService {
 
     public List<StageStatus> fetchStatuses(String requestId) {
         long startTime = System.currentTimeMillis();
+
+        // Return cached result if available and not expired (only for non-request-specific queries)
+        if ((requestId == null || requestId.isBlank()) && cachedStatuses != null) {
+            long age = System.currentTimeMillis() - cacheTimestamp;
+            if (age < CACHE_TTL_MS) {
+                log.debug("fetchStatuses: returning cached result (age={}ms)", age);
+                return cachedStatuses;
+            }
+        }
+
         String table = properties.getStagingTable();
         List<StageStatus> statuses = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
@@ -1173,6 +1198,13 @@ public class RefDbService {
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed loading stage status", ex);
         }
+
+        // Cache the result for non-request-specific queries (dashboard use case)
+        if (requestId == null || requestId.isBlank()) {
+            cachedStatuses = statuses;
+            cacheTimestamp = System.currentTimeMillis();
+        }
+
         log.debug("fetchStatuses: total took {}ms, returning {} statuses", System.currentTimeMillis() - startTime, statuses.size());
         return statuses;
     }
