@@ -547,13 +547,15 @@
       <div class="sites-grid" *ngIf="snapshot() as snap; else loadingState">
         <div
           *ngFor="let site of snap.sites"
-          class="site-card glass-panel"
+          class="site-panel"
+          [class.site-card-selected]="siteFilter() === site.site"
           (click)="onSiteClick(site)"
           role="button"
           tabindex="0"
           (keydown.enter)="onSiteClick(site)"
           (keydown.space)="onSiteClick(site)"
-          [attr.aria-label]="'Open site details for ' + site.site"
+          [attr.aria-label]="'Filter by site ' + site.site"
+          [attr.aria-pressed]="siteFilter() === site.site"
         >
           <div class="site-card-header">
             <div class="site-title-block">
@@ -603,16 +605,6 @@
             >
               <mat-icon>arrow_forward</mat-icon>
               View Details
-            </button>
-            <button
-              mat-stroked-button
-              class="view-dashboard"
-              [routerLink]="[]"
-              [queryParams]="{ site: site.site }"
-              (click)="$event.stopPropagation()"
-            >
-              <mat-icon>insights</mat-icon>
-              View Site
             </button>
           </div>
         </div>

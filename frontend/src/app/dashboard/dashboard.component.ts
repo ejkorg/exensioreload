@@ -749,27 +749,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onSiteClick(site: DashboardSiteSnapshot): void {
-    if (window.innerWidth < 768) {
-      const dialogRef = this.dialog.open(SiteDetailModalComponent, {
-        data: { site },
-        panelClass: 'site-detail-modal-panel',
-        width: '100vw',
-        maxWidth: '100vw',
-        height: '100vh',
-        maxHeight: '100vh',
+    // Toggle site filter on click
+    const currentFilter = this.siteFilter();
+    if (currentFilter === site.site) {
+      // Clicking the same site clears the filter
+      this.clearSiteFilter();
+    } else {
+      // Clicking a different site filters by that site
+      this.siteFilter.set(site.site);
+      this.dashState.applyFilters({ siteIds: [site.site] });
+      // Update URL with site query parameter
+      this.router.navigate([], {
+        queryParams: { site: site.site },
+        queryParamsHandling: 'merge',
       });
-
-      dialogRef.afterClosed().then((result) => {
-        if (result?.action === 'refresh') {
-          this.refresh();
-        } else if (result?.action === 'resume') {
-          this.resumeMonitoring();
-        }
-      });
-      return;
     }
-
-    this.toggleSiteSenders(site.site);
   }
 
   private loadSnapshot(showLoading: boolean) {
