@@ -69,31 +69,31 @@ public class AlertMonitoringService {
     }
 
     private void checkBacklogThreshold(StageStatus status, AlertThreshold threshold) {
-        int backlog = status.backlog();
-        int thresholdValue = threshold.backlogThreshold() != null ? threshold.backlogThreshold() : 1000;
+        long backlog = status.backlog();
+        int thresholdValue = threshold.backlogThreshold() > 0 ? threshold.backlogThreshold() : 1000;
 
         if (backlog >= thresholdValue) {
             String alertType = "BACKLOG_THRESHOLD";
             // Don't create duplicate active alerts
             if (!alertRepository.existsBySenderIdAndAlertTypeAndStatus(status.senderId(), alertType, "ACTIVE")) {
-                String severity = backlog >= thresholdValue * 2 ? "CRITICAL" : "WARNING";
+                String severity = backlog >= thresholdValue * 2L ? "CRITICAL" : "WARNING";
                 String message = String.format("Sender %d backlog (%d) exceeds threshold (%d)",
                         status.senderId(), backlog, thresholdValue);
 
-                Alert alert = createAlert(status, alertType, severity, thresholdValue, backlog, message);
+                Alert alert = createAlert(status, alertType, severity, thresholdValue, (int) backlog, message);
                 notificationService.sendNotification(alert);
             }
         }
     }
 
     private void checkFailureRateThreshold(StageStatus status, AlertThreshold threshold) {
-        int total = status.total();
-        int failed = status.totalFailed();
+        long total = status.total();
+        long failed = status.totalFailed();
 
         if (total < 10) return; // Not enough data
 
         double failureRate = (failed * 100.0) / total;
-        int thresholdValue = threshold.failureRateThreshold() != null ? threshold.failureRateThreshold() : 10;
+        int thresholdValue = threshold.failureRateThreshold() > 0 ? threshold.failureRateThreshold() : 10;
 
         if (failureRate >= thresholdValue) {
             String alertType = "FAILURE_RATE";
@@ -134,9 +134,9 @@ public class AlertMonitoringService {
     public AlertThreshold updateThreshold(int senderId, AlertThreshold threshold) {
         AlertThreshold resolved = new AlertThreshold(
                 senderId,
-                threshold.backlogThreshold() != null ? threshold.backlogThreshold() : 1000,
-                threshold.failureRateThreshold() != null ? threshold.failureRateThreshold() : 10,
-                threshold.enabled() != null ? threshold.enabled() : true,
+                threshold.backlogThreshold() > 0 ? threshold.backlogThreshold() : 1000,
+                threshold.failureRateThreshold() > 0 ? threshold.failureRateThreshold() : 10,
+                threshold.enabled(),
                 threshold.createdAt(),
                 Instant.now().toString()
         );
