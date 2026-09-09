@@ -1,6 +1,7 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.IntegrationStatusProperties;
+import org.springframework.boot.actuate.health.Health;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -34,11 +35,19 @@ public class IntegrationStatusService {
 
     private final IntegrationStatusProperties properties;
 
+    // Health indicators for real connection checks
+    private final ElasticsearchHealthIndicator elasticsearchHealthIndicator;
+    private final ExensioHealthIndicator exensioHealthIndicator;
+
     // Scheduled executor for periodic eviction tasks
     private final ScheduledExecutorService evictionScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    public IntegrationStatusService(IntegrationStatusProperties properties) {
+    public IntegrationStatusService(IntegrationStatusProperties properties,
+                                    ElasticsearchHealthIndicator elasticsearchHealthIndicator,
+                                    ExensioHealthIndicator exensioHealthIndicator) {
         this.properties = properties;
+        this.elasticsearchHealthIndicator = elasticsearchHealthIndicator;
+        this.exensioHealthIndicator = exensioHealthIndicator;
         // Schedule periodic eviction every 5 minutes
         evictionScheduler.scheduleAtFixedRate(this::evictExpiredEntries, 5, 5, TimeUnit.MINUTES);
     }
@@ -243,9 +252,29 @@ public class IntegrationStatusService {
             return out;
         }
 
-        out.put("status", "pending");
-        out.put("message", "Waiting for first check");
-        out.put("lastAt", null);
+        // No records processing and no in-memory status - perform real health check
+        return checkElasticsearchHealth();
+    }
+
+    private Map<String, Object> checkElasticsearchHealth() {
+        Map<String, Object> out = new HashMap<>();
+        out.put("configured", true);
+        try {
+            Health health = elasticsearchHealthIndicator.health();
+            boolean isUp = health.getStatus() != null && "UP".equals(health.getStatus().getCode());
+            if (isUp) {
+                out.put("status", "success");
+                out.put("message", "Connected");
+            } else {
+                out.put("status", "failure");
+                out.put("message", "Connection failed");
+            }
+            out.put("lastAt", Instant.now().toString());
+        } catch (Exception e) {
+            out.put("status", "failure");
+            out.put("message", "Connection error: " + e.getMessage());
+            out.put("lastAt", Instant.now().toString());
+        }
         return out;
     }
 
@@ -304,9 +333,29 @@ public class IntegrationStatusService {
             return out;
         }
 
-        out.put("status", "pending");
-        out.put("message", "Waiting for first check");
-        out.put("lastAt", null);
+        // No records processing and no in-memory status - perform real health check
+        return checkExensioHealth();
+    }
+
+    private Map<String, Object> checkExensioHealth() {
+        Map<String, Object> out = new HashMap<>();
+        out.put("configured", true);
+        try {
+            Health health = exensioHealthIndicator.health();
+            boolean isUp = health.getStatus() != null && "UP".equals(health.getStatus().getCode());
+            if (isUp) {
+                out.put("status", "success");
+                out.put("message", "Connected");
+            } else {
+                out.put("status", "failure");
+                out.put("message", "Connection failed");
+            }
+            out.put("lastAt", Instant.now().toString());
+        } catch (Exception e) {
+            out.put("status", "failure");
+            out.put("message", "Connection error: " + e.getMessage());
+            out.put("lastAt", Instant.now().toString());
+        }
         return out;
     }
 
