@@ -394,26 +394,25 @@ export class LoginComponent implements OnInit {
     // ssoEnabled is already populated by APP_INITIALIZER before this page renders
     this.ssoEnabled.set(this.auth.ssoEnabled);
 
-    // Attempt silent SSO on page load if:
-    // - SSO is enabled
-    // - User is not coming from logout or expired session
-    // - Silent SSO has not already failed (prevents infinite loop)
+    // When SSO is enabled, automatically redirect to interactive SSO
+    // Microsoft will use existing session (Teams, Outlook) without prompting for credentials
     const silentFailed = this.route.snapshot.queryParamMap.get('silent') === 'failed';
     if (this.auth.ssoEnabled && reason !== 'logout' && reason !== 'expired' && !silentFailed) {
-      this.attemptSilentSso();
+      this.attemptAutoSso();
     }
   }
 
   /**
-   * Attempt silent SSO authentication using existing Microsoft Entra session.
-   * If successful, user is automatically logged in without prompting for credentials.
+   * Automatically redirect to SSO authentication.
+   * First tries silent SSO (prompt=none), then falls back to interactive SSO.
+   * Microsoft will use existing session if available.
    */
-  private attemptSilentSso(): void {
+  private attemptAutoSso(): void {
     this.ssoLoading.set(true);
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/';
     const safeUrl = this.getSafeReturnUrl(returnUrl);
-    // Redirect to silent SSO endpoint which uses prompt=none
-    window.location.href = `${environment.apiUrl}/auth/sso/silent?returnUrl=${encodeURIComponent(safeUrl)}`;
+    // Redirect to interactive SSO endpoint - Microsoft will use existing session
+    window.location.href = `${environment.apiUrl}/auth/sso/initiate?returnUrl=${encodeURIComponent(safeUrl)}`;
   }
 
   onSsoLogin(): void {
