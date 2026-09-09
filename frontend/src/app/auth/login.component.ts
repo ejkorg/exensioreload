@@ -393,6 +393,23 @@ export class LoginComponent implements OnInit {
 
     // ssoEnabled is already populated by APP_INITIALIZER before this page renders
     this.ssoEnabled.set(this.auth.ssoEnabled);
+
+    // Attempt silent SSO on page load if SSO is enabled and user is not coming from logout
+    if (this.auth.ssoEnabled && reason !== 'logout' && reason !== 'expired') {
+      this.attemptSilentSso();
+    }
+  }
+
+  /**
+   * Attempt silent SSO authentication using existing Microsoft Entra session.
+   * If successful, user is automatically logged in without prompting for credentials.
+   */
+  private attemptSilentSso(): void {
+    this.ssoLoading.set(true);
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/';
+    const safeUrl = this.getSafeReturnUrl(returnUrl);
+    // Redirect to silent SSO endpoint which uses prompt=none
+    window.location.href = `${environment.apiUrl}/auth/sso/silent?returnUrl=${encodeURIComponent(safeUrl)}`;
   }
 
   onSsoLogin(): void {

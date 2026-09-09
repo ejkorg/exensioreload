@@ -82,6 +82,21 @@
     </div>
   </section>
 
+  <!-- Loading Skeleton -->
+  <div class="analytics-loading" *ngIf="loading() && !hasData()">
+    <div class="skeleton-summary">
+      <div class="skeleton-card" *ngFor="let i of [1, 2, 3, 4]"></div>
+    </div>
+    <div class="skeleton-charts">
+      <div class="skeleton-chart skeleton-chart-wide"></div>
+      <div class="skeleton-chart-row">
+        <div class="skeleton-chart"></div>
+        <div class="skeleton-chart"></div>
+      </div>
+    </div>
+    <p class="loading-text">Loading analytics data...</p>
+  </div>
+
   <div class="error-container" *ngIf="error() as err">
     <mat-icon aria-hidden="true">error_outline</mat-icon>
     <p>{{ err }}</p>
@@ -94,7 +109,7 @@
     <p>Data will appear once dashboard snapshots are available.</p>
   </div>
 
-  <section class="charts-grid" *ngIf="!error() && hasData()">
+  <section class="charts-grid" *ngIf="!loading() && !error() && hasData()">
     <article class="chart-card glass-panel chart-wide">
       <div class="chart-header">
         <h2>Hourly Trend Overview</h2>
