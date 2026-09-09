@@ -1111,6 +1111,7 @@ public class RefDbService {
     }
 
     public List<StageStatus> fetchStatuses(String requestId) {
+        long startTime = System.currentTimeMillis();
         String table = properties.getStagingTable();
         List<StageStatus> statuses = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
@@ -1133,12 +1134,17 @@ public class RefDbService {
         sql.append(" GROUP BY site, sender_id");
 
         try (Connection connection = dataSource.getConnection()) {
+            long userBreakdownStart = System.currentTimeMillis();
             Map<StageStatusKey, List<StageUserStatus>> userBreakdown = fetchUserBreakdown(connection, table, null, null, requestId);
+            log.debug("fetchStatuses: fetchUserBreakdown took {}ms", System.currentTimeMillis() - userBreakdownStart);
+
             try (PreparedStatement ps = connection.prepareStatement(sql.toString())) {
                 for (int i = 0; i < params.size(); i++) {
                     ps.setString(i + 1, params.get(i).toString());
                 }
+                long queryStart = System.currentTimeMillis();
                 try (ResultSet rs = ps.executeQuery()) {
+                    log.debug("fetchStatuses: main query took {}ms", System.currentTimeMillis() - queryStart);
                     while (rs.next()) {
                         String site = rs.getString(1);
                         int senderId = rs.getInt(2);
@@ -1167,6 +1173,7 @@ public class RefDbService {
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed loading stage status", ex);
         }
+        log.debug("fetchStatuses: total took {}ms, returning {} statuses", System.currentTimeMillis() - startTime, statuses.size());
         return statuses;
     }
 

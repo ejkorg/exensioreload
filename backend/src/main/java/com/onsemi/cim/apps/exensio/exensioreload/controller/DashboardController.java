@@ -241,8 +241,11 @@ public class DashboardController {
     public DashboardSnapshot snapshot(@RequestParam(required = false) java.util.List<String> devices) {
         // GET /api/dashboard/snapshot - Get dashboard snapshot with optional device filtering
         // Requirements: 4.2, 7.1, 7.2
+        long startTime = System.currentTimeMillis();
+        log.debug("Dashboard snapshot request received");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         List<StageStatus> statuses = resolveStatuses(auth);
+        log.debug("Dashboard snapshot: fetchStatuses took {}ms, got {} statuses", System.currentTimeMillis() - startTime, statuses.size());
         
         // Note: Device filtering would be applied in the underlying query logic
         // For now, we accept the parameter for API compatibility
@@ -295,6 +298,7 @@ public class DashboardController {
 
         sites.sort(Comparator.comparingLong((DashboardSiteSnapshot s) -> s.metrics().backlog()).reversed());
 
+        log.debug("Dashboard snapshot: total took {}ms, returning {} sites", System.currentTimeMillis() - startTime, sites.size());
         return new DashboardSnapshot(Instant.now(), globalAcc.toTotals(), List.copyOf(sites));
     }
 

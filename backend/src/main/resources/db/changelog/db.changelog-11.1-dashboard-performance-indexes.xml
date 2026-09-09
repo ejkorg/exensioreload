@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!--
+        Dashboard Performance: Add composite index for aggregation query
+        
+        The fetchStatuses query groups by site, sender_id and uses multiple
+        SUM CASE statements on status. This composite index optimizes that query.
+    -->
+
+    <changeSet id="11.1-create-dashboard-aggregation-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE"/>
+                <not>
+                    <indexExists indexName="idx_sender_stage_dashboard_agg" tableName="SENDER_STAGE"/>
+                </not>
+            </and>
+        </preConditions>
+
+        <comment>
+            Create composite index for dashboard aggregation query.
+            
+            Optimizes:
+            SELECT site, sender_id, COUNT(*), 
+                   SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), ...
+            FROM SENDER_STAGE
+            GROUP BY site, sender_id
+        </comment>
+
+        <createIndex indexName="idx_sender_stage_dashboard_agg" tableName="SENDER_STAGE">
+            <column name="site" />
+            <column name="sender_id" />
+            <column name="status" />
+        </createIndex>
+
+        <rollback>
+            <dropIndex indexName="idx_sender_stage_dashboard_agg" tableName="SENDER_STAGE"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

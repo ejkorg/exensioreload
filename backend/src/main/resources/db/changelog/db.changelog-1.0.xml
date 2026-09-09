@@ -409,5 +409,7 @@
     <include file="db.changelog-10.1-discovery-metadata-columns.xml" relativeToChangelogFile="true" />
     <!-- Alerts system: threshold-based monitoring and notification -->
     <include file="db.changelog-11.0-create-alerts-table.xml" relativeToChangelogFile="true" />
+    <!-- Dashboard performance: aggregation query optimization -->
+    <include file="db.changelog-11.1-dashboard-performance-indexes.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>
