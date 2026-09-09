@@ -583,13 +583,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const query = (this.senderSearch() || '').trim().toLowerCase();
     if (!query) return sites;
 
-    // Only show sites that have at least one sender matching the search
+    // Only show sites that have at least one sender or site name matching the search
     return sites.filter((site) =>
+      site.site.toLowerCase().includes(query) ||
       site.senders.some(
         (sender) =>
           sender.senderLabel.toLowerCase().includes(query) ||
-          String(sender.senderId).includes(query) ||
-          sender.site.toLowerCase().includes(query)
+          String(sender.senderId).includes(query)
       )
     );
   });
