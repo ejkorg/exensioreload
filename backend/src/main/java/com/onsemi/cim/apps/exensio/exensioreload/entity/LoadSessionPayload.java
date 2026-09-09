@@ -40,6 +40,15 @@ public class LoadSessionPayload {
     @Column(name = "device", length = 100)
     private String device;
 
+    @Column(name = "step", length = 100)
+    private String step;
+
+    @Column(name = "tester_id", length = 100)
+    private String testerId;
+
+    @Column(name = "test_program", length = 200)
+    private String testProgram;
+
     public LoadSessionPayload() {}
 
     public LoadSessionPayload(LoadSession session, String payloadId) {
@@ -75,6 +84,15 @@ public class LoadSessionPayload {
 
     public String getDevice() { return device; }
     public void setDevice(String device) { this.device = device; }
+
+    public String getStep() { return step; }
+    public void setStep(String step) { this.step = step; }
+
+    public String getTesterId() { return testerId; }
+    public void setTesterId(String testerId) { this.testerId = testerId; }
+
+    public String getTestProgram() { return testProgram; }
+    public void setTestProgram(String testProgram) { this.testProgram = testProgram; }
 
     // Convenience state transition helpers used by SessionPushService and tests
     public void markStaged() {

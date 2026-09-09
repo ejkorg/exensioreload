@@ -134,4 +134,40 @@ public class LoadSessionPayloadRepositoryImpl implements LoadSessionPayloadRepos
 
         return new PageImpl<>(content, pageable, total);
     }
+
+    @Override
+    public List<String> findDistinctSteps() {
+        String sql = "SELECT DISTINCT step FROM load_session_payload WHERE step IS NOT NULL ORDER BY step";
+        return jdbcTemplate.queryForList(sql, String.class);
+    }
+
+    @Override
+    public List<String> findDistinctStepsBySessionId(Long sessionId) {
+        String sql = "SELECT DISTINCT step FROM load_session_payload WHERE session_id = ? AND step IS NOT NULL ORDER BY step";
+        return jdbcTemplate.queryForList(sql, String.class, sessionId);
+    }
+
+    @Override
+    public List<String> findDistinctTesterIds() {
+        String sql = "SELECT DISTINCT tester_id FROM load_session_payload WHERE tester_id IS NOT NULL ORDER BY tester_id";
+        return jdbcTemplate.queryForList(sql, String.class);
+    }
+
+    @Override
+    public List<String> findDistinctTesterIdsBySessionId(Long sessionId) {
+        String sql = "SELECT DISTINCT tester_id FROM load_session_payload WHERE session_id = ? AND tester_id IS NOT NULL ORDER BY tester_id";
+        return jdbcTemplate.queryForList(sql, String.class, sessionId);
+    }
+
+    @Override
+    public List<String> findDistinctTestPrograms() {
+        String sql = "SELECT DISTINCT test_program FROM load_session_payload WHERE test_program IS NOT NULL ORDER BY test_program";
+        return jdbcTemplate.queryForList(sql, String.class);
+    }
+
+    @Override
+    public List<String> findDistinctTestProgramsBySessionId(Long sessionId) {
+        String sql = "SELECT DISTINCT test_program FROM load_session_payload WHERE session_id = ? AND test_program IS NOT NULL ORDER BY test_program";
+        return jdbcTemplate.queryForList(sql, String.class, sessionId);
+    }
 }

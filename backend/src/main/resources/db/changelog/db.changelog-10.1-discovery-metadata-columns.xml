@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!--
+        Discovery Phase Enhancement: Add metadata columns for filtering
+        
+        Adds device, step, tester_id, and test_program columns to both
+        load_session_payload and stage_records tables for enhanced filtering
+        capabilities across Analytics, My Sessions, and Dashboard pages.
+        
+        Fixes: column "device" does not exist error for PostgreSQL
+        (previous changelog 9.9 only targeted oracle,h2)
+    -->
+
+    <!-- ============================================ -->
+    <!-- load_session_payload table - Add metadata columns -->
+    <!-- ============================================ -->
+
+    <changeSet id="10.1-add-device-to-load-session-payload" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <not>
+                    <columnExists tableName="load_session_payload" columnName="device"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add device column to load_session_payload for device-based filtering.
+            Fixes PostgreSQL migration missing from changelog 9.9 (oracle,h2 only).
+        </comment>
+        <addColumn tableName="load_session_payload">
+            <column name="device" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="load_session_payload" columnName="device"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-step-to-load-session-payload" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <not>
+                    <columnExists tableName="load_session_payload" columnName="step"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add step column to load_session_payload for step-based filtering.
+            Stores semiconductor test step identifiers (e.g., "FT1", "FT2", "BURN-IN").
+        </comment>
+        <addColumn tableName="load_session_payload">
+            <column name="step" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="load_session_payload" columnName="step"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-tester-id-to-load-session-payload" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <not>
+                    <columnExists tableName="load_session_payload" columnName="tester_id"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add tester_id column to load_session_payload for equipment-based filtering.
+            Stores tester/equipment identifiers (e.g., "TESTER-01", "UF3000-05").
+        </comment>
+        <addColumn tableName="load_session_payload">
+            <column name="tester_id" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="load_session_payload" columnName="tester_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-test-program-to-load-session-payload" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <not>
+                    <columnExists tableName="load_session_payload" columnName="test_program"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add test_program column to load_session_payload for recipe/program filtering.
+            Stores test program or recipe names (e.g., "IR71939_FT1_V1.2", "BURN_IN_125C").
+        </comment>
+        <addColumn tableName="load_session_payload">
+            <column name="test_program" type="VARCHAR(200)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="load_session_payload" columnName="test_program"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ============================================ -->
+    <!-- stage_records table - Add metadata columns -->
+    <!-- ============================================ -->
+
+    <changeSet id="10.1-add-step-to-stage-records" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <not>
+                    <columnExists tableName="stage_records" columnName="step"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add step column to stage_records for step-based filtering.
+        </comment>
+        <addColumn tableName="stage_records">
+            <column name="step" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="stage_records" columnName="step"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-tester-id-to-stage-records" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <not>
+                    <columnExists tableName="stage_records" columnName="tester_id"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add tester_id column to stage_records for equipment-based filtering.
+        </comment>
+        <addColumn tableName="stage_records">
+            <column name="tester_id" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="stage_records" columnName="tester_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-test-program-to-stage-records" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <not>
+                    <columnExists tableName="stage_records" columnName="test_program"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>
+            Add test_program column to stage_records for recipe/program filtering.
+        </comment>
+        <addColumn tableName="stage_records">
+            <column name="test_program" type="VARCHAR(200)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="stage_records" columnName="test_program"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ============================================ -->
+    <!-- Indexes for load_session_payload -->
+    <!-- ============================================ -->
+
+    <changeSet id="10.1-add-load-session-payload-device-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <columnExists tableName="load_session_payload" columnName="device"/>
+                <not>
+                    <indexExists indexName="idx_load_session_payload_device" tableName="load_session_payload"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on device column for efficient device-based filtering.</comment>
+        <createIndex indexName="idx_load_session_payload_device" tableName="load_session_payload">
+            <column name="device"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_load_session_payload_device" tableName="load_session_payload"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-load-session-payload-step-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <columnExists tableName="load_session_payload" columnName="step"/>
+                <not>
+                    <indexExists indexName="idx_load_session_payload_step" tableName="load_session_payload"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on step column for efficient step-based filtering.</comment>
+        <createIndex indexName="idx_load_session_payload_step" tableName="load_session_payload">
+            <column name="step"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_load_session_payload_step" tableName="load_session_payload"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-load-session-payload-tester-id-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <columnExists tableName="load_session_payload" columnName="tester_id"/>
+                <not>
+                    <indexExists indexName="idx_load_session_payload_tester_id" tableName="load_session_payload"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on tester_id column for efficient equipment-based filtering.</comment>
+        <createIndex indexName="idx_load_session_payload_tester_id" tableName="load_session_payload">
+            <column name="tester_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_load_session_payload_tester_id" tableName="load_session_payload"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-load-session-payload-test-program-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="load_session_payload"/>
+                <columnExists tableName="load_session_payload" columnName="test_program"/>
+                <not>
+                    <indexExists indexName="idx_load_session_payload_test_program" tableName="load_session_payload"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on test_program column for efficient program-based filtering.</comment>
+        <createIndex indexName="idx_load_session_payload_test_program" tableName="load_session_payload">
+            <column name="test_program"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_load_session_payload_test_program" tableName="load_session_payload"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ============================================ -->
+    <!-- Indexes for stage_records -->
+    <!-- ============================================ -->
+
+    <changeSet id="10.1-add-stage-records-device-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <columnExists tableName="stage_records" columnName="device"/>
+                <not>
+                    <indexExists indexName="idx_stage_records_device" tableName="stage_records"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on device column for efficient device-based filtering.</comment>
+        <createIndex indexName="idx_stage_records_device" tableName="stage_records">
+            <column name="device"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_stage_records_device" tableName="stage_records"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-stage-records-step-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <columnExists tableName="stage_records" columnName="step"/>
+                <not>
+                    <indexExists indexName="idx_stage_records_step" tableName="stage_records"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on step column for efficient step-based filtering.</comment>
+        <createIndex indexName="idx_stage_records_step" tableName="stage_records">
+            <column name="step"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_stage_records_step" tableName="stage_records"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-stage-records-tester-id-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <columnExists tableName="stage_records" columnName="tester_id"/>
+                <not>
+                    <indexExists indexName="idx_stage_records_tester_id" tableName="stage_records"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on tester_id column for efficient equipment-based filtering.</comment>
+        <createIndex indexName="idx_stage_records_tester_id" tableName="stage_records">
+            <column name="tester_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_stage_records_tester_id" tableName="stage_records"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="10.1-add-stage-records-test-program-index" author="exensioreload" dbms="postgresql,oracle,h2">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="stage_records"/>
+                <columnExists tableName="stage_records" columnName="test_program"/>
+                <not>
+                    <indexExists indexName="idx_stage_records_test_program" tableName="stage_records"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on test_program column for efficient program-based filtering.</comment>
+        <createIndex indexName="idx_stage_records_test_program" tableName="stage_records">
+            <column name="test_program"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_stage_records_test_program" tableName="stage_records"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

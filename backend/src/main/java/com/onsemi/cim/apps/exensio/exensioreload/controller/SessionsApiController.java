@@ -50,4 +50,70 @@ public class SessionsApiController {
 
         return ResponseEntity.ok(devices);
     }
+
+    /**
+     * Get distinct step identifiers across all session payloads.
+     * Used by the dashboard for step filtering.
+     *
+     * @param sessionId optional session ID to filter steps by session
+     * @return list of unique step identifiers
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/steps")
+    public ResponseEntity<List<String>> getDistinctSteps(@RequestParam(required = false) Long sessionId) {
+        log.debug("Fetching distinct steps, sessionId: {}", sessionId);
+
+        List<String> steps;
+        if (sessionId != null) {
+            steps = payloadRepository.findDistinctStepsBySessionId(sessionId);
+        } else {
+            steps = payloadRepository.findDistinctSteps();
+        }
+
+        return ResponseEntity.ok(steps);
+    }
+
+    /**
+     * Get distinct tester IDs across all session payloads.
+     * Used by the dashboard for tester/equipment filtering.
+     *
+     * @param sessionId optional session ID to filter tester IDs by session
+     * @return list of unique tester identifiers
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/testers")
+    public ResponseEntity<List<String>> getDistinctTesterIds(@RequestParam(required = false) Long sessionId) {
+        log.debug("Fetching distinct tester IDs, sessionId: {}", sessionId);
+
+        List<String> testerIds;
+        if (sessionId != null) {
+            testerIds = payloadRepository.findDistinctTesterIdsBySessionId(sessionId);
+        } else {
+            testerIds = payloadRepository.findDistinctTesterIds();
+        }
+
+        return ResponseEntity.ok(testerIds);
+    }
+
+    /**
+     * Get distinct test program identifiers across all session payloads.
+     * Used by the dashboard for test program/recipe filtering.
+     *
+     * @param sessionId optional session ID to filter test programs by session
+     * @return list of unique test program identifiers
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/test-programs")
+    public ResponseEntity<List<String>> getDistinctTestPrograms(@RequestParam(required = false) Long sessionId) {
+        log.debug("Fetching distinct test programs, sessionId: {}", sessionId);
+
+        List<String> testPrograms;
+        if (sessionId != null) {
+            testPrograms = payloadRepository.findDistinctTestProgramsBySessionId(sessionId);
+        } else {
+            testPrograms = payloadRepository.findDistinctTestPrograms();
+        }
+
+        return ResponseEntity.ok(testPrograms);
+    }
 }

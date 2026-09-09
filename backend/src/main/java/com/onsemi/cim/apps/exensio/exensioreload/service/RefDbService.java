@@ -225,8 +225,8 @@ public class RefDbService {
         }
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-            "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+            "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?, ?)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -242,7 +242,6 @@ public class RefDbService {
 
             log.info("Starting to process {} payloads", payloads.size());
             for (PayloadCandidate candidate : payloads) {
-                log.info("Processing payload: metadataId={} dataId={}", candidate.metadataId(), candidate.dataId());
                 ps.setString(1, site);
                 ps.setInt(2, senderId);
                 ps.setString(3, normalizedSenderName);
@@ -251,18 +250,20 @@ public class RefDbService {
                 ps.setString(6, candidate.lot());
                 ps.setString(7, candidate.wafer());
                 ps.setString(8, candidate.device());
-                ps.setString(9, candidate.filename());
+                ps.setString(9, candidate.step());
+                ps.setString(10, candidate.testerId());
+                ps.setString(11, candidate.testProgram());
+                ps.setString(12, candidate.filename());
                 if (candidate.endTime() != null) {
-                    ps.setTimestamp(10, Timestamp.from(candidate.endTime()));
+                    ps.setTimestamp(13, Timestamp.from(candidate.endTime()));
                 } else {
-                    ps.setNull(10, java.sql.Types.TIMESTAMP);
+                    ps.setNull(13, java.sql.Types.TIMESTAMP);
                 }
-                ps.setString(11, normalizedUser);
-                ps.setString(12, normalizedUser);
-                ps.setString(13, requestId);
-                ps.setString(14, candidate.dataType());
-                ps.setString(15, candidate.testPhase());
-                log.info("About to add batch for metadataId={}", candidate.metadataId());
+                ps.setString(14, normalizedUser);
+                ps.setString(15, normalizedUser);
+                ps.setString(16, requestId);
+                ps.setString(17, candidate.dataType());
+                ps.setString(18, candidate.testPhase());
                 ps.addBatch();
                 log.info("Batch added successfully");
                 currentBatch.add(candidate);

@@ -26,6 +26,45 @@ public interface LoadSessionPayloadRepositoryCustom {
     List<String> findDistinctDevicesBySessionId(Long sessionId);
 
     /**
+     * Find all distinct non-NULL step values across all payloads.
+     * @return list of unique step identifiers
+     */
+    List<String> findDistinctSteps();
+
+    /**
+     * Find distinct non-NULL step values for a specific session.
+     * @param sessionId the session ID to query
+     * @return list of unique step identifiers for the session
+     */
+    List<String> findDistinctStepsBySessionId(Long sessionId);
+
+    /**
+     * Find all distinct non-NULL tester_id values across all payloads.
+     * @return list of unique tester identifiers
+     */
+    List<String> findDistinctTesterIds();
+
+    /**
+     * Find distinct non-NULL tester_id values for a specific session.
+     * @param sessionId the session ID to query
+     * @return list of unique tester identifiers for the session
+     */
+    List<String> findDistinctTesterIdsBySessionId(Long sessionId);
+
+    /**
+     * Find all distinct non-NULL test_program values across all payloads.
+     * @return list of unique test program identifiers
+     */
+    List<String> findDistinctTestPrograms();
+
+    /**
+     * Find distinct non-NULL test_program values for a specific session.
+     * @param sessionId the session ID to query
+     * @return list of unique test program identifiers for the session
+     */
+    List<String> findDistinctTestProgramsBySessionId(Long sessionId);
+
+    /**
      * Find payloads filtered by device identifiers with pagination.
      * Requirements: 7.2, 8.1
      * @param devices list of device identifiers to filter by
