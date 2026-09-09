@@ -622,6 +622,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.toast = inject(ToastService);
   }
 
+  // Signal to delay chart rendering for faster initial load
+  showCharts = signal(false);
+
   ngOnInit() {
     this.backend.getLimits().subscribe({
       next: (limits: LimitsConfig) => {
@@ -658,6 +661,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.dashState.applyFilters({ siteIds: [siteParam] });
       }
     });
+
+    // Delay chart rendering to improve initial load performance
+    // Charts (ECharts) are heavy - show them after main content renders
+    setTimeout(() => this.showCharts.set(true), 100);
   }
 
   ngOnDestroy() {

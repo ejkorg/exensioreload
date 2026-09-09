@@ -138,8 +138,8 @@
     </button>
   </div>
 
-  <!-- Loading State - Show skeleton while loading initial data -->
-  <div class="dashboard-loading" *ngIf="loading() && !snapshot()">
+  <!-- Loading State - Show skeleton while no data loaded yet -->
+  <div class="dashboard-loading" *ngIf="!snapshot() && !error()">
     <div class="skeleton-header"></div>
     <div class="skeleton-summary">
       <div class="skeleton-card" *ngFor="let i of [1, 2, 3]"></div>
@@ -150,7 +150,7 @@
     <p class="loading-text">Loading dashboard data...</p>
   </div>
 
-  <div class="dashboard-content" *ngIf="!loading() && !error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
+  <div class="dashboard-content" *ngIf="snapshot() && !error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
     <!-- Health Overview Card -->
     <section class="health-section" [class.layout-hidden]="!sectionVisible('health')" aria-labelledby="health-heading">
       <div class="health-card glass-panel">
@@ -318,7 +318,7 @@
     </section>
 
     <!-- Live Pipeline Trends (Requirement 1.1 - time-series charts) -->
-    <section class="trends-section" [class.layout-hidden]="!sectionVisible('trends')" aria-labelledby="trends-heading">
+    <section class="trends-section" [class.layout-hidden]="!sectionVisible('trends') || !showCharts()" aria-labelledby="trends-heading">
       <div class="trends-head-row">
         <h2 class="section-title" id="trends-heading">Live Pipeline Trends</h2>
         <div class="compare-controls" *ngIf="compareActive()">

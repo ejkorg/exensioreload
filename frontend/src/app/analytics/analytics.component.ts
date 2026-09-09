@@ -59,6 +59,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   history = signal<AnalyticsSample[]>([]);
   timeRangeMinutes = signal(60);
   devices = signal<string[]>([]);
+  showCharts = signal(false);
 
   readonly rangeOptions = [
     { label: '1h', minutes: 60 },
@@ -108,6 +109,8 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.isViewReady = true;
     this.scheduleChartRender();
+    // Delay chart rendering to improve initial load performance
+    setTimeout(() => this.showCharts.set(true), 100);
   }
 
   ngOnDestroy(): void {

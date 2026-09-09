@@ -1,7 +1,8 @@
 # Taste (Continuously Learned by [CommandCode][cmd])
 
 [cmd]: https://commandcode.ai/
-
+
+
 
 # git
 - Commit .vscode/ directory with shared workspace config files (settings, launch, tasks, extensions) for team-wide IDE setup. Confidence: 0.75
@@ -47,11 +48,8 @@ See [documentation/taste.md](documentation/taste.md)
 - Include diagnostic context in failure messages: ES failures should capture log.level, timestamp, and actual CP error message; pp_log failures should capture lot, idFile, process_code, and log_message; timeout/unresolved should document what was tried (ES, pp_log, Exensio) to aid operator investigation. Confidence: 0.60
 - Include filename in enrichment diagnostic messages (ES failures, pp_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
 
-# exensio
-- Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75
-in Exensio. Confidence: 0.75
-_log failures, timeout/unresolved summaries) for traceability. Confidence: 0.70
+# authentication
+- Logout should only clear the application session, NOT the external identity provider (Microsoft Entra) session. Users authenticated via Microsoft Entra (computer login, email, Teams) should be silently re-authenticated on next visit using `prompt=none` silent SSO — they should not be prompted for credentials again. Confidence: 0.85
 
 # exensio
 - Exensio wafer IDs are not prefixed with "W" — do not reconstruct "W"-prefixed variants when matching wafer numbers in Exensio. Confidence: 0.75
-in Exensio. Confidence: 0.75

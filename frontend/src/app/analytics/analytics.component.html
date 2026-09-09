@@ -109,7 +109,7 @@
     <p>Data will appear once dashboard snapshots are available.</p>
   </div>
 
-  <section class="charts-grid" *ngIf="!loading() && !error() && hasData()">
+  <section class="charts-grid" *ngIf="!loading() && !error() && hasData() && showCharts()">
     <article class="chart-card glass-panel chart-wide">
       <div class="chart-header">
         <h2>Hourly Trend Overview</h2>
