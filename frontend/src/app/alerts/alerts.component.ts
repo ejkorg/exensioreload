@@ -169,7 +169,7 @@ interface Alert {
           </div>
 
           <!-- Email Notifications -->
-          <div class="config-card" [class.enabled]="editConfig.emailNotifications?.enabled">
+          <div class="config-card" [class.enabled]="editConfig.emailNotifications.enabled">
             <div class="config-header">
               <mat-icon>email</mat-icon>
               <span class="config-title">Email Notifications</span>
@@ -178,7 +178,7 @@ interface Alert {
                 color="primary">
               </mat-slide-toggle>
             </div>
-            @if (editConfig.emailNotifications?.enabled) {
+            @if (editConfig.emailNotifications.enabled) {
               <div class="config-fields">
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Recipients (comma-separated)</mat-label>
@@ -191,7 +191,7 @@ interface Alert {
           </div>
 
           <!-- Webhook Notifications -->
-          <div class="config-card" [class.enabled]="editConfig.webhookNotifications?.enabled">
+          <div class="config-card" [class.enabled]="editConfig.webhookNotifications.enabled">
             <div class="config-header">
               <mat-icon>webhook</mat-icon>
               <span class="config-title">Webhook</span>
@@ -200,7 +200,7 @@ interface Alert {
                 color="primary">
               </mat-slide-toggle>
             </div>
-            @if (editConfig.webhookNotifications?.enabled) {
+            @if (editConfig.webhookNotifications.enabled) {
               <div class="config-fields">
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Webhook URL</mat-label>
@@ -213,7 +213,7 @@ interface Alert {
           </div>
 
           <!-- Slack Notifications -->
-          <div class="config-card" [class.enabled]="editConfig.slackNotifications?.enabled">
+          <div class="config-card" [class.enabled]="editConfig.slackNotifications.enabled">
             <div class="config-header">
               <mat-icon>chat</mat-icon>
               <span class="config-title">Slack</span>
@@ -222,7 +222,7 @@ interface Alert {
                 color="primary">
               </mat-slide-toggle>
             </div>
-            @if (editConfig.slackNotifications?.enabled) {
+            @if (editConfig.slackNotifications.enabled) {
               <div class="config-fields">
                 <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Slack Webhook URL</mat-label>

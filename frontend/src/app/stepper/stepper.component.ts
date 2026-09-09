@@ -74,6 +74,11 @@ interface WaferMonitoringRow {
   exensioIntegrationMessage?: string | null;
   message?: string;
   updatedAt?: string | null;
+  // Manufacturing context fields
+  device?: string | null;
+  step?: string | null;
+  testerId?: string | null;
+  testProgram?: string | null;
 }
 
 interface DiscoveryFiltersSnapshot {
@@ -1183,6 +1188,11 @@ export class StepperComponent implements OnInit, OnDestroy {
           exensioIntegrationStatus: row.exensioIntegrationStatus ?? undefined,
           exensioIntegrationMessage: row.exensioIntegrationMessage ?? undefined,
           updatedAt: row.updatedAt ?? undefined,
+          // Manufacturing context fields
+          device: row.device ?? undefined,
+          step: row.step ?? undefined,
+          testerId: row.testerId ?? undefined,
+          testProgram: row.testProgram ?? undefined,
         }) as MonitoringFile,
     );
   });

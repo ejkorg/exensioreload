@@ -112,6 +112,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
           <div class="col-filename">Filename</div>
           <div class="col-lot">Lot</div>
           <div class="col-wafer">Wafer</div>
+          <div class="col-device">Device</div>
           <div class="col-step">Step</div>
           <div class="col-tester">Tester</div>
           <div class="col-recipe">Recipe</div>
@@ -149,6 +150,12 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
             <!-- Wafer -->
             <div class="col-wafer">{{ file.wafer || '-' }}</div>
+
+            <!-- Device -->
+            <div class="col-device">
+              <span class="device-badge" *ngIf="file.device">{{ file.device }}</span>
+              <span *ngIf="!file.device" class="text-muted">-</span>
+            </div>
 
             <!-- Step -->
             <div class="col-step">
@@ -389,7 +396,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .table-header {
         display: grid;
-        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 100px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
         padding: 0.75rem 1.25rem;
         background: rgba(255, 255, 255, 0.02);
@@ -415,7 +422,7 @@ import { DualTimestampComponent } from './dual-timestamp.component';
 
       .table-row {
         display: grid;
-        grid-template-columns: 60px 1fr 100px 80px 80px 100px 120px 110px 200px 180px;
+        grid-template-columns: 60px 1fr 100px 80px 100px 80px 100px 120px 110px 200px 180px;
         gap: 1rem;
         padding: 0.75rem 1.25rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.03);
@@ -476,6 +483,19 @@ import { DualTimestampComponent } from './dual-timestamp.component';
       // NEW COLUMN BADGES
       // ═══════════════════════════════════════════════════════
 
+      // Device Badge (amber pill)
+      .device-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+      }
+
       // Step Badge (cyan pill)
       .step-badge {
         display: inline-flex;
@@ -484,8 +504,6 @@ import { DualTimestampComponent } from './dual-timestamp.component';
         border-radius: 6px;
         font-size: 0.7rem;
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
         background: rgba(6, 182, 212, 0.15);
         color: #06b6d4;
         border: 1px solid rgba(6, 182, 212, 0.3);
