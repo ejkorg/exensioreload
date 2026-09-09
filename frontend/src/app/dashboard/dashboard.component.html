@@ -138,7 +138,19 @@
     </button>
   </div>
 
-  <div class="dashboard-content" *ngIf="!error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
+  <!-- Loading State - Show skeleton while loading initial data -->
+  <div class="dashboard-loading" *ngIf="loading() && !snapshot()">
+    <div class="skeleton-header"></div>
+    <div class="skeleton-summary">
+      <div class="skeleton-card" *ngFor="let i of [1, 2, 3]"></div>
+    </div>
+    <div class="skeleton-metrics">
+      <div class="skeleton-card" *ngFor="let i of [1, 2, 3, 4, 5, 6, 7, 8, 9]"></div>
+    </div>
+    <p class="loading-text">Loading dashboard data...</p>
+  </div>
+
+  <div class="dashboard-content" *ngIf="!loading() && !error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
     <!-- Health Overview Card -->
     <section class="health-section" [class.layout-hidden]="!sectionVisible('health')" aria-labelledby="health-heading">
       <div class="health-card glass-panel">
