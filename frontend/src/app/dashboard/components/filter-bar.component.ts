@@ -18,13 +18,21 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="dashboard-filter-bar glass-panel">
-      <div class="filter-controls">
-        <app-glass-device-filter (deviceChange)="deviceChange.emit($event)"></app-glass-device-filter>
+      <div class="filter-grid">
+        <app-glass-device-filter
+          label="Device"
+          placeholder="All devices"
+          (deviceChange)="deviceChange.emit($event)"
+        ></app-glass-device-filter>
 
-        <label class="mini-filter search-filter">
-          <mat-icon aria-hidden="true">search</mat-icon>
+        <label class="search-filter-wrap">
+          <span class="filter-label">
+            <mat-icon aria-hidden="true">search</mat-icon>
+            Sender
+          </span>
           <input
             type="text"
+            class="search-input"
             placeholder="Search senders…"
             [value]="senderSearch"
             (input)="senderSearchChange.emit($any($event.target).value)"
@@ -32,15 +40,19 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
           />
         </label>
 
-         <app-glass-select
-           label="Site"
-           placeholder="All sites"
-           [options]="siteOptions"
-           [ngModel]="siteFilter"
-           (ngModelChange)="siteFilterChange.emit($event)"
+        <app-glass-select
+          label="Site"
+          prefixIcon="location_on"
+          placeholder="All sites"
+          [options]="siteOptions"
+          [ngModel]="siteFilter"
+          (ngModelChange)="siteFilterChange.emit($event)"
         ></app-glass-select>
+      </div>
 
-        <button type="button" class="clear-filters-btn" *ngIf="activeCount > 0" (click)="clearFilters.emit()">
+      <div class="filter-actions" *ngIf="activeCount > 0">
+        <button type="button" class="clear-filters-btn" (click)="clearFilters.emit()">
+          <mat-icon>clear_all</mat-icon>
           Clear filters ({{ activeCount }})
         </button>
       </div>
@@ -49,86 +61,129 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
   styles: [
     `
       .dashboard-filter-bar {
-        padding: 0.6rem 0.85rem;
+        padding: 1rem;
         border-radius: 14px;
         border: 1px solid rgba(167, 139, 250, 0.16);
         background: rgba(30, 22, 68, 0.4);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
       }
-      .filter-controls {
+
+      .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.875rem;
+        align-items: end;
+      }
+
+      .search-filter-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+      }
+
+      .filter-label {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 0.6rem;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: rgba(203, 213, 225, 0.8);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+
+        mat-icon {
+          font-size: 0.875rem;
+          width: 0.875rem;
+          height: 0.875rem;
+          color: rgba(167, 139, 250, 0.7);
+        }
       }
-      .mini-filter {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
+
+      .search-input {
         height: 40px;
-        padding: 0 0.75rem;
+        padding: 0 0.875rem;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         background: rgba(255, 255, 255, 0.03);
+        color: rgba(226, 232, 255, 0.92);
+        font-size: 0.84rem;
+        outline: none;
+        transition: all 0.2s ease;
 
-        mat-icon {
-          color: rgba(203, 213, 225, 0.6);
-          font-size: 1.1rem;
-          width: 1.1rem;
-          height: 1.1rem;
+        &::placeholder {
+          color: rgba(203, 213, 225, 0.4);
         }
 
-        input,
-        select {
-          border: none;
-          outline: none;
-          background: transparent;
-          color: rgba(226, 232, 255, 0.92);
-          font-size: 0.82rem;
-          min-width: 130px;
-        }
-
-        select {
-          cursor: pointer;
-          option {
-            background: #1a1240;
-            color: rgba(226, 232, 255, 0.92);
-          }
-        }
-
-        &:focus-within {
+        &:focus {
           border-color: rgba(167, 139, 250, 0.55);
-          box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
+          box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.12);
+          background: rgba(255, 255, 255, 0.05);
         }
       }
+
+      .filter-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 0.25rem;
+      }
+
       .clear-filters-btn {
-        height: 32px;
-        padding: 0 0.7rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        height: 36px;
+        padding: 0 0.875rem;
         border-radius: 8px;
         border: 1px solid rgba(239, 68, 68, 0.35);
         background: rgba(239, 68, 68, 0.1);
         color: #f87171;
-        font-size: 0.75rem;
+        font-size: 0.78rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .clear-filters-btn:hover {
-        background: rgba(239, 68, 68, 0.2);
+        transition: all 0.2s ease;
+
+        mat-icon {
+          font-size: 1rem;
+          width: 1rem;
+          height: 1rem;
+        }
+
+        &:hover {
+          background: rgba(239, 68, 68, 0.2);
+          border-color: rgba(239, 68, 68, 0.5);
+          transform: translateY(-1px);
+        }
+
+        &:active {
+          transform: translateY(0);
+        }
       }
 
-      /* Match the device & site glass-selects in both height and width (Req dashboard polish). */
       app-glass-select,
       app-glass-device-filter {
-        min-width: 150px;
+        width: 100%;
+      }
+
+      @media (max-width: 1024px) {
+        .filter-grid {
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
       }
 
       @media (max-width: 768px) {
-        .mini-filter {
-          flex: 1 1 100%;
-          input,
-          select {
-            flex: 1;
-          }
+        .filter-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .filter-actions {
+          justify-content: stretch;
+        }
+
+        .clear-filters-btn {
+          width: 100%;
+          justify-content: center;
         }
       }
     `,

@@ -1,28 +1,29 @@
 import { CommonModule } from '@angular/common';
 import {
-    ChangeDetectionStrategy,
-    Component,
-    computed,
-    ElementRef,
-    OnDestroy,
-    OnInit,
-    signal,
-    ViewChild,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import * as echarts from 'echarts';
 import { forkJoin } from 'rxjs';
 import {
-    BackendService,
-    SessionAnalyticsResponse,
-    SessionDailyStatusPoint,
-    SessionLotWaferDailyPoint,
-    StageRecordView,
-    StagingSessionDetail,
-    StagingSessionSummary,
+  BackendService,
+  SessionAnalyticsResponse,
+  SessionDailyStatusPoint,
+  SessionLotWaferDailyPoint,
+  StageRecordView,
+  StagingSessionDetail,
+  StagingSessionSummary,
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
@@ -30,7 +31,6 @@ import { GlassLoadingOverlayComponent } from '../shared/components/glass-loading
 import { GlassOption, GlassSelectComponent } from '../shared/components/glass-select.component';
 import { SiteNamePipe } from '../shared/pipes/site-name.pipe';
 import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '../shared/utils/datetime.util';
-import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-my-sessions',
@@ -65,20 +65,21 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
               <span class="stat-dot"></span>
               {{ activeSessionCount() }} Active
             </span>
-            <span class="stat-pill stat-pill--total">
-              {{ total() }} Total
-            </span>
+            <span class="stat-pill stat-pill--total"> {{ total() }} Total </span>
           </div>
           <span class="page-subtitle">Track active and historical staging sessions.</span>
         </div>
       </div>
 
       <div class="session-filters">
-        <div class="filter-row">
+        <div class="filter-grid">
           <div class="filter-search-wrap">
-            <app-glass-icon name="search" [size]="14" class="filter-search-icon"></app-glass-icon>
+            <label class="filter-label">
+              <app-glass-icon name="search" [size]="14"></app-glass-icon>
+              Search
+            </label>
             <input
-              class="filter-input filter-input--search"
+              class="filter-input"
               type="text"
               placeholder="Search sessions…"
               [value]="searchText()"
@@ -86,47 +87,51 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
             />
           </div>
 
-          <div class="filter-selects">
-            <app-glass-select
-              label="Sender"
-              prefixIcon="send"
-              placeholder="All Senders"
-              [options]="glassSenderFilterOptions()"
-              [ngModel]="senderIdFilter()"
-              (ngModelChange)="onSenderSelectChange($event)"
-            ></app-glass-select>
+          <app-glass-select
+            label="Sender"
+            prefixIcon="send"
+            placeholder="All Senders"
+            [options]="glassSenderFilterOptions()"
+            [ngModel]="senderIdFilter()"
+            (ngModelChange)="onSenderSelectChange($event)"
+          ></app-glass-select>
 
-            <app-glass-select
-              *ngIf="showUserColumn()"
-              label="User"
-              prefixIcon="person"
-              placeholder="All Users"
-              [options]="glassUserFilterOptions()"
-              [ngModel]="usernameFilter()"
-              (ngModelChange)="onUsernameSelectChange($event)"
-            ></app-glass-select>
+          <app-glass-select
+            *ngIf="showUserColumn()"
+            label="User"
+            prefixIcon="person"
+            placeholder="All Users"
+            [options]="glassUserFilterOptions()"
+            [ngModel]="usernameFilter()"
+            (ngModelChange)="onUsernameSelectChange($event)"
+          ></app-glass-select>
 
-            <app-glass-select
-              label="Status"
-              prefixIcon="flag"
-              placeholder="All Status"
-              [options]="statusSelectOptions"
-              [ngModel]="statusFilter()"
-              (ngModelChange)="onStatusSelectChange($event)"
-            ></app-glass-select>
+          <app-glass-select
+            label="Status"
+            prefixIcon="flag"
+            placeholder="All Status"
+            [options]="statusSelectOptions"
+            [ngModel]="statusFilter()"
+            (ngModelChange)="onStatusSelectChange($event)"
+          ></app-glass-select>
 
-            <app-glass-device-filter
-              label="Device"
-              placeholder="All devices"
-              [disabled]="false"
-              (deviceChange)="onDeviceFilterChange($event)"
-            ></app-glass-device-filter>
-          </div>
+          <app-glass-device-filter
+            label="Device"
+            placeholder="All devices"
+            [disabled]="false"
+            (deviceChange)="onDeviceFilterChange($event)"
+          ></app-glass-device-filter>
+        </div>
 
-          <div class="filter-actions">
-            <app-glass-button variant="secondary" size="small" (clicked)="clearSessionFilters()">Clear</app-glass-button>
-            <app-glass-button variant="primary" size="small" (clicked)="applySessionFilters()">Apply</app-glass-button>
-          </div>
+        <div class="filter-actions">
+          <app-glass-button variant="secondary" size="small" (clicked)="clearSessionFilters()">
+            <app-glass-icon name="clear_all" [size]="14"></app-glass-icon>
+            Clear
+          </app-glass-button>
+          <app-glass-button variant="primary" size="small" (clicked)="applySessionFilters()">
+            <app-glass-icon name="check" [size]="14"></app-glass-icon>
+            Apply
+          </app-glass-button>
         </div>
       </div>
 
@@ -188,7 +193,7 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
                   <span class="progress-pct">{{ session.progress | number: '1.0-0' }}%</span>
                 </div>
               </td>
-               <td>
+              <td>
                 <span class="status-badge" [class]="session.status.toLowerCase()">
                   <app-glass-icon [name]="getStatusIcon(session.status)" [size]="12"></app-glass-icon>
                   {{ session.status }}
@@ -288,337 +293,330 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
     </div>
 
     <div class="detail-overlay" *ngIf="selectedSession()" (click)="closeDetail()">
-        <div
-          class="detail-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-session-title"
-          (click)="$event.stopPropagation()"
-        >
-          <div class="detail-head" *ngIf="selectedSession() as session">
-            <div class="detail-head-left">
-              <h3 id="modal-session-title">Session Detail — {{ truncateSessionId(session.sessionId) }}</h3>
-              <div class="head-meta">
-                <span
-                  class="status-badge"
-                  [class]="selectedDetail()?.status?.toLowerCase() || session.status.toLowerCase()"
-                >
-                  <app-glass-icon [name]="getStatusIcon(selectedDetail()?.status || session.status)" [size]="12"></app-glass-icon>
-                  {{ selectedDetail()?.status || session.status }}
-                </span>
-                <span class="head-updated">Updated: <app-dual-timestamp [value]="session.updatedAt" layout="inline"></app-dual-timestamp></span>
-                <app-glass-button
-                  variant="secondary"
-                  size="small"
-                  class="copy-id-btn"
-                  (clicked)="copySessionId(session.sessionId)"
-                >
-                  {{ copiedSessionId() === session.sessionId ? 'Copied' : 'Copy ID' }}
-                </app-glass-button>
-              </div>
-            </div>
-            <div class="actions">
-              <app-glass-button
-                *ngIf="canResumeMonitoring(session)"
-                variant="primary"
-                size="small"
-                (clicked)="resumeSessionMonitoring(session)"
+      <div
+        class="detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-session-title"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="detail-head" *ngIf="selectedSession() as session">
+          <div class="detail-head-left">
+            <h3 id="modal-session-title">Session Detail — {{ truncateSessionId(session.sessionId) }}</h3>
+            <div class="head-meta">
+              <span
+                class="status-badge"
+                [class]="selectedDetail()?.status?.toLowerCase() || session.status.toLowerCase()"
               >
-                <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
-                Resume Monitoring
-              </app-glass-button>
-              <app-glass-button variant="secondary" size="small" (clicked)="refreshSession(session.sessionId)">
-                <app-glass-icon name="refresh" [size]="16"></app-glass-icon>
-                Refresh
-              </app-glass-button>
+                <app-glass-icon
+                  [name]="getStatusIcon(selectedDetail()?.status || session.status)"
+                  [size]="12"
+                ></app-glass-icon>
+                {{ selectedDetail()?.status || session.status }}
+              </span>
+              <span class="head-updated"
+                >Updated: <app-dual-timestamp [value]="session.updatedAt" layout="inline"></app-dual-timestamp
+              ></span>
               <app-glass-button
                 variant="secondary"
                 size="small"
-                [disabled]="files().length === 0"
-                (clicked)="exportCurrentSessionFiles()"
+                class="copy-id-btn"
+                (clicked)="copySessionId(session.sessionId)"
               >
-                <app-glass-icon name="download" [size]="16"></app-glass-icon>
-                Export Files CSV
-              </app-glass-button>
-              <app-glass-button
-                variant="secondary"
-                size="small"
-                class="cancel-soft"
-                (clicked)="cancelSession(session.sessionId)"
-                [disabled]="isTerminal(session.status)"
-              >
-                <app-glass-icon name="close" [size]="16"></app-glass-icon>
-                Cancel
-              </app-glass-button>
-              <app-glass-button variant="secondary" size="small" (clicked)="closeDetail()">
-                <app-glass-icon name="close" [size]="16"></app-glass-icon>
-                Close
+                {{ copiedSessionId() === session.sessionId ? 'Copied' : 'Copy ID' }}
               </app-glass-button>
             </div>
           </div>
-
-          <div class="modal-body">
-            <div class="metrics-cards" *ngIf="sessionStats() as stats">
-              <div class="metric-card metric-card--total">
-                <app-glass-icon name="description" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ stats.total }}</div>
-                <div class="metric-label">Total</div>
-              </div>
-              <div class="metric-card metric-card--staged">
-                <app-glass-icon name="upload" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ stats.staged }}</div>
-                <div class="metric-label">Staged</div>
-              </div>
-              <div class="metric-card metric-card--enqueued">
-                <app-glass-icon name="clock" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ stats.enqueued }}</div>
-                <div class="metric-label">Enqueued</div>
-              </div>
-              <div class="metric-card metric-card--done">
-                <app-glass-icon name="check_circle" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ stats.done }}</div>
-                <div class="metric-label">Done</div>
-              </div>
-              <div class="metric-card metric-card--failed" [class.zero]="stats.failed === 0">
-                <app-glass-icon name="error" [size]="18"></app-glass-icon>
-                <div class="metric-value">{{ stats.failed }}</div>
-                <div class="metric-label">Failed</div>
-              </div>
-            </div>
-
-
-            <div
-              class="coverage-banner"
-              *ngIf="fileCoverage() as cov"
-              role="region"
-              aria-label="File end-time coverage"
+          <div class="actions">
+            <app-glass-button
+              *ngIf="canResumeMonitoring(session)"
+              variant="primary"
+              size="small"
+              (clicked)="resumeSessionMonitoring(session)"
             >
-              <div class="coverage-icon">
-                <app-glass-icon name="calendar" [size]="18"></app-glass-icon>
+              <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
+              Resume Monitoring
+            </app-glass-button>
+            <app-glass-button variant="secondary" size="small" (clicked)="refreshSession(session.sessionId)">
+              <app-glass-icon name="refresh" [size]="16"></app-glass-icon>
+              Refresh
+            </app-glass-button>
+            <app-glass-button
+              variant="secondary"
+              size="small"
+              [disabled]="files().length === 0"
+              (clicked)="exportCurrentSessionFiles()"
+            >
+              <app-glass-icon name="download" [size]="16"></app-glass-icon>
+              Export Files CSV
+            </app-glass-button>
+            <app-glass-button
+              variant="secondary"
+              size="small"
+              class="cancel-soft"
+              (clicked)="cancelSession(session.sessionId)"
+              [disabled]="isTerminal(session.status)"
+            >
+              <app-glass-icon name="close" [size]="16"></app-glass-icon>
+              Cancel
+            </app-glass-button>
+            <app-glass-button variant="secondary" size="small" (clicked)="closeDetail()">
+              <app-glass-icon name="close" [size]="16"></app-glass-icon>
+              Close
+            </app-glass-button>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <div class="metrics-cards" *ngIf="sessionStats() as stats">
+            <div class="metric-card metric-card--total">
+              <app-glass-icon name="description" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.total }}</div>
+              <div class="metric-label">Total</div>
+            </div>
+            <div class="metric-card metric-card--staged">
+              <app-glass-icon name="upload" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.staged }}</div>
+              <div class="metric-label">Staged</div>
+            </div>
+            <div class="metric-card metric-card--enqueued">
+              <app-glass-icon name="clock" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.enqueued }}</div>
+              <div class="metric-label">Enqueued</div>
+            </div>
+            <div class="metric-card metric-card--done">
+              <app-glass-icon name="check_circle" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.done }}</div>
+              <div class="metric-label">Done</div>
+            </div>
+            <div class="metric-card metric-card--failed" [class.zero]="stats.failed === 0">
+              <app-glass-icon name="error" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.failed }}</div>
+              <div class="metric-label">Failed</div>
+            </div>
+          </div>
+
+          <div class="coverage-banner" *ngIf="fileCoverage() as cov" role="region" aria-label="File end-time coverage">
+            <div class="coverage-icon">
+              <app-glass-icon name="calendar" [size]="18"></app-glass-icon>
+            </div>
+            <div class="coverage-body">
+              <div class="coverage-label">File End-Time Coverage</div>
+              <div class="coverage-range">
+                <span class="coverage-date coverage-date--from">{{ cov.fromLabel }}</span>
+                <span class="coverage-arrow">→</span>
+                <span class="coverage-date coverage-date--to">{{ cov.toLabel }}</span>
+                <span class="coverage-span" *ngIf="cov.days > 0"
+                  >({{ cov.days }} day{{ cov.days !== 1 ? 's' : '' }})</span
+                >
               </div>
-              <div class="coverage-body">
-                <div class="coverage-label">File End-Time Coverage</div>
-                <div class="coverage-range">
-                  <span class="coverage-date coverage-date--from">{{ cov.fromLabel }}</span>
-                  <span class="coverage-arrow">→</span>
-                  <span class="coverage-date coverage-date--to">{{ cov.toLabel }}</span>
-                  <span class="coverage-span" *ngIf="cov.days > 0"
-                    >({{ cov.days }} day{{ cov.days !== 1 ? 's' : '' }})</span
-                  >
-                </div>
-                <div class="coverage-hint">
-                  Files in this session have end-times spanning this range. Use this to avoid re-staging already-covered
-                  dates.
-                </div>
+              <div class="coverage-hint">
+                Files in this session have end-times spanning this range. Use this to avoid re-staging already-covered
+                dates.
               </div>
             </div>
+          </div>
 
-            <div class="charts-section" *ngIf="selectedSession()">
-              <button
-                type="button"
-                class="section-toggle"
-                [class.expanded]="chartsExpanded()"
-                (click)="toggleChartsPanel()"
-              >
-                <span class="toggle-label">Session Analytics</span>
-                <span class="toggle-chevron">▾</span>
-              </button>
+          <div class="charts-section" *ngIf="selectedSession()">
+            <button
+              type="button"
+              class="section-toggle"
+              [class.expanded]="chartsExpanded()"
+              (click)="toggleChartsPanel()"
+            >
+              <span class="toggle-label">Session Analytics</span>
+              <span class="toggle-chevron">▾</span>
+            </button>
 
-              <div class="charts-panel" *ngIf="chartsExpanded()">
-                <div class="charts-head">
-                  <h4>Session Analytics</h4>
-                  <span class="charts-sub">Lots/Wafers and status trend across session days</span>
-                  <div class="analytics-toolbar">
-                    <label class="date-input-wrap">
-                      <span>From</span>
-                      <div class="date-input-row">
-                        <input
-                          #startDateInput
-                          type="date"
-                          [value]="analyticsStartDate() || ''"
-                          (change)="onAnalyticsStartDateChange($event)"
-                        />
-                        <button type="button" class="date-picker-btn" (click)="openDatePicker(startDateInput)">
-                          📅
-                        </button>
-                      </div>
-                    </label>
-                    <label class="date-input-wrap">
-                      <span>To</span>
-                      <div class="date-input-row">
-                        <input
-                          #endDateInput
-                          type="date"
-                          [value]="analyticsEndDate() || ''"
-                          (change)="onAnalyticsEndDateChange($event)"
-                        />
-                        <button type="button" class="date-picker-btn" (click)="openDatePicker(endDateInput)">📅</button>
-                      </div>
-                    </label>
-                    <app-glass-button variant="secondary" size="small" (clicked)="applyAnalyticsDateRange()"
-                      >Apply Range</app-glass-button
-                    >
-                    <app-glass-button variant="secondary" size="small" (clicked)="clearAnalyticsDateRange()"
-                      >Clear</app-glass-button
-                    >
-                    <div class="toolbar-divider"></div>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('today')">Today</button>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('7d')">Last 7d</button>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('30d')">Last 30d</button>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('90d')">Last 90d</button>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('month')">This Month</button>
-                    <button type="button" class="preset-btn" (click)="applyQuickPreset('all')">All</button>
-                  </div>
-                  <div class="status-summary" *ngIf="analyticsStatusSummary().total > 0">
-                    <span class="summary-pill summary-pill--completed"
-                      >Completed {{ analyticsStatusSummary().completedPct }}%</span
-                    >
-                    <span class="summary-pill summary-pill--failed"
-                      >Failed {{ analyticsStatusSummary().failedPct }}%</span
-                    >
-                    <span class="summary-pill summary-pill--cancelled"
-                      >Cancelled {{ analyticsStatusSummary().cancelledPct }}%</span
-                    >
-                    <span class="summary-pill summary-pill--total">Total {{ analyticsStatusSummary().total }}</span>
-                  </div>
+            <div class="charts-panel" *ngIf="chartsExpanded()">
+              <div class="charts-head">
+                <h4>Session Analytics</h4>
+                <span class="charts-sub">Lots/Wafers and status trend across session days</span>
+                <div class="analytics-toolbar">
+                  <label class="date-input-wrap">
+                    <span>From</span>
+                    <div class="date-input-row">
+                      <input
+                        #startDateInput
+                        type="date"
+                        [value]="analyticsStartDate() || ''"
+                        (change)="onAnalyticsStartDateChange($event)"
+                      />
+                      <button type="button" class="date-picker-btn" (click)="openDatePicker(startDateInput)">📅</button>
+                    </div>
+                  </label>
+                  <label class="date-input-wrap">
+                    <span>To</span>
+                    <div class="date-input-row">
+                      <input
+                        #endDateInput
+                        type="date"
+                        [value]="analyticsEndDate() || ''"
+                        (change)="onAnalyticsEndDateChange($event)"
+                      />
+                      <button type="button" class="date-picker-btn" (click)="openDatePicker(endDateInput)">📅</button>
+                    </div>
+                  </label>
+                  <app-glass-button variant="secondary" size="small" (clicked)="applyAnalyticsDateRange()"
+                    >Apply Range</app-glass-button
+                  >
+                  <app-glass-button variant="secondary" size="small" (clicked)="clearAnalyticsDateRange()"
+                    >Clear</app-glass-button
+                  >
+                  <div class="toolbar-divider"></div>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('today')">Today</button>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('7d')">Last 7d</button>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('30d')">Last 30d</button>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('90d')">Last 90d</button>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('month')">This Month</button>
+                  <button type="button" class="preset-btn" (click)="applyQuickPreset('all')">All</button>
                 </div>
-                <div class="charts-grid">
-                  <div class="chart-card">
-                    <div class="chart-title">Daily Status Trend</div>
-                    <div
-                      #trendChartContainer
-                      class="trend-chart-container"
-                      *ngIf="dailyStatusRows().length > 0; else noTrendData"
-                    ></div>
-                    <ng-template #noTrendData>
-                      <div class="chart-empty">No daily trend data available.</div>
-                    </ng-template>
-                  </div>
-                  <div class="chart-card">
-                    <div class="chart-title">Status Distribution</div>
-                    <div
-                      #statusChartContainer
-                      class="status-chart-container"
-                      *ngIf="sessionAnalytics()?.dailyStatus; else noStatusData"
-                    ></div>
-                    <ng-template #noStatusData>
-                      <div class="chart-empty">No status data available.</div>
-                    </ng-template>
-                  </div>
+                <div class="status-summary" *ngIf="analyticsStatusSummary().total > 0">
+                  <span class="summary-pill summary-pill--completed"
+                    >Completed {{ analyticsStatusSummary().completedPct }}%</span
+                  >
+                  <span class="summary-pill summary-pill--failed"
+                    >Failed {{ analyticsStatusSummary().failedPct }}%</span
+                  >
+                  <span class="summary-pill summary-pill--cancelled"
+                    >Cancelled {{ analyticsStatusSummary().cancelledPct }}%</span
+                  >
+                  <span class="summary-pill summary-pill--total">Total {{ analyticsStatusSummary().total }}</span>
                 </div>
               </div>
-            </div>
-
-            <div class="files-section" *ngIf="files().length > 0">
-              <div class="files-section-header" (click)="toggleFilesTable()">
-                <div class="files-section-title">
-                  <app-glass-icon name="description" [size]="15"></app-glass-icon>
-                  <span>Files Details</span>
-                  <span class="files-count-badge">{{ files().length }}</span>
+              <div class="charts-grid">
+                <div class="chart-card">
+                  <div class="chart-title">Daily Status Trend</div>
+                  <div
+                    #trendChartContainer
+                    class="trend-chart-container"
+                    *ngIf="dailyStatusRows().length > 0; else noTrendData"
+                  ></div>
+                  <ng-template #noTrendData>
+                    <div class="chart-empty">No daily trend data available.</div>
+                  </ng-template>
                 </div>
-                <div class="files-section-right">
-                  <span class="files-toggle-hint">{{ filesTableExpanded() ? 'Collapse' : 'Expand' }}</span>
-                  <span class="toggle-chevron" [class.expanded]="filesTableExpanded()">▾</span>
-                </div>
-              </div>
-
-              <div class="files-table-container" *ngIf="filesTableExpanded()">
-                <div class="files-toolbar">
-                  <div class="files-search-wrap">
-                    <app-glass-icon name="search" [size]="13" class="files-search-icon"></app-glass-icon>
-                    <input
-                      class="files-search-input"
-                      type="text"
-                      placeholder="Filter by lot, wafer or filename…"
-                      [value]="filesSearchText()"
-                      (input)="onFilesSearchChange($event)"
-                    />
-                  </div>
-                  <div class="files-toolbar-right">
-                    <select
-                      class="files-status-filter"
-                      [value]="filesStatusFilter()"
-                      (change)="onFilesStatusFilterChange($event)"
-                    >
-                      <option value="">All Status</option>
-                      <option value="DONE">Done</option>
-                      <option value="ENQUEUED">Enqueued</option>
-                      <option value="FAILED">Failed</option>
-                      <option value="CANCELLED">Cancelled</option>
-                      <option value="READY">Ready</option>
-                    </select>
-                    <span class="files-showing"
-                      >{{ filesPageStart() + 1 }}–{{ filesPageEnd() }} of {{ filteredFiles().length
-                      }}{{ filteredFiles().length < files().length ? ' filtered' : '' }}</span
-                    >
-                  </div>
-                </div>
-
-                <div class="files-table-scroll">
-                  <table class="files-table" role="table" aria-label="Session files">
-                    <thead>
-                      <tr>
-                        <th class="ft-col-lot">Lot</th>
-                        <th class="ft-col-wafer">Wafer</th>
-                        <th class="ft-col-device">Device</th>
-                        <th class="ft-col-filename">Filename</th>
-                        <th class="ft-col-status">Status</th>
-                        <th class="ft-col-date">Created</th>
-                        <th class="ft-col-date">End Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let f of pagedFiles(); let odd = odd" [class.ft-row-odd]="odd">
-                        <td class="ft-col-lot ft-mono">{{ f.lot || '—' }}</td>
-                        <td class="ft-col-wafer ft-mono">{{ f.wafer || '—' }}</td>
-                        <td class="ft-col-device ft-mono">{{ f.device || 'N/A' }}</td>
-                        <td class="ft-col-filename">
-                          <span class="ft-filename" [title]="f.filename">{{ f.filename }}</span>
-                        </td>
-                        <td class="ft-col-status">
-                          <span class="status-badge" [class]="f.status.toLowerCase()">{{ f.status }}</span>
-                        </td>
-                        <td class="ft-col-date ft-date">
-                          <app-dual-timestamp [value]="f.createdAt"></app-dual-timestamp>
-                        </td>
-                        <td class="ft-col-date ft-date ft-endtime">
-                          <app-dual-timestamp [value]="f.endTime"></app-dual-timestamp>
-                        </td>
-                      </tr>
-                      <tr *ngIf="filteredFiles().length === 0" class="ft-empty-row">
-                        <td colspan="7" class="ft-empty-cell">No files match the current filter.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div class="ft-pagination" *ngIf="filesTotalPages() > 1">
-                  <button class="ft-page-btn" [disabled]="filesPage() === 0" (click)="filesPage.set(0)">«</button>
-                  <button class="ft-page-btn" [disabled]="filesPage() === 0" (click)="filesPrevPage()">‹ Prev</button>
-                  <span class="ft-page-info"
-                    >Page <strong>{{ filesPage() + 1 }}</strong> of <strong>{{ filesTotalPages() }}</strong></span
-                  >
-                  <button
-                    class="ft-page-btn"
-                    [disabled]="filesPage() >= filesTotalPages() - 1"
-                    (click)="filesNextPage()"
-                  >
-                    Next ›
-                  </button>
-                  <button
-                    class="ft-page-btn"
-                    [disabled]="filesPage() >= filesTotalPages() - 1"
-                    (click)="filesPage.set(filesTotalPages() - 1)"
-                  >
-                    »
-                  </button>
+                <div class="chart-card">
+                  <div class="chart-title">Status Distribution</div>
+                  <div
+                    #statusChartContainer
+                    class="status-chart-container"
+                    *ngIf="sessionAnalytics()?.dailyStatus; else noStatusData"
+                  ></div>
+                  <ng-template #noStatusData>
+                    <div class="chart-empty">No status data available.</div>
+                  </ng-template>
                 </div>
               </div>
             </div>
           </div>
-          <!-- /.modal-body -->
+
+          <div class="files-section" *ngIf="files().length > 0">
+            <div class="files-section-header" (click)="toggleFilesTable()">
+              <div class="files-section-title">
+                <app-glass-icon name="description" [size]="15"></app-glass-icon>
+                <span>Files Details</span>
+                <span class="files-count-badge">{{ files().length }}</span>
+              </div>
+              <div class="files-section-right">
+                <span class="files-toggle-hint">{{ filesTableExpanded() ? 'Collapse' : 'Expand' }}</span>
+                <span class="toggle-chevron" [class.expanded]="filesTableExpanded()">▾</span>
+              </div>
+            </div>
+
+            <div class="files-table-container" *ngIf="filesTableExpanded()">
+              <div class="files-toolbar">
+                <div class="files-search-wrap">
+                  <app-glass-icon name="search" [size]="13" class="files-search-icon"></app-glass-icon>
+                  <input
+                    class="files-search-input"
+                    type="text"
+                    placeholder="Filter by lot, wafer or filename…"
+                    [value]="filesSearchText()"
+                    (input)="onFilesSearchChange($event)"
+                  />
+                </div>
+                <div class="files-toolbar-right">
+                  <select
+                    class="files-status-filter"
+                    [value]="filesStatusFilter()"
+                    (change)="onFilesStatusFilterChange($event)"
+                  >
+                    <option value="">All Status</option>
+                    <option value="DONE">Done</option>
+                    <option value="ENQUEUED">Enqueued</option>
+                    <option value="FAILED">Failed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                    <option value="READY">Ready</option>
+                  </select>
+                  <span class="files-showing"
+                    >{{ filesPageStart() + 1 }}–{{ filesPageEnd() }} of {{ filteredFiles().length
+                    }}{{ filteredFiles().length < files().length ? ' filtered' : '' }}</span
+                  >
+                </div>
+              </div>
+
+              <div class="files-table-scroll">
+                <table class="files-table" role="table" aria-label="Session files">
+                  <thead>
+                    <tr>
+                      <th class="ft-col-lot">Lot</th>
+                      <th class="ft-col-wafer">Wafer</th>
+                      <th class="ft-col-device">Device</th>
+                      <th class="ft-col-filename">Filename</th>
+                      <th class="ft-col-status">Status</th>
+                      <th class="ft-col-date">Created</th>
+                      <th class="ft-col-date">End Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let f of pagedFiles(); let odd = odd" [class.ft-row-odd]="odd">
+                      <td class="ft-col-lot ft-mono">{{ f.lot || '—' }}</td>
+                      <td class="ft-col-wafer ft-mono">{{ f.wafer || '—' }}</td>
+                      <td class="ft-col-device ft-mono">{{ f.device || 'N/A' }}</td>
+                      <td class="ft-col-filename">
+                        <span class="ft-filename" [title]="f.filename">{{ f.filename }}</span>
+                      </td>
+                      <td class="ft-col-status">
+                        <span class="status-badge" [class]="f.status.toLowerCase()">{{ f.status }}</span>
+                      </td>
+                      <td class="ft-col-date ft-date">
+                        <app-dual-timestamp [value]="f.createdAt"></app-dual-timestamp>
+                      </td>
+                      <td class="ft-col-date ft-date ft-endtime">
+                        <app-dual-timestamp [value]="f.endTime"></app-dual-timestamp>
+                      </td>
+                    </tr>
+                    <tr *ngIf="filteredFiles().length === 0" class="ft-empty-row">
+                      <td colspan="7" class="ft-empty-cell">No files match the current filter.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="ft-pagination" *ngIf="filesTotalPages() > 1">
+                <button class="ft-page-btn" [disabled]="filesPage() === 0" (click)="filesPage.set(0)">«</button>
+                <button class="ft-page-btn" [disabled]="filesPage() === 0" (click)="filesPrevPage()">‹ Prev</button>
+                <span class="ft-page-info"
+                  >Page <strong>{{ filesPage() + 1 }}</strong> of <strong>{{ filesTotalPages() }}</strong></span
+                >
+                <button class="ft-page-btn" [disabled]="filesPage() >= filesTotalPages() - 1" (click)="filesNextPage()">
+                  Next ›
+                </button>
+                <button
+                  class="ft-page-btn"
+                  [disabled]="filesPage() >= filesTotalPages() - 1"
+                  (click)="filesPage.set(filesTotalPages() - 1)"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+        <!-- /.modal-body -->
       </div>
+    </div>
   `,
   styles: [
     `
@@ -693,8 +691,13 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         color: var(--text-muted);
       }
       @keyframes pulse-dot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
       }
       :host-context(body.light-theme) .page-title {
         color: #1e293b;
@@ -723,43 +726,39 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         backdrop-filter: blur(8px);
       }
       .session-filters {
-        padding: 0.75rem 1rem;
+        padding: 1rem;
         background: rgba(30, 22, 68, 0.4);
         border: 1px solid rgba(167, 139, 250, 0.12);
         border-radius: 12px;
-      }
-      .filter-row {
         display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: 0.875rem;
       }
+
+      .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.875rem;
+        align-items: end;
+      }
+
       .filter-search-wrap {
-        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+      }
+
+      .filter-label {
         display: flex;
         align-items: center;
-        flex: 1;
-        min-width: 200px;
-        max-width: 320px;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: rgba(203, 213, 225, 0.8);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
       }
-      .filter-search-icon {
-        position: absolute;
-        left: 0.75rem;
-        pointer-events: none;
-        opacity: 0.5;
-        z-index: 1;
-      }
-      .filter-selects {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-      .filter-selects app-glass-select,
-      .filter-selects app-glass-device-filter {
-        min-width: 140px;
-        max-width: 180px;
-      }
+
       .filter-input {
         height: 40px;
         width: 100%;
@@ -769,60 +768,79 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         backdrop-filter: blur(8px);
         color: rgba(226, 232, 255, 0.94);
         padding: 0 0.875rem;
-        font-size: 0.875rem;
+        font-size: 0.84rem;
         cursor: text;
         outline: none;
         box-sizing: border-box;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        transition: all 0.2s ease;
       }
-      .filter-input--search {
-        padding-left: 2.25rem;
+
+      .filter-input::placeholder {
+        color: rgba(203, 213, 225, 0.4);
       }
+
       .filter-input:focus {
-        border-color: rgba(167, 139, 250, 0.6);
-        box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.1);
+        border-color: rgba(167, 139, 250, 0.55);
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.12);
+        background: rgba(255, 255, 255, 0.05);
       }
+
       .filter-input:hover {
         border-color: rgba(255, 255, 255, 0.12);
       }
+
       .filter-actions {
         display: flex;
-        align-items: center;
+        justify-content: flex-end;
         gap: 0.5rem;
-        margin-left: auto;
+        padding-top: 0.25rem;
       }
-      @media (max-width: 900px) {
-        .filter-row {
-          flex-direction: column;
-          align-items: stretch;
+
+      app-glass-select,
+      app-glass-device-filter {
+        width: 100%;
+      }
+
+      @media (max-width: 1024px) {
+        .filter-grid {
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         }
-        .filter-search-wrap {
-          max-width: 100%;
+      }
+
+      @media (max-width: 768px) {
+        .filter-grid {
+          grid-template-columns: 1fr;
         }
-        .filter-selects {
-          width: 100%;
-        }
-        .filter-selects app-glass-select,
-        .filter-selects app-glass-device-filter {
-          flex: 1;
-          max-width: none;
-        }
+
         .filter-actions {
-          margin-left: 0;
-          justify-content: flex-end;
+          justify-content: stretch;
+          gap: 0.5rem;
+        }
+
+        .filter-actions app-glass-button {
+          flex: 1;
         }
       }
+
       :host-context(body.light-theme) .session-filters {
         background: rgba(240, 238, 255, 0.5);
         border-color: rgba(99, 102, 241, 0.12);
       }
+
       :host-context(body.light-theme) .filter-input {
         border-color: rgba(99, 102, 241, 0.15);
         background-color: rgba(255, 255, 255, 0.85);
         color: #1e293b;
       }
+
       :host-context(body.light-theme) .filter-input:focus {
         border-color: rgba(99, 102, 241, 0.5);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+      }
+
+      :host-context(body.light-theme) .filter-label {
+        color: #475569;
+      }
         box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08);
       }
       .table-meta-bar {
@@ -1708,7 +1726,9 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         background: linear-gradient(165deg, rgba(31, 23, 61, 0.97) 0%, rgba(22, 17, 52, 0.95) 100%);
         backdrop-filter: blur(14px) saturate(118%);
         -webkit-backdrop-filter: blur(14px) saturate(118%);
-        box-shadow: 0 20px 60px rgba(2, 8, 23, 0.7), 0 0 0 1px rgba(167, 139, 250, 0.1);
+        box-shadow:
+          0 20px 60px rgba(2, 8, 23, 0.7),
+          0 0 0 1px rgba(167, 139, 250, 0.1);
       }
       .files-section {
         display: flex;
@@ -1799,7 +1819,9 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         color: rgba(226, 232, 255, 0.92);
         font-size: 0.78rem;
         outline: none;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
       }
       .files-search-input:focus {
         border-color: rgba(167, 139, 250, 0.65);
@@ -2056,7 +2078,9 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
         border: 1px solid rgba(99, 102, 241, 0.15);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
+        box-shadow:
+          0 20px 60px rgba(15, 23, 42, 0.18),
+          0 8px 24px rgba(15, 23, 42, 0.08);
       }
       :host-context(body.light-theme) .detail-overlay {
         background:
@@ -2482,7 +2506,10 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     const failed = detail.filesFailed || 0;
 
     if (total > 0 && staged === 0 && enqueued === 0 && done === 0 && failed === 0) {
-      let s = 0, e = 0, d = 0, f = 0;
+      let s = 0,
+        e = 0,
+        d = 0,
+        f = 0;
       this.files().forEach((file: StageRecordView) => {
         const status = this.normalizeStatus(file.status);
         if (status === 'DONE') d++;
@@ -2491,10 +2518,10 @@ export class MySessionsComponent implements OnInit, OnDestroy {
         else s++;
       });
       if (this.files().length > 0) {
-          return { total, staged: s, enqueued: e, done: d, failed: f };
+        return { total, staged: s, enqueued: e, done: d, failed: f };
       }
     }
-    
+
     return { total, staged, enqueued, done, failed };
   });
 
@@ -2561,15 +2588,15 @@ export class MySessionsComponent implements OnInit, OnDestroy {
   });
 
   glassSenderFilterOptions = computed((): GlassOption[] => {
-    const base = this.senderFilterOptions().map(s => ({
+    const base = this.senderFilterOptions().map((s) => ({
       value: s.id,
-      label: `${s.id}${s.name ? ' · ' + s.name : ''}`
+      label: `${s.id}${s.name ? ' · ' + s.name : ''}`,
     }));
     return [{ value: null, label: 'All Senders' }, ...base];
   });
 
   glassUserFilterOptions = computed((): GlassOption[] => {
-    const base = this.userFilterOptions().map(u => ({ value: u, label: u }));
+    const base = this.userFilterOptions().map((u) => ({ value: u, label: u }));
     return [{ value: '', label: 'All Users' }, ...base];
   });
 
