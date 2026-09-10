@@ -586,12 +586,13 @@ public class ExensioClient {
             String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(best, "WAFER_ID"));
             String lotIdStr = getText(best, "LOT_ID");
             String fileNameStr = getText(best, "FILE_NAME");
+            String schema = getText(best, "SCHEMA_NAME");
 
             if (waferKey <= 0) {
                 return new ExensioLotWaferResult.NotFound();
             }
 
-            ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr);
+            ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr, schema);
             return applyPpidCheck(candidate, ppid, testPhase, lot, waferId);
         } catch (Exception e) {
             log.warn("Raw SQL lookup failed (traceId={}) for lot={} wafer={}: {}", traceId, lot, wafer, e.getMessage());
@@ -669,9 +670,10 @@ public class ExensioClient {
                 Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
                 long lotKey = getLong(row, "LOT_KEY");
                 String fileName = getText(row, "FILE_NAME");
+                String schema = getText(row, "SCHEMA_NAME");
 
                 byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
-                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName));
+                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName, schema));
                 if (lotKey > 0) {
                     lotKeys.putIfAbsent(lotId, lotKey);
                 }
@@ -963,12 +965,13 @@ public class ExensioClient {
             where.append(" AND (de.file_name IS NULL OR ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
         }
 
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time FROM (" +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
             " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " NVL(de.file_name,'') AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time" +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'PRODUCTION' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
@@ -976,18 +979,33 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE " + where +
-                " ORDER BY ol.end_time DESC" +
+                " UNION ALL" +
+                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'SANDBOX' AS schema_name" +
+                " FROM op_log ol" +
+                " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
+                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                " WHERE " + where +
+                " ORDER BY end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
     private String buildBatchRawSql(List<String> clauses) {
         String where = String.join(" OR ", clauses);
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time FROM (" +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
             " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " NVL(de.file_name,'') AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time" +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'PRODUCTION' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
@@ -995,7 +1013,21 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
-                " ORDER BY ol.end_time DESC" +
+                " UNION ALL" +
+                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'SANDBOX' AS schema_name" +
+                " FROM op_log ol" +
+                " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
+                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                " WHERE (" + where + ")" +
+                " ORDER BY end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1121,53 +1153,15 @@ public class ExensioClient {
 
     private StringBuilder buildWaferMatchClause(String rawWafer) {
         String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
-        String paddedWafer = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
-        String twoDigitWafer = cleanWafer;
         Integer waferNum = null;
         try {
             waferNum = Integer.parseInt(cleanWafer);
-            twoDigitWafer = String.format("%02d", waferNum);
         } catch (NumberFormatException ignored) {}
 
         StringBuilder wfClause = new StringBuilder();
-        wfClause.append(" AND (");
-
-        boolean hasOr = false;
         if (waferNum != null) {
-            wfClause.append("w.wf_num = ").append(waferNum);
-            hasOr = true;
+            wfClause.append(" AND (w.wf_num = ").append(waferNum).append(")");
         }
-
-        // Suffix matching: matches <sourceLot>-<waferNum>, <lot>-<waferNum>, etc.
-        if (hasOr) wfClause.append(" OR ");
-        wfClause.append("w.wf_id LIKE '%-").append(escapeLikeLiteral(cleanWafer)).append("'")
-                .append(" OR w.wf_id LIKE '%-").append(escapeLikeLiteral(twoDigitWafer)).append("'")
-                .append(" OR w.wf_id LIKE '%-").append(escapeLikeLiteral(paddedWafer)).append("'")
-                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(cleanWafer)).append("'")
-                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(twoDigitWafer)).append("'")
-                .append(" OR w.wf_id LIKE '%_").append(escapeLikeLiteral(paddedWafer)).append("'");
-
-        // Direct matching: matches bare number, padded number, or original raw string
-        Set<String> directWaferIds = new LinkedHashSet<>();
-        directWaferIds.add(cleanWafer.toUpperCase(Locale.ROOT));
-        directWaferIds.add(cleanWafer.toLowerCase(Locale.ROOT));
-        directWaferIds.add(twoDigitWafer.toUpperCase(Locale.ROOT));
-        directWaferIds.add(twoDigitWafer.toLowerCase(Locale.ROOT));
-        directWaferIds.add(paddedWafer.toUpperCase(Locale.ROOT));
-        directWaferIds.add(paddedWafer.toLowerCase(Locale.ROOT));
-        if (rawWafer != null && !rawWafer.isBlank()) {
-            directWaferIds.add(rawWafer.trim().toUpperCase(Locale.ROOT));
-            directWaferIds.add(rawWafer.trim().toLowerCase(Locale.ROOT));
-        }
-
-        wfClause.append(" OR w.wf_id IN (");
-        int i = 0;
-        for (String wid : directWaferIds) {
-            if (i > 0) wfClause.append(", ");
-            wfClause.append("'").append(escapeSqlLiteral(wid)).append("'");
-            i++;
-        }
-        wfClause.append("))");
         return wfClause;
     }
 

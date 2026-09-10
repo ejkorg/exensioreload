@@ -378,29 +378,87 @@ The application generates **Oracle SQL** that queries Exensio's internal tables:
 #### Single-Record Lookup SQL
 
 ```sql
-SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time
+SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name
 FROM (
-  SELECT l.lot_id AS lot_id,
-         NVL(w.wf_id,'') AS wafer_id,
-         ol.lot_key AS lot_key,
-         NVL(w.wf_key,0) AS wafer_key,
-         NVL(ol.pg_key,0) AS pg_key,
-         NVL(p.ppid,'') AS ppid,
-         NVL(de.file_name,'') AS file_name,
-         NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),'') AS end_time
-  FROM op_log ol
-  JOIN lot l ON l.lot_key = ol.lot_key
-  JOIN program p ON p.pg_key = ol.pg_key
-  LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key
-  LEFT JOIN wafer w ON w.wf_key = wfl.wf_key
-  LEFT JOIN df_export de ON de.lg_key = ol.lg_key
-       AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)
-  WHERE ol.pgc_key = 1
-    AND l.lot_id IN ('LOT001', 'lot001')
-    AND (w.wf_id IN ('06', '06', '06', '06') OR w.wf_num = 6)
-  ORDER BY ol.end_time DESC
-) WHERE ROWNUM <= 200
+  SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name,
+         ROW_NUMBER() OVER (PARTITION BY lot_id, wafer_id ORDER BY end_time DESC) AS rn
+  FROM (
+    -- PRODUCTION schema
+    SELECT l.lot_id AS lot_id,
+           NVL(w.wf_id,'') AS wafer_id,
+           ol.lot_key AS lot_key,
+           NVL(w.wf_key,0) AS wafer_key,
+           NVL(ol.pg_key,0) AS pg_key,
+           NVL(p.ppid,'') AS ppid,
+           SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name,
+           NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),'') AS end_time,
+           'PRODUCTION' AS schema_name
+    FROM PRODUCTION.op_log ol
+    JOIN PRODUCTION.lot l ON l.lot_key = ol.lot_key
+    JOIN PRODUCTION.program p ON p.pg_key = ol.pg_key
+    LEFT JOIN PRODUCTION.wf_log wfl ON wfl.lg_key = ol.lg_key
+    LEFT JOIN PRODUCTION.wafer w ON w.wf_key = wfl.wf_key
+    LEFT JOIN PRODUCTION.df_export de ON de.lg_key = ol.lg_key
+         AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)
+    WHERE ol.pgc_key = ?pgc_key          -- Parameter: frontend resolves from data type
+      AND l.lot_id IN ('LOT001', 'lot001')
+      AND (?is_wafer_level = 0 OR w.wf_num = ?wafer_num)
+
+    UNION ALL
+
+    -- SANDBOX schema
+    SELECT l.lot_id AS lot_id,
+           NVL(w.wf_id,'') AS wafer_id,
+           ol.lot_key AS lot_key,
+           NVL(w.wf_key,0) AS wafer_key,
+           NVL(ol.pg_key,0) AS pg_key,
+           NVL(p.ppid,'') AS ppid,
+           SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name,
+           NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),'') AS end_time,
+           'SANDBOX' AS schema_name
+    FROM SANDBOX.op_log ol
+    JOIN SANDBOX.lot l ON l.lot_key = ol.lot_key
+    JOIN SANDBOX.program p ON p.pg_key = ol.pg_key
+    LEFT JOIN SANDBOX.wf_log wfl ON wfl.lg_key = ol.lg_key
+    LEFT JOIN SANDBOX.wafer w ON w.wf_key = wfl.wf_key
+    LEFT JOIN SANDBOX.df_export de ON de.lg_key = ol.lg_key
+         AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)
+    WHERE ol.pgc_key = ?pgc_key          -- Parameter: same pgc_key from frontend
+      AND l.lot_id IN ('LOT001', 'lot001')
+      AND (?is_wafer_level = 0 OR w.wf_num = ?wafer_num)
+  )
+) WHERE rn = 1
+  AND ROWNUM <= 200
 ```
+
+**Query parameters (resolved from frontend data type input):**
+
+| Parameter | Source | Description |
+|---|---|---|
+| `?pgc_key` | Frontend → `DataTypePgcKeyMapper` | Resolved from user's data type input (e.g., `probe` → 1, `ft` → 2) |
+| `?is_wafer_level` | Frontend → `ExensioSqlUtilService.isWaferLevelClass()` | 1 for wafer-level PGC keys (1, 4, 5, 14), 0 for lot-level (2) |
+| `?wafer_num` | Frontend → `ExensioSqlUtilService.stripWaferPrefix()` | Numeric wafer number extracted from user input (e.g., `W06` → 6, `06` → 6) |
+
+**Key features of this query:**
+
+| Feature | Implementation |
+|---|---|
+| **Multi-schema** | `UNION ALL` across `PRODUCTION.*` and `SANDBOX.*` tables |
+| **Schema tracking** | `schema_name` column identifies source schema |
+| **Filename limit** | `SUBSTR(file_name, 1, 15)` truncates to 15 characters |
+| **Per-wafer filtering** | For wafer-level PGC keys (1, 4, 5, 14), wafer ID filter is applied |
+| **Lot-level fallback** | For lot-level PGC key (2), wafer join becomes optional (returns lot-only rows) |
+| **Deduplication** | `ROW_NUMBER()` keeps only the most recent record per lot/wafer |
+
+**Wafer-level vs lot-level behavior by PGC key:**
+
+| PGC Key | Data Type | Level | Wafer Filter |
+|---|---|---|---|
+| 1 | probe | Wafer | Yes - per wafer |
+| 4 | map/binmap/wxml/upm | Wafer | Yes - per wafer |
+| 5 | pcm | Wafer | Yes - per wafer |
+| 14 | defect | Wafer | Yes - per wafer |
+| 2 | ft/final test | Lot | No - lot only |
 
 #### Exensio Database Tables Used
 

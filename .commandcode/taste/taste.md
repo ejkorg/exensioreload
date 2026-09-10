@@ -17,6 +17,9 @@ See [workflow/taste.md](workflow/taste.md)
 See [database/taste.md](database/taste.md)
 # documentation
 See [documentation/taste.md](documentation/taste.md)
+# domain-model
+- Semiconductor data is classified by PGC key (pgc_key 1=probe, 2=ft/final test, 4=map/binmap/wxml/upm, 5=pcm, 14=defect). Keys 1/4/5/14 are wafer-level; key 2 is lot-level. Wafer-level queries must filter per-wafer, lot-level queries return lot-only rows. See [database/taste.md](database/taste.md).
+
 # logging
 - Disable or reduce Spring Boot DEBUG console logging to minimize noise. Confidence: 0.70
 - Make logging configurable via YAML properties rather than hardcoded changes. Confidence: 0.75

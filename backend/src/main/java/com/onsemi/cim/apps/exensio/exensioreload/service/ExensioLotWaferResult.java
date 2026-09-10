@@ -15,8 +15,9 @@ public sealed interface ExensioLotWaferResult {
      * @param lotId    the matched lot ID string
      * @param waferId  the matched wafer ID string
      * @param fileName the matched file name
+     * @param schema   the schema where data was found (PRODUCTION or SANDBOX)
      */
-    record Found(long lotKey, long waferKey, long pgKey, String ppid, String lotId, String waferId, String fileName) implements ExensioLotWaferResult {}
+    record Found(long lotKey, long waferKey, long pgKey, String ppid, String lotId, String waferId, String fileName, String schema) implements ExensioLotWaferResult {}
 
     /**
      * No matching wafer found — data not yet loaded into Exensio.

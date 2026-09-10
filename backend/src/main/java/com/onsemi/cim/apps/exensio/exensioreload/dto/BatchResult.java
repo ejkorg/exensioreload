@@ -24,6 +24,7 @@ public record BatchResult(
      * @param waferKey the Exensio wafer key (if applicable)
      * @param pgKey the Exensio pg key (if applicable)
      * @param errorMessage error message if the update failed
+     * @param schema the schema where data was found (PRODUCTION or SANDBOX, null if not applicable)
      */
     public record RecordUpdate(
             long recordId,
@@ -35,11 +36,18 @@ public record BatchResult(
             String waferId,
             String fileName,
             String traceId,
-            String requestId
+            String requestId,
+            String schema
     ) {
         public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
                             String errorMessage, String lotId, String waferId, String fileName, String traceId) {
-            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, null);
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, null, null);
+        }
+
+        public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
+                            String errorMessage, String lotId, String waferId, String fileName, String traceId,
+                            String requestId) {
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, requestId, null);
         }
     }
 

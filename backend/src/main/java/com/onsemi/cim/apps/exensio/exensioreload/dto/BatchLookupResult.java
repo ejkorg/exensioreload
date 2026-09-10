@@ -1,20 +1,21 @@
 package com.onsemi.cim.apps.exensio.exensioreload.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioSqlUtilService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioSqlUtilService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
  * Result of a batch lot-wafer lookup API call.
@@ -43,12 +44,13 @@ public class BatchLookupResult {
     private final List<LotResult> lots;
     private final boolean success;
     private final String errorMessage;
+    private final String schema;  // Track which schema this result came from
 
     /**
      * Represents a single lot result with its wafers.
      */
     public record LotResult(String lotId, long lotKey, List<WaferResult> wafers) {
-        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid, Instant endTime, String fileName) {}
+        public record WaferResult(String waferId, long waferKey, long pgKey, String ppid, Instant endTime, String fileName, String schema) {}
     }
 
     /**
@@ -57,9 +59,20 @@ public class BatchLookupResult {
      * @param lots list of lot results
      */
     public BatchLookupResult(List<LotResult> lots) {
+        this(lots, null);
+    }
+
+    /**
+     * Create a successful batch lookup result with schema information.
+     *
+     * @param lots list of lot results
+     * @param schema the schema where the results were found (PRODUCTION or SANDBOX)
+     */
+    public BatchLookupResult(List<LotResult> lots, String schema) {
         this.lots = lots;
         this.success = true;
         this.errorMessage = null;
+        this.schema = schema;
     }
 
     /**
@@ -71,6 +84,7 @@ public class BatchLookupResult {
         this.lots = new ArrayList<>();
         this.success = false;
         this.errorMessage = errorMessage;
+        this.schema = null;
     }
 
     /**
@@ -98,6 +112,15 @@ public class BatchLookupResult {
      */
     public List<LotResult> getLots() {
         return lots;
+    }
+
+    /**
+     * Get the schema where these results were found.
+     *
+     * @return schema name (PRODUCTION, SANDBOX) or null if not applicable
+     */
+    public String getSchema() {
+        return schema;
     }
 
     /**
@@ -137,7 +160,8 @@ public class BatchLookupResult {
                         record.wafer(),
                         record.filename(),
                         traceId,
-                        record.requestId()
+                        record.requestId(),
+                        null
                 ));
             }
             return updates;
@@ -235,7 +259,8 @@ public class BatchLookupResult {
                         waferResult.waferId(),
                         waferResult.fileName(),
                         traceId,
-                        record.requestId()
+                        record.requestId(),
+                        waferResult.schema()
                 ));
             } else {
                 // Wafer not found in Exensio response
@@ -330,9 +355,10 @@ public class BatchLookupResult {
                     String ppid = waferNode.path("ppid").asText(null);
                     Instant endTime = parseInstantSafe(waferNode.path("end_time").asText(null));
                     String fileName = waferNode.path("file_name").asText(null);
+                    String schema = waferNode.path("schema").asText(null);
 
                     if (waferId != null && waferKey > 0) {
-                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName));
+                        waferResults.add(new LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName, schema));
                     }
                 }
 
