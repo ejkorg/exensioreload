@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add pipeline state tracking columns to SENDER_STAGE table -->
+    <!-- These columns enable the PipelineOrchestrator to track stage progression across CP, PP_LOG, and Exensio enrichments -->
+
+    <changeSet id="13.0-add-pipeline-state-columns" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="current_pipeline_stage" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="current_pipeline_stage" type="VARCHAR2(50)" remarks="Name of the current pipeline stage being processed">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="13.1-add-completed-pipeline-stages" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="completed_pipeline_stages" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="completed_pipeline_stages" type="VARCHAR2(500)" remarks="JSON array of completed stage names">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="13.2-add-stage-metadata" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="stage_metadata" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="stage_metadata" type="CLOB" remarks="JSON object with metadata from each stage (e.g., trace IDs, ES log paths)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="13.3-add-pipeline-started-at" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="pipeline_started_at" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="pipeline_started_at" type="TIMESTAMP" remarks="When the pipeline execution started for this record">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="13.4-add-last-stage-check-at" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="last_stage_check_at" />
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="last_stage_check_at" type="TIMESTAMP" remarks="Timestamp of the last pipeline stage check">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Create index for efficient pipeline state queries by site and current stage -->
+    <changeSet id="13.5-create-pipeline-state-index" author="copilot">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <indexExists tableName="SENDER_STAGE" indexName="idx_sender_stage_pipeline" />
+                </not>
+            </and>
+        </preConditions>
+        <createIndex indexName="idx_sender_stage_pipeline" tableName="SENDER_STAGE">
+            <column name="site" />
+            <column name="current_pipeline_stage" />
+            <column name="pipeline_started_at" />
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

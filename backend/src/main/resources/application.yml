@@ -62,6 +62,13 @@ exensioreload:
     yaml:
       path: classpath:dbconnections.yml
 
+# Pipeline orchestration configuration
+pipeline:
+  cache:
+    # Cache expiration time in minutes for parsed pipeline configurations
+    # Set to 5 by default; increase for stable configurations, decrease for frequent updates
+    expire-after-minutes: 5
+
 # Default mail settings (can be overridden per-profile or via env vars)
 app:
   preview:

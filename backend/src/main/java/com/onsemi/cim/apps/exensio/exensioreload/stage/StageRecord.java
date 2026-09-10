@@ -29,5 +29,11 @@ public record StageRecord(
         Long exensioWaferKey,
         Long exensioPgKey,
         String dataType,
-        String testPhase
+        String testPhase,
+        // Pipeline orchestration fields
+        String currentPipelineStage,
+        String completedPipelineStages,
+        String stageMetadata,
+        Instant pipelineStartedAt,
+        Instant lastStageCheckAt
 ) {}

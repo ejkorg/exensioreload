@@ -411,5 +411,7 @@
     <include file="db.changelog-11.0-create-alerts-table.xml" relativeToChangelogFile="true" />
     <!-- Dashboard performance: aggregation query optimization -->
     <include file="db.changelog-11.1-dashboard-performance-indexes.xml" relativeToChangelogFile="true" />
+    <!-- Pipeline dependency orchestration: state tracking columns and indexes -->
+    <include file="db.changelog-13.0-pipeline-orchestration.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>
