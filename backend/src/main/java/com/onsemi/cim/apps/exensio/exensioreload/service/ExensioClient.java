@@ -1283,7 +1283,7 @@ public class ExensioClient {
                         String ppid = waferNode.path("ppid").asText(null);
                         if (waferKey > 0) {
                             ExensioLotWaferResult candidate =
-                                    new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, null);
+                                    new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, null, null);
                             return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, waferId);
                         }
                         continue;
@@ -1307,7 +1307,7 @@ public class ExensioClient {
                 if (waferKey > 0) {
                     String finalWaferId = ExensioSqlUtilService.stripWaferPrefix(bestWaferNode.path("wafer_id").asText(null));
                     ExensioLotWaferResult candidate =
-                            new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid, bestLotId, finalWaferId, null);
+                            new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid, bestLotId, finalWaferId, null, null);
                     return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, finalWaferId);
                 }
             }
