@@ -109,6 +109,15 @@ public class CpLogMonitor {
      * (default: 60 000 ms). Requirements: 2.1
      */
     @Scheduled(fixedDelayString = "${cp.elasticsearch.poll-interval-ms:60000}")
+    /**
+     * Main polling loop. Runs on a fixed delay configured by {@code cp.elasticsearch.poll-interval-ms}
+     * (default: 60 000 ms). Requirements: 2.1
+     * 
+     * Batch Processing Optimization (Task 16.1):
+     * - Group records by site to minimize config lookups
+     * - Process records in parallel within each site batch using thread pool
+     * - BatchRecordProcessor handles batch partitioning and parallel execution
+     */
     public void monitorEnrichmentRecords() {
         boolean hasEs = props.isConfigured();
         boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
@@ -135,10 +144,10 @@ public class CpLogMonitor {
 
         log.debug("Polling Elasticsearch for {} ENRICHMENT record(s)", enrichmentRecords.size());
 
-        for (StageRecord record : enrichmentRecords) {
-            totalRecordsProcessed.incrementAndGet();
+        totalRecordsProcessed.addAndGet(enrichmentRecords.size());
+        batchProcessor.processBatch(enrichmentRecords, record -> {
             processRecord(record);
-        }
+        });
     }
 
     /**

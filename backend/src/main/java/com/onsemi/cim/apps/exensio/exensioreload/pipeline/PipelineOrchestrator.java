@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.pipeline;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.pipeline;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +18,13 @@ import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
+import org.springframework.jmx.export.annotation.ManagedAttribute;
+import org.springframework.jmx.export.annotation.ManagedResource;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Core pipeline orchestrator that manages record progression through dependency-aware stages.
- * 
+ *
  * Responsibilities:
  * - Determine next action for a record based on pipeline configuration and state
  * - Check if stage dependencies are satisfied
@@ -26,16 +32,27 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
  * - Handle errors, timeouts, and stage transitions
  * - Emit SSE events for status changes
  * - Maintain backward compatibility with legacy sites
- * 
+ *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 10.4, 10.5, 11.1, 11.2, 11.3
  */
 @Component
 public class PipelineOrchestrator {
+
     private static final Logger log = LoggerFactory.getLogger(PipelineOrchestrator.class);
 
-    // Default timeout configuration (in minutes)
+    /** Default timeout per stage when not specified in config (minutes). */
     private static final long DEFAULT_STAGE_TIMEOUT_MINUTES = 30;
-    private static final int ERROR_THRESHOLD = 3; // Fail after 3 consecutive errors
+
+    /**
+     * Maximum number of consecutive handler errors before a record is marked FAILED.
+     * Per-record error counts are tracked in-memory (reset on restart which is acceptable
+     * for transient error protection).
+     */
+    private static final int ERROR_THRESHOLD = 3;
+
+    // In-memory error counters keyed by "recordId:stageName"
+    // These are intentionally reset on restart â€” transient protection only.
+    private final ConcurrentHashMap<String, AtomicInteger> errorCounters = new ConcurrentHashMap<>();
 
     private final PipelineConfigCache configCache;
     private final StageHandlerRegistry handlerRegistry;
@@ -46,15 +63,15 @@ public class PipelineOrchestrator {
 
     /**
      * Create PipelineOrchestrator with required dependencies.
-     * 
-     * _Requirements: 2.1, 10.4, 10.5_
-     * 
-     * @param configCache cache for pipeline configurations per site
-     * @param handlerRegistry registry of stage handlers by type
-     * @param statusTracker tracker for pipeline state per record
-     * @param stageMonitorService service for emitting SSE events
-     * @param integrationStatusService service for updating integration status
-     * @param refDbService service for database operations
+     *
+     * Requirements: 2.1, 10.4, 10.5
+     *
+     * @param configCache               cache for pipeline configurations per site
+     * @param handlerRegistry           registry of stage handlers by type
+     * @param statusTracker             tracker for pipeline state per record
+     * @param stageMonitorService       service for emitting SSE events
+     * @param integrationStatusService  service for updating integration status
+     * @param refDbService              service for database operations
      */
     public PipelineOrchestrator(
             PipelineConfigCache configCache,
@@ -63,7 +80,7 @@ public class PipelineOrchestrator {
             StageMonitorService stageMonitorService,
             IntegrationStatusService integrationStatusService,
             RefDbService refDbService) {
-        
+
         this.configCache = configCache;
         this.handlerRegistry = handlerRegistry;
         this.statusTracker = statusTracker;
@@ -72,18 +89,22 @@ public class PipelineOrchestrator {
         this.refDbService = refDbService;
     }
 
+    // =========================================================================
+    // 9.2 determineNextAction()
+    // =========================================================================
+
     /**
      * Determine the next action for a record based on current state and pipeline config.
-     * 
-     * This is the main decision point of the orchestrator. It checks:
-     * 1. If the site has a pipeline configuration
-     * 2. If the current stage's dependencies are satisfied
-     * 3. If the current stage has timed out
-     * 
-     * Returns appropriate PipelineAction indicating what should happen next.
-     * 
-     * _Requirements: 2.2, 2.3, 2.4, 11.1, 11.2_
-     * 
+     *
+     * Decision flow:
+     * 1. Get pipeline config for the site; if absent â†’ useLegacyPath()
+     * 2. Get current PipelineState from statusTracker
+     * 3. Identify current stage (from state or first stage in config)
+     * 4. If dependencies are not satisfied â†’ waitForDependencies()
+     * 5. Obtain handler from registry â†’ executeStage()
+     *
+     * Requirements: 2.2, 2.3, 2.4, 11.1, 11.2
+     *
      * @param record the record to determine action for
      * @return the action to take for this record
      */
@@ -95,10 +116,11 @@ public class PipelineOrchestrator {
         try {
             // Get pipeline config from cache using record.site()
             Optional<PipelineConfig> configOpt = configCache.getConfig(record.site());
-            
+
             // Return PipelineAction.useLegacyPath() if config not present
             if (configOpt.isEmpty()) {
-                log.debug("No pipeline config for site '{}', using legacy path", record.site());
+                log.debug("No pipeline config for site '{}', using legacy path (record {})",
+                         record.site(), record.id());
                 return PipelineAction.useLegacyPath();
             }
 
@@ -107,35 +129,30 @@ public class PipelineOrchestrator {
             // Get current PipelineState from statusTracker
             PipelineStatusTracker.PipelineState state = statusTracker.getState(record.id());
 
-            // Determine current stage from state or first stage in config
+            // Determine current stage: use state.currentStage() if set, else first stage in config
             String currentStageName = state.currentStage();
             if (currentStageName == null || currentStageName.isBlank()) {
-                // First time - use first stage
-                currentStageName = config.getFirstStage().name();
+                StageDefinition first = config.getFirstStage();
+                if (first == null) {
+                    log.warn("Pipeline config for site '{}' has no stages; falling back to legacy path", record.site());
+                    return PipelineAction.useLegacyPath();
+                }
+                currentStageName = first.name();
             }
 
             StageDefinition currentStage = config.findStage(currentStageName);
             if (currentStage == null) {
-                log.warn("Current stage '{}' not found in pipeline config for record {}", 
-                         currentStageName, record.id());
+                log.warn("Current stage '{}' not found in pipeline config for site '{}' (record {}); falling back to legacy path",
+                         currentStageName, record.site(), record.id());
                 return PipelineAction.useLegacyPath();
             }
 
             // Check if current stage dependencies are satisfied via areDependenciesSatisfied()
             if (!areDependenciesSatisfied(currentStage, state)) {
                 List<String> unsatisfiedDeps = getUnsatisfiedDependencies(currentStage, state);
-                log.debug("Record {} stage '{}' dependencies not satisfied. Waiting for: {}", 
-                         record.id(), currentStageName, unsatisfiedDeps);
+                log.debug("Record {} stage '{}' waiting for dependencies: {}", record.id(), currentStageName, unsatisfiedDeps);
                 // Return PipelineAction.waitForDependencies() if not satisfied
                 return PipelineAction.waitForDependencies(unsatisfiedDeps);
-            }
-
-            // Check if current stage has timed out
-            Duration stageTimeout = getStageTimeout(currentStage);
-            if (statusTracker.isStageTimedOut(record.id(), currentStageName, stageTimeout)) {
-                log.warn("Record {} stage '{}' has timed out (timeout={})", 
-                         record.id(), currentStageName, stageTimeout);
-                // Will be handled by executeStage when result status is TIMEOUT
             }
 
             // Get handler from registry for current stage type
@@ -143,7 +160,9 @@ public class PipelineOrchestrator {
             try {
                 handler = handlerRegistry.getHandler(currentStage.type());
             } catch (StageHandlerRegistry.StageHandlerNotFoundException e) {
-                log.error("No handler found for stage type {}: {}", currentStage.type(), e.getMessage());
+                log.error("No handler found for stage type {} (record {}): {}",
+                         currentStage.type(), record.id(), e.getMessage());
+                // Fall back to legacy path so the record doesn't get stuck
                 return PipelineAction.useLegacyPath();
             }
 
@@ -152,25 +171,21 @@ public class PipelineOrchestrator {
 
         } catch (Exception e) {
             log.error("Error determining next action for record {}: {}", record.id(), e.getMessage(), e);
-            // Fall back to legacy path on error
             return PipelineAction.useLegacyPath();
         }
     }
 
+    // =========================================================================
+    // 9.3 areDependenciesSatisfied() (private)
+    // =========================================================================
+
     /**
-     * Check if all dependencies for a stage are satisfied.
-     * 
-     * Iterates through stage.dependsOn() and checks if each dependency has been completed
-     * via state.isStageComplete(depName).
-     * 
-     * _Requirements: 2.3_
-     * 
-     * @param stage the stage to check dependencies for
-     * @param state the current pipeline state
-     * @return true if all dependencies complete, false if any dependency is incomplete
+     * Return true when every dependency in stage.dependsOn() is present in state.completedStages.
+     *
+     * Requirements: 2.3
      */
-    private boolean areDependenciesSatisfied(StageDefinition stage, 
-                                            PipelineStatusTracker.PipelineState state) {
+    private boolean areDependenciesSatisfied(StageDefinition stage,
+                                              PipelineStatusTracker.PipelineState state) {
         for (String depName : stage.dependsOn()) {
             if (!state.isStageComplete(depName)) {
                 return false;
@@ -180,14 +195,10 @@ public class PipelineOrchestrator {
     }
 
     /**
-     * Get list of unsatisfied dependencies for a stage.
-     * 
-     * @param stage the stage to check dependencies for
-     * @param state the current pipeline state
-     * @return list of dependency names that are not yet complete
+     * Return the list of dependency names that are not yet complete.
      */
-    private List<String> getUnsatisfiedDependencies(StageDefinition stage, 
-                                                   PipelineStatusTracker.PipelineState state) {
+    private List<String> getUnsatisfiedDependencies(StageDefinition stage,
+                                                     PipelineStatusTracker.PipelineState state) {
         List<String> unsatisfied = new ArrayList<>();
         for (String depName : stage.dependsOn()) {
             if (!state.isStageComplete(depName)) {
@@ -197,19 +208,23 @@ public class PipelineOrchestrator {
         return unsatisfied;
     }
 
+    // =========================================================================
+    // 9.4 executeStage()
+    // =========================================================================
+
     /**
-     * Execute a stage and handle the result.
-     * 
-     * Calls handler.checkCompletion(record, stage.config()) and switches on result.status():
-     * - COMPLETED → call progressToNextStage()
-     * - NOT_FOUND → call keepInCurrentStage()
-     * - ERROR → call handleStageError()
-     * - TIMEOUT → call handleStageTimeout()
-     * 
-     * _Requirements: 2.3, 2.4, 2.5_
-     * 
-     * @param record the record to execute stage for
-     * @param stage the stage definition
+     * Execute a stage and dispatch to the appropriate handler based on result status.
+     *
+     * Calls handler.checkCompletion(record, stage.config()) then switches:
+     * - COMPLETED â†’ progressToNextStage()
+     * - NOT_FOUND â†’ keepInCurrentStage()
+     * - ERROR     â†’ handleStageError()
+     * - TIMEOUT   â†’ handleStageTimeout()
+     *
+     * Requirements: 2.3, 2.4, 2.5
+     *
+     * @param record  the record to execute stage for
+     * @param stage   the stage definition
      * @param handler the stage handler
      */
     public void executeStage(StageRecord record, StageDefinition stage, StageHandler handler) {
@@ -221,320 +236,341 @@ public class PipelineOrchestrator {
             // Call handler.checkCompletion(record, stage.config())
             StageHandler.StageResult result = handler.checkCompletion(record, stage.config());
 
-            log.debug("Stage '{}' check result for record {}: status={}, traceId={}", 
+            log.debug("Stage '{}' check for record {}: status={}, traceId={}",
                      stage.name(), record.id(), result.status(), result.traceId());
 
             // Switch on result.status()
             switch (result.status()) {
                 case COMPLETED -> progressToNextStage(record, stage, result);
                 case NOT_FOUND -> keepInCurrentStage(record, stage, result);
-                case ERROR -> handleStageError(record, stage, result);
-                case TIMEOUT -> handleStageTimeout(record, stage, result);
+                case ERROR     -> handleStageError(record, stage, result);
+                case TIMEOUT   -> handleStageTimeout(record, stage, result);
             }
 
         } catch (Exception e) {
-            log.error("Exception executing stage '{}' for record {}: {}", 
+            log.error("Exception executing stage '{}' for record {}: {}",
                      stage.name(), record.id(), e.getMessage(), e);
+            // Treat unexpected exception as an ERROR result so error-count logic applies
             handleStageError(record, stage, null);
         }
     }
 
+    // =========================================================================
+    // 9.5 progressToNextStage() (private)
+    // =========================================================================
+
     /**
-     * Progress record to next stage after current stage completes.
-     * 
+     * Advance the record to the next pipeline stage after the current stage completes.
+     *
      * Actions:
-     * - Call statusTracker.markStageComplete() with stage name and result metadata
-     * - Determine next stage from pipeline config
-     * - Update record status to next stage monitoring status (e.g., CP_MONITORING → PPLOG_MONITORING)
-     * - If no next stage, update record status to DONE
-     * - Emit SSE event via stageMonitorService.sendEvent()
-     * - Update integration status via integrationStatusService
-     * 
-     * _Requirements: 2.5, 6.1, 10.4, 10.5_
-     * 
-     * @param record the record to progress
-     * @param stage the stage that just completed
-     * @param result the completion result with metadata
+     * 1. Mark stage complete in PipelineStatusTracker (persists to DB)
+     * 2. Determine next stage from pipeline config
+     * 3. Update SENDER_STAGE.status to next monitoring status, or DONE if no next stage
+     * 4. Emit SSE event via stageMonitorService
+     * 5. Update per-record integration status via integrationStatusService
+     *
+     * Requirements: 2.5, 6.1, 10.4, 10.5
      */
-    private void progressToNextStage(StageRecord record, StageDefinition stage, 
-                                    StageHandler.StageResult result) {
+    private void progressToNextStage(StageRecord record, StageDefinition stage,
+                                     StageHandler.StageResult result) {
         try {
-            // Call statusTracker.markStageComplete() with stage name and result metadata
+            // 1. Call statusTracker.markStageComplete() with stage name and result metadata
             statusTracker.markStageComplete(record.id(), stage.name(), result.metadata());
 
-            log.info("Stage '{}' completed for record {} with traceId {}", 
+            log.info("Stage '{}' completed for record {} (traceId={})",
                     stage.name(), record.id(), result.traceId());
 
-            // Get pipeline config to determine next stage
+            // 2. Determine next stage from pipeline config
             Optional<PipelineConfig> configOpt = configCache.getConfig(record.site());
             if (configOpt.isEmpty()) {
-                log.warn("Pipeline config lost for record {} after stage completion", record.id());
+                log.warn("Pipeline config lost for site '{}' after stage '{}' completion (record {})",
+                         record.site(), stage.name(), record.id());
                 return;
             }
 
             PipelineConfig config = configOpt.get();
-
-            // Determine next stage from pipeline config
             StageDefinition nextStage = config.getNextStage(stage.name());
 
-            String nextStatus;
+            // 3. Update record status
+            final String nextStatus;
+            final String progressMsg;
             if (nextStage != null) {
-                // Update record status to next stage monitoring status
+                // Advance to next stage monitoring status (e.g., CP_MONITORING â†’ PPLOG_MONITORING)
                 nextStatus = stageNameToMonitoringStatus(nextStage.name());
-                log.debug("Progressing record {} from stage '{}' to '{}'", 
-                         record.id(), stage.name(), nextStage.name());
+                progressMsg = "Pipeline stage '" + stage.name() + "' completed; advancing to '" + nextStage.name() + "'";
+                log.info("Progressing record {} from stage '{}' â†’ '{}' (new status={})",
+                         record.id(), stage.name(), nextStage.name(), nextStatus);
             } else {
-                // If no next stage, update record status to DONE
+                // No next stage â†’ pipeline is complete
                 nextStatus = "DONE";
-                log.info("Record {} completed all pipeline stages", record.id());
+                progressMsg = "All pipeline stages completed";
+                log.info("Record {} completed all pipeline stages; marking DONE", record.id());
+            }
+            refDbService.updatePipelineStatus(record.id(), nextStatus, null);
+
+            // 4. Emit SSE event via stageMonitorService.sendEvent()
+            // StageMonitorService.sendEvent uses String requestId (not Long)
+            if (record.requestId() != null) {
+                stageMonitorService.sendEvent(record.requestId(), "PIPELINE_STAGE_PROGRESS",
+                    Map.of(
+                        "recordId",      record.id(),
+                        "completedStage", stage.name(),
+                        "nextStage",     nextStage != null ? nextStage.name() : "NONE",
+                        "newStatus",     nextStatus,
+                        "completedAt",   Instant.now().toString(),
+                        "traceId",       result.traceId()
+                    ));
             }
 
-            // Update the record status in database
-            // TODO: Implement generic status update method or use specific mark* methods
-            // For now, we log the intended status transition
-            log.debug("Record {} status should transition to: {}", record.id(), nextStatus);
-
-            // Emit SSE event via stageMonitorService.sendEvent()
-            // Note: StageMonitorService uses String requestId, not Long record ID
-            stageMonitorService.sendEvent(String.valueOf(record.requestId()), "stageProgress", 
-                Map.of(
-                    "recordId", record.id(),
-                    "previousStage", stage.name(),
-                    "nextStage", nextStage != null ? nextStage.name() : "NONE",
-                    "newStatus", nextStatus,
-                    "completedAt", Instant.now().toString(),
-                    "traceId", result.traceId()
-                ));
-
-            // Update integration status via integrationStatusService
-            // Note: Using CP status update as a proxy for pipeline stage progression
-            integrationStatusService.updateCpStatusForRecord(record.id(), "completed", 
-                "Stage '" + stage.name() + "' completed successfully");
+            // 5. Update integration status via integrationStatusService
+            // updateCpStatusForRecord is the closest generic method for per-record status tracking
+            integrationStatusService.updateCpStatusForRecord(record.id(), "completed", progressMsg);
 
         } catch (Exception e) {
-            log.error("Error progressing record {} to next stage: {}", record.id(), e.getMessage(), e);
+            log.error("Error progressing record {} to next stage after '{}' completed: {}",
+                     record.id(), stage.name(), e.getMessage(), e);
         }
     }
 
-    /**
-     * Keep record in current stage for next poll cycle.
-     * 
-     * Actions:
-     * - Update last_stage_check_at timestamp
-     * - Check if stage has timed out via statusTracker.isStageTimedOut()
-     * - If timed out, call handleStageTimeout()
-     * - Otherwise, log debug message and exit (retry next poll)
-     * 
-     * _Requirements: 5.3, 9.1_
-     * 
-     * @param record the record to keep in current stage
-     * @param stage the stage that's still processing
-     * @param result the not found result
-     */
-    private void keepInCurrentStage(StageRecord record, StageDefinition stage, 
-                                   StageHandler.StageResult result) {
-        try {
-            // Update last_stage_check_at timestamp
-            // This would be done through a database update in real implementation
+    // =========================================================================
+    // 9.6 keepInCurrentStage() (private)
+    // =========================================================================
 
-            log.debug("Stage '{}' not found for record {} (traceId: {}), will retry", 
+    /**
+     * Keep the record in its current stage for the next poll cycle.
+     *
+     * Actions:
+     * 1. Update last_stage_check_at timestamp
+     * 2. Check if stage has timed out via statusTracker.isStageTimedOut()
+     * 3. If timed out â†’ handleStageTimeout()
+     * 4. Otherwise â†’ log debug and exit (retry next poll)
+     *
+     * Requirements: 5.3, 9.1
+     */
+    private void keepInCurrentStage(StageRecord record, StageDefinition stage,
+                                    StageHandler.StageResult result) {
+        try {
+            // 1. Update last_stage_check_at timestamp
+            statusTracker.touchLastCheck(record.id());
+
+            log.debug("Stage '{}' not found for record {} (traceId={}); will retry next poll",
                      stage.name(), record.id(), result.traceId());
 
-            // Check if stage has timed out via statusTracker.isStageTimedOut()
+            // 2. Check if stage has timed out via statusTracker.isStageTimedOut()
             Duration stageTimeout = getStageTimeout(stage);
             if (statusTracker.isStageTimedOut(record.id(), stage.name(), stageTimeout)) {
-                log.warn("Stage '{}' for record {} timed out after not finding completion", 
-                         stage.name(), record.id());
-                // If timed out, call handleStageTimeout()
+                // 3. If timed out â†’ handleStageTimeout()
+                log.warn("Stage '{}' for record {} has timed out after not finding completion", stage.name(), record.id());
                 handleStageTimeout(record, stage, result);
             } else {
-                // Otherwise, log debug message and exit (retry next poll)
-                log.debug("Stage '{}' check will retry on next poll for record {}", 
-                         stage.name(), record.id());
+                // 4. Otherwise log debug and exit (retry next poll)
+                log.debug("Stage '{}' check will retry on next poll for record {} (timeout in {})",
+                         stage.name(), record.id(), stageTimeout);
             }
 
         } catch (Exception e) {
-            log.error("Error keeping record {} in current stage: {}", record.id(), e.getMessage(), e);
+            log.error("Error in keepInCurrentStage for record {} stage '{}': {}",
+                     record.id(), stage.name(), e.getMessage(), e);
         }
     }
 
+    // =========================================================================
+    // 9.7 handleStageError() (private)
+    // =========================================================================
+
     /**
-     * Handle stage error and manage error count/retry logic.
-     * 
+     * Handle a stage error result and manage retry/failure logic.
+     *
      * Actions:
-     * - Log error with record ID, stage name, error message
-     * - Update integration status to "error"
-     * - Keep record in current monitoring status for retry
-     * - Check error count - if exceeds threshold, mark FAILED
-     * 
-     * _Requirements: 9.1, 9.3_
-     * 
-     * @param record the record with error
-     * @param stage the stage that errored
-     * @param result the error result (may be null in some cases)
+     * 1. Log error with record ID, stage name, error message
+     * 2. Update integration status to "error"
+     * 3. Keep record in current monitoring status for retry
+     * 4. If error count exceeds threshold â†’ mark record FAILED
+     *
+     * Requirements: 9.1, 9.3
+     *
+     * @param result may be null when called from the exception catch block in executeStage()
      */
-    private void handleStageError(StageRecord record, StageDefinition stage, 
-                                 StageHandler.StageResult result) {
+    private void handleStageError(StageRecord record, StageDefinition stage,
+                                  StageHandler.StageResult result) {
         try {
-            String errorMessage = result != null ? result.errorMessage() : "Unknown error";
-            
-            // Log error with record ID, stage name, error message
+            String errorMessage = (result != null && result.errorMessage() != null)
+                    ? result.errorMessage() : "Unknown error in stage handler";
+
+            // 1. Log error with record ID, stage name, error message
             log.error("Stage '{}' error for record {}: {}", stage.name(), record.id(), errorMessage);
 
-            // Increment error count (simplified - would track in DB in real implementation)
-            // Check error count - if exceeds threshold, mark FAILED
-            int errorCount = getErrorCount(record.id(), stage.name());
-            errorCount++;
+            // Increment in-memory error counter for this record+stage combination
+            String key = record.id() + ":" + stage.name();
+            int errorCount = errorCounters
+                    .computeIfAbsent(key, k -> new AtomicInteger(0))
+                    .incrementAndGet();
 
+            // 4. Check error count - if exceeds threshold, mark FAILED
             if (errorCount >= ERROR_THRESHOLD) {
-                log.warn("Stage '{}' error threshold exceeded for record {} (errors={}), marking FAILED", 
-                         stage.name(), record.id(), errorCount);
-                
-                // Update record status to FAILED
-                refDbService.updateRecordStatus(record.id(), "FAILED");
-                
-                // Update integration status
-                integrationStatusService.updateIntegrationStatus(record.id(), "failed", 
-                    "Stage '" + stage.name() + "' failed after " + errorCount + " errors");
+                log.warn("Stage '{}' error threshold ({}) exceeded for record {} (errors={}); marking FAILED",
+                         stage.name(), ERROR_THRESHOLD, record.id(), errorCount);
+
+                String failMsg = "Stage '" + stage.name() + "' failed after " + errorCount
+                        + " consecutive errors. Last error: " + errorMessage;
+
+                // Update status to FAILED
+                refDbService.updatePipelineStatus(record.id(), "FAILED", failMsg);
+
+                // Emit SSE notification
+                if (record.requestId() != null) {
+                    stageMonitorService.sendEvent(record.requestId(), "PIPELINE_STAGE_FAILED",
+                        Map.of(
+                            "recordId",    record.id(),
+                            "stage",       stage.name(),
+                            "errorCount",  errorCount,
+                            "message",     failMsg,
+                            "timestamp",   Instant.now().toString()
+                        ));
+                }
+
+                // 2. Update integration status to reflect final failure
+                integrationStatusService.updateCpStatusForRecord(record.id(), "failed", failMsg);
+
+                // Clear the error counter after marking failed
+                errorCounters.remove(key);
+
             } else {
-                // Keep record in current monitoring status for retry
-                log.debug("Stage '{}' error for record {}, will retry (error_count={})", 
-                         stage.name(), record.id(), errorCount);
-                
-                // Update integration status to "error" with retry indication
-                integrationStatusService.updateIntegrationStatus(record.id(), "error", 
-                    "Stage '" + stage.name() + "' error - retry " + errorCount + "/" + ERROR_THRESHOLD);
+                // 3. Keep record in current monitoring status for retry
+                log.debug("Stage '{}' error for record {} (error_count={}/{}); keeping in current status for retry",
+                         stage.name(), record.id(), errorCount, ERROR_THRESHOLD);
+
+                // 2. Update integration status to "error" with retry indication
+                String retryMsg = "Stage '" + stage.name() + "' error (" + errorCount + "/"
+                        + ERROR_THRESHOLD + "): " + errorMessage;
+                integrationStatusService.updateCpStatusForRecord(record.id(), "error", retryMsg);
             }
 
         } catch (Exception e) {
-            log.error("Exception in handleStageError for record {}: {}", record.id(), e.getMessage(), e);
+            log.error("Exception in handleStageError for record {} stage '{}': {}",
+                     record.id(), stage.name(), e.getMessage(), e);
         }
     }
 
+    // =========================================================================
+    // 9.8 handleStageTimeout() (private)
+    // =========================================================================
+
     /**
-     * Handle stage timeout and transition to timeout status.
-     * 
+     * Handle a stage timeout and transition the record to a timeout status.
+     *
      * Actions:
-     * - Build diagnostic message with stage details, dependencies, duration
-     * - Update record status to stage timeout status (CP_TIMEOUT, PPLOG_TIMEOUT)
-     * - Update integration status to "timeout"
-     * - Emit SSE event with timeout diagnostic
-     * - Log warning with full diagnostic information
-     * 
-     * _Requirements: 5.3, 9.2_
-     * 
-     * @param record the record that timed out
-     * @param stage the stage that timed out
-     * @param result the result that indicated timeout
+     * 1. Build diagnostic message (stage name, dependencies, duration)
+     * 2. Update SENDER_STAGE.status to stage timeout status (e.g., CP_TIMEOUT, PPLOG_TIMEOUT)
+     * 3. Update integration status to "timeout"
+     * 4. Emit SSE event with timeout diagnostic
+     * 5. Log warning with full diagnostic
+     *
+     * Requirements: 5.3, 9.2
+     *
+     * Diagnostic log format (from design doc):
+     * Stage '{stageName}' timed out for record {recordId} (lot={lot}, wafer={wafer}, site={site}):
+     *   - Time in stage: X minutes (timeout threshold: Y minutes)
+     *   - Last check result: {result}
+     *   - Dependencies: {deps or "none"}
      */
-    private void handleStageTimeout(StageRecord record, StageDefinition stage, 
-                                   StageHandler.StageResult result) {
+    private void handleStageTimeout(StageRecord record, StageDefinition stage,
+                                    StageHandler.StageResult result) {
         try {
             PipelineStatusTracker.PipelineState state = statusTracker.getState(record.id());
             Duration stageTimeout = getStageTimeout(stage);
+            Duration elapsed = state.getPipelineAge();
 
-            // Build diagnostic message with stage details, dependencies, duration
+            // 1. Build diagnostic message
             StringBuilder diagnostic = new StringBuilder();
-            diagnostic.append("Stage '").append(stage.name()).append("' timed out for record ").append(record.id()).append(": ");
-            diagnostic.append("timeout_threshold=").append(stageTimeout);
+            diagnostic.append("Stage '").append(stage.name())
+                      .append("' timed out for record ").append(record.id())
+                      .append(" (lot=").append(record.lot())
+                      .append(", wafer=").append(record.wafer())
+                      .append(", site=").append(record.site()).append("):\n");
+            diagnostic.append("  - Time in stage: ").append(elapsed.toMinutes())
+                      .append(" minutes (timeout threshold: ").append(stageTimeout.toMinutes()).append(" minutes)\n");
 
-            if (!stage.dependsOn().isEmpty()) {
-                diagnostic.append(", dependencies=[");
-                boolean first = true;
+            String lastCheckResult = (result != null) ? result.status().toString() : "UNKNOWN";
+            diagnostic.append("  - Last check result: ").append(lastCheckResult).append("\n");
+
+            if (stage.dependsOn().isEmpty()) {
+                diagnostic.append("  - Dependencies: none (first stage)\n");
+            } else {
+                diagnostic.append("  - Dependencies: ");
+                List<String> depDetails = new ArrayList<>();
                 for (String dep : stage.dependsOn()) {
-                    if (!first) diagnostic.append(", ");
-                    boolean completed = state.isStageComplete(dep);
-                    diagnostic.append(dep).append("=").append(completed ? "COMPLETE" : "PENDING");
-                    first = false;
+                    depDetails.add(dep + "=" + (state.isStageComplete(dep) ? "COMPLETE" : "PENDING"));
                 }
-                diagnostic.append("]");
+                diagnostic.append(String.join(", ", depDetails)).append("\n");
             }
 
-            Duration stageAge = state.getStageAge(stage.name());
-            if (!stageAge.isNegative() && !stageAge.isZero()) {
-                diagnostic.append(", age=").append(stageAge);
-            }
+            String diagnosticMsg = diagnostic.toString().trim();
 
+            // 2. Update record status to stage timeout status
             String timeoutStatus = stageNameToTimeoutStatus(stage.name());
+            refDbService.updatePipelineStatus(record.id(), timeoutStatus, diagnosticMsg);
 
-            // Update record status to stage timeout status
-            refDbService.updateRecordStatus(record.id(), timeoutStatus);
+            // 3. Update integration status to "timeout"
+            integrationStatusService.updateCpStatusForRecord(record.id(), "timeout", diagnosticMsg);
 
-            // Update integration status to "timeout"
-            integrationStatusService.updateIntegrationStatus(record.id(), "timeout", diagnostic.toString());
+            // 4. Emit SSE event with timeout diagnostic
+            if (record.requestId() != null) {
+                stageMonitorService.sendEvent(record.requestId(), "PIPELINE_STAGE_TIMEOUT",
+                    Map.of(
+                        "recordId",       record.id(),
+                        "stage",          stage.name(),
+                        "timeoutStatus",  timeoutStatus,
+                        "elapsedMinutes", elapsed.toMinutes(),
+                        "timeoutMinutes", stageTimeout.toMinutes(),
+                        "diagnostic",     diagnosticMsg,
+                        "timestamp",      Instant.now().toString()
+                    ));
+            }
 
-            // Emit SSE event with timeout diagnostic
-            stageMonitorService.sendEvent(record.id(), "stageTimeout",
-                Map.of(
-                    "recordId", record.id(),
-                    "stage", stage.name(),
-                    "status", timeoutStatus,
-                    "diagnostic", diagnostic.toString(),
-                    "timeoutMinutes", stageTimeout.toMinutes(),
-                    "timestamp", Instant.now().toString()
-                ));
-
-            // Log warning with full diagnostic information
-            log.warn("Stage timeout: {}", diagnostic);
+            // 5. Log warning with full diagnostic information
+            log.warn(diagnosticMsg);
 
         } catch (Exception e) {
-            log.error("Error handling stage timeout for record {}: {}", record.id(), e.getMessage(), e);
+            log.error("Error handling stage timeout for record {} stage '{}': {}",
+                     record.id(), stage.name(), e.getMessage(), e);
         }
     }
 
+    // =========================================================================
+    // Private helpers
+    // =========================================================================
+
     /**
-     * Convert stage name to monitoring status (e.g., "cp" → "CP_MONITORING").
-     * 
-     * @param stageName the stage name
-     * @return the monitoring status string
+     * Convert stage name to monitoring status string (e.g., "cp" â†’ "CP_MONITORING").
      */
     private String stageNameToMonitoringStatus(String stageName) {
         return stageName.toUpperCase() + "_MONITORING";
     }
 
     /**
-     * Convert stage name to timeout status (e.g., "cp" → "CP_TIMEOUT").
-     * 
-     * @param stageName the stage name
-     * @return the timeout status string
+     * Convert stage name to timeout status string (e.g., "cp" â†’ "CP_TIMEOUT").
      */
     private String stageNameToTimeoutStatus(String stageName) {
         return stageName.toUpperCase() + "_TIMEOUT";
     }
 
     /**
-     * Get timeout duration for a stage.
-     * 
-     * Checks stage config for timeoutMinutes, falls back to default.
-     * 
-     * @param stage the stage definition
-     * @return timeout duration
+     * Resolve the timeout duration for a stage.
+     *
+     * Checks stage config for "timeoutMinutes"; falls back to DEFAULT_STAGE_TIMEOUT_MINUTES.
      */
     private Duration getStageTimeout(StageDefinition stage) {
         if (stage.config() == null || stage.config().isEmpty()) {
             return Duration.ofMinutes(DEFAULT_STAGE_TIMEOUT_MINUTES);
         }
-
         Object timeoutObj = stage.config().get("timeoutMinutes");
-        if (timeoutObj instanceof Number) {
-            long minutes = ((Number) timeoutObj).longValue();
-            return Duration.ofMinutes(Math.max(1, minutes)); // Ensure at least 1 minute
+        if (timeoutObj instanceof Number n) {
+            long minutes = n.longValue();
+            return Duration.ofMinutes(Math.max(1, minutes));
         }
-
         return Duration.ofMinutes(DEFAULT_STAGE_TIMEOUT_MINUTES);
     }
-
-    /**
-     * Get current error count for a stage (simplified implementation).
-     * 
-     * In a real implementation, this would track errors in the database.
-     * 
-     * @param recordId the record ID
-     * @param stageName the stage name
-     * @return current error count
-     */
-    private int getErrorCount(long recordId, String stageName) {
-        // Simplified - would query database in real implementation
-        return 0;
-    }
 }
+
+

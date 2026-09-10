@@ -1,4 +1,4 @@
-BE2-PROD:
+﻿BE2-PROD:
   dbType: oracle
   schema: DATAPORT_OWNER
   hikari:
@@ -379,3 +379,85 @@ UWH-GTAT-QA:
   host: gyqsq-db.onsemi.com:1545/GYQSQ.onsemi.com
   password: "uwhowb#587"
   user: DATAPORT_UWH_OWNER
+
+# ============================================================================
+# PIPELINE CONFIGURATION EXAMPLES (Task 15.2)
+# ============================================================================
+# 
+# The pipeline orchestration system supports configuration-driven, dependency-aware
+# stage execution. Uncomment and customize these examples for your site.
+#
+# Supported Stage Types:
+#   - CP: Elasticsearch-based CP completion detection
+#   - PPLOG: Oracle pp_log table-based completion detection
+#   - EXENSIO: Exensio API-based wafer/lot verification
+#
+# Each pipeline: stages array with name, type, optional dependsOn
+# ============================================================================
+
+# EXAMPLE 1: CP only (legacy behavior - no dependencies)
+# Uncomment to apply to a site:
+# CEBU-PROD:
+#   pipeline:
+#     stages:
+#       - name: cp
+#         type: CP
+#         timeoutMinutes: 30
+
+# EXAMPLE 2: CP -> PP_LOG -> Exensio (full pipeline with dependencies)
+# Uncomment and customize site name:
+# CEBU-PROD:
+#   pipeline:
+#     stages:
+#       - name: cp
+#         type: CP
+#         timeoutMinutes: 30
+#       - name: pplog
+#         type: PPLOG
+#         dependsOn: [cp]
+#         timeoutMinutes: 20
+#       - name: exensio
+#         type: EXENSIO
+#         dependsOn: [pplog]
+#         timeoutMinutes: 60
+
+# EXAMPLE 3: PP_LOG only (PP_LOG as primary enrichment, CP disabled)
+# Uncomment to apply to a site:
+# CEBU-PROD:
+#   pipeline:
+#     stages:
+#       - name: pplog
+#         type: PPLOG
+#         timeoutMinutes: 25
+
+# EXAMPLE 4: Exensio only (direct Exensio lookup, no enrichment stages)
+# Uncomment to apply to a site:
+# CEBU-PROD:
+#   pipeline:
+#     stages:
+#       - name: exensio
+#         type: EXENSIO
+#         timeoutMinutes: 60
+
+# EXAMPLE 5: CP -> Exensio (skip PP_LOG)
+# Uncomment to apply to a site:
+# CEBU-PROD:
+#   pipeline:
+#     stages:
+#       - name: cp
+#         type: CP
+#         timeoutMinutes: 30
+#       - name: exensio
+#         type: EXENSIO
+#         dependsOn: [cp]
+#         timeoutMinutes: 60
+
+# ============================================================================
+# NOTES:
+# ============================================================================
+# - To enable a pipeline, uncomment the block and replace CEBU-PROD with your site
+# - All stages must have unique names within a pipeline
+# - dependsOn is optional; omit for independent/first stages
+# - timeoutMinutes defaults to 30 if not specified
+# - Sites WITHOUT a pipeline section use legacy direct-processing behavior
+# - Requirements: 1.1, 1.4

@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -25,6 +25,8 @@ import org.springframework.stereotype.Service;
 
 import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache;
+
 import com.onsemi.cim.apps.exensio.exensioreload.dto.BatchResult;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
@@ -50,7 +52,7 @@ public class RefDbService {
 
     private final RefDbProperties properties;
     private final HikariDataSource dataSource;
-    /** Separate datasource for pp_log queries — points to PRODUCTION when configured. */
+    /** Separate datasource for pp_log queries â€” points to PRODUCTION when configured. */
     private final HikariDataSource ppLogDataSource;
     private final PpLogDbProperties ppLogDbProperties;
     private final boolean isOracle;
@@ -60,6 +62,8 @@ public class RefDbService {
     private final com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties;
     private final IntegrationStatusService integrationStatusService;
     private final StateAggregationBatcher stateAggregationBatcher;
+    private final com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache pipelineConfigCache;
+
     @Value("${refdb.auth-bootstrap-enabled:false}")
     private boolean authBootstrapEnabled = false; // Disabled - using modern JPA authentication
 
@@ -74,7 +78,8 @@ public class RefDbService {
                         com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties elasticsearchProperties,
                         com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties,
                         IntegrationStatusService integrationStatusService,
-                        StateAggregationBatcher stateAggregationBatcher) {
+                        StateAggregationBatcher stateAggregationBatcher,
+                        com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache pipelineConfigCache) {
         this.properties = properties;
         this.ppLogDbProperties = ppLogDbProperties;
         this.monitorService = monitorService;
@@ -82,6 +87,7 @@ public class RefDbService {
         this.exensioProperties = exensioProperties;
         this.integrationStatusService = integrationStatusService;
         this.stateAggregationBatcher = stateAggregationBatcher;
+        this.pipelineConfigCache = pipelineConfigCache;
         this.isPostgres = properties.isPostgres();
         this.isOracle = !isPostgres && properties.getHost() != null && !properties.getHost().isBlank();
         HikariConfig config = new HikariConfig();
@@ -130,9 +136,9 @@ public class RefDbService {
             this.ppLogDataSource = new HikariDataSource(ppConfig);
             log.info("pp_log datasource configured separately: {}", ppLogDbProperties.buildJdbcUrl());
         } else {
-            // No separate pp_log config — reuse the main staging datasource
+            // No separate pp_log config â€” reuse the main staging datasource
             this.ppLogDataSource = this.dataSource;
-            log.warn("pp_log datasource not separately configured — using main refdb datasource (QA instead of PRODUCTION)");
+            log.warn("pp_log datasource not separately configured â€” using main refdb datasource (QA instead of PRODUCTION)");
         }
     }
 
@@ -750,7 +756,7 @@ public class RefDbService {
 
     /**
      * Marks records as ENRICHMENT status when they are consumed from the sender queue by CP.
-     * This replaces the incorrect DONE transition — the file has only been picked up for enrichment,
+     * This replaces the incorrect DONE transition â€” the file has only been picked up for enrichment,
         * not fully processed. The enrichment timestamp is set once here, at queue-consumption time.
      * Broadcasts SSE ROW_UPDATE with status "ELASTICSEARCH_MONITORING" and msg "Consumed by CP (processing)".
      * Requirements: 1.1, 1.2
@@ -894,7 +900,7 @@ public class RefDbService {
             Map<String, Object> evt = new HashMap<>();
             evt.put("id", record.id());
             evt.put("status", "COMPLETED");
-            evt.put("msg", "Completed — manual verification needed: " + truncate(message, 60));
+            evt.put("msg", "Completed â€” manual verification needed: " + truncate(message, 60));
             evt.put("errorMessage", message);
             safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
@@ -946,7 +952,7 @@ public class RefDbService {
     }
 
     /**
-     * Mark record with Exensio timeout — requires manual verification.
+     * Mark record with Exensio timeout â€” requires manual verification.
      * Called when Exensio API returns NotFound after configured timeout period.
      * Transitions the record from EXENSIO_LOADING to EXENSIO_TIMEOUT status.
      * Emits SSE state change event via StateAggregationBatcher.
@@ -2288,6 +2294,7 @@ public class RefDbService {
         ensureFileColumns(connection, table);
         ensureRequestIdColumn(connection, table);
         ensureExtendedColumns(connection, table);
+        ensurePipelineColumns(connection, table);
         if (!sequenceExists(connection, table + "_SEQ")) {
             createSequence(connection, table + "_SEQ");
         }
@@ -2775,7 +2782,7 @@ public class RefDbService {
         if (columnExists(connection, table, column)) {
             return false;
         }
-        // PostgreSQL does not accept Oracle/H2 "ADD (col ...)" syntax — use "ADD COLUMN".
+        // PostgreSQL does not accept Oracle/H2 "ADD (col ...)" syntax â€” use "ADD COLUMN".
         String exec = ddl;
         if (isPostgres) {
             int addIdx = ddl.toUpperCase().indexOf(" ADD (");
@@ -3449,7 +3456,7 @@ public class RefDbService {
 
     /**
      * Aggregate staged records by end_time bucket (day/week/month) per sender.
-     * Used by the Data Coverage report — cross-session, grouped by data end-time.
+     * Used by the Data Coverage report â€” cross-session, grouped by data end-time.
      *
      * @param site          required
      * @param senderId      optional filter
@@ -3627,7 +3634,7 @@ public class RefDbService {
         }
 
         // Process COMPLETED_MANUAL_VERIFICATION_REQUIRED updates
-        // Requirements: 2.1, 2.2, 2.3 — wafer not found in Exensio after configured timeout
+        // Requirements: 2.1, 2.2, 2.3 â€” wafer not found in Exensio after configured timeout
         List<BatchResult.RecordUpdate> manualVerificationUpdates = grouped.get(BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED);
         if (manualVerificationUpdates != null && !manualVerificationUpdates.isEmpty()) {
             int mvCount = batchMarkCompletedManualVerification(manualVerificationUpdates);
@@ -3834,7 +3841,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events keeping status as EXENSIO_MONITORING
-            broadcastBatchEvents(updates, "EXENSIO_MONITORING", "Wafer not found in Exensio yet — still monitoring");
+            broadcastBatchEvents(updates, "EXENSIO_MONITORING", "Wafer not found in Exensio yet â€” still monitoring");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking NOT_FOUND: {}", ex.getMessage(), ex);
@@ -3876,7 +3883,7 @@ public class RefDbService {
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 for (BatchResult.RecordUpdate update : updates) {
                     String errorMsg = update.errorMessage() != null ?
-                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed — manual verification required";
+                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed â€” manual verification required";
                     ps.setString(1, errorMsg);
                     ps.setLong(2, update.recordId());
                     ps.addBatch();
@@ -3900,7 +3907,7 @@ public class RefDbService {
             }
 
             // Broadcast SSE events for updated records
-            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio API error — manual verification required");
+            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio API error â€” manual verification required");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ERROR: {}", ex.getMessage(), ex);
@@ -3914,7 +3921,7 @@ public class RefDbService {
     /**
      * Batch mark records as EXENSIO_TIMEOUT.
      * Wafer not found in Exensio after the configured monitoring timeout.
-     * This is NOT a failure — the record may have loaded but was not detected.
+     * This is NOT a failure â€” the record may have loaded but was not detected.
      * Operators should manually verify in Exensio before taking corrective action.
      *
      * Requirements: 2.1, 2.2, 2.3
@@ -3964,7 +3971,7 @@ public class RefDbService {
                 }
             }
 
-            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio monitoring timeout — verify manually");
+            broadcastBatchEvents(updates, "COMPLETED_MANUAL_VERIFICATION_REQUIRED", "Exensio monitoring timeout â€” verify manually");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking EXENSIO_TIMEOUT: {}", ex.getMessage(), ex);
@@ -3976,7 +3983,7 @@ public class RefDbService {
     /**
      * Batch mark records as ENRICHMENT_TIMEOUT.
      * No enrichment log found in ES/pp_log within the monitoring window.
-     * This is NOT a failure — enrichment may have occurred but was not detected.
+     * This is NOT a failure â€” enrichment may have occurred but was not detected.
      * Operators should manually verify before taking corrective action.
      *
      * Requirements: 1.1, 1.2, 1.3
@@ -4026,7 +4033,7 @@ public class RefDbService {
                 }
             }
 
-            broadcastBatchEvents(updates, "CP_TIMEOUT", "Enrichment monitoring timeout — Exensio not configured");
+            broadcastBatchEvents(updates, "CP_TIMEOUT", "Enrichment monitoring timeout â€” Exensio not configured");
 
         } catch (SQLException ex) {
             log.error("Failed batch marking ENRICHMENT_TIMEOUT: {}", ex.getMessage(), ex);
@@ -4176,7 +4183,7 @@ public class RefDbService {
                         Map<String, Object> evt = new HashMap<>();
                         evt.put("id", update.recordId());
                         evt.put("status", "EXENSIO_MONITORING");
-                        evt.put("msg", "Wafer not found in Exensio yet — still monitoring (retry)");
+                        evt.put("msg", "Wafer not found in Exensio yet â€” still monitoring (retry)");
                         safeSendEvent(update.requestId(), "ROW_UPDATE", evt);
                     }
                 } catch (SQLException ex) {
@@ -4217,7 +4224,7 @@ public class RefDbService {
             for (BatchResult.RecordUpdate update : updates) {
                 try {
                     String errorMsg = update.errorMessage() != null ?
-                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed — manual verification required";
+                            truncate(update.errorMessage()) : "[Exensio API Error] Lookup failed â€” manual verification required";
                     ps.setString(1, errorMsg);
                     ps.setLong(2, update.recordId());
                     ps.executeUpdate();
@@ -4290,7 +4297,7 @@ public class RefDbService {
                 .toLocalDateTime();
         java.sql.Timestamp sinceTs = java.sql.Timestamp.valueOf(sinceLocal);
 
-        log.info("pp_log query using PRD refdb ({}): lot={} discoveredFilename={} sinceEnrichmentStartedAt={} (UTC) → sinceLocal={} ({})",
+        log.info("pp_log query using PRD refdb ({}): lot={} discoveredFilename={} sinceEnrichmentStartedAt={} (UTC) â†’ sinceLocal={} ({})",
             ppLogDataSource.getJdbcUrl(), lot, discoveredFilename, enrichmentStartedAt, sinceLocal, ppLogZone);
 
         String sql;
@@ -4413,7 +4420,7 @@ public class RefDbService {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         long currentCount = rs.getLong(1);
-                        // Record to batcher — it will handle aggregation and batching
+                        // Record to batcher â€” it will handle aggregation and batching
                         stateAggregationBatcher.recordStateChange(requestId, state, -1, currentCount);
                     }
                 }
@@ -4452,4 +4459,142 @@ public class RefDbService {
         }
         return null;
     }
+
+    // -------------------------------------------------------------------------
+    // Pipeline orchestration state methods
+    // -------------------------------------------------------------------------
+
+    /**
+     * Ensure the pipeline orchestration columns exist in the staging table.
+     *
+     * Columns added:
+     *   current_pipeline_stage    VARCHAR2(50)   - name of the stage currently being checked
+     *   completed_pipeline_stages VARCHAR2(500)  - JSON array of completed stage names
+     *   stage_metadata            CLOB           - JSON object of per-stage metadata
+     *   pipeline_started_at       TIMESTAMP      - when pipeline processing started
+     *   last_stage_check_at       TIMESTAMP      - timestamp of the most recent stage check
+     */
+    private void ensurePipelineColumns(Connection connection, String table) throws SQLException {
+        boolean currentStageAdded = ensureColumn(connection, table, "CURRENT_PIPELINE_STAGE", isOracle
+                ? "ALTER TABLE " + table + " ADD (current_pipeline_stage VARCHAR2(50))"
+                : "ALTER TABLE " + table + " ADD (current_pipeline_stage VARCHAR(50))");
+        boolean completedStagesAdded = ensureColumn(connection, table, "COMPLETED_PIPELINE_STAGES", isOracle
+                ? "ALTER TABLE " + table + " ADD (completed_pipeline_stages VARCHAR2(500))"
+                : "ALTER TABLE " + table + " ADD (completed_pipeline_stages VARCHAR(500))");
+        boolean stageMetadataAdded = ensureColumn(connection, table, "STAGE_METADATA", isOracle
+                ? "ALTER TABLE " + table + " ADD (stage_metadata CLOB)"
+                : "ALTER TABLE " + table + " ADD (stage_metadata TEXT)");
+        boolean pipelineStartedAtAdded = ensureColumn(connection, table, "PIPELINE_STARTED_AT", isOracle
+                ? "ALTER TABLE " + table + " ADD (pipeline_started_at TIMESTAMP)"
+                : "ALTER TABLE " + table + " ADD (pipeline_started_at TIMESTAMP)");
+        boolean lastStageCheckAtAdded = ensureColumn(connection, table, "LAST_STAGE_CHECK_AT", isOracle
+                ? "ALTER TABLE " + table + " ADD (last_stage_check_at TIMESTAMP)"
+                : "ALTER TABLE " + table + " ADD (last_stage_check_at TIMESTAMP)");
+
+        if (currentStageAdded || completedStagesAdded || stageMetadataAdded
+                || pipelineStartedAtAdded || lastStageCheckAtAdded) {
+            log.info("Pipeline orchestration columns ensured for {}", table);
+        }
+    }
+
+    /**
+     * Mark a pipeline stage as complete.
+     *
+     * Updates current_pipeline_stage, completed_pipeline_stages (JSON array), stage_metadata
+     * (JSON object), and last_stage_check_at in one atomic UPDATE.  Also initialises
+     * pipeline_started_at if it is not yet set.
+     *
+     * Called by PipelineStatusTracker.markStageComplete().
+     *
+     * @param recordId           the SENDER_STAGE primary key
+     * @param stageName          the stage name that just finished
+     * @param completedStagesJson JSON array of all completed stage names, e.g. ["cp","pplog"]
+     * @param metadataJson       JSON object of stage metadata accumulated so far
+     */
+    public void updatePipelineStageComplete(long recordId, String stageName,
+                                            String completedStagesJson, String metadataJson) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET current_pipeline_stage = ?" +
+                "  , completed_pipeline_stages = ?" +
+                "  , stage_metadata = ?" +
+                "  , last_stage_check_at = " + timestampExpr() +
+                "  , pipeline_started_at = COALESCE(pipeline_started_at, " + timestampExpr() + ")" +
+                " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, stageName);
+            ps.setString(2, completedStagesJson);
+            ps.setString(3, metadataJson);
+            ps.setLong(4, recordId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed updating pipeline stage complete for record " + recordId, e);
+        }
+    }
+
+    /**
+     * Set current_pipeline_stage without updating completed_pipeline_stages.
+     *
+     * Used when first entering a stage (before any completion check has been run).
+     * Also initialises pipeline_started_at if not yet set.
+     *
+     * @param recordId  the SENDER_STAGE primary key
+     * @param stageName the stage name being entered
+     */
+    public void updateCurrentPipelineStage(long recordId, String stageName) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET current_pipeline_stage = ?" +
+                "  , pipeline_started_at = COALESCE(pipeline_started_at, " + timestampExpr() + ")" +
+                "  , last_stage_check_at = " + timestampExpr() +
+                " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, stageName);
+            ps.setLong(2, recordId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed updating current pipeline stage for record " + recordId, e);
+        }
+    }
+
+    /**
+     * Refresh the last_stage_check_at column to the current server time.
+     *
+     * Called every poll cycle so timeout logic can calculate how long a record has
+     * been in its current stage.
+     *
+     * @param recordId the SENDER_STAGE primary key
+     */
+    public void updateLastStageCheckAt(long recordId) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET last_stage_check_at = " + timestampExpr() +
+                " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, recordId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            log.warn("Failed to update last_stage_check_at for record {}: {}", recordId, e.getMessage());
+        }
+    }
+
+    /**
+     * Update the status column to an arbitrary pipeline status string plus a message.
+     *
+     * Used by PipelineOrchestrator for pipeline-specific statuses that do not have a
+     * dedicated mark* method (e.g. PPLOG_MONITORING, PPLOG_TIMEOUT, CP_MONITORING, DONE, FAILED).
+     *
+     * @param recordId the SENDER_STAGE primary key
+     * @param status   the new status value
+     * @param message  optional error/diagnostic message (may be null)
+     */
+    public void updatePipelineStatus(long recordId, String status, String message) {
+        updateStatus(List.of(recordId), status, message);
+        log.debug("Updated pipeline status for record {} to {}", recordId, status);
+    }
 }
+
+
