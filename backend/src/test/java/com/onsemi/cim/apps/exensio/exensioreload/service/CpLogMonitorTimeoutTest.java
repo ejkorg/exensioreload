@@ -24,6 +24,8 @@ import org.mockito.MockitoAnnotations;
 import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.BatchRecordProcessor;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineOrchestrator;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
@@ -47,6 +49,8 @@ class CpLogMonitorTimeoutTest {
     @Mock private StagePipelineOrchestrator pipelineOrchestrator;
     @Mock private IntegrationStatusService integrationStatusService;
     @Mock private StageMonitorService stageMonitorService;
+    @Mock private BatchRecordProcessor batchProcessor;
+    @Mock private PipelineOrchestrator orchestrator;
 
     private CpLogMonitor cpLogMonitor;
 
@@ -58,6 +62,10 @@ class CpLogMonitorTimeoutTest {
         when(cpElasticsearchProperties.isConfigured()).thenReturn(true);
         when(cpElasticsearchProperties.getEnrichmentTimeoutMinutes()).thenReturn(15);
         when(ppLogDbProperties.isPpLogAvailable()).thenReturn(true);
+
+        // Default: no pipeline-aware records (CP_MONITORING is empty for all legacy tests)
+        when(refDbService.listRecords(null, null, "CP_MONITORING", Integer.MAX_VALUE))
+            .thenReturn(Collections.emptyList());
         
         cpLogMonitor = new CpLogMonitor(
             refDbService,
@@ -68,7 +76,9 @@ class CpLogMonitorTimeoutTest {
             ppLogDbProperties,
             pipelineOrchestrator,
             integrationStatusService,
-            stageMonitorService
+            stageMonitorService,
+            batchProcessor,
+            orchestrator
         );
     }
 
@@ -92,12 +102,15 @@ class CpLogMonitorTimeoutTest {
             "LOT-001",             // lot
             "W1",                  // wafer
             null,                  // device
+            null,                  // step
+            null,                  // testerId
+            null,                  // testProgram
             "test.csv",            // filename
             Instant.now(),         // endTime
             "ELASTICSEARCH_MONITORING",          // status
             null,                  // errorMessage
             createdAt,             // createdAt
-            createdAt,             // updatedAt (same as createdAt means in ELASTICSEARCH_MONITORING for 16 min)
+            createdAt,             // updatedAt
             createdAt,             // enrichmentStartedAt
             null,                  // processedAt
             "operator1",           // stagedBy
@@ -109,7 +122,12 @@ class CpLogMonitorTimeoutTest {
             null,                  // exensioWaferKey
             null,                  // exensioPgKey
             "dataTypeA",           // dataType
-            "phase1"               // testPhase
+            "phase1",              // testPhase
+            null,                  // currentPipelineStage
+            null,                  // completedPipelineStages
+            null,                  // stageMetadata
+            null,                  // pipelineStartedAt
+            null                   // lastStageCheckAt
         );
 
         // Setup ES and pp_log to both return NotFound
@@ -154,10 +172,10 @@ class CpLogMonitorTimeoutTest {
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60); // 16 minutes ago
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1"
+            "dataTypeA", "phase1", null, null, null, null, null
         );
 
         // Setup: ES returns success
@@ -192,10 +210,10 @@ class CpLogMonitorTimeoutTest {
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60); // 16 minutes ago
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1"
+            "dataTypeA", "phase1", null, null, null, null, null
         );
 
         // Setup: ES returns failure
@@ -227,10 +245,10 @@ class CpLogMonitorTimeoutTest {
         Instant createdAt = Instant.now().minusSeconds(5 * 60);
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1"
+            "dataTypeA", "phase1", null, null, null, null, null
         );
 
         // Setup: Both sources return NotFound
@@ -266,10 +284,10 @@ class CpLogMonitorTimeoutTest {
         Instant createdAt = Instant.now().minusSeconds(15 * 60 + 60);
         StageRecord record = new StageRecord(
             1L, "test-site", 1, "TestSender",
-            "meta-456", "data-789", "LOT-001", "W1", null, "test.csv",
+            "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1"
+            "dataTypeA", "phase1", null, null, null, null, null
         );
 
         // Setup: ES returns NotFound but pp_log has success
