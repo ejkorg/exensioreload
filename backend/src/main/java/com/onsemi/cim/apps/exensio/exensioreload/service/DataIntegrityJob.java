@@ -388,7 +388,6 @@ public class DataIntegrityJob {
         }
         String requestId = rs.getString("request_id");
 
-        // StageRecord requires all 32 fields - fill missing ones with null/empty
         return new StageRecord(
             id, site, senderId, senderName, metadataId, dataId, lot, wafer,
             null,  // device

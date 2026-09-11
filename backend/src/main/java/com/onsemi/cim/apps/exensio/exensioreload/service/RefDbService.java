@@ -1,4 +1,4 @@
-package com.onsemi.cim.apps.exensio.exensioreload.service;
+﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -405,7 +405,7 @@ public class RefDbService {
         int requeuedCount = 0;
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
                 "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -516,7 +516,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatch(int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
             "FROM " + table + " WHERE status = 'STAGED' ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1352,7 +1352,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSite(String site, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
                 "FROM " + table + " WHERE status = 'STAGED' AND site = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1372,7 +1372,7 @@ public class RefDbService {
 
     public List<StageRecord> fetchNextBatchForSender(String site, int senderId, int limit) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
                 "FROM " + table + " WHERE status = 'STAGED' AND site = ? AND sender_id = ? ORDER BY created_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1396,7 +1396,7 @@ public class RefDbService {
             limit = 200;
         }
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, " + coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at " +
                 "FROM " + table + " WHERE status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING') AND processed_at IS NULL ORDER BY updated_at FETCH FIRST ? ROWS ONLY";
         List<StageRecord> records = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -1452,7 +1452,7 @@ public class RefDbService {
 
     public List<StageRecord> listRecords(String site, Integer senderId, String status, int offset, int limit, String sortBy, String sortDir, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, ")
             .append(coalesce("error_message", "''"))
             .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at FROM ")
                 .append(table)
@@ -1533,7 +1533,7 @@ public class RefDbService {
 
     public List<StageRecord> listRecords(String site, Integer senderId, String status, String q, int offset, int limit, String sortBy, String sortDir, String requestId, List<String> devices) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, ")
                 .append(coalesce("error_message", "''"))
                 .append(" AS error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at FROM ")
                 .append(table)
@@ -1612,7 +1612,7 @@ public class RefDbService {
 
     public List<StageRecord> listRecordsForUser(String site, Integer senderId, String status, int offset, int limit, String userKeyFilter, String sortBy, String sortDir, String requestId) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, ")
             .append(coalesce("error_message", "''"))
             .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at FROM ")
                 .append(table)
@@ -1676,7 +1676,7 @@ public class RefDbService {
 
     public List<StageRecord> listRecordsForUser(String site, Integer senderId, String status, String q, int offset, int limit, String userKeyFilter, String sortBy, String sortDir, String requestId) {
         String table = properties.getStagingTable();
-        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, filename, end_time, status, ")
+        StringBuilder sb = new StringBuilder("SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, ")
             .append(coalesce("error_message", "''"))
             .append(" AS error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at FROM ")
                 .append(table)
@@ -2253,6 +2253,9 @@ public class RefDbService {
                 rs.getString("lot"),
                 rs.getString("wafer"),
                 safeString(rs, "device"),
+                safeString(rs, "step"),
+                safeString(rs, "tester_id"),
+                safeString(rs, "test_program"),
                 rs.getString("filename"),
                 toInstant(safeTimestamp(rs, "end_time")),
                 rs.getString("status"),
@@ -2619,6 +2622,15 @@ public class RefDbService {
         boolean deviceAdded = ensureColumn(connection, table, "DEVICE", isOracle
                 ? "ALTER TABLE " + table + " ADD (device VARCHAR2(100))"
                 : "ALTER TABLE " + table + " ADD (device VARCHAR(100))");
+        boolean stepAdded = ensureColumn(connection, table, "STEP", isOracle
+                ? "ALTER TABLE " + table + " ADD (step VARCHAR2(100))"
+                : "ALTER TABLE " + table + " ADD (step VARCHAR(100))");
+        boolean testerIdAdded = ensureColumn(connection, table, "TESTER_ID", isOracle
+                ? "ALTER TABLE " + table + " ADD (tester_id VARCHAR2(100))"
+                : "ALTER TABLE " + table + " ADD (tester_id VARCHAR(100))");
+        boolean testProgramAdded = ensureColumn(connection, table, "TEST_PROGRAM", isOracle
+                ? "ALTER TABLE " + table + " ADD (test_program VARCHAR2(256))"
+                : "ALTER TABLE " + table + " ADD (test_program VARCHAR(256))");
         boolean cpOutputPathAdded = ensureColumn(connection, table, "CP_OUTPUT_PATH", isOracle
                 ? "ALTER TABLE " + table + " ADD (cp_output_path VARCHAR2(1000))"
                 : "ALTER TABLE " + table + " ADD (cp_output_path VARCHAR(1000))");
@@ -2638,7 +2650,8 @@ public class RefDbService {
                 ? "ALTER TABLE " + table + " ADD (test_phase VARCHAR2(50))"
                 : "ALTER TABLE " + table + " ADD (test_phase VARCHAR(50))");
 
-        if (deviceAdded || cpOutputPathAdded || cpOutputTargetAdded || exensioWaferKeyAdded
+        if (deviceAdded || stepAdded || testerIdAdded || testProgramAdded
+                || cpOutputPathAdded || cpOutputTargetAdded || exensioWaferKeyAdded
                 || exensioPgKeyAdded || dataTypeAdded || testPhaseAdded) {
             log.info("Extended metadata columns ensured for {}", table);
         }
@@ -4440,7 +4453,7 @@ public class RefDbService {
      */
     public StageRecord fetchRecordById(long recordId) {
         String table = properties.getStagingTable();
-        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, filename, end_time, status, " +
+        String sql = "SELECT id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, " +
                      coalesce("error_message", "''") + " AS error_message, created_at, updated_at, processed_at, enrichment_started_at, " +
                      "staged_by, last_requested_by, last_requested_at, request_id, cp_output_path, cp_output_target, exensio_wafer_key, " +
                      "exensio_pg_key, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, " +
