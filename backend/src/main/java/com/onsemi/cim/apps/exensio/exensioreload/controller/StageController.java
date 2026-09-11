@@ -455,6 +455,7 @@ public class StageController {
         // Token parameter is for EventSource compatibility (EventSource can't send custom headers)
         // Authentication is still enforced by Spring Security filter chain
         log.info("SSE monitor endpoint called for sessionId: {}, token present: {}", sessionId, token != null && !token.isEmpty());
+        log.info("Full path: /api/stage/sessions/{}/monitor", sessionId);
         
         // Validate session exists (allow SSE connection even for non-existent sessions to support polling)
         // This prevents 404 errors and allows fallback to polling updates
@@ -469,22 +470,85 @@ public class StageController {
             log.warn("Error validating session {}: {}, allowing SSE connection anyway", sessionId, ex.getMessage());
         }
 
-        // Set SSE-specific headers
-        response.setContentType("text/event-stream");
+        // Set SSE-specific headers - ensure proper configuration
+        response.setContentType("text/event-stream; charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         response.setHeader("Pragma", "no-cache");
         response.setHeader("Expires", "0");
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+        response.setHeader("Transfer-Encoding", "chunked");
 
         // CORS headers for SSE
         response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-        log.info("SSE headers set, creating emitter for sessionId: {}", sessionId);
+        log.info("SSE headers set successfully for sessionId: {}, creating emitter", sessionId);
 
         return monitorService.subscribe(sessionId);
+    }
+
+    /**
+     * Fallback polling endpoint for session updates when SSE is unavailable.
+     * Returns the current session state and record updates.
+     * 
+     * This can be called periodically (e.g., every 5 seconds) as an alternative to SSE.
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")
+    @GetMapping("/sessions/{sessionId}/status")
+    public ResponseEntity<Map<String, Object>> getSessionStatus(@PathVariable String sessionId) {
+        log.info("Polling status endpoint called for sessionId: {}", sessionId);
+        
+        try {
+            StagingSessionDetail session = stageSessionService.getSession(sessionId, getCurrentUsername(), isAdminUser());
+            if (session == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Map<String, Object> status = new HashMap<>();
+            status.put("sessionId", sessionId);
+            status.put("site", session.site());
+            status.put("senderId", session.senderId());
+            status.put("senderName", session.senderName());
+            status.put("status", session.status());
+            status.put("totalFiles", session.totalFiles());
+            status.put("filesStaged", session.filesStaged());
+            status.put("filesEnqueued", session.filesEnqueued());
+            status.put("filesDone", session.filesDone());
+            status.put("filesFailed", session.filesFailed());
+            status.put("createdAt", session.createdAt());
+            status.put("updatedAt", session.updatedAt());
+            status.put("completedAt", session.completedAt());
+            status.put("timestamp", Instant.now().toString());
+            
+            return ResponseEntity.ok(status);
+        } catch (Exception ex) {
+            log.error("Error getting session status for sessionId: {}", sessionId, ex);
+            return ResponseEntity.status(500).body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    /**
+     * Health check endpoint for SSE connectivity.
+     * Can be called to verify that the SSE endpoint is accessible before attempting to connect.
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")
+    @GetMapping("/sessions/{sessionId}/monitor-health")
+    public ResponseEntity<Map<String, Object>> monitorHealth(@PathVariable String sessionId) {
+        log.info("Monitor health check endpoint called for sessionId: {}", sessionId);
+        
+        Map<String, Object> health = new HashMap<>();
+        health.put("sessionId", sessionId);
+        health.put("status", "ok");
+        health.put("endpoint", "/api/stage/sessions/" + sessionId + "/monitor");
+        health.put("timestamp", Instant.now().toString());
+        health.put("sse_supported", true);
+        health.put("fallback_polling_endpoint", "/api/stage/sessions/" + sessionId + "/status");
+        
+        return ResponseEntity.ok(health);
     }
 
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('USER')")
