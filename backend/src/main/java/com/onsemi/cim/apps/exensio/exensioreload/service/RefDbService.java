@@ -235,7 +235,7 @@ public class RefDbService {
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
         String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at) " +
-            "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)";
+            "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?, NULL, NULL, NULL, NULL, NULL)";
         int inserted = 0;
         int requeued = 0;
         List<DuplicatePayload> duplicates = new ArrayList<>();
@@ -403,8 +403,8 @@ public class RefDbService {
         int requeuedCount = 0;
         String table = properties.getStagingTable();
         String idExpr = nextIdExpr(table);
-        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, error_message, created_at, updated_at, processed_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase) " +
-                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?)";
+        String sql = "INSERT INTO " + table + " (id, site, sender_id, sender_name, metadata_id, data_id, lot, wafer, device, step, tester_id, test_program, filename, end_time, status, error_message, created_at, updated_at, processed_at, enrichment_started_at, staged_by, last_requested_by, last_requested_at, request_id, data_type, test_phase, current_pipeline_stage, completed_pipeline_stages, stage_metadata, pipeline_started_at, last_stage_check_at) " +
+                "VALUES (" + idExpr + ", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED', NULL, " + timestampExpr() + ", " + timestampExpr() + ", NULL, NULL, ?, ?, " + timestampExpr() + ", ?, ?, ?, NULL, NULL, NULL, NULL, NULL)";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (PayloadCandidate candidate : batch) {
