@@ -405,6 +405,8 @@
     <include file="db.changelog-9.15-widen-sender-stage-status.xml" relativeToChangelogFile="true" />
     <!-- Allow audit_log.user_id to be NULL for system and scheduled events -->
     <include file="db.changelog-9.16-allow-null-audit-user-id.xml" relativeToChangelogFile="true" />
+    <!-- Add step, tester_id, test_program columns to SENDER_STAGE for monitor UI display -->
+    <include file="db.changelog-9.17-add-step-tester-test-program.xml" relativeToChangelogFile="true" />
     <!-- Discovery phase enhancement: device, step, tester_id, test_program columns -->
     <include file="db.changelog-10.1-discovery-metadata-columns.xml" relativeToChangelogFile="true" />
     <!-- Alerts system: threshold-based monitoring and notification -->

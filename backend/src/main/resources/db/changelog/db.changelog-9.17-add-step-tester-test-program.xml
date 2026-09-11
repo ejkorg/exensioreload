@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add step, tester_id, and test_program columns to SENDER_STAGE for monitor display -->
+    <changeSet id="9.17-add-step-column" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="step" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add step column to SENDER_STAGE for displaying test step information in monitor UI</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="step" type="VARCHAR(255)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="9.17-add-tester-id-column" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="tester_id" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add tester_id column to SENDER_STAGE for displaying tester identifier in monitor UI</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="tester_id" type="VARCHAR(100)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="9.17-add-test-program-column" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="test_program" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add test_program column to SENDER_STAGE for displaying test program/recipe information in monitor UI</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="test_program" type="VARCHAR(255)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Create index for efficient filtering by these columns -->
+    <changeSet id="9.17-create-step-tester-index" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <columnExists tableName="SENDER_STAGE" columnName="step" />
+                <columnExists tableName="SENDER_STAGE" columnName="tester_id" />
+                <not>
+                    <indexExists tableName="SENDER_STAGE" indexName="idx_sender_stage_step_tester" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on step and tester_id columns for efficient filtering in monitor UI</comment>
+        <createIndex indexName="idx_sender_stage_step_tester" tableName="SENDER_STAGE">
+            <column name="step" />
+            <column name="tester_id" />
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

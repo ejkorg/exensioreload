@@ -37,6 +37,9 @@ public class StageRecordMapper {
                     null,                  // lot
                     null,                  // wafer
                     null,                  // device
+                    null,                  // step
+                    null,                  // testerId
+                    null,                  // testProgram
                     null,                  // filename
                     null,                  // endTime
                     null,                  // status
@@ -124,6 +127,9 @@ public class StageRecordMapper {
                 lot,
                 wafer,
                 record.device(),
+                normalizeDisplayValue(record.step(), "-"),
+                normalizeDisplayValue(record.testerId(), "-"),
+                normalizeDisplayValue(record.testProgram(), "-"),
                 filename,
                 toIso(record.endTime()),
                 record.status(),
