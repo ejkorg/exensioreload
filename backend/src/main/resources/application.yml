@@ -68,7 +68,8 @@ pipeline:
     # Cache expiration time in minutes for parsed pipeline configurations
     # Set to 5 by default; increase for stable configurations, decrease for frequent updates
     expire-after-minutes: 5
-  thread-pool-size: ${PIPELINE_THREAD_POOL_SIZE:5}
+  thread-pool-size:
+    ${PIPELINE_THREAD_POOL_SIZE:5}
     # Number of threads for parallel stage processing within a site batch.
     # Default: 5 (suitable for 10-50 concurrent records per poll cycle).
     # Increase for high-volume sites; decrease if thread pool contention observed.
@@ -251,8 +252,7 @@ pplog:
   # Poll interval (milliseconds) for checking PP_LOG table for record completion
   # Default: 60000 (1 minute) - independent of CP polling interval
   # Requirement: 5.1, 5.4
-  poll-interval-ms: 
-
+  poll-interval-ms: 60000
 
   url: ${SNOW_URL:}
   username: ${SNOW_USER:}
@@ -262,17 +262,8 @@ pplog:
 
 # Configuration notes:
 # - SNOW_URL must include database, schema, and warehouse parameters
-# - Example: jdbc:# PP_LOG database configuration for Parametric Program Logging
-# Used by PpLogMonitor for checking PP_LOG completion (task 11)
-pplog:
-  # Poll interval (milliseconds) for checking PP_LOG table for record completion
-  # Default: 60000 (1 minute) - independent of CP polling interval
-  # Requirement: 5.1, 5.4
-  poll-interval-ms: 
-
-//account.region.azure.snowflakecomputing.com/?db=ANALYTICSPRD&schema=MFG&warehouse=MFG_PRD_RPT_WH&JDBC_QUERY_RESULT_FORMAT=JSON
+# - Example: jdbc://account.region.azure.snowflakecomputing.com/?db=ANALYTICSPRD&schema=MFG&warehouse=MFG_PRD_RPT_WH&JDBC_QUERY_RESULT_FORMAT=JSON
 # - JDBC_QUERY_RESULT_FORMAT=JSON enables JSON parsing for lot verification queries
 # - This datasource is managed by ExensioPreCheckService, NOT by Spring's JPA/Hibernate
 # - Set these in systemd service file or environment before starting the application
 # - Custom namespace prevents Spring Boot from treating this as the primary datasource
-
