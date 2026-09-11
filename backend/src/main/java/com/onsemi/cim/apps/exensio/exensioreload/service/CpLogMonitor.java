@@ -19,6 +19,8 @@ import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchPropertie
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.pipeline.BatchRecordProcessor;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineAction;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineOrchestrator;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
@@ -60,6 +62,7 @@ public class CpLogMonitor {
     private final IntegrationStatusService integrationStatusService;
     private final StageMonitorService stageMonitorService;
     private final BatchRecordProcessor batchProcessor;
+    private final PipelineOrchestrator orchestrator;
 
     private final AtomicLong totalRecordsProcessed = new AtomicLong(0);
     private final AtomicLong successCount = new AtomicLong(0);
@@ -80,7 +83,8 @@ public class CpLogMonitor {
                         StagePipelineOrchestrator pipelineOrchestrator,
                         IntegrationStatusService integrationStatusService,
                         StageMonitorService stageMonitorService,
-                        BatchRecordProcessor batchProcessor) {
+                        BatchRecordProcessor batchProcessor,
+                        PipelineOrchestrator orchestrator) {
         this.refDbService = refDbService;
         this.elasticsearchLogService = elasticsearchLogService;
         this.exensioClient = exensioClient;
@@ -91,6 +95,7 @@ public class CpLogMonitor {
         this.integrationStatusService = integrationStatusService;
         this.stageMonitorService = stageMonitorService;
         this.batchProcessor = batchProcessor;
+        this.orchestrator = orchestrator;
     }
 
     @PostConstruct
@@ -110,18 +115,22 @@ public class CpLogMonitor {
 
     /**
      * Main polling loop. Runs on a fixed delay configured by {@code cp.elasticsearch.poll-interval-ms}
-     * (default: 60 000 ms). Requirements: 2.1
-     */
-    @Scheduled(fixedDelayString = "${cp.elasticsearch.poll-interval-ms:60000}")
-    /**
-     * Main polling loop. Runs on a fixed delay configured by {@code cp.elasticsearch.poll-interval-ms}
-     * (default: 60 000 ms). Requirements: 2.1
-     * 
+     * (default: 60 000 ms).
+     *
+     * Routing logic (Task 10.1, 10.2):
+     * - Records whose site has a pipeline configuration route through PipelineOrchestrator
+     *   and are tracked under CP_MONITORING status.
+     * - Records whose site has NO pipeline configuration use the legacy processRecord() path
+     *   and continue to use ELASTICSEARCH_MONITORING status for full backward compatibility.
+     *
      * Batch Processing Optimization (Task 16.1):
      * - Group records by site to minimize config lookups
      * - Process records in parallel within each site batch using thread pool
      * - BatchRecordProcessor handles batch partitioning and parallel execution
+     *
+     * Requirements: 2.1, 10.1, 10.2, 11.1, 11.4, 16.1
      */
+    @Scheduled(fixedDelayString = "${cp.elasticsearch.poll-interval-ms:60000}")
     public void monitorEnrichmentRecords() {
         boolean hasEs = props.isConfigured();
         boolean hasPpLog = ppLogDbProperties.isPpLogAvailable();
@@ -132,25 +141,69 @@ public class CpLogMonitor {
             return;
         }
 
-        List<StageRecord> enrichmentRecords;
+        // ── Pipeline-aware records (CP_MONITORING) ──────────────────────────
+        // These records belong to sites that have a pipeline config in dbconnections.yml.
+        // Route them through PipelineOrchestrator → determineNextAction → executeStage.
+        List<StageRecord> pipelineRecords;
         try {
-            // Requirement 2.2: query only ENRICHMENT records
-            enrichmentRecords = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE);
+            pipelineRecords = refDbService.listRecords(null, null, "CP_MONITORING", Integer.MAX_VALUE);
         } catch (Exception e) {
-            log.warn("Failed to load ENRICHMENT records from DB — skipping poll cycle: {}", e.getMessage());
+            log.warn("Failed to load CP_MONITORING records from DB: {}", e.getMessage());
+            pipelineRecords = List.of();
+        }
+
+        if (!pipelineRecords.isEmpty()) {
+            log.debug("Pipeline-orchestrated poll: {} CP_MONITORING record(s)", pipelineRecords.size());
+            totalRecordsProcessed.addAndGet(pipelineRecords.size());
+
+            batchProcessor.processBatch(pipelineRecords, record -> {
+                // Requirements: 10.1, 11.2, 11.3
+                PipelineAction action = orchestrator.determineNextAction(record);
+
+                if (action instanceof PipelineAction.UseLegacyPath) {
+                    // Site lost its pipeline config between status set and now — fall through to legacy
+                    log.debug("Record {} (CP_MONITORING) switched to legacy path: no pipeline config for site '{}'",
+                            record.id(), record.site());
+                    processRecord(record);
+
+                } else if (action instanceof PipelineAction.WaitForDependencies waitAction) {
+                    log.debug("Record {} waiting for pipeline dependencies: {}", record.id(), waitAction.blockedByDependencies());
+                    // Keep waiting — retry on next poll cycle
+
+                } else if (action instanceof PipelineAction.ExecuteStage execAction) {
+                    log.debug("Record {} executing pipeline stage '{}' via orchestrator", record.id(), execAction.stage().name());
+                    orchestrator.executeStage(record, execAction.stage(), execAction.handler());
+
+                } else {
+                    log.warn("Unknown PipelineAction type for record {}: {}", record.id(), action.getClass().getName());
+                }
+            });
+        }
+
+        // ── Legacy records (ELASTICSEARCH_MONITORING) ────────────────────────
+        // These records belong to sites with NO pipeline config. They continue to use
+        // the original processRecord() logic unchanged for full backward compatibility.
+        // Requirements: 11.1, 11.4
+        List<StageRecord> legacyRecords;
+        try {
+            legacyRecords = refDbService.listRecords(null, null, "ELASTICSEARCH_MONITORING", Integer.MAX_VALUE);
+        } catch (Exception e) {
+            log.warn("Failed to load ELASTICSEARCH_MONITORING records from DB — skipping legacy poll: {}", e.getMessage());
             return;
         }
 
-        if (enrichmentRecords.isEmpty()) {
-            log.debug("No ENRICHMENT records found — nothing to poll");
+        if (legacyRecords.isEmpty()) {
+            if (pipelineRecords.isEmpty()) {
+                log.debug("No enrichment records found (CP_MONITORING or ELASTICSEARCH_MONITORING) — nothing to poll");
+            }
             return;
         }
 
-        log.debug("Polling Elasticsearch for {} ENRICHMENT record(s)", enrichmentRecords.size());
+        log.debug("Legacy poll: {} ELASTICSEARCH_MONITORING record(s)", legacyRecords.size());
+        totalRecordsProcessed.addAndGet(legacyRecords.size());
 
-        totalRecordsProcessed.addAndGet(enrichmentRecords.size());
-        // Process records sequentially for now (batch processor not yet implemented)
-        for (StageRecord record : enrichmentRecords) {
+        // Legacy path: process sequentially using original enrichment logic
+        for (StageRecord record : legacyRecords) {
             processRecord(record);
         }
     }
