@@ -28,6 +28,19 @@ CEBU-PROD:
   host: cpyqsp-db.onsemi.com:1529:CPYQSP
   password: dpownerp321
   user: DATAPORT_OWNER
+  pipeline:
+    stages:
+      - name: cp
+        type: CP
+        timeoutMinutes: 30
+      - name: pplog
+        type: PPLOG
+        dependsOn: [cp]
+        timeoutMinutes: 20
+      - name: exensio
+        type: EXENSIO
+        dependsOn: [pplog]
+        timeoutMinutes: 60
 CEBU-QA:
   dbType: oracle
   schema: DATAPORT_OWNER
@@ -68,6 +81,20 @@ CZ4-CZ2-PROD:
   host: cz4mfgp-db1.onsemi.com:1528/svcCZ4MFGP_DATAPORT.onsemi.com
   password: dportprd_2019
   user: DATAPORT_OWNER
+  # Add pipeline configuration here
+  pipeline:
+    stages:
+      - name: cp
+        type: CP
+        timeoutMinutes: 30
+      - name: pplog
+        type: PPLOG
+        timeoutMinutes: 25
+      - name: exensio
+        type: EXENSIO
+        dependsOn: [cp]
+        timeoutMinutes: 60
+
 CZ4-CZ2-QA:
   dbType: oracle
   schema: DATAPORT_OWNER
@@ -383,7 +410,7 @@ UWH-GTAT-QA:
 # ============================================================================
 # PIPELINE CONFIGURATION EXAMPLES (Task 15.2)
 # ============================================================================
-# 
+#
 # The pipeline orchestration system supports configuration-driven, dependency-aware
 # stage execution. Uncomment and customize these examples for your site.
 #

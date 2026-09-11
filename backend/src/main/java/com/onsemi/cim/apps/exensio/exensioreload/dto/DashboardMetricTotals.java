@@ -37,7 +37,7 @@ public record DashboardMetricTotals(
     public long getExensioTimeout() { return completedManualVerification; }
     public long getFailed() { return cpFailed + loadFailed; }
     public long getEnqueued() { return queuedForCp + elasticsearchMonitoring + exensioMonitoring; }
-    public long getProcessing() { return elasticsearchMonitoring + cpTimeout + exensioMonitoring + completedManualVerification; }
+    public long getProcessing() { return elasticsearchMonitoring + cpTimeout + completedManualVerification; }
 
     /** All in-flight monitoring states (for backward-compatible display). */
     public long enqueued() { return queuedForCp + elasticsearchMonitoring + exensioMonitoring; }

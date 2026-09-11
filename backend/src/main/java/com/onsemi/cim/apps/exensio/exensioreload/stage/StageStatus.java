@@ -41,10 +41,12 @@ public record StageStatus(
     /**
      * Calculate backlog records still in processing pipeline.
      * Includes timeout/warning states as they are uncertain and may resolve later.
+     * Note: EXENSIO_MONITORING records are NOT counted as backlog as they are already
+     * assumed loaded but need verification.
      */
     public long backlog() {
         return queuedForCp + elasticsearchMonitoring + cpTimeout
-            + exensioMonitoring + completedManualVerification;
+            + completedManualVerification;
     }
 
     /** All failure states combined (for backward compatibility where both are shown together). */
@@ -57,6 +59,7 @@ public record StageStatus(
     /**
      * Backward compatibility: compute enqueued as queuedForCp + elasticsearchMonitoring + exensioMonitoring.
      * This allows existing code to continue working without modification.
+     * Note: EXENSIO_MONITORING is included in enqueued for backward compatibility.
      */
     public long enqueued() {
         return queuedForCp + elasticsearchMonitoring + exensioMonitoring;
