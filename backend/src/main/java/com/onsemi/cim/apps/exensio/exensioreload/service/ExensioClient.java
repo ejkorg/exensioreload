@@ -880,6 +880,7 @@ public class ExensioClient {
             List<StageRecord> records, String traceId, List<String> schemas) {
 
         Map<String, ExensioLoadError> result = new HashMap<>();
+        int timeoutMinutes = props.getTimeoutMinutes();
 
         for (StageRecord rec : records) {
             String fileNameFilter = rec.filename() != null ? rec.filename().trim() : null;
@@ -898,30 +899,41 @@ public class ExensioClient {
                 continue;
             }
 
-            String escapedBaseName = escapeSqlLiteral(baseName.toUpperCase(Locale.ROOT));
+            // Use first 15 characters for regex matching to reduce false positives from file reloads
+            String filePrefix = baseName.length() > 15 ? baseName.substring(0, 15) : baseName;
+            String escapedFilePrefix = escapeSqlLiteral(filePrefix.toUpperCase(Locale.ROOT));
 
-            StringBuilder fallbackSql = new StringBuilder();
-            fallbackSql.append("SELECT NVL(rf.file_name, '') AS file_name, dl.error_code, ");
-            fallbackSql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || ");
-            fallbackSql.append("COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
-            fallbackSql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
-            fallbackSql.append("FROM dp_log dl ");
-            fallbackSql.append("JOIN raw_file rf ON rf.rawfile_key = dl.rawfile_key ");
-            fallbackSql.append("JOIN error_message em ON em.msg_key = dl.msg_key ");
-            fallbackSql.append("LEFT JOIN string_holder sh1 ON sh1.str_key = em.str_key1 ");
-            fallbackSql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
-            fallbackSql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
-            fallbackSql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
-            fallbackSql.append("WHERE dl.error_code != 0 AND UPPER(rf.file_name) LIKE '%");
-            fallbackSql.append(escapedBaseName);
-            fallbackSql.append("%' ORDER BY dl.start_time DESC");
+            // Calculate time window: 20 minutes before createdAt to timeoutMinutes after now
+            // This ensures we only match the current loading instance, not previous reloads
+            Instant windowStart = rec.createdAt().minus(Duration.ofMinutes(20));
+            Instant windowEnd = Instant.now().plus(Duration.ofMinutes(timeoutMinutes));
+            java.sql.Timestamp sqlWindowStart = java.sql.Timestamp.from(windowStart);
+            java.sql.Timestamp sqlWindowEnd = java.sql.Timestamp.from(windowEnd);
+
+            StringBuilder rawDataSql = new StringBuilder();
+            rawDataSql.append("SELECT NVL(rf.file_name, '') AS file_name, dl.error_code, ");
+            rawDataSql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || ");
+            rawDataSql.append("COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
+            rawDataSql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
+            rawDataSql.append("FROM dp_log dl ");
+            rawDataSql.append("JOIN raw_file rf ON rf.rawfile_key = dl.rawfile_key ");
+            rawDataSql.append("JOIN error_message em ON em.msg_key = dl.msg_key ");
+            rawDataSql.append("LEFT JOIN string_holder sh1 ON sh1.str_key = em.str_key1 ");
+            rawDataSql.append("LEFT JOIN string_holder sh2 ON sh2.str_key = em.str_key2 ");
+            rawDataSql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
+            rawDataSql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
+            rawDataSql.append("WHERE dl.error_code != 0 ");
+            rawDataSql.append("AND REGEXP_LIKE(UPPER(rf.file_name), '^").append(escapedFilePrefix).append(".*') ");
+            rawDataSql.append("AND dl.insert_time >= TO_TIMESTAMP('").append(sqlWindowStart).append("', 'YYYY-MM-DD HH24:MI:SS.FF') ");
+            rawDataSql.append("AND dl.insert_time <= TO_TIMESTAMP('").append(sqlWindowEnd).append("', 'YYYY-MM-DD HH24:MI:SS.FF') ");
+            rawDataSql.append("ORDER BY dl.insert_time DESC FETCH FIRST 1 ROW ONLY");
 
             String lotKey = rec.lot() != null ? rec.lot().toUpperCase(Locale.ROOT) : ("ID_" + rec.id());
 
             for (String schema : schemas) {
                 try {
                     String token = authService.getToken(schema);
-                    JsonNode rows = executeRawSql(fallbackSql.toString(), token, traceId);
+                    JsonNode rows = executeRawSql(rawDataSql.toString(), token, traceId);
                     if (rows != null && rows.isArray() && !rows.isEmpty()) {
                         JsonNode row = rows.get(0); // most recent error only
                         result.put(lotKey, new ExensioLoadError(
@@ -933,12 +945,12 @@ public class ExensioClient {
                                 getText(row, "FULL_ERROR_MESSAGE"),
                                 getText(row, "ERROR_TIME")
                         ));
-                        log.info("[ExensioLoadError] RAW_FILE fallback hit for lot={} file={} in schema={} (traceId={})",
-                                rec.lot(), fileNameFilter, schema, traceId);
+                        log.info("[ExensioLoadError] Raw data error query hit for lot={} file={} in schema={} (first 15 chars match, time window={}-{}) (traceId={})",
+                                rec.lot(), fileNameFilter, schema, windowStart, windowEnd, traceId);
                         break; // found in this schema, no need to check others
                     }
                 } catch (Exception ex) {
-                    log.warn("[ExensioLoadError] RAW_FILE fallback query failed for lot={} in schema={} (traceId={}): {}",
+                    log.warn("[ExensioLoadError] Raw data error query failed for lot={} in schema={} (traceId={}): {}",
                             rec.lot(), schema, traceId, ex.getMessage());
                 }
             }

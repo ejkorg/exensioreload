@@ -100,6 +100,12 @@ app:
     enabled: true
     # Cron expression: every 5 minutes by default
     cron: "0 */5 * * * *"
+  # Manual verification retry settings
+  manual-verification:
+    # Interval (milliseconds) for silent retry of COMPLETED_MANUAL_VERIFICATION_REQUIRED records
+    # Default: 300000 (5 minutes) - queries Exensio silently and auto-completes if found
+    # Requirement: Silent background verification + auto-completion
+    retry-interval-ms: 300000
 
 # Optional: Dev-only local authorization bootstrap (use Liquibase in prod)
 #refdb:
