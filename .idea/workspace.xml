@@ -6,6 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="3e6f22a0-b93f-44c4-8c4c-143d0c6f1c52" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/PipelineStatusController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/PipelineStatusController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigValidator.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigValidator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineOrchestrator.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineOrchestrator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/PpLogMonitor.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/PpLogMonitor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
