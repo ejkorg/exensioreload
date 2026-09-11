@@ -1,4 +1,4 @@
-﻿package com.onsemi.cim.apps.exensio.exensioreload.service;
+package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
