@@ -593,12 +593,12 @@ public class CpLogMonitor {
                 case ExensioLotWaferResult.Found found -> {
                     log.info("Exensio direct lookup resolved record id={}: waferKey={}, pgKey={}",
                             record.id(), found.waferKey(), found.pgKey());
-                    String statusMsg = String.format("Resolved via Exensio direct lookup: waferKey=%d, pgKey=%d",
-                            found.waferKey(), found.pgKey());
+                    String statusMsg = String.format("Resolved via Exensio direct lookup: waferKey=%d, pgKey=%d, schema=%s",
+                            found.waferKey(), found.pgKey(), found.schema());
                     integrationStatusService.updateCpStatusForRecord(stageRecordId, "success", statusMsg);
                     integrationStatusService.updateElasticsearch(requestId, "success", statusMsg);
                     successCount.incrementAndGet();
-                    refDbService.markCompletedFromExensio(record, found.waferKey(), found.pgKey());
+                    refDbService.markCompletedFromExensio(record, found.waferKey(), found.pgKey(), found.schema());
                 }
                 case ExensioLotWaferResult.NotFound notFound -> {
                     log.info("Exensio direct lookup also not found for record id={} — marking DONE with manual verify",

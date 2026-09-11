@@ -1025,14 +1025,14 @@ public class RefDbService {
 
     /**
      * Marks a record as DONE after Exensio confirms the wafer was loaded.
-     * Stores the Exensio wafer_key and pg_key for future results queries.
+     * Stores the Exensio wafer_key, pg_key, and destination schema for future results queries.
      * Broadcasts SSE ROW_UPDATE with status "COMPLETED".
      */
-    public void markCompletedFromExensio(StageRecord record, Long exensioWaferKey, long exensioPgKey) {
+    public void markCompletedFromExensio(StageRecord record, Long exensioWaferKey, long exensioPgKey, String exensioSchema) {
         if (record == null) return;
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
+                " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?, exensio_schema = ?," +
             " processed_at = " + timestampExpr() +
                 " WHERE id = ?";
         try (Connection connection = dataSource.getConnection();
@@ -1043,7 +1043,8 @@ public class RefDbService {
                 ps.setNull(1, java.sql.Types.NUMERIC);
             }
             ps.setLong(2, exensioPgKey);
-            ps.setLong(3, record.id());
+            ps.setString(3, exensioSchema);
+            ps.setLong(4, record.id());
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed marking record as DONE from Exensio", ex);
@@ -1056,6 +1057,7 @@ public class RefDbService {
             evt.put("msg", "Loaded into Exensio");
             evt.put("exensioWaferKey", exensioWaferKey);
             evt.put("exensioPgKey", exensioPgKey);
+            evt.put("exensioSchema", exensioSchema);
             safeSendEvent(record.requestId(), "ROW_UPDATE", evt);
             // Record state change to batcher for aggregation event
             recordStateChangeForBatcher(record.requestId(), "COMPLETED");
@@ -2277,7 +2279,10 @@ public class RefDbService {
                 safeString(rs, "completed_pipeline_stages"),
                 safeString(rs, "stage_metadata"),
                 toInstant(safeTimestamp(rs, "pipeline_started_at")),
-                toInstant(safeTimestamp(rs, "last_stage_check_at"))
+                toInstant(safeTimestamp(rs, "last_stage_check_at")),
+                // Schema tracking fields
+                safeString(rs, "exensio_schema"),
+                safeString(rs, "cp_output_schema")
         );
     }
 

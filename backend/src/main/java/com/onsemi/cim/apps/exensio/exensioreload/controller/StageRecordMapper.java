@@ -54,6 +54,8 @@ public class StageRecordMapper {
                     null,                  // cpOutputTarget
                     null,                  // exensioWaferKey
                     null,                  // exensioPgKey
+                    null,                  // exensioSchema
+                    null,                  // cpOutputSchema
                     null,                  // cpIntegrationStatus
                     null,                  // cpIntegrationMessage
                     null,                  // exensioIntegrationStatus
@@ -144,6 +146,8 @@ public class StageRecordMapper {
                 record.cpOutputTarget(),
                 record.exensioWaferKey(),
                 record.exensioPgKey(),
+                record.exensioSchema(),
+                record.cpOutputSchema(),
                 cpIntegrationStatus,
                 cpIntegrationMessage,
                 exensioIntegrationStatus,

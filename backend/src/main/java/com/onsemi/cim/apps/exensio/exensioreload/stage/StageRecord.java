@@ -38,5 +38,8 @@ public record StageRecord(
         String completedPipelineStages,
         String stageMetadata,
         Instant pipelineStartedAt,
-        Instant lastStageCheckAt
+        Instant lastStageCheckAt,
+        // Schema tracking fields
+        String exensioSchema,
+        String cpOutputSchema
 ) {}

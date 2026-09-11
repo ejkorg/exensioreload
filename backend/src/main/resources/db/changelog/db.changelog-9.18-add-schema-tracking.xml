@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!-- Add exensio_schema column to track which schema (PRODUCTION/SANDBOX) records were completed to -->
+    <changeSet id="9.18-add-exensio-schema-column" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="exensio_schema" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add exensio_schema column to track which Exensio schema (PRODUCTION/SANDBOX) records were completed to for audit trail and reporting</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="exensio_schema" type="VARCHAR(50)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Add cp_output_schema column to track CP output target detected during processing -->
+    <changeSet id="9.18-add-cp-output-schema-column" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <not>
+                    <columnExists tableName="SENDER_STAGE" columnName="cp_output_schema" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add cp_output_schema column to track CP output target detected (PRODUCTION/SANDBOX/UNKNOWN) for troubleshooting</comment>
+        <addColumn tableName="SENDER_STAGE">
+            <column name="cp_output_schema" type="VARCHAR(50)">
+                <constraints nullable="true" />
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!-- Create index for schema-based reporting and filtering -->
+    <changeSet id="9.18-create-schema-index" author="exensioreload">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="SENDER_STAGE" />
+                <columnExists tableName="SENDER_STAGE" columnName="exensio_schema" />
+                <not>
+                    <indexExists tableName="SENDER_STAGE" indexName="idx_sender_stage_schema" />
+                </not>
+            </and>
+        </preConditions>
+        <comment>Create index on exensio_schema for efficient schema-based reporting and filtering</comment>
+        <createIndex indexName="idx_sender_stage_schema" tableName="SENDER_STAGE">
+            <column name="status" />
+            <column name="exensio_schema" />
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

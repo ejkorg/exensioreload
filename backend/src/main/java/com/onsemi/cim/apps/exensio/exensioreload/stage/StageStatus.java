@@ -40,13 +40,23 @@ public record StageStatus(
 
     /**
      * Calculate backlog records still in processing pipeline.
-     * Includes timeout/warning states as they are uncertain and may resolve later.
-     * Note: EXENSIO_MONITORING records are NOT counted as backlog as they are already
-     * assumed loaded but need verification.
+     * Backlog = records actively being processed or waiting to be processed.
+     * 
+     * Includes:
+     * - stagedToRefdb: Staged and waiting for CP dispatch
+     * - queuedForCp: Queued for CP processing
+     * - elasticsearchMonitoring: Waiting for CP completion verification
+     * - exensioMonitoring: Waiting for Exensio load verification
+     * - cpTimeout: Timed out but uncertain/retryable
+     * 
+     * Excludes:
+     * - completedManualVerification: Already completed, awaiting manual review (final state)
+     * - cpFailed, loadFailed: Already failed (final state)
+     * - completed, cancelled: Already finalized (final states)
      */
     public long backlog() {
-        return queuedForCp + elasticsearchMonitoring + cpTimeout
-            + completedManualVerification;
+        return stagedToRefdb + queuedForCp + elasticsearchMonitoring 
+            + exensioMonitoring + cpTimeout;
     }
 
     /** All failure states combined (for backward compatibility where both are shown together). */
