@@ -388,14 +388,34 @@ public class DataIntegrityJob {
         }
         String requestId = rs.getString("request_id");
 
+        // StageRecord requires all 32 fields - fill missing ones with null/empty
         return new StageRecord(
-            id, site, senderId, senderName, metadataId, dataId, lot, wafer, null, filename,
+            id, site, senderId, senderName, metadataId, dataId, lot, wafer,
+            null,  // device
+            null,  // step
+            null,  // testerId
+            null,  // testProgram
+            filename,
             null,  // end_time
-            status, null,  // error_message
-            createdAt, updatedAt, enrichmentStartedAt, null,  // enrichmentStartedAt, processedAt
-            null, null, null,  // staged_by, last_requested_by, last_requested_at
-            requestId, null,  // cp_output_path
-            null, null, null, null, null  // cp_output_target, exensio_wafer_key, exensio_pg_key, data_type, test_phase
+            status,
+            null,  // error_message
+            createdAt, updatedAt, enrichmentStartedAt,
+            null,  // processedAt
+            null,  // staged_by
+            null,  // last_requested_by
+            null,  // last_requested_at
+            requestId,
+            null,  // cp_output_path
+            null,  // cp_output_target
+            null,  // exensio_wafer_key
+            null,  // exensio_pg_key
+            null,  // data_type
+            null,  // test_phase
+            null,  // current_pipeline_stage
+            null,  // completed_pipeline_stages
+            null,  // stage_metadata
+            null,  // pipeline_started_at
+            null   // last_stage_check_at
         );
     }
 

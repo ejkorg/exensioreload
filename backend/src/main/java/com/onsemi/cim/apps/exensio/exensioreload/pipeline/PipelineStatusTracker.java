@@ -78,6 +78,22 @@ public class PipelineStatusTracker {
         }
 
         /**
+         * Return the completion time for a completed stage, or null when not found
+         * or the stage has no recorded completion timestamp.
+         *
+         * @param stageName the stage to look up
+         * @return ISO-8601 completion timestamp, or null
+         */
+        public String getStageCompletionTime(String stageName) {
+            if (stageMetadata == null || stageName == null) return null;
+            Object stageEntry = stageMetadata.get(stageName);
+            if (stageEntry instanceof Map<?, ?> sm && sm.get("completedAt") instanceof String s) {
+                return s;
+            }
+            return null;
+        }
+
+        /**
          * How long ago the current stage last completed a check; Duration.ZERO when unknown.
          */
         public Duration getStageAge(String stageName) {
@@ -188,6 +204,23 @@ public class PipelineStatusTracker {
             log.debug("Updated current stage to '{}' for record {}", stageName, recordId);
         } catch (Exception e) {
             log.error("Failed to update current stage to '{}' for record {}: {}", stageName, recordId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Reset pipeline state for a record, clearing all pipeline columns.
+     *
+     * Used by PipelineStatusController.retryRecord() to reset a timed-out record
+     * back to its initial pipeline state so it can re-enter the first stage.
+     *
+     * @param recordId the SENDER_STAGE primary key
+     */
+    public void resetState(long recordId) {
+        try {
+            refDbService.updatePipelineReset(recordId);
+            log.debug("Reset pipeline state for record {}", recordId);
+        } catch (Exception e) {
+            log.error("Failed to reset pipeline state for record {}: {}", recordId, e.getMessage(), e);
         }
     }
 

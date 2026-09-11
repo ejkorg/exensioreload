@@ -63,7 +63,7 @@ public class PipelineStatusController {
             PipelineStatusTracker.PipelineState state = statusTracker.getState(recordId);
             
             // Load record to get site for config lookup
-            StageRecord record = refDbService.getRecord(recordId);
+            StageRecord record = refDbService.fetchRecordById(recordId);
             if (record == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Record not found", "recordId", recordId));
@@ -92,8 +92,13 @@ public class PipelineStatusController {
             // Completed stages with times
             Map<String, Object> completedStagesInfo = new HashMap<>();
             for (String completed : state.completedStages()) {
-                Instant completedAt = state.getStageCompletionTime(completed);
-                completedStagesInfo.put(completed, completedAt != null ? completedAt.toString() : "unknown");
+                // Extract completion time from stageMetadata if available
+                Object stageMeta = state.stageMetadata() != null ? state.stageMetadata().get(completed) : null;
+                String completedAt = "unknown";
+                if (stageMeta instanceof Map<?,?> sm && sm.get("completedAt") instanceof String s) {
+                    completedAt = s;
+                }
+                completedStagesInfo.put(completed, completedAt);
             }
             response.put("completedStages", completedStagesInfo);
 
@@ -104,8 +109,8 @@ public class PipelineStatusController {
                 .collect(Collectors.toList());
             response.put("pendingStages", pendingStages);
 
-            // Stage completion times and metadata
-            response.put("stageMetadata", state.metadata());
+            // Stage metadata
+            response.put("stageMetadata", state.stageMetadata());
 
             // Pipeline age (time since started)
             if (state.pipelineStartedAt() != null) {
@@ -136,7 +141,7 @@ public class PipelineStatusController {
     public ResponseEntity<?> retryRecord(@PathVariable Long recordId) {
         try {
             // Load record from RefDbService
-            StageRecord record = refDbService.getRecord(recordId);
+            StageRecord record = refDbService.fetchRecordById(recordId);
             if (record == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Record not found", "recordId", recordId));

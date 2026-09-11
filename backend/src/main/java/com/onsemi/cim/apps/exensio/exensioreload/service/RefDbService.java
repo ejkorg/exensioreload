@@ -4432,9 +4432,9 @@ public class RefDbService {
 
     /**
      * Fetch a single StageRecord by ID.
-     * 
+     *
      * Used by PipelineStatusTracker to retrieve pipeline state information.
-     * 
+     *
      * @param recordId the record ID to fetch
      * @return the StageRecord, or null if not found
      */
@@ -4458,6 +4458,16 @@ public class RefDbService {
             log.error("Failed to fetch record by ID {}: {}", recordId, e.getMessage(), e);
         }
         return null;
+    }
+
+    /**
+     * Alias for {@link #fetchRecordById(long)}.
+     *
+     * @param recordId the record ID to fetch
+     * @return the StageRecord, or null if not found
+     */
+    public StageRecord getRecord(long recordId) {
+        return fetchRecordById(recordId);
     }
 
     // -------------------------------------------------------------------------
@@ -4594,6 +4604,59 @@ public class RefDbService {
     public void updatePipelineStatus(long recordId, String status, String message) {
         updateStatus(List.of(recordId), status, message);
         log.debug("Updated pipeline status for record {} to {}", recordId, status);
+    }
+
+    /**
+     * Reset all pipeline orchestration columns for a record.
+     *
+     * Clears current_pipeline_stage, completed_pipeline_stages, stage_metadata,
+     * pipeline_started_at, and last_stage_check_at so the record can re-enter
+     * the first pipeline stage.
+     *
+     * Called by PipelineStatusTracker.resetState().
+     *
+     * @param recordId the SENDER_STAGE primary key
+     */
+    public void updatePipelineReset(long recordId) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table +
+                " SET current_pipeline_stage = NULL" +
+                "  , completed_pipeline_stages = NULL" +
+                "  , stage_metadata = NULL" +
+                "  , pipeline_started_at = NULL" +
+                "  , last_stage_check_at = NULL" +
+                " WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, recordId);
+            ps.executeUpdate();
+            log.debug("Reset pipeline columns for record {}", recordId);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed resetting pipeline columns for record " + recordId, e);
+        }
+    }
+
+    /**
+     * Update only the status column for a record, leaving error_message untouched.
+     *
+     * Used by PipelineStatusController.retryRecord() to reset a timed-out record
+     * back to its initial monitoring status.
+     *
+     * @param recordId the SENDER_STAGE primary key
+     * @param status   the new status value
+     */
+    public void updateRecordStatus(long recordId, String status) {
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table + " SET status = ? WHERE id = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, status);
+            ps.setLong(2, recordId);
+            ps.executeUpdate();
+            log.debug("Updated status for record {} to {}", recordId, status);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed updating status for record " + recordId, e);
+        }
     }
 }
 

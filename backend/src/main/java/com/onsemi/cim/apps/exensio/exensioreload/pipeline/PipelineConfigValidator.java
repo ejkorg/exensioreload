@@ -63,7 +63,7 @@ public class PipelineConfigValidator {
             try {
                 var configOpt = configLoader.loadPipelineConfig(site);
                 if (configOpt.isPresent()) {
-                    PipelineConfigLoader.PipelineConfig config = configOpt.get();
+                    PipelineConfig config = configOpt.get();
 
                     configLoader.validatePipelineConfig(config);
 

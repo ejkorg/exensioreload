@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.config.PpLogDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.BatchRecordProcessor;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
@@ -58,6 +59,7 @@ public class CpLogMonitor {
     private final StagePipelineOrchestrator pipelineOrchestrator;
     private final IntegrationStatusService integrationStatusService;
     private final StageMonitorService stageMonitorService;
+    private final BatchRecordProcessor batchProcessor;
 
     private final AtomicLong totalRecordsProcessed = new AtomicLong(0);
     private final AtomicLong successCount = new AtomicLong(0);
@@ -77,7 +79,8 @@ public class CpLogMonitor {
                         PpLogDbProperties ppLogDbProperties,
                         StagePipelineOrchestrator pipelineOrchestrator,
                         IntegrationStatusService integrationStatusService,
-                        StageMonitorService stageMonitorService) {
+                        StageMonitorService stageMonitorService,
+                        BatchRecordProcessor batchProcessor) {
         this.refDbService = refDbService;
         this.elasticsearchLogService = elasticsearchLogService;
         this.exensioClient = exensioClient;
@@ -87,6 +90,7 @@ public class CpLogMonitor {
         this.pipelineOrchestrator = pipelineOrchestrator;
         this.integrationStatusService = integrationStatusService;
         this.stageMonitorService = stageMonitorService;
+        this.batchProcessor = batchProcessor;
     }
 
     @PostConstruct
@@ -145,9 +149,10 @@ public class CpLogMonitor {
         log.debug("Polling Elasticsearch for {} ENRICHMENT record(s)", enrichmentRecords.size());
 
         totalRecordsProcessed.addAndGet(enrichmentRecords.size());
-        batchProcessor.processBatch(enrichmentRecords, record -> {
+        // Process records sequentially for now (batch processor not yet implemented)
+        for (StageRecord record : enrichmentRecords) {
             processRecord(record);
-        });
+        }
     }
 
     /**
