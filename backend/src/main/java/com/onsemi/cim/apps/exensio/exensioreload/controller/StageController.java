@@ -455,6 +455,19 @@ public class StageController {
         // Token parameter is for EventSource compatibility (EventSource can't send custom headers)
         // Authentication is still enforced by Spring Security filter chain
         log.info("SSE monitor endpoint called for sessionId: {}, token present: {}", sessionId, token != null && !token.isEmpty());
+        
+        // Validate session exists (allow SSE connection even for non-existent sessions to support polling)
+        // This prevents 404 errors and allows fallback to polling updates
+        try {
+            StagingSessionDetail session = stageSessionService.getSession(sessionId, getCurrentUsername(), isAdminUser());
+            if (session == null) {
+                log.warn("Session {} not found, but allowing SSE connection for polling fallback", sessionId);
+            } else {
+                log.debug("Session {} found, active SSE emitter created", sessionId);
+            }
+        } catch (Exception ex) {
+            log.warn("Error validating session {}: {}, allowing SSE connection anyway", sessionId, ex.getMessage());
+        }
 
         // Set SSE-specific headers
         response.setContentType("text/event-stream");

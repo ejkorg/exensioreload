@@ -1,14 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
-import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -19,7 +10,23 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.StageDefinition;
+import com.onsemi.cim.apps.exensio.exensioreload.pipeline.StageType;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class SenderDispatchService {
@@ -29,12 +36,14 @@ public class SenderDispatchService {
     private final ExternalDbConfig externalDbConfig;
     private final RefDbProperties properties;
     private final StageSessionService stageSessionService;
+    private final PipelineConfigCache pipelineConfigCache;
 
-    public SenderDispatchService(RefDbService refDbService, ExternalDbConfig externalDbConfig, RefDbProperties properties, StageSessionService stageSessionService) {
+    public SenderDispatchService(RefDbService refDbService, ExternalDbConfig externalDbConfig, RefDbProperties properties, StageSessionService stageSessionService, PipelineConfigCache pipelineConfigCache) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.properties = properties;
         this.stageSessionService = stageSessionService;
+        this.pipelineConfigCache = pipelineConfigCache;
     }
 
     @PostConstruct
@@ -63,6 +72,31 @@ public class SenderDispatchService {
         if (batch.isEmpty()) {
             return;
         }
+        
+        // Check if site has pipeline configuration
+        Optional<PipelineConfig> pipelineConfig = Optional.empty();
+        try {
+            pipelineConfig = pipelineConfigCache.getConfig(site);
+        } catch (Exception ex) {
+            log.warn("Failed to load pipeline config for site {}: {}", site, ex.getMessage());
+        }
+        
+        // If site has pipeline, check if CP is the first stage
+        if (pipelineConfig.isPresent()) {
+            StageDefinition firstStage = pipelineConfig.get().getFirstStage();
+            if (firstStage != null && firstStage.type() != StageType.CP) {
+                // Pipeline exists but CP is NOT the first stage
+                // Route records directly to the first stage monitoring status
+                log.info("Site {} has pipeline with first stage {} (not CP) - routing {} records directly to monitoring", 
+                    site, firstStage.type(), batch.size());
+                routeToFirstPipelineStage(batch, firstStage);
+                return;
+            }
+            // If first stage IS CP, continue with normal CP dispatch below
+            log.debug("Site {} has pipeline with CP as first stage - proceeding with CP dispatch", site);
+        }
+        
+        // Normal CP dispatch for legacy sites or sites with CP as first stage
         Map<Integer, List<StageRecord>> bySender = new HashMap<>();
         for (StageRecord record : batch) {
             bySender.computeIfAbsent(record.senderId(), key -> new ArrayList<>()).add(record);
@@ -70,6 +104,41 @@ public class SenderDispatchService {
         for (Map.Entry<Integer, List<StageRecord>> entry : bySender.entrySet()) {
             pushGroup(site, entry.getKey(), entry.getValue());
         }
+    }
+    
+    /**
+     * Route records directly to the first pipeline stage monitoring status.
+     * Used when pipeline exists but CP is not the first stage.
+     */
+    private void routeToFirstPipelineStage(List<StageRecord> records, StageDefinition firstStage) {
+        if (records.isEmpty()) {
+            return;
+        }
+        
+        String targetStatus = switch (firstStage.type()) {
+            case PPLOG -> "PPLOG_MONITORING";
+            case EXENSIO -> "EXENSIO_MONITORING";
+            case CP -> "CP_MONITORING"; // Shouldn't reach here but handle it
+            default -> {
+                log.warn("Unknown first stage type {} - defaulting to EXENSIO_MONITORING", firstStage.type());
+                yield "EXENSIO_MONITORING";
+            }
+        };
+        
+        log.info("Routing {} records to {} status (first pipeline stage: {})", 
+            records.size(), targetStatus, firstStage.type());
+        
+        // Update each record to the target status
+        for (StageRecord record : records) {
+            refDbService.updateRecordStatus(record.id(), targetStatus);
+        }
+        
+        // Refresh sessions to update UI
+        List<String> requestIds = records.stream()
+            .map(StageRecord::requestId)
+            .distinct()
+            .toList();
+        stageSessionService.refreshSessions(requestIds);
     }
 
     private void pushGroup(String site, int senderId, List<StageRecord> records) {
@@ -213,6 +282,22 @@ public class SenderDispatchService {
         int defaultBatchSize = configuredPerSend > 0 ? configuredPerSend : 200;
         int remaining = (limitOverride != null && limitOverride > 0) ? limitOverride : Integer.MAX_VALUE;
         int processed = 0;
+        
+        // Check if site has pipeline configuration
+        Optional<PipelineConfig> pipelineConfig = Optional.empty();
+        try {
+            pipelineConfig = pipelineConfigCache.getConfig(site);
+        } catch (Exception ex) {
+            log.warn("Failed to load pipeline config for site {}: {}", site, ex.getMessage());
+        }
+        
+        // Check if pipeline has non-CP first stage
+        boolean shouldRouteToPipeline = false;
+        StageDefinition firstStage = null;
+        if (pipelineConfig.isPresent()) {
+            firstStage = pipelineConfig.get().getFirstStage();
+            shouldRouteToPipeline = firstStage != null && firstStage.type() != StageType.CP;
+        }
 
         while (true) {
             if (remaining <= 0) {
@@ -226,7 +311,15 @@ public class SenderDispatchService {
             if (batch.isEmpty()) {
                 break;
             }
-            pushGroup(site, senderId, batch);
+            
+            if (shouldRouteToPipeline) {
+                // Route to first pipeline stage instead of CP dispatch
+                routeToFirstPipelineStage(batch, firstStage);
+            } else {
+                // Normal CP dispatch
+                pushGroup(site, senderId, batch);
+            }
+            
             processed += batch.size();
             remaining -= batch.size();
             if (batch.size() < requestedBatch) {
