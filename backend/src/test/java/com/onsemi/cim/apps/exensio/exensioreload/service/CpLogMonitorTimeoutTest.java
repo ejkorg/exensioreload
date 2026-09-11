@@ -127,7 +127,9 @@ class CpLogMonitorTimeoutTest {
             null,                  // completedPipelineStages
             null,                  // stageMetadata
             null,                  // pipelineStartedAt
-            null                   // lastStageCheckAt
+            null,                  // lastStageCheckAt
+            null,                  // exensioSchema
+            null                   // cpOutputSchema
         );
 
         // Setup ES and pp_log to both return NotFound
@@ -175,10 +177,8 @@ class CpLogMonitorTimeoutTest {
             "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1", null, null, null, null, null
+            "dataTypeA", "phase1", null, null, null, null, null, null, null
         );
-
-        // Setup: ES returns success
         when(elasticsearchLogService.findCpLog(
             anyString(), anyString(), anyString(), any(), anyString(), anyString()
         )).thenReturn(new CpLogResult.Success("trace-123", "path", "target", Instant.now()));
@@ -213,7 +213,7 @@ class CpLogMonitorTimeoutTest {
             "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1", null, null, null, null, null
+            "dataTypeA", "phase1", null, null, null, null, null, null, null
         );
 
         // Setup: ES returns failure
@@ -248,7 +248,7 @@ class CpLogMonitorTimeoutTest {
             "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1", null, null, null, null, null
+            "dataTypeA", "phase1", null, null, null, null, null, null, null
         );
 
         // Setup: Both sources return NotFound
@@ -287,7 +287,7 @@ class CpLogMonitorTimeoutTest {
             "meta-456", "data-789", "LOT-001", "W1", null, null, null, null, "test.csv",
             Instant.now(), "ELASTICSEARCH_MONITORING", null, createdAt, createdAt, createdAt, null,
             "operator1", null, null, "req-123", null, null, null, null,
-            "dataTypeA", "phase1", null, null, null, null, null
+            "dataTypeA", "phase1", null, null, null, null, null, null, null
         );
 
         // Setup: ES returns NotFound but pp_log has success

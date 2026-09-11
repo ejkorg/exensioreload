@@ -414,7 +414,9 @@ public class DataIntegrityJob {
             null,  // completed_pipeline_stages
             null,  // stage_metadata
             null,  // pipeline_started_at
-            null   // last_stage_check_at
+            null,  // last_stage_check_at
+            null,  // exensio_schema
+            null   // cp_output_schema
         );
     }
 
