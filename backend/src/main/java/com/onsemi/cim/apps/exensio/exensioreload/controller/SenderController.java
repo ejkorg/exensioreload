@@ -557,7 +557,7 @@ public class SenderController {
                 filters.recipes(),
                 filters.equipmentIds());
         if (log.isInfoEnabled()) {
-            log.info("Preview response rows={} total={} strictFilters={} historicalMode={}", response.items().size(), response.total(), strictFilters, request.historicalMode());
+            log.info("Preview response rows={} total={} strictFilters={} historicalMode={}", response.rows().size(), response.total(), strictFilters, request.historicalMode());
         }
         return ResponseEntity.ok(response);
     }
@@ -623,9 +623,9 @@ public class SenderController {
         // Now check for duplicates in parallel for all items
         java.util.Map<String, DuplicatePayloadView> duplicatesMap = new java.util.HashMap<>();
         long duplicateDurationMs = 0L;
-        if (previewResponse.items() != null && !previewResponse.items().isEmpty()) {
+        if (previewResponse.rows() != null && !previewResponse.rows().isEmpty()) {
             long duplicateStartNanos = System.nanoTime();
-            java.util.List<PayloadCandidate> candidates = previewResponse.items().stream()
+            java.util.List<PayloadCandidate> candidates = previewResponse.rows().stream()
                     .filter(row -> row.metadataId() != null && row.dataId() != null)
                     .map(row -> new PayloadCandidate(row.metadataId().trim(), row.dataId().trim(), null, null, null, null))
                     .filter(candidate -> !candidate.metadataId().isEmpty() && !candidate.dataId().isEmpty())
@@ -646,7 +646,7 @@ public class SenderController {
             discoveryToken = java.util.UUID.randomUUID().toString();
             if (previewResponse.returned() == previewResponse.total()) {
                 // We already fetched all of them, cache synchronously and immediately
-                metadataImporterService.putCachedDiscoveryResults(discoveryToken, previewResponse.items(), request.dataType());
+                metadataImporterService.putCachedDiscoveryResults(discoveryToken, previewResponse.rows(), request.dataType());
             } else {
                 // We only fetched a page. Kick off a background thread to fetch the full set
                 // so when the user clicks 'Stage All' a few seconds later, it's ready.
@@ -664,8 +664,8 @@ public class SenderController {
                                 strictFilters, true, // bypass cap
                                 filters.steps(), filters.recipes(), filters.equipmentIds()
                         );
-                        if (fullResponse != null && fullResponse.items() != null) {
-                            metadataImporterService.putCachedDiscoveryResults(asyncToken, fullResponse.items(), request.dataType());
+                        if (fullResponse != null && fullResponse.rows() != null) {
+                            metadataImporterService.putCachedDiscoveryResults(asyncToken, fullResponse.rows(), request.dataType());
                         }
                     } catch (Exception ex) {
                         log.warn("Failed to cache full discovery results in background: {}", ex.getMessage());
@@ -675,7 +675,7 @@ public class SenderController {
         }
 
         DiscoveryPreviewWithDuplicatesResponse combined = new DiscoveryPreviewWithDuplicatesResponse(
-                previewResponse.items(),
+                previewResponse.rows(),
                 previewResponse.total(),
                 previewResponse.returned(),
                 previewResponse.page(),
@@ -872,8 +872,8 @@ public class SenderController {
                 if (resp != null) {
                     totalAvailable = resp.total();
                     pagesFetched = 1;
-                    if (resp.items() != null) {
-                        for (DiscoveryPreviewRow row : resp.items()) {
+                    if (resp.rows() != null) {
+                        for (DiscoveryPreviewRow row : resp.rows()) {
                             if (row == null) continue;
                             String metadataId = row.metadataId();
                             String dataId = row.dataId();
@@ -1000,11 +1000,11 @@ public class SenderController {
                         filters.steps(), filters.recipes(), filters.equipmentIds());
                 if (resp == null) break;
                 if (total == Long.MAX_VALUE) total = resp.total();
-                if (resp.items() != null && !resp.items().isEmpty()) {
-                    collected.addAll(resp.items());
+                if (resp.rows() != null && !resp.rows().isEmpty()) {
+                    collected.addAll(resp.rows());
                 }
                 if (collected.size() >= total) break;
-                if (resp.items() == null || resp.items().isEmpty()) break;
+                if (resp.rows() == null || resp.rows().isEmpty()) break;
                 page++;
             }
         } catch (Exception ex) {

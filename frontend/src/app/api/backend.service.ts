@@ -93,8 +93,8 @@ export interface DiscoveryPreviewRequest {
   enableSnowflakeFallback?: boolean | null;
   // New filter fields for dtp_*_metadata tables
   steps?: string[] | null;
-  recipes?: string[] | null;       // maps to test_program column
-  equipmentIds?: string[] | null;  // maps to tester_id column
+  recipes?: string[] | null; // maps to test_program column
+  equipmentIds?: string[] | null; // maps to tester_id column
 }
 
 export interface DiscoveryPreviewRow {
@@ -242,6 +242,9 @@ export interface StageRecordView {
   lot: string;
   wafer: string;
   device?: string | null;
+  step?: string | null;
+  testerId?: string | null;
+  testProgram?: string | null;
   filename: string;
   status: string;
   updated?: string | null;

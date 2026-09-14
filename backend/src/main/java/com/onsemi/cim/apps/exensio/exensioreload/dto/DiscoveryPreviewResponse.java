@@ -2,9 +2,9 @@ package com.onsemi.cim.apps.exensio.exensioreload.dto;
 
 import java.util.List;
 
-public record DiscoveryPreviewResponse(List<DiscoveryPreviewRow> items,
+public record DiscoveryPreviewResponse(List<DiscoveryPreviewRow> rows,
 									   long total,
-									   // How many rows are returned in this response (items.size())
+									   // How many rows are returned in this response (rows.size())
 									   int returned,
 									   int page,
 									   int size,

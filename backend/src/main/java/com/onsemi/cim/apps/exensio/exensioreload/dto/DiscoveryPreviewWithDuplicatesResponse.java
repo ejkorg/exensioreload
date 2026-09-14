@@ -10,7 +10,7 @@ import java.util.Map;
  */
 
 public record DiscoveryPreviewWithDuplicatesResponse(
-        List<DiscoveryPreviewRow> items,
+        List<DiscoveryPreviewRow> rows,
         long total,
         // How many rows returned in this response
         int returned,

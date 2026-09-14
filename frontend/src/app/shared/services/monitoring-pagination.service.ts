@@ -44,6 +44,7 @@ export interface MonitoringFileItem {
   /** Tracks if this file was updated in the current real-time update cycle (for UI indicators) */
   isRecentlyUpdated?: boolean;
   // ➕ NEW: Manufacturing context fields
+  device?: string | null; // Device identifier (e.g., "IR71939")
   step?: string | null; // Test step (e.g., "CP1", "PRB1")
   testerId?: string | null; // Tester equipment ID (e.g., "TST-02")
   testProgram?: string | null; // Recipe/program name (e.g., "RECIPE_A")
@@ -379,6 +380,11 @@ export class MonitoringPaginationService implements OnDestroy {
       updatedAt: file.updated,
       cpOutputPath: file.cpOutputPath,
       cpOutputTarget: file.cpOutputTarget,
+      // Manufacturing context fields from discovery — treat backend "-" sentinel as null
+      device: this.nullIfDash(file.device),
+      step: this.nullIfDash(file.step),
+      testerId: this.nullIfDash(file.testerId),
+      testProgram: this.nullIfDash(file.testProgram),
       // Per-file integration status
       cpIntegrationStatus: file.cpIntegrationStatus,
       cpIntegrationMessage: file.cpIntegrationMessage,
@@ -386,6 +392,12 @@ export class MonitoringPaginationService implements OnDestroy {
       exensioIntegrationMessage: file.exensioIntegrationMessage,
       isRecentlyUpdated: false,
     };
+  }
+
+  /** Backend normalizeDisplayValue returns "-" for null/empty fields. Treat that as null in the UI. */
+  private nullIfDash(value: string | null | undefined): string | null {
+    if (value === null || value === undefined || value.trim() === '-') return null;
+    return value;
   }
 
   /**
