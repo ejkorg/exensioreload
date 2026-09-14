@@ -1,27 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.ExternalLocation;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.ExternalLocationRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.ExternalMetadataRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.MetadataRow;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.MetadataPageResult;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.MetadataSummary;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewResponse;
-import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRow;
-import org.springframework.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.server.ResponseStatusException;
-
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import java.io.BufferedWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,15 +10,37 @@ import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewResponse;
+import com.onsemi.cim.apps.exensio.exensioreload.dto.DiscoveryPreviewRow;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ExternalLocation;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.ExternalLocationRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.ExternalMetadataRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.MetadataRow;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.MetadataSummary;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.DuplicatePayload;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.PayloadCandidate;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageResult;
 
 @Service
 public class MetadataImporterService {
@@ -501,7 +501,7 @@ public class MetadataImporterService {
                                 nullSafe(row.getId()),
                                 nullSafe(row.getIdData()),
                                 nullSafe(row.getLot()),
-                                nullSafe(row.getWafer()),
+                                com.onsemi.cim.apps.exensio.exensioreload.util.WaferNormalizerUtils.normalizeWafer(row.getWafer()),
                                 nullSafe(row.getDevice()),
                                 nullSafe(row.getOriginalFileName()),
                                 toIsoString(row.getEndTime()),

@@ -692,7 +692,7 @@ public class SenderController {
 
         if (log.isInfoEnabled()) {
             log.info("Preview with duplicates response rows={} total={} duplicates={} previewMs={} duplicateMs={} token={}",
-                    combined.items().size(), combined.total(), duplicatesMap.size(), previewDurationMs, duplicateDurationMs, discoveryToken != null ? "yes" : "no");
+                    combined.rows().size(), combined.total(), duplicatesMap.size(), previewDurationMs, duplicateDurationMs, discoveryToken != null ? "yes" : "no");
         }
         return ResponseEntity.ok(combined);
     }
