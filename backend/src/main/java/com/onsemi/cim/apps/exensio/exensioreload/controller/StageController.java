@@ -457,6 +457,14 @@ public class StageController {
         log.info("SSE monitor endpoint called for sessionId: {}, token present: {}", sessionId, token != null && !token.isEmpty());
         log.info("Full path: /api/stage/sessions/{}/monitor", sessionId);
         
+        // Validate authentication BEFORE setting response headers (to avoid "response already committed" errors)
+        // This ensures Spring Security exceptions can be properly handled before SSE streaming starts
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
+            log.warn("Unauthorized SSE request for session {} from anonymous user", sessionId);
+            throw new org.springframework.security.access.AccessDeniedException("Authentication required for SSE monitoring endpoint");
+        }
+        
         // Validate session exists (allow SSE connection even for non-existent sessions to support polling)
         // This prevents 404 errors and allows fallback to polling updates
         try {

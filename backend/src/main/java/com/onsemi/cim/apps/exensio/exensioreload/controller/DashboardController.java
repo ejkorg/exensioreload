@@ -37,6 +37,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardBucketTotals;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardDateBucket;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardLink;
@@ -48,8 +50,6 @@ import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardSnapshot;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.DashboardWaferBreakdown;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordPage;
 import com.onsemi.cim.apps.exensio.exensioreload.dto.StageRecordView;
-import com.onsemi.cim.apps.exensio.exensioreload.config.CpElasticsearchProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties;
 import com.onsemi.cim.apps.exensio.exensioreload.service.IntegrationStatusService;
 import com.onsemi.cim.apps.exensio.exensioreload.service.RefDbService;
 import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
@@ -106,6 +106,14 @@ public class DashboardController {
     @PreAuthorize("isAuthenticated()")
     @GetMapping(value = "/states", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamStateChanges(jakarta.servlet.http.HttpServletResponse response) {
+        // Validate authentication BEFORE setting response headers (to avoid "response already committed" errors)
+        // This ensures Spring Security exceptions can be properly handled before SSE streaming starts
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().isEmpty()) {
+            log.warn("Unauthorized SSE request to /dashboard/states from anonymous user");
+            throw new org.springframework.security.access.AccessDeniedException("Authentication required for SSE dashboard state stream");
+        }
+        
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache");
