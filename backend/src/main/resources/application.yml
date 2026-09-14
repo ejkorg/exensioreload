@@ -102,6 +102,10 @@ app:
     cron: "0 */5 * * * *"
   # Manual verification retry settings
   manual-verification:
+    # Enable or disable silent background verification of COMPLETED_MANUAL_VERIFICATION_REQUIRED records
+    # Default: true
+    # Requirement: Silent background verification + auto-completion
+    enabled: true
     # Interval (milliseconds) for silent retry of COMPLETED_MANUAL_VERIFICATION_REQUIRED records
     # Default: 300000 (5 minutes) - queries Exensio silently and auto-completes if found
     # Requirement: Silent background verification + auto-completion

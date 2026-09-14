@@ -1,12 +1,14 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.LoadSession;
-import com.onsemi.cim.apps.exensio.exensioreload.entity.LoadSessionPayload;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.LoadSessionPayloadRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.repository.LoadSessionRepository;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,11 +17,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.time.Instant;
-import java.util.*;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ManualVerificationProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.AppUser;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.LoadSession;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.LoadSessionPayload;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.LoadSessionPayloadRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.LoadSessionRepository;
 
 /**
  * CompletionNotificationService
@@ -50,6 +55,9 @@ public class CompletionNotificationService {
     @Autowired
     private Environment env;
 
+    @Autowired
+    private ManualVerificationProperties manualVerificationProps;
+
     /**
      * Scheduled task to check for completed sessions.
      * Runs every 5 minutes by default (configurable via app.completion-check.cron)
@@ -60,6 +68,12 @@ public class CompletionNotificationService {
         boolean enabled = Boolean.parseBoolean(env.getProperty("app.completion-check.enabled", "true"));
         if (!enabled) {
             log.debug("Completion check is disabled");
+            return;
+        }
+
+        // Also check if manual verification is enabled (which drives completion notifications)
+        if (!manualVerificationProps.isEnabled()) {
+            log.debug("Manual verification is disabled, skipping completion check");
             return;
         }
 
