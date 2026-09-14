@@ -82,8 +82,10 @@ public class ManualVerificationRetryService {
                     }
 
                     // Query Exensio silently (no loud logging)
+                    // Resolve pgcKey from dataType to ensure correct program group classification
+                    int pgcKey = DataTypePgcKeyMapper.resolve(record.dataType());
                     ExensioLotWaferResult result = exensioClient.lotWaferLookup(
-                            lot, wafer, record.endTime(), null, null, record.filename(), record.metadataId(), record.dataId());
+                            lot, wafer, record.endTime(), pgcKey, record.testPhase(), record.filename(), record.metadataId(), record.dataId());
                     
                     if (result instanceof ExensioLotWaferResult.Found found) {
                         // Data found in Exensio - auto-complete this record
