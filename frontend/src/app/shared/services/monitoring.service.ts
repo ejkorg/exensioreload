@@ -118,7 +118,7 @@ export class MonitoringService {
    */
   connectSSE(requestId: string, token: string): Observable<MonitorEvent> {
     return new Observable<MonitorEvent>((observer) => {
-      const url = `${environment.apiUrl}/stage/monitor?requestId=${requestId}`;
+      const url = `${environment.apiUrl}/stage/monitor?requestId=${requestId}&token=${encodeURIComponent(token)}`;
 
       this.eventSource = new EventSource(url);
 
