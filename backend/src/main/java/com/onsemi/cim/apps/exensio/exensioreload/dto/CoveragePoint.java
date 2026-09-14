@@ -5,7 +5,9 @@ public record CoveragePoint(
         int senderId,
         String site,
         long total,
-        long done,
+        long done,        // COMPLETED in PRODUCTION schema
+        long doneSbx,     // COMPLETED in SANDBOX schema
+        long donePending, // COMPLETED_MANUAL_VERIFICATION_REQUIRED — done but schema unconfirmed
         long enqueued,
         long staged,
         long failed

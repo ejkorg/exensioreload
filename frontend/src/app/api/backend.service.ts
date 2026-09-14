@@ -593,7 +593,9 @@ export interface CoveragePoint {
   senderId: number;
   site: string;
   total: number;
-  done: number;
+  done: number; // COMPLETED in PRODUCTION schema
+  doneSbx: number; // COMPLETED in SANDBOX schema
+  donePending: number; // COMPLETED_MANUAL_VERIFICATION_REQUIRED — confirmed but schema unresolved
   enqueued: number;
   staged: number;
   failed: number;

@@ -3512,8 +3512,10 @@ public class RefDbService {
         StringBuilder sql = new StringBuilder(
                 "SELECT " + bucketExpr + " AS bucket, sender_id, site, " +
                         "COUNT(*) AS total, " +
-                        "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS done, " +
-                        "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, " +
+                        "SUM(CASE WHEN status = 'COMPLETED' AND (exensio_schema LIKE '%PRODUCTION%' OR exensio_schema IS NULL) THEN 1 ELSE 0 END) AS done, " +
+                        "SUM(CASE WHEN status = 'COMPLETED' AND exensio_schema LIKE '%SANDBOX%' THEN 1 ELSE 0 END) AS done_sbx, " +
+                        "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END) AS done_pending, " +
+                        "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END) AS enqueued, " +
                         "SUM(CASE WHEN status IN ('STAGED','READY') THEN 1 ELSE 0 END) AS staged, " +
                         "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed " +
                         "FROM " + table + " WHERE site = ? AND end_time IS NOT NULL");
@@ -3566,6 +3568,8 @@ public class RefDbService {
                             rs.getString("site"),
                             rs.getLong("total"),
                             rs.getLong("done"),
+                            rs.getLong("done_sbx"),
+                            rs.getLong("done_pending"),
                             rs.getLong("enqueued"),
                             rs.getLong("staged"),
                             rs.getLong("failed")
