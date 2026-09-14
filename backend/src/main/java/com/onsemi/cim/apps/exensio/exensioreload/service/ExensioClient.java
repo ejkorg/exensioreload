@@ -556,11 +556,17 @@ public class ExensioClient {
                                                        String token,
                                                        String traceId) {
         try {
+            long overallStartTime = System.currentTimeMillis();
             Set<String> identifiers = buildIdentifierTokens(filename, metadataId, dataId);
             if (identifiers.isEmpty()) {
                 return new ExensioLotWaferResult.NotFound();
             }
 
+            // Step 1: Try primary query with lot_id filter
+            long primaryStartTime = System.currentTimeMillis();
+            log.info("Primary lot_id query START (traceId={}): lot={}, wafer={}, pgcKey={}, targetEndTime={}", 
+                     traceId, lot, wafer, pgcKey, targetEndTime);
+            
             String sql = buildSingleRawSql(lot, wafer, pgcKey, identifiers);
             JsonNode rows = executeRawSql(sql, token, traceId);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
@@ -570,15 +576,78 @@ public class ExensioClient {
                     rows = executeRawSql(sql, fallbackToken, traceId);
                 }
             }
+            
+            long primaryElapsed = System.currentTimeMillis() - primaryStartTime;
+            
+            if (rows != null && rows.isArray() && !rows.isEmpty()) {
+                log.info("Primary lot_id query SUCCESS (traceId={}): {} rows returned in {}ms", 
+                         traceId, rows.size(), primaryElapsed);
+                
+                // Step 3: Primary query returned results, use identifier-based selection
+                JsonNode best = selectBestRawRow(rows, targetEndTime, identifiers);
+                if (best == null) {
+                    log.warn("Primary query returned rows but best row selection failed (traceId={})", traceId);
+                    return new ExensioLotWaferResult.NotFound();
+                }
+
+                long lotKey = getLong(best, "LOT_KEY");
+                long waferKey = getLong(best, "WAFER_KEY");
+                long pgKey = getLong(best, "PG_KEY");
+                String ppid = getText(best, "PPID");
+                String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(best, "WAFER_ID"));
+                String lotIdStr = getText(best, "LOT_ID");
+                String fileNameStr = getText(best, "FILE_NAME");
+                String schema = getText(best, "SCHEMA_NAME");
+
+                if (waferKey <= 0) {
+                    return new ExensioLotWaferResult.NotFound();
+                }
+
+                long totalElapsed = System.currentTimeMillis() - overallStartTime;
+                log.info("Primary query SELECTED RECORD (traceId={}): lotId={}, waferId={}, lotKey={}, waferKey={}, pgKey={}, " +
+                         "ppid={}, fileName={}, schema={}, totalElapsed={}ms",
+                         traceId, lotIdStr, waferId, lotKey, waferKey, pgKey, ppid, fileNameStr, schema, totalElapsed);
+
+                ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr, schema);
+                return applyPpidCheck(candidate, ppid, testPhase, lot, waferId);
+            }
+
+            // Step 2: If primary query returned empty, attempt fallback query without lot_id
+            log.info("Primary lot_id query returned empty ({}ms), attempting fallback (traceId={})", primaryElapsed, traceId);
+            
+            int timeWindowHours = props.getFallbackQueryTimeWindowHours();
+            String fallbackSql = buildFallbackRawSql(pgcKey, wafer, identifiers, targetEndTime, timeWindowHours);
+            
+            long fallbackStartTime = System.currentTimeMillis();
+            log.debug("Fallback query execution START (traceId={}): timeWindowHours={}", traceId, timeWindowHours);
+            log.debug("Fallback SQL (traceId={}):\n{}", traceId, fallbackSql);
+            
+            rows = executeRawSql(fallbackSql, token, traceId);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
+                String fallbackSchema = props.resolvedDbschemaFallback();
+                if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                    String fallbackToken = authService.login(fallbackSchema);
+                    rows = executeRawSql(fallbackSql, fallbackToken, traceId);
+                }
+            }
+            
+            long fallbackElapsed = System.currentTimeMillis() - fallbackStartTime;
+            
+            if (rows == null || !rows.isArray() || rows.isEmpty()) {
+                log.warn("Fallback query also returned empty ({}ms) (traceId={})", fallbackElapsed, traceId);
                 return new ExensioLotWaferResult.NotFound();
             }
-
-            JsonNode best = selectBestRawRow(rows, targetEndTime, identifiers);
+            
+            log.info("Fallback query SUCCESS (traceId={}): {} rows returned in {}ms", 
+                     traceId, rows.size(), fallbackElapsed);
+            
+            // For fallback results, use timestamp-based selection instead of identifier scoring
+            JsonNode best = selectBestRecordByTimestamp(rows, targetEndTime);
             if (best == null) {
+                log.warn("Fallback query returned rows but best record selection failed (traceId={})", traceId);
                 return new ExensioLotWaferResult.NotFound();
             }
-
+            
             long lotKey = getLong(best, "LOT_KEY");
             long waferKey = getLong(best, "WAFER_KEY");
             long pgKey = getLong(best, "PG_KEY");
@@ -587,10 +656,18 @@ public class ExensioClient {
             String lotIdStr = getText(best, "LOT_ID");
             String fileNameStr = getText(best, "FILE_NAME");
             String schema = getText(best, "SCHEMA_NAME");
+            String insertTime = getText(best, "INSERT_TIME");
+            String endTime = getText(best, "END_TIME");
 
             if (waferKey <= 0) {
                 return new ExensioLotWaferResult.NotFound();
             }
+
+            long totalElapsed = System.currentTimeMillis() - overallStartTime;
+            log.info("Fallback query SELECTED RECORD (traceId={}): lotId={}, waferId={}, lotKey={}, waferKey={}, pgKey={}, " +
+                     "ppid={}, fileName={}, schema={}, insertTime={}, endTime={}, primaryTime={}ms, fallbackTime={}ms, totalTime={}ms",
+                     traceId, lotIdStr, waferId, lotKey, waferKey, pgKey, ppid, fileNameStr, schema, insertTime, endTime, 
+                     primaryElapsed, fallbackElapsed, totalElapsed);
 
             ExensioLotWaferResult candidate = new ExensioLotWaferResult.Found(lotKey, waferKey, pgKey, ppid, lotIdStr, waferId, fileNameStr, schema);
             return applyPpidCheck(candidate, ppid, testPhase, lot, waferId);
@@ -602,8 +679,11 @@ public class ExensioClient {
 
     private BatchLookupResult doRawSqlLookupBatch(List<StageRecord> records, String token, String traceId) {
         try {
-            List<String> clauses = new ArrayList<>();
+            // Step 1: Build and execute primary batch query with lot_id filters
+            List<String> primaryClauses = new ArrayList<>();
             List<StageRecord> indexedRecords = new ArrayList<>();
+            Map<String, StageRecord> lotToRecord = new HashMap<>();
+            
             for (StageRecord record : records) {
                 if (record.lot() == null || record.lot().isBlank()) {
                     continue;
@@ -633,49 +713,152 @@ public class ExensioClient {
                 }
 
                 clause.append(")");
-                clauses.add(clause.toString());
+                primaryClauses.add(clause.toString());
                 indexedRecords.add(record);
+                lotToRecord.put(record.lot().toUpperCase(Locale.ROOT), record);
             }
 
-            if (clauses.isEmpty()) {
+            if (primaryClauses.isEmpty()) {
                 return new BatchLookupResult(Collections.emptyList());
             }
 
-            String sql = buildBatchRawSql(clauses);
-            JsonNode rows = executeRawSql(sql, token, traceId);
-            if (rows == null || !rows.isArray() || rows.isEmpty()) {
+            // Execute primary query
+            String primarySql = buildBatchRawSql(primaryClauses);
+            JsonNode primaryRows = executeRawSql(primarySql, token, traceId);
+            if (primaryRows == null || !primaryRows.isArray() || primaryRows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.login(fallbackSchema);
-                    rows = executeRawSql(sql, fallbackToken, traceId);
+                    primaryRows = executeRawSql(primarySql, fallbackToken, traceId);
                 }
             }
-            if (rows == null || !rows.isArray() || rows.isEmpty()) {
-                return new BatchLookupResult(Collections.emptyList());
-            }
 
+            // Step 2: Extract lots that were resolved by primary query
             Map<String, List<BatchLookupResult.LotResult.WaferResult>> byLot = new HashMap<>();
             Map<String, Long> lotKeys = new HashMap<>();
+            Set<String> resolvedLots = new HashSet<>();
 
-            for (JsonNode row : rows) {
-                long waferKey = getLong(row, "WAFER_KEY");
-                if (waferKey <= 0) continue;
+            if (primaryRows != null && primaryRows.isArray() && !primaryRows.isEmpty()) {
+                for (JsonNode row : primaryRows) {
+                    long waferKey = getLong(row, "WAFER_KEY");
+                    if (waferKey <= 0) continue;
 
-                String lotId = safeUpper(getText(row, "LOT_ID"));
-                if (lotId == null || lotId.isBlank()) continue;
+                    String lotId = safeUpper(getText(row, "LOT_ID"));
+                    if (lotId == null || lotId.isBlank()) continue;
 
-                String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(row, "WAFER_ID"));
-                long pgKey = getLong(row, "PG_KEY");
-                String ppid = getText(row, "PPID");
-                Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
-                long lotKey = getLong(row, "LOT_KEY");
-                String fileName = getText(row, "FILE_NAME");
-                String schema = getText(row, "SCHEMA_NAME");
+                    resolvedLots.add(lotId);
+                    String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(row, "WAFER_ID"));
+                    long pgKey = getLong(row, "PG_KEY");
+                    String ppid = getText(row, "PPID");
+                    Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
+                    long lotKey = getLong(row, "LOT_KEY");
+                    String fileName = getText(row, "FILE_NAME");
+                    String schema = getText(row, "SCHEMA_NAME");
 
-                byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
-                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName, schema));
-                if (lotKey > 0) {
-                    lotKeys.putIfAbsent(lotId, lotKey);
+                    byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
+                            .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName, schema));
+                    if (lotKey > 0) {
+                        lotKeys.putIfAbsent(lotId, lotKey);
+                    }
+                }
+            }
+
+            // Step 3: For unresolved lots, attempt fallback queries
+            List<StageRecord> unresolvedRecords = indexedRecords.stream()
+                    .filter(r -> !resolvedLots.contains(r.lot().toUpperCase(Locale.ROOT)))
+                    .toList();
+
+            if (!unresolvedRecords.isEmpty()) {
+                long fallbackBatchStartTime = System.currentTimeMillis();
+                log.info("Primary batch query resolved {}/{} lots, attempting fallback for {} unresolved records (traceId={})",
+                        resolvedLots.size(), indexedRecords.size(), unresolvedRecords.size(), traceId);
+
+                int timeWindowHours = props.getFallbackQueryTimeWindowHours();
+                
+                // Build fallback clauses for unresolved records
+                List<String> fallbackClauses = new ArrayList<>();
+                for (StageRecord record : unresolvedRecords) {
+                    boolean waferBlank = isBlankOrNa(record.wafer());
+                    int pgcKey = ExensioPreCheckService.resolvePgcKey(record.dataType());
+                    Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
+
+                    StringBuilder clause = new StringBuilder();
+                    clause.append("(ol.pgc_key = ").append(pgcKey);
+
+                    // Add time window constraint on INSERT_TIME
+                    if (timeWindowHours > 0) {
+                        Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
+                        String windowStartStr = formatInstantForSql(windowStart);
+                        clause.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(windowStartStr)
+                                .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
+                    }
+
+                    // Add wafer matching clause if wafer is provided
+                    if (!waferBlank) {
+                        clause.append(buildWaferMatchClause(record.wafer()));
+                    }
+
+                    // Add file identifier matching if identifiers are provided
+                    if (!identifiers.isEmpty()) {
+                        clause.append(" AND (de.file_name IS NULL OR ")
+                                .append(buildIdentifierLikeClause("de.file_name", identifiers))
+                                .append(")");
+                    }
+
+                    clause.append(")");
+                    fallbackClauses.add(clause.toString());
+                }
+
+                if (!fallbackClauses.isEmpty()) {
+                    String fallbackSql = buildBatchRawSql(fallbackClauses);
+                    log.debug("Batch fallback SQL execution (traceId={}): {} clauses, timeWindowHours={}", 
+                              traceId, fallbackClauses.size(), timeWindowHours);
+                    
+                    JsonNode fallbackRows = executeRawSql(fallbackSql, token, traceId);
+                    if (fallbackRows == null || !fallbackRows.isArray() || fallbackRows.isEmpty()) {
+                        String fallbackSchema = props.resolvedDbschemaFallback();
+                        if (fallbackSchema != null && !fallbackSchema.isBlank()) {
+                            String fallbackToken = authService.login(fallbackSchema);
+                            fallbackRows = executeRawSql(fallbackSql, fallbackToken, traceId);
+                        }
+                    }
+
+                    // Process fallback results
+                    if (fallbackRows != null && fallbackRows.isArray() && !fallbackRows.isEmpty()) {
+                        int fallbackRowCount = 0;
+                        for (JsonNode row : fallbackRows) {
+                            long waferKey = getLong(row, "WAFER_KEY");
+                            if (waferKey <= 0) continue;
+
+                            String lotId = safeUpper(getText(row, "LOT_ID"));
+                            if (lotId == null || lotId.isBlank()) continue;
+
+                            // Only add fallback results for lots that weren't resolved by primary query
+                            if (!resolvedLots.contains(lotId)) {
+                                String waferId = ExensioSqlUtilService.stripWaferPrefix(getText(row, "WAFER_ID"));
+                                long pgKey = getLong(row, "PG_KEY");
+                                String ppid = getText(row, "PPID");
+                                Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
+                                long lotKey = getLong(row, "LOT_KEY");
+                                String fileName = getText(row, "FILE_NAME");
+                                String schema = getText(row, "SCHEMA_NAME");
+
+                                byLot.computeIfAbsent(lotId, k -> new ArrayList<>())
+                                        .add(new BatchLookupResult.LotResult.WaferResult(waferId, waferKey, pgKey, ppid, endTime, fileName, schema));
+                                if (lotKey > 0) {
+                                    lotKeys.putIfAbsent(lotId, lotKey);
+                                }
+                                fallbackRowCount++;
+                            }
+                        }
+                        long fallbackBatchElapsed = System.currentTimeMillis() - fallbackBatchStartTime;
+                        log.info("Fallback batch query SUCCESS (traceId={}): resolved {} additional lots from {} rows in {}ms", 
+                                 traceId, fallbackRowCount, fallbackRows.size(), fallbackBatchElapsed);
+                    } else {
+                        long fallbackBatchElapsed = System.currentTimeMillis() - fallbackBatchStartTime;
+                        log.info("Fallback batch query returned empty for {} unresolved records in {}ms (traceId={})", 
+                                 unresolvedRecords.size(), fallbackBatchElapsed, traceId);
+                    }
                 }
             }
 
@@ -1009,6 +1192,102 @@ public class ExensioClient {
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
+    /**
+     * Builds a fallback raw SQL query without the lot_id filter.
+     *
+     * <p>This query removes the lot_id constraint and instead applies compensating filters:
+     * pgc_key matching, time window constraint on INSERT_TIME, wafer matching, and file matching.
+     * Used when the primary lot_id query returns empty results.
+     *
+     * <p>Parameters:
+     * <ul>
+     *   <li>{@code pgcKey}: Program group category key for filtering</li>
+     *   <li>{@code wafer}: Wafer identifier (may be blank or N/A)</li>
+     *   <li>{@code identifiers}: File name, metadata ID, data ID tokens for matching</li>
+     *   <li>{@code targetEndTime}: Optional target END_TIME for time delta calculation</li>
+     *   <li>{@code timeWindowHours}: Number of hours to look back from targetEndTime (or now)</li>
+     * </ul>
+     *
+     * <p>Returns a UNION ALL query across both PRODUCTION and SANDBOX schemas with ROWNUM limit.
+     * Records are ordered by INSERT_TIME DESC, then END_TIME DESC for selection.
+     *
+     * <p>Requirements: 2.1, 2.2, 4.2</p>
+     */
+    private String buildFallbackRawSql(int pgcKey, String wafer, Set<String> identifiers,
+                                       Instant targetEndTime, int timeWindowHours) {
+        StringBuilder where = new StringBuilder();
+        where.append("ol.pgc_key = ").append(pgcKey);
+
+        // Add time window constraint on INSERT_TIME
+        // If targetEndTime is provided, look back from that time
+        // Otherwise, look back from now
+        if (timeWindowHours > 0) {
+            String windowStartStr;
+            if (targetEndTime != null) {
+                Instant windowStart = targetEndTime.minus(Duration.ofHours(timeWindowHours));
+                windowStartStr = formatInstantForSql(windowStart);
+            } else {
+                Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
+                windowStartStr = formatInstantForSql(windowStart);
+            }
+            where.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(windowStartStr)
+                    .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
+        }
+
+        // Add wafer matching clause if wafer is provided and not blank/N/A
+        if (!isBlankOrNa(wafer)) {
+            where.append(buildWaferMatchClause(wafer));
+        }
+
+        // Add file identifier matching if identifiers are provided
+        if (!identifiers.isEmpty()) {
+            where.append(" AND (de.file_name IS NULL OR ")
+                    .append(buildIdentifierLikeClause("de.file_name", identifiers))
+                    .append(")");
+        }
+
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'PRODUCTION' AS schema_name" +
+                " FROM op_log ol" +
+                " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
+                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                " WHERE " + where +
+                " UNION ALL" +
+                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
+                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
+                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
+                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " 'SANDBOX' AS schema_name" +
+                " FROM op_log ol" +
+                " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " JOIN program p ON p.pg_key = ol.pg_key" +
+                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
+                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
+                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                " WHERE " + where +
+                " ORDER BY insert_time DESC, end_time DESC" +
+                ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
+    }
+
+    /**
+     * Formats an Instant as a SQL-compatible timestamp string (YYYY-MM-DD HH24:MI:SS.FF).
+     */
+    private String formatInstantForSql(Instant instant) {
+        java.sql.Timestamp sqlTimestamp = java.sql.Timestamp.from(instant);
+        return sqlTimestamp.toString();
+    }
+
     private String buildBatchRawSql(List<String> clauses) {
         String where = String.join(" OR ", clauses);
         return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
@@ -1118,6 +1397,123 @@ public class ExensioClient {
         }
 
         return best;
+    }
+
+    /**
+     * Enhanced timestamp-based record selection implementing priority logic.
+     *
+     * <p>Priority order:
+     * <ol>
+     *   <li>If targetEndTime provided: record with minimum |END_TIME - targetEndTime| delta</li>
+     *   <li>If no targetEndTime: record with maximum INSERT_TIME</li>
+     *   <li>If INSERT_TIME identical: record with maximum END_TIME</li>
+     *   <li>If both timestamps NULL: record with maximum LOT_KEY</li>
+     * </ol>
+     *
+     * <p>All NULL timestamp values are handled gracefully, treating NULL as less-than any actual value.
+     *
+     * <p>Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 3.4
+     *
+     * @param rows the array of result rows from the query
+     * @param targetEndTime optional target END_TIME for delta matching
+     * @return the best matching JsonNode row, or null if no valid rows
+     */
+    private JsonNode selectBestRecordByTimestamp(JsonNode rows, Instant targetEndTime) {
+        if (rows == null || !rows.isArray() || rows.isEmpty()) {
+            return null;
+        }
+
+        JsonNode bestRow = null;
+        int recordsEvaluated = 0;
+
+        if (targetEndTime != null) {
+            // Priority 1: Minimize |END_TIME - targetEndTime| delta
+            long bestDelta = Long.MAX_VALUE;
+
+            for (JsonNode row : rows) {
+                recordsEvaluated++;
+                long waferKey = getLong(row, "WAFER_KEY");
+                if (waferKey <= 0) continue;
+
+                Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
+                if (endTime == null) {
+                    // NULL END_TIME gets worst delta score (lowest priority)
+                    long delta = Long.MAX_VALUE;
+                    if (bestRow == null || delta < bestDelta) {
+                        bestRow = row;
+                        bestDelta = delta;
+                    }
+                } else {
+                    long delta = Math.abs(Duration.between(targetEndTime, endTime).getSeconds());
+                    if (bestRow == null || delta < bestDelta) {
+                        bestRow = row;
+                        bestDelta = delta;
+                    }
+                }
+            }
+        } else {
+            // Priority 2-4: Order by INSERT_TIME DESC, END_TIME DESC, LOT_KEY DESC
+            for (JsonNode row : rows) {
+                recordsEvaluated++;
+                long waferKey = getLong(row, "WAFER_KEY");
+                if (waferKey <= 0) continue;
+
+                if (bestRow == null) {
+                    bestRow = row;
+                } else {
+                    // Compare INSERT_TIME (descending - newer is better)
+                    Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
+                    Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
+
+                    int insertTimeComparison = compareInstants(currentInsertTime, bestInsertTime);
+                    if (insertTimeComparison > 0) {
+                        // Current has newer/larger INSERT_TIME
+                        bestRow = row;
+                    } else if (insertTimeComparison == 0) {
+                        // INSERT_TIME identical, check END_TIME (descending)
+                        Instant currentEndTime = parseInstantSafe(getText(row, "END_TIME"));
+                        Instant bestEndTime = parseInstantSafe(getText(bestRow, "END_TIME"));
+
+                        int endTimeComparison = compareInstants(currentEndTime, bestEndTime);
+                        if (endTimeComparison > 0) {
+                            // Current has newer/larger END_TIME
+                            bestRow = row;
+                        } else if (endTimeComparison == 0) {
+                            // Both END_TIME identical, check LOT_KEY (descending)
+                            long currentLotKey = getLong(row, "LOT_KEY");
+                            long bestLotKey = getLong(bestRow, "LOT_KEY");
+
+                            if (currentLotKey > bestLotKey) {
+                                bestRow = row;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (bestRow != null) {
+            log.debug("Timestamp-based record selection: evaluated {} records, targetEndTime={}", 
+                     recordsEvaluated, targetEndTime);
+        }
+
+        return bestRow;
+    }
+
+    /**
+     * Helper method to compare two Instant values for sorting (descending order).
+     *
+     * <p>NULL values are treated as "less than" non-NULL values.
+     *
+     * @param a first Instant (may be null)
+     * @param b second Instant (may be null)
+     * @return positive if a > b, negative if a < b, 0 if equal (considering NULLs)
+     */
+    private int compareInstants(Instant a, Instant b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;  // NULL < non-NULL
+        if (b == null) return 1;   // non-NULL > NULL
+        return a.compareTo(b);
     }
 
     private int identifierMatchScore(String fileName, Set<String> identifiers) {

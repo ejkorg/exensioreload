@@ -219,6 +219,11 @@ exensio:
   prefer-raw-sql: ${EXENSIO_PREFER_RAW_SQL:true}
   raw-sql-timeout-seconds: ${EXENSIO_RAW_SQL_TIMEOUT_SECONDS:20}
   raw-sql-row-limit: ${EXENSIO_RAW_SQL_ROW_LIMIT:200}
+  # Time window in hours for fallback queries when primary lot_id filtering returns empty.
+  # The fallback query looks back this many hours from the target END_TIME (or now).
+  # Used to constrain results when the lot_id filter is removed.
+  # Default: 48 hours (Requirement: 4.2, 7.1, 7.2)
+  fallback-query-time-window-hours: ${EXENSIO_FALLBACK_QUERY_TIME_WINDOW_HOURS:48}
 
 # AI Integration Configuration
 # Quick setup: Use preset + API key

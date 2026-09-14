@@ -3,6 +3,9 @@ package com.onsemi.cim.apps.exensio.exensioreload.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioOAuthAuthService;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ExensioSamlAuthService;
+
 /**
  * Configuration properties for the Exensio Loading API integration.
  * Bound from the {@code exensio} prefix in application.yml.
@@ -185,6 +188,14 @@ public class ExensioProperties {
      */
     private int rawSqlRowLimit = 200;
 
+    /**
+     * Time window in hours for fallback queries when primary lot_id filtering returns empty.
+     * The fallback query looks back this many hours from the target END_TIME (or now).
+     * Used to constrain results when the lot_id filter is removed.
+     * Default: 48 hours.
+     */
+    private int fallbackQueryTimeWindowHours = 48;
+
     // --- OAuth Authentication (Requirement 5.4, 5.5) ---
 
     /**
@@ -292,6 +303,9 @@ public class ExensioProperties {
         }
         if (rawSqlRowLimit < 10 || rawSqlRowLimit > 5000) {
             throw new IllegalArgumentException("exensio.rawSqlRowLimit must be between 10 and 5000");
+        }
+        if (fallbackQueryTimeWindowHours <= 0) {
+            throw new IllegalArgumentException("exensio.fallbackQueryTimeWindowHours must be positive");
         }
 
         // Validate cache settings
@@ -473,6 +487,9 @@ public class ExensioProperties {
 
     public int getRawSqlRowLimit() { return rawSqlRowLimit; }
     public void setRawSqlRowLimit(int rawSqlRowLimit) { this.rawSqlRowLimit = rawSqlRowLimit; }
+
+    public int getFallbackQueryTimeWindowHours() { return fallbackQueryTimeWindowHours; }
+    public void setFallbackQueryTimeWindowHours(int fallbackQueryTimeWindowHours) { this.fallbackQueryTimeWindowHours = fallbackQueryTimeWindowHours; }
 
     public boolean isCacheEnabled() { return cacheEnabled; }
     public void setCacheEnabled(boolean cacheEnabled) { this.cacheEnabled = cacheEnabled; }
