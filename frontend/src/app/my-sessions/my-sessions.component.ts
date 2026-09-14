@@ -1350,6 +1350,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         background: linear-gradient(135deg, rgba(56, 189, 248, 0.1) 0%, rgba(129, 140, 248, 0.12) 100%);
         border: 1px solid rgba(56, 189, 248, 0.28);
         border-radius: 12px;
+        flex: 0 0 auto; /* don't grow or shrink */
       }
       .coverage-icon {
         flex-shrink: 0;
@@ -1432,6 +1433,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        flex: 0 0 auto; /* don't grow or shrink */
       }
       .section-toggle {
         width: 100%;
@@ -1475,6 +1477,8 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         border-radius: 12px;
         border: 1px solid rgba(167, 139, 250, 0.18);
         background: rgba(49, 35, 98, 0.22);
+        max-height: 500px; /* limit charts panel height */
+        overflow-y: auto; /* allow charts to scroll if needed */
       }
       .charts-head {
         display: flex;
@@ -1717,10 +1721,10 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         padding: 2rem; /* breathing room so modal doesn't touch viewport edges */
       }
       .detail-modal {
-        width: min(1200px, 100%);
-        max-width: 1200px;
-        max-height: 95vh; /* constrain height to viewport */
-        min-height: 160px;
+        width: min(1400px, 100%);
+        max-width: 1400px;
+        max-height: 92vh; /* constrain height to viewport */
+        min-height: 600px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -1740,14 +1744,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         border-radius: 14px;
         border: 1px solid rgba(167, 139, 250, 0.2);
         overflow: hidden;
-        flex: 1;
-        min-height: 200px;
+        flex: 0 1 auto; /* don't grow, can shrink, auto basis */
+        min-height: 300px;
+        max-height: 600px; /* limit max height so it doesn't dominate */
       }
       .files-section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.7rem 1rem;
+        padding: 0.6rem 0.875rem;
         background: rgba(49, 35, 98, 0.55);
         cursor: pointer;
         user-select: none;
@@ -1785,16 +1790,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         display: flex;
         flex-direction: column;
         background: rgba(18, 12, 42, 0.6);
-        max-height: none;
         overflow: hidden;
-        flex: 1;
-        min-height: 0;
+        flex: 1 1 auto; /* grow and shrink to fill available space */
+        min-height: 250px; /* ensure minimum usable height */
       }
       .files-toolbar {
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        padding: 0.6rem 0.875rem;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
         border-bottom: 1px solid rgba(167, 139, 250, 0.12);
         flex-wrap: wrap;
         flex-shrink: 0;
@@ -1814,13 +1818,13 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       }
       .files-search-input {
         width: 100%;
-        height: 30px;
-        padding: 0 0.6rem 0 1.8rem;
+        height: 28px;
+        padding: 0 0.5rem 0 1.7rem;
         border-radius: 8px;
         border: 1px solid rgba(167, 139, 250, 0.2);
         background: rgba(20, 16, 44, 0.55);
         color: rgba(226, 232, 255, 0.92);
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         outline: none;
         transition:
           border-color 0.2s ease,
@@ -1840,15 +1844,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         flex-shrink: 0;
       }
       .files-status-filter {
-        height: 30px;
-        padding: 0 1.8rem 0 0.65rem;
+        height: 28px;
+        padding: 0 1.7rem 0 0.6rem;
         border-radius: 8px;
         border: 1px solid rgba(167, 139, 250, 0.24);
         background: rgba(20, 16, 44, 0.65)
           url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a78bfa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
           no-repeat right 0.55rem center;
         color: rgba(226, 232, 255, 0.9);
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         appearance: none;
         -webkit-appearance: none;
         cursor: pointer;
@@ -1878,12 +1882,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         position: sticky;
         top: 0;
         z-index: 1;
-        padding: 0.55rem 0.75rem;
+        padding: 0.45rem 0.6rem;
         text-align: left;
-        font-size: 0.68rem;
+        font-size: 0.64rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
+        letter-spacing: 0.06em;
         color: rgba(167, 139, 250, 0.8);
         background: rgba(35, 25, 75, 0.95);
         border-bottom: 1px solid rgba(167, 139, 250, 0.18);
@@ -1891,7 +1895,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         backdrop-filter: blur(8px);
       }
       .files-table td {
-        padding: 0.5rem 0.75rem;
+        padding: 0.4rem 0.6rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         vertical-align: middle;
       }
@@ -2214,7 +2218,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         position: sticky;
         top: 0;
         z-index: 2;
-        padding: 1.5rem 2rem;
+        padding: 1rem 1.5rem;
         background: linear-gradient(135deg, rgba(31, 23, 61, 0.98) 0%, rgba(22, 17, 52, 0.95) 100%);
         backdrop-filter: blur(16px);
         border-bottom: 1px solid rgba(167, 139, 250, 0.12);
@@ -2227,7 +2231,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         min-width: 0;
       }
       .detail-head h3 {
-        font-size: 1rem;
+        font-size: 0.95rem;
         font-weight: 700;
         margin: 0;
         color: rgba(226, 232, 255, 0.95);
@@ -2244,10 +2248,11 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .modal-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        padding: 1.25rem 2rem 2rem;
+        overflow-x: hidden;
+        padding: 1rem 1.5rem 1.5rem;
         display: flex;
         flex-direction: column;
-        gap: 1.25rem;
+        gap: 0.875rem;
         min-height: 0; /* allow flex children to shrink and allow internal scrolling */
       }
       .head-updated {
@@ -2272,17 +2277,18 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         gap: 0.75rem;
         flex-wrap: wrap;
         padding: 0.25rem 0;
+        flex: 0 0 auto; /* don't grow or shrink */
       }
       .metric-card {
         flex: 1;
-        min-width: 100px;
-        padding: 1rem;
+        min-width: 85px;
+        padding: 0.8rem;
         border-radius: 14px;
         border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.375rem;
+        gap: 0.3rem;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
@@ -2304,7 +2310,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         margin-bottom: 0.25rem;
       }
       .metric-value {
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         font-weight: 700;
         line-height: 1;
       }
