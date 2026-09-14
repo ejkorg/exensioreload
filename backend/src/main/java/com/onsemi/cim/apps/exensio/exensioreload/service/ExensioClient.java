@@ -958,7 +958,7 @@ public class ExensioClient {
         sql.append("SELECT l.lot_id, NVL(w.wf_id, '') AS wafer_id, NVL(p.ppid, '') AS program_name, ");
         sql.append("NVL(rf.file_name, '') AS file_name, dl.error_code, ");
         sql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
-        sql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
+        sql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"') AS error_time ");
         sql.append("FROM op_log ol ");
         sql.append("JOIN lot l ON l.lot_key = ol.lot_key ");
         sql.append("JOIN program p ON p.pg_key = ol.pg_key ");
@@ -1097,7 +1097,7 @@ public class ExensioClient {
             rawDataSql.append("SELECT NVL(rf.file_name, '') AS file_name, dl.error_code, ");
             rawDataSql.append("COALESCE(sh1.str_value, '') || COALESCE(sh2.str_value, '') || ");
             rawDataSql.append("COALESCE(sh3.str_value, '') || COALESCE(sh4.str_value, '') AS full_error_message, ");
-            rawDataSql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS error_time ");
+            rawDataSql.append("TO_CHAR(dl.start_time, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"') AS error_time ");
             rawDataSql.append("FROM dp_log dl ");
             rawDataSql.append("JOIN raw_file rf ON rf.rawfile_key = dl.rawfile_key ");
             rawDataSql.append("JOIN error_message em ON em.msg_key = dl.msg_key ");
@@ -1165,7 +1165,7 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'PRODUCTION' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
@@ -1179,7 +1179,7 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'SANDBOX' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
@@ -1251,8 +1251,8 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS insert_time," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'PRODUCTION' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
@@ -1266,8 +1266,8 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS insert_time," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'SANDBOX' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
@@ -1295,7 +1295,7 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'PRODUCTION' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
@@ -1309,7 +1309,7 @@ public class ExensioClient {
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS" + '"' + "Z" + '"' + "'),'') AS end_time," +
+                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
                 " 'SANDBOX' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
