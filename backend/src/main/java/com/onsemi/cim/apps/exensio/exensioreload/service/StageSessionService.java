@@ -174,6 +174,9 @@ public class StageSessionService {
         if (detail == null) {
             return null;
         }
+        if ("CANCELLED".equalsIgnoreCase(detail.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
+        }
         refreshCounters(sessionId, detail.status());
         return getOwnedSession(sessionId, username);
     }
@@ -350,6 +353,9 @@ public class StageSessionService {
         if (detail == null) {
             return null;
         }
+        if ("CANCELLED".equalsIgnoreCase(detail.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
+        }
         refreshCounters(sessionId, detail.status());
         return isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
     }
@@ -365,6 +371,9 @@ public class StageSessionService {
         StagingSessionDetail session = getOwnedSession(sessionId, username);
         if (session == null) {
             return new StageRecordPage(List.of(), 0, 0, 0);
+        }
+        if ("CANCELLED".equalsIgnoreCase(session.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
         }
         int resolvedPage = Math.max(page, 0);
         int resolvedSize = size <= 0 ? 100 : Math.min(size, 1000);
@@ -405,6 +414,9 @@ public class StageSessionService {
         StagingSessionDetail session = isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         if (session == null) {
             return new StageRecordPage(List.of(), 0, 0, 0);
+        }
+        if ("CANCELLED".equalsIgnoreCase(session.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
         }
         int resolvedPage = Math.max(page, 0);
         int resolvedSize = size <= 0 ? 100 : Math.min(size, 1000);
@@ -585,6 +597,7 @@ public class StageSessionService {
         }
 
         if ("CANCELLED".equalsIgnoreCase(session.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
             refreshCounters(sessionId, "CANCELLED");
             return isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         }
@@ -657,6 +670,10 @@ public class StageSessionService {
         StagingSessionDetail session = isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         if (session == null) {
             return null;
+        }
+        if ("CANCELLED".equalsIgnoreCase(session.status())) {
+            refDbService.cancelRecordsForSession(sessionId, "Cancelled session reconciliation");
+            refreshCounters(sessionId, "CANCELLED");
         }
 
         int resolvedTopPairs = topPairsLimit <= 0 ? 10 : Math.min(topPairsLimit, 50);

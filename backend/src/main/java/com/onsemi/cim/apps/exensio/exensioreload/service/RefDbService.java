@@ -2229,15 +2229,17 @@ public class RefDbService {
             throw new IllegalStateException("Failed cancelling staging records", ex);
         }
 
-        // Invalidate status cache so dashboard queries immediately see fresh DB counts
-        invalidateStatusCache();
+        if (rowsUpdated > 0) {
+            // Invalidate status cache so dashboard queries immediately see fresh DB counts
+            invalidateStatusCache();
 
-        // Emit aggregation state change and broadcast updated stats
-        if (stateAggregationBatcher != null) {
-            recordStateChangeForBatcher(sessionId, "CANCELLED");
-        }
-        if (monitorService != null) {
-            broadcastStats(sessionId);
+            // Emit aggregation state change and broadcast updated stats
+            if (stateAggregationBatcher != null) {
+                recordStateChangeForBatcher(sessionId, "CANCELLED");
+            }
+            if (monitorService != null) {
+                broadcastStats(sessionId);
+            }
         }
 
         return rowsUpdated;

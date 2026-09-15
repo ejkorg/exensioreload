@@ -374,12 +374,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               <div class="metric-value">{{ stats.total }}</div>
               <div class="metric-label">Total</div>
             </div>
-            <div class="metric-card metric-card--staged">
+            <div class="metric-card metric-card--staged" *ngIf="stats.staged > 0 || (stats.cancelled ?? 0) === 0">
               <app-glass-icon name="upload" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.staged }}</div>
               <div class="metric-label">Staged</div>
             </div>
-            <div class="metric-card metric-card--enqueued">
+            <div class="metric-card metric-card--enqueued" *ngIf="stats.enqueued > 0 || (stats.cancelled ?? 0) === 0">
               <app-glass-icon name="clock" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.enqueued }}</div>
               <div class="metric-label">Enqueued</div>
@@ -393,6 +393,11 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               <app-glass-icon name="error" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.failed }}</div>
               <div class="metric-label">Failed</div>
+            </div>
+            <div class="metric-card metric-card--cancelled" *ngIf="(stats.cancelled ?? 0) > 0">
+              <app-glass-icon name="close" [size]="18"></app-glass-icon>
+              <div class="metric-value">{{ stats.cancelled }}</div>
+              <div class="metric-label">Cancelled</div>
             </div>
           </div>
 
@@ -478,7 +483,10 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
                   <span class="summary-pill summary-pill--failed"
                     >Failed {{ analyticsStatusSummary().failedPct }}%</span
                   >
-                  <span class="summary-pill summary-pill--cancelled"
+                  <span class="summary-pill summary-pill--enqueued" *ngIf="analyticsStatusSummary().enqueuedPct > 0"
+                    >Enqueued {{ analyticsStatusSummary().enqueuedPct }}%</span
+                  >
+                  <span class="summary-pill summary-pill--cancelled" *ngIf="analyticsStatusSummary().cancelledPct > 0"
                     >Cancelled {{ analyticsStatusSummary().cancelledPct }}%</span
                   >
                   <span class="summary-pill summary-pill--total">Total {{ analyticsStatusSummary().total }}</span>
@@ -1586,10 +1594,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         border-color: rgba(239, 68, 68, 0.3);
         color: #ef4444;
       }
+      .summary-pill--enqueued {
+        background: rgba(245, 158, 11, 0.18);
+        border-color: rgba(245, 158, 11, 0.3);
+        color: #f59e0b;
+      }
       .summary-pill--cancelled {
-        background: rgba(239, 68, 68, 0.14);
-        border-color: rgba(239, 68, 68, 0.24);
-        color: #f87171;
+        background: rgba(249, 115, 22, 0.18);
+        border-color: rgba(249, 115, 22, 0.3);
+        color: #f97316;
       }
       .summary-pill--total {
         background: rgba(99, 102, 241, 0.18);
@@ -2170,10 +2183,15 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         border-color: rgba(220, 38, 38, 0.22);
         color: #dc2626;
       }
+      :host-context(body.light-theme) .summary-pill--enqueued {
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.25);
+        color: #d97706;
+      }
       :host-context(body.light-theme) .summary-pill--cancelled {
-        background: rgba(220, 38, 38, 0.08);
-        border-color: rgba(220, 38, 38, 0.18);
-        color: #ef4444;
+        background: rgba(249, 115, 22, 0.12);
+        border-color: rgba(249, 115, 22, 0.25);
+        color: #ea580c;
       }
       :host-context(body.light-theme) .summary-pill--total {
         background: rgba(79, 70, 229, 0.1);
@@ -2364,6 +2382,14 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
       .metric-card--failed.zero {
         opacity: 0.4;
       }
+      .metric-card--cancelled {
+        background: rgba(249, 115, 22, 0.08);
+        border-color: rgba(249, 115, 22, 0.2);
+        color: #f97316;
+      }
+      .metric-card--cancelled::before {
+        background: linear-gradient(90deg, #f97316, #fb923c);
+      }
       .status-row {
         display: flex;
         align-items: center;
@@ -2394,6 +2420,11 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
         background: rgba(220, 38, 38, 0.08);
         border-color: rgba(220, 38, 38, 0.2);
         color: #dc2626;
+      }
+      :host-context(body.light-theme) .metric-card--cancelled {
+        background: rgba(249, 115, 22, 0.08);
+        border-color: rgba(249, 115, 22, 0.2);
+        color: #ea580c;
       }
       :host-context(body.light-theme) .metric-card {
         border-color: rgba(15, 23, 42, 0.1);
@@ -2513,25 +2544,28 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     const enqueued = detail.filesEnqueued || 0;
     const done = detail.filesDone || 0;
     const failed = detail.filesFailed || 0;
+    const cancelled = Math.max(0, total - staged - enqueued - done - failed);
 
     if (total > 0 && staged === 0 && enqueued === 0 && done === 0 && failed === 0) {
       let s = 0,
         e = 0,
         d = 0,
-        f = 0;
+        f = 0,
+        c = 0;
       this.files().forEach((file: StageRecordView) => {
         const status = this.normalizeStatus(file.status);
         if (status === 'DONE') d++;
         else if (status === 'QUEUED_FOR_CP') e++;
-        else if (status === 'FAILED' || status === 'CANCELLED') f++;
+        else if (status === 'FAILED') f++;
+        else if (status === 'CANCELLED') c++;
         else s++;
       });
       if (this.files().length > 0) {
-        return { total, staged: s, enqueued: e, done: d, failed: f };
+        return { total, staged: s, enqueued: e, done: d, failed: f, cancelled: c };
       }
     }
 
-    return { total, staged, enqueued, done, failed };
+    return { total, staged, enqueued, done, failed, cancelled };
   });
 
   loading = signal(false);
@@ -2698,12 +2732,14 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     const completed = points.reduce((acc: number, p: SessionDailyStatusPoint) => acc + (p.done || 0), 0);
     const failed = points.reduce((acc: number, p: SessionDailyStatusPoint) => acc + (p.failed || 0), 0);
     const cancelled = points.reduce((acc: number, p: SessionDailyStatusPoint) => acc + (p.cancelled || 0), 0);
+    const enqueued = points.reduce((acc: number, p: SessionDailyStatusPoint) => acc + (p.enqueued || 0), 0);
     const pct = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
     return {
       total,
       completedPct: pct(completed),
       failedPct: pct(failed),
       cancelledPct: pct(cancelled),
+      enqueuedPct: pct(enqueued),
     };
   });
 
@@ -3584,13 +3620,15 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     const failedCount = stats.failed;
     const enqueuedCount = stats.enqueued;
     const stagedCount = stats.staged;
-    const otherCount = Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount);
+    const cancelledCount = stats.cancelled ?? Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount);
+    const otherCount = Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount - cancelledCount);
 
     const data = [
       { value: completedCount, name: 'Completed', itemStyle: { color: '#10b981' } },
       { value: failedCount, name: 'Failed', itemStyle: { color: '#ef4444' } },
       { value: enqueuedCount, name: 'Enqueued', itemStyle: { color: '#f59e0b' } },
       { value: stagedCount, name: 'Staged', itemStyle: { color: '#818cf8' } },
+      ...(cancelledCount > 0 ? [{ value: cancelledCount, name: 'Cancelled', itemStyle: { color: '#f97316' } }] : []),
       ...(otherCount > 0 ? [{ value: otherCount, name: 'Other', itemStyle: { color: '#64748b' } }] : []),
     ].filter((d: any) => d.value > 0);
 
