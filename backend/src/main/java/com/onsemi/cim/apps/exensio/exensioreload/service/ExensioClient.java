@@ -1896,4 +1896,173 @@ public class ExensioClient {
             return null;
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Advanced-Dates endpoint
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parsed result from the {@code POST /api/v1/key/advanced-dates} endpoint.
+     *
+     * <p>Both instants are in UTC. Either field may be {@code null} when the API
+     * response does not include a start or end date (e.g. ABSOLUTE mode with a
+     * single fixed point).</p>
+     */
+    public record AdvancedDatesResult(Instant startDate, Instant endDate) {}
+
+    /**
+     * Calls the Exensio {@code POST /api/v1/key/advanced-dates} endpoint to resolve
+     * a date window according to Exensio's own calendar logic.
+     *
+     * <p>Use this instead of hard-coded time offsets when you need to restrict a
+     * raw-SQL fallback query to the same date window that the Exensio UI would use.
+     * The two most common request shapes are:
+     *
+     * <ul>
+     *   <li><b>ABSOLUTE</b> — fixed ISO-8601 start/end strings.</li>
+     *   <li><b>RELATIVE</b> — period-based window (e.g. last N hours / days).</li>
+     * </ul>
+     *
+     * <p>On any error (network, HTTP, parse) the method logs a warning and returns
+     * {@code null}. Callers should fall back to their default behaviour in that case.
+     *
+     * @param requestBody  fully-formed JSON body as defined by the advanced-dates API spec
+     * @param schema       Exensio schema to authenticate against (e.g. {@code "PRODUCTION"})
+     * @param traceId      correlation ID for logging
+     * @return resolved start/end pair, or {@code null} on error
+     */
+    public AdvancedDatesResult callAdvancedDates(String requestBody, String schema, String traceId) {
+        String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/api/v1/key/advanced-dates";
+        try {
+            String token = authService.getToken(schema);
+            log.info("Exensio advanced-dates START: url={}, traceId={}", url, traceId);
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio advanced-dates body (traceId={}):\n{}", traceId, requestBody);
+            }
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 401) {
+                // One retry with a fresh token
+                log.debug("Exensio advanced-dates got 401 — refreshing token and retrying (traceId={})", traceId);
+                authService.invalidateToken(schema);
+                token = authService.login(schema);
+                request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofSeconds(15))
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                        .build();
+                response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            }
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Exensio advanced-dates FAILED (HTTP {}, traceId={}): {}",
+                        response.statusCode(), traceId, response.body());
+                return null;
+            }
+
+            log.info("Exensio advanced-dates SUCCESS (HTTP {}, traceId={})", response.statusCode(), traceId);
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio advanced-dates response (traceId={}):\n{}", traceId, response.body());
+            }
+
+            return parseAdvancedDatesResponse(response.body());
+
+        } catch (Exception e) {
+            log.warn("Exensio advanced-dates call failed (traceId={}): {}", traceId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Convenience method: resolves a RELATIVE date window of {@code hours} hours
+     * centred on {@code anchorTime} (or "now" when {@code anchorTime} is null) using
+     * the Exensio advanced-dates API.
+     *
+     * <p>This is the recommended replacement for computing
+     * {@code Instant.now().minus(Duration.ofHours(hours))} directly, because it
+     * delegates the calendar arithmetic to Exensio and therefore stays consistent
+     * with the date ranges that the Exensio UI itself would display.
+     *
+     * <p>Returns {@code null} when the API call fails — callers should fall back to
+     * local time arithmetic.
+     *
+     * @param hours      look-back window length in hours
+     * @param anchorTime optional anchor; if null the current wall-clock is used
+     * @param schema     Exensio schema to authenticate against
+     * @param traceId    correlation ID for logging
+     */
+    public AdvancedDatesResult resolveQueryDateWindow(int hours, Instant anchorTime, String schema, String traceId) {
+        // Build a RELATIVE request: "last N hours" ending at anchorTime (or 'now').
+        // Exensio interprets the interval as [anchorTime - hours, anchorTime].
+        String body;
+        if (anchorTime != null) {
+            // ABSOLUTE request with explicit end = anchorTime, start = anchorTime - hours
+            String endStr = anchorTime.toString().replace("Z", "+0000"); // ISO-8601 compat
+            String startStr = anchorTime.minus(Duration.ofHours(hours)).toString().replace("Z", "+0000");
+            body = "{\"date_type\":\"ABSOLUTE\",\"period_range\":{\"unit\":\"HOUR\"," +
+                   "\"from\":{\"period\":0,\"year\":0},\"to\":{\"period\":0,\"year\":0}}," +
+                   "\"interval\":{\"offset\":0,\"interval\":1,\"position\":\"END\",\"unit\":\"HOUR\"}," +
+                   "\"start_date\":\"" + startStr + "\",\"end_date\":\"" + endStr + "\"}";
+        } else {
+            // RELATIVE request: last N hours ending at 'now'
+            body = "{\"date_type\":\"RELATIVE\",\"period_range\":{\"unit\":\"HOUR\"," +
+                   "\"from\":{\"period\":" + hours + ",\"year\":0},\"to\":{\"period\":0,\"year\":0}}," +
+                   "\"interval\":{\"offset\":0,\"interval\":1,\"position\":\"END\",\"unit\":\"HOUR\"}}";
+        }
+        return callAdvancedDates(body, schema, traceId);
+    }
+
+    /**
+     * Parses the JSON response from the advanced-dates endpoint.
+     *
+     * <p>Expected shape (from API spec):
+     * <pre>
+     * {
+     *   "start_date": "2026-09-14T19:00:00+0000",
+     *   "end_date":   "2026-09-15T03:00:00+0000"
+     * }
+     * </pre>
+     */
+    private AdvancedDatesResult parseAdvancedDatesResponse(String body) {
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            Instant start = parseAdvancedDateField(root, "start_date");
+            Instant end   = parseAdvancedDateField(root, "end_date");
+            return new AdvancedDatesResult(start, end);
+        } catch (Exception e) {
+            log.warn("Failed to parse advanced-dates response: {} — body snippet: {}",
+                    e.getMessage(), body.length() > 200 ? body.substring(0, 200) : body);
+            return null;
+        }
+    }
+
+    /**
+     * Parses a single date field from the advanced-dates JSON response.
+     * Handles both {@code +0000} and {@code Z} UTC designators.
+     */
+    private Instant parseAdvancedDateField(JsonNode root, String field) {
+        JsonNode node = getFieldNode(root, field);
+        if (node == null || node.isNull()) return null;
+        String raw = node.asText("").trim();
+        if (raw.isEmpty()) return null;
+        // Normalise "+0000" → "Z" for standard Instant.parse
+        String normalised = raw.replace("+0000", "Z").replace("+00:00", "Z");
+        // If no 'T' separator, assume date-only → midnight UTC
+        if (!normalised.contains("T")) {
+            normalised = normalised + "T00:00:00Z";
+        }
+        return parseInstantSafe(normalised);
+    }
 }
+

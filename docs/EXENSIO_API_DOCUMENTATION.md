@@ -1,4 +1,4 @@
-﻿# Exensio API Integration â€” Detailed Documentation
+# Exensio API Integration — Detailed Documentation
 
 > [!NOTE]
 > This document describes how the **exensioreload** backend application integrates with the **Exensio Loading API** to verify, look up, and monitor semiconductor lot/wafer data loading status.
@@ -10,8 +10,8 @@
 1. [Architecture Overview](#1-architecture-overview)
 2. [Exensio API Endpoints Used](#2-exensio-api-endpoints-used)
 3. [Authentication Flow](#3-authentication-flow)
-4. [Lot-Wafer Lookup â€” Single Record](#4-lot-wafer-lookup--single-record)
-5. [Lot-Wafer Lookup â€” Batch](#5-lot-wafer-lookup--batch)
+4. [Lot-Wafer Lookup — Single Record](#4-lot-wafer-lookup--single-record)
+5. [Lot-Wafer Lookup — Batch](#5-lot-wafer-lookup--batch)
 6. [Raw SQL Endpoint](#6-raw-sql-endpoint)
 7. [Pre-Flight Lot Existence Check](#7-pre-flight-lot-existence-check)
 8. [Load Monitoring Pipeline](#8-load-monitoring-pipeline)
@@ -21,6 +21,8 @@
 12. [Configuration Reference](#12-configuration-reference)
 13. [Data Flow Diagrams](#13-data-flow-diagrams)
 14. [Key Classes Reference](#14-key-classes-reference)
+15. [Pipeline Dependency Orchestration](#15-pipeline-dependency-orchestration)
+16. [Advanced-Dates Endpoint](#16-advanced-dates-endpoint)
 
 ---
 
@@ -28,11 +30,11 @@
 
 The application acts as an intermediary between semiconductor manufacturing data senders and the **Exensio** data warehouse. It uses the Exensio REST API to:
 
-1. **Authenticate** â€” Obtain session tokens via login endpoint
-2. **Look up lot/wafer data** â€” Verify that data has been loaded into Exensio (single or batch)
-3. **Execute raw SQL queries** â€” Query Exensio's Oracle database directly for lot metadata
-4. **Pre-flight checks** â€” Verify lot existence before staging data for reload
-5. **Monitor loading status** â€” Poll for records in `EXENSIO_MONITORING` state and drive status transitions
+1. **Authenticate** — Obtain session tokens via login endpoint
+2. **Look up lot/wafer data** — Verify that data has been loaded into Exensio (single or batch)
+3. **Execute raw SQL queries** — Query Exensio's Oracle database directly for lot metadata
+4. **Pre-flight checks** — Verify lot existence before staging data for reload
+5. **Monitor loading status** — Poll for records in `EXENSIO_MONITORING` state and drive status transitions
 
 ### Component Interaction
 
@@ -59,7 +61,7 @@ graph TD
 
 All Exensio HTTP operations share a single `HttpClient` bean created by [ExensioHttpClientFactory](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/ExensioHttpClientFactory.java):
 
-- **Redirect policy**: `NEVER` â€” 3xx responses are treated as errors (catches misconfigured URLs)
+- **Redirect policy**: `NEVER` — 3xx responses are treated as errors (catches misconfigured URLs)
 - **Connect timeout**: 10 seconds
 - **Bean qualifier**: `exensioHttpClient`
 
@@ -132,7 +134,7 @@ The `token` field is extracted and cached per schema in a `ConcurrentHashMap<Str
 | `getToken(schema)` | Returns cached token or triggers fresh login |
 | `invalidateToken(schema)` | Removes cached token (called on HTTP 401) |
 | `login(schema)` | Thread-safe login with `ReentrantLock` + double-check pattern |
-| `logout()` | `@PreDestroy` â€” logs out all schemas on application shutdown |
+| `logout()` | `@PreDestroy` — logs out all schemas on application shutdown |
 
 ### 3.3 Token Refresh on 401
 
@@ -154,14 +156,14 @@ Executed for every cached schema token during `@PreDestroy`.
 
 ### 3.5 Error Handling
 
-- **3xx redirects**: Surfaced as errors (not followed) â€” indicates URL misconfiguration
+- **3xx redirects**: Surfaced as errors (not followed) — indicates URL misconfiguration
 - **Non-2xx**: Throws `ExensioAuthException` with HTTP status and response body
 - **Missing token field**: Throws `ExensioAuthException`
 - **Network errors**: Wrapped in `ExensioAuthException`
 
 ---
 
-## 4. Lot-Wafer Lookup â€” Single Record
+## 4. Lot-Wafer Lookup — Single Record
 
 **Service**: [ExensioClient.lotWaferLookup()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java#L108-L111)
 
@@ -200,7 +202,7 @@ Timeout: 15 seconds
 
 | Field | Type | Description |
 |---|---|---|
-| `pgc_key` | `int` | Program Group Class key (see [Â§10 PGC Key Resolution](#10-pgc-key-resolution)) |
+| `pgc_key` | `int` | Program Group Class key (see [§10 PGC Key Resolution](#10-pgc-key-resolution)) |
 | `lot_ids` | `string[]` | Array of lot ID strings to look up |
 | `wafer_ids` | `string[]` | Array of wafer ID strings (empty array for lot-level lookups) |
 
@@ -227,7 +229,7 @@ Timeout: 15 seconds
 Parsed by [parseResponse()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java#L1075-L1145) into a sealed interface result:
 
 ```java
-// ExensioLotWaferResult.java â€” Discriminated union
+// ExensioLotWaferResult.java — Discriminated union
 public sealed interface ExensioLotWaferResult {
     record Found(long lotKey, long waferKey, long pgKey,
                  String ppid, String lotId, String waferId,
@@ -251,17 +253,17 @@ After finding a candidate, the PPID suffix is validated against the expected `te
 
 ```java
 // ppidMatchesTestPhase() logic:
-// 1. testPhase is null/blank â†’ ACCEPT (no check)
-// 2. ppid is null/blank     â†’ ACCEPT (cannot validate)
-// 3. ppid ends with "_<testPhase>" (case-insensitive) â†’ ACCEPT
-// 4. Otherwise â†’ REJECT (downgrade to NotFound)
+// 1. testPhase is null/blank → ACCEPT (no check)
+// 2. ppid is null/blank     → ACCEPT (cannot validate)
+// 3. ppid ends with "_<testPhase>" (case-insensitive) → ACCEPT
+// 4. Otherwise → REJECT (downgrade to NotFound)
 ```
 
-Example: If `testPhase = "FT"`, then `ppid = "WS::CM8012X_FT"` â†’ âœ… accepted, but `ppid = "WS::CM8012X_PROBE"` â†’ âŒ rejected (retries next cycle).
+Example: If `testPhase = "FT"`, then `ppid = "WS::CM8012X_FT"` → ✅ accepted, but `ppid = "WS::CM8012X_PROBE"` → ❌ rejected (retries next cycle).
 
 ---
 
-## 5. Lot-Wafer Lookup â€” Batch
+## 5. Lot-Wafer Lookup — Batch
 
 **Service**: [ExensioClient.lotWaferLookupBatch()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioClient.java#L321-L384)
 
@@ -299,7 +301,7 @@ Timeout: 30 seconds
 }
 ```
 
-The `pgc_key` for a batch is resolved by **majority vote** â€” the most common PGC key across all records in the batch is used.
+The `pgc_key` for a batch is resolved by **majority vote** — the most common PGC key across all records in the batch is used.
 
 ### 5.3 Retry with Exponential Backoff
 
@@ -309,12 +311,12 @@ The batch lookup includes built-in retry logic:
 |---|---|---|
 | Max attempts | 3 | `exensio.retry-max-attempts` |
 | Base delay | 1000 ms | `exensio.retry-base-delay-ms` |
-| Backoff formula | `baseDelay Ã— 2^(attempt-1)` | â€” |
+| Backoff formula | `baseDelay × 2^(attempt-1)` | — |
 
 **Retry triggers:**
-- HTTP 401 â†’ Refresh token and retry immediately
-- HTTP 429, 500, 502, 503, 504, Timeout â†’ Exponential backoff
-- Other errors â†’ Return immediately (non-transient)
+- HTTP 401 → Refresh token and retry immediately
+- HTTP 429, 500, 502, 503, 504, Timeout → Exponential backoff
+- Other errors → Return immediately (non-transient)
 
 ### 5.4 Result Mapping
 
@@ -323,7 +325,7 @@ The [BatchLookupResult](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backen
 | Update Type | Meaning | Action |
 |---|---|---|
 | `COMPLETED` | Wafer found in Exensio | Mark record as DONE, store `wafer_key` + `pg_key` |
-| `NOT_FOUND` | No matching wafer found | Retry next cycle (or timeout â†’ FAILED) |
+| `NOT_FOUND` | No matching wafer found | Retry next cycle (or timeout → FAILED) |
 | `LOAD_FAILED` | Confirmed load error in Exensio | Mark as permanently FAILED |
 | `ERROR` | API call failed | Retry next cycle |
 | `COMPLETED_MANUAL_VERIFICATION_REQUIRED` | Timeout with no definitive result | Needs human review |
@@ -354,7 +356,7 @@ Timeout: 20 seconds (configurable)
 
 The endpoint may return two shapes, both handled:
 
-**Format A â€” Direct array:**
+**Format A — Direct array:**
 ```json
 [
   {"LOT_ID": "LOT001", "WAFER_ID": "06", "WAFER_KEY": 4633046, ...},
@@ -362,7 +364,7 @@ The endpoint may return two shapes, both handled:
 ]
 ```
 
-**Format B â€” Wrapped in `rows`:**
+**Format B — Wrapped in `rows`:**
 ```json
 {
   "rows": [
@@ -435,9 +437,9 @@ FROM (
 
 | Parameter | Source | Description |
 |---|---|---|
-| `?pgc_key` | Frontend â†’ `DataTypePgcKeyMapper` | Resolved from user's data type input (e.g., `probe` â†’ 1, `ft` â†’ 2) |
-| `?is_wafer_level` | Frontend â†’ `ExensioSqlUtilService.isWaferLevelClass()` | 1 for wafer-level PGC keys (1, 4, 5, 14), 0 for lot-level (2) |
-| `?wafer_num` | Frontend â†’ `ExensioSqlUtilService.stripWaferPrefix()` | Numeric wafer number extracted from user input (e.g., `W06` â†’ 6, `06` â†’ 6) |
+| `?pgc_key` | Frontend → `DataTypePgcKeyMapper` | Resolved from user's data type input (e.g., `probe` → 1, `ft` → 2) |
+| `?is_wafer_level` | Frontend → `ExensioSqlUtilService.isWaferLevelClass()` | 1 for wafer-level PGC keys (1, 4, 5, 14), 0 for lot-level (2) |
+| `?wafer_num` | Frontend → `ExensioSqlUtilService.stripWaferPrefix()` | Numeric wafer number extracted from user input (e.g., `W06` → 6, `06` → 6) |
 
 **Key features of this query:**
 
@@ -464,10 +466,10 @@ FROM (
 
 | Table | Alias | Purpose |
 |---|---|---|
-| `op_log` | `ol` | Operation log â€” central join table linking lots, programs, wafers |
+| `op_log` | `ol` | Operation log — central join table linking lots, programs, wafers |
 | `lot` | `l` | Lot master data (`lot_key`, `lot_id`) |
 | `program` | `p` | Program definitions (`pg_key`, `ppid`) |
-| `wf_log` | `wfl` | Wafer log â€” links operations to wafers |
+| `wf_log` | `wfl` | Wafer log — links operations to wafers |
 | `wafer` | `w` | Wafer master data (`wf_key`, `wf_id`, `wf_num`) |
 | `df_export` | `de` | Data file export records (`file_name`) |
 | `dp_log` | `dl` | Data processing log (error detection) |
@@ -519,9 +521,9 @@ The pre-check follows a **4-step cascading strategy** to maximize the chance of 
 
 ```mermaid
 flowchart TD
-    A["check(request)"] --> B{"Step 1: HTTP Raw-SQL<br/>Multi-Schema<br/>(PRODUCTION â†’ SANDBOX)"}
+    A["check(request)"] --> B{"Step 1: HTTP Raw-SQL<br/>Multi-Schema<br/>(PRODUCTION → SANDBOX)"}
     B -->|"Lots Found"| Z["Return Success"]
-    B -->|"Empty/Error"| C{"Step 2: Lot-Wafer Lookup<br/>Multi-Schema<br/>(PRODUCTION â†’ SANDBOX)"}
+    B -->|"Empty/Error"| C{"Step 2: Lot-Wafer Lookup<br/>Multi-Schema<br/>(PRODUCTION → SANDBOX)"}
     C -->|"Lots Found"| Z
     C -->|"Empty/Error"| D{"Step 3: Snowflake JDBC<br/>(Secondary Fallback)"}
     D -->|"Lots Found"| Z
@@ -535,7 +537,7 @@ flowchart TD
 
 The pre-check generates Oracle SQL that:
 
-1. Joins `op_log` â†’ `lot` â†’ `program` â†’ `wf_log` â†’ `wafer`
+1. Joins `op_log` → `lot` → `program` → `wf_log` → `wafer`
 2. Filters by `pgc_key` (derived from data type)
 3. Optionally filters by wafer ID (for wafer-level classes)
 4. Optionally filters by date range (year/month blocks)
@@ -581,7 +583,7 @@ Results are cached by [ExensioPreCheckCacheService](file:///c:/Users/fg8n8x/Desk
 |---|---|---|
 | TTL | 5 minutes | `exensio.precheck-cache-ttl-minutes` |
 | Max entries | 1000 | hardcoded |
-| Cache key | Hash of `(lotIds, waferIds, dataType, blocks, snowflakeFallback)` | â€” |
+| Cache key | Hash of `(lotIds, waferIds, dataType, blocks, snowflakeFallback)` | — |
 
 ---
 
@@ -617,12 +619,12 @@ Each batch goes through:
 3. **Concurrency control**: Acquire semaphore permit (max concurrent requests)
 4. **API call**: `ExensioClient.lotWaferLookupBatch(records)`
 5. **Result processing**:
-   - `COMPLETED` â†’ Cache result, mark DONE with `wafer_key` + `pg_key`
-   - `NOT_FOUND` â†’ Check for raw data load errors in `DP_LOG`
-     - If load error found â†’ Mark `LOAD_FAILED` with error details
-     - If timeout exceeded â†’ Mark `COMPLETED_MANUAL_VERIFICATION_REQUIRED`
-     - Otherwise â†’ Leave for retry next cycle
-   - Batch API failure â†’ Retry each record individually via single lookup
+   - `COMPLETED` → Cache result, mark DONE with `wafer_key` + `pg_key`
+   - `NOT_FOUND` → Check for raw data load errors in `DP_LOG`
+     - If load error found → Mark `LOAD_FAILED` with error details
+     - If timeout exceeded → Mark `COMPLETED_MANUAL_VERIFICATION_REQUIRED`
+     - Otherwise → Leave for retry next cycle
+   - Batch API failure → Retry each record individually via single lookup
 
 ### 8.3 Dead Letter Queue
 
@@ -632,10 +634,10 @@ Records that fail repeatedly are moved to a dead letter queue:
 |---|---|---|
 | Threshold | 5 | Consecutive failures before DLQ |
 | Action | Mark `LOAD_FAILED` | Record stops being retried |
-| Message | "Exensio load failed after N consecutive failures â€” moved to dead letter queue" | â€” |
+| Message | "Exensio load failed after N consecutive failures — moved to dead letter queue" | — |
 
 > [!IMPORTANT]
-> Timeout states (`ENRICHMENT_TIMEOUT`, `EXENSIO_TIMEOUT`) do **not** count toward the DLQ failure threshold â€” they are expected conditions handled separately.
+> Timeout states (`ENRICHMENT_TIMEOUT`, `EXENSIO_TIMEOUT`) do **not** count toward the DLQ failure threshold — they are expected conditions handled separately.
 
 ### 8.4 SSE Event Emission
 
@@ -671,10 +673,10 @@ The application implements a **multi-schema fallback** pattern to maximize data 
 
 Every lookup operation follows this pattern:
 
-1. **Raw SQL â†’ Primary schema** (PRODUCTION)
-2. **Raw SQL â†’ Fallback schema** (SANDBOX) â€” only if step 1 returned empty
-3. **Lot-wafer-lookup â†’ Primary schema** (PRODUCTION) â€” only if raw SQL found nothing
-4. **Lot-wafer-lookup â†’ Fallback schema** (SANDBOX) â€” only if step 3 returned empty
+1. **Raw SQL → Primary schema** (PRODUCTION)
+2. **Raw SQL → Fallback schema** (SANDBOX) — only if step 1 returned empty
+3. **Lot-wafer-lookup → Primary schema** (PRODUCTION) — only if raw SQL found nothing
+4. **Lot-wafer-lookup → Fallback schema** (SANDBOX) — only if step 3 returned empty
 
 ### 9.3 Configuration
 
@@ -694,7 +696,7 @@ exensio:
 
 The **Program Group Class key** (`pgc_key`) determines which type of semiconductor test data to query in Exensio.
 
-### 10.1 Data Type â†’ PGC Key Mapping
+### 10.1 Data Type → PGC Key Mapping
 
 Defined in [DataTypePgcKeyMapper.resolve()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/DataTypePgcKeyMapper.java) and exposed via [ExensioPreCheckService.resolvePgcKey()](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckService.java#L638-L640):
 
@@ -753,7 +755,7 @@ stateDiagram-v2
 
 - **Max attempts**: 3 (`exensio.retry-max-attempts`)
 - **Base delay**: 1,000 ms (`exensio.retry-base-delay-ms`)
-- **Formula**: `delay = baseDelay Ã— 2^(attempt - 1)` â†’ 1s, 2s, 4s
+- **Formula**: `delay = baseDelay × 2^(attempt - 1)` → 1s, 2s, 4s
 - **Transient errors**: HTTP 429, 500, 502, 503, 504, Timeout, `IOException`
 
 ### 11.3 Concurrency Limiting
@@ -771,7 +773,7 @@ stateDiagram-v2
 | Enable | `true` | `exensio.cache-enabled` |
 | Max size | 10,000 | `exensio.cache-maximum-size` |
 | TTL | 60 minutes | `exensio.cache-expire-after-write-minutes` |
-| Key format | `"<lot>|<wafer>"` | â€” |
+| Key format | `"<lot>|<wafer>"` | — |
 
 ### 11.5 Health Indicator
 
@@ -792,11 +794,11 @@ All configuration is under the `exensio` prefix in [application.yml](file:///c:/
 |---|---|---|---|
 | `exensio.enabled` | `EXENSIO_ENABLED` | `false` | Master switch for Exensio integration |
 | `exensio.env` | `EXENSIO_ENV` | `QA` | Target environment (`QA` or `PROD`) |
-| `exensio.qa-url` | `EXENSIO_QA_URL` | â€” | QA base URL |
-| `exensio.prod-url` | `EXENSIO_PROD_URL` | â€” | Production base URL |
-| `exensio.username` | `EXENSIO_USERNAME` | â€” | Login username |
-| `exensio.password` | `EXENSIO_PASSWORD` | â€” | Login password |
-| `exensio.dbname` | `EXENSIO_DBNAME` | â€” | Database name for login |
+| `exensio.qa-url` | `EXENSIO_QA_URL` | — | QA base URL |
+| `exensio.prod-url` | `EXENSIO_PROD_URL` | — | Production base URL |
+| `exensio.username` | `EXENSIO_USERNAME` | — | Login username |
+| `exensio.password` | `EXENSIO_PASSWORD` | — | Login password |
+| `exensio.dbname` | `EXENSIO_DBNAME` | — | Database name for login |
 | `exensio.dbschema` | `EXENSIO_DBSCHEMA` | `PRODUCTION` | Schema (auto-detected, kept for compat) |
 
 ### Polling & Timeout
@@ -810,9 +812,9 @@ All configuration is under the `exensio` prefix in [application.yml](file:///c:/
 
 | Property | Env Variable | Default | Range | Description |
 |---|---|---|---|---|
-| `exensio.batch-size` | `EXENSIO_BATCH_SIZE` | `50` | 1â€“100 | Records per batch API call |
-| `exensio.thread-pool-size` | `EXENSIO_THREAD_POOL_SIZE` | `5` | 1â€“20 | Worker threads for parallel batches |
-| `exensio.max-concurrent-requests` | `EXENSIO_MAX_CONCURRENT_REQUESTS` | `10` | 1â€“50 | Max concurrent API calls |
+| `exensio.batch-size` | `EXENSIO_BATCH_SIZE` | `50` | 1–100 | Records per batch API call |
+| `exensio.thread-pool-size` | `EXENSIO_THREAD_POOL_SIZE` | `5` | 1–20 | Worker threads for parallel batches |
+| `exensio.max-concurrent-requests` | `EXENSIO_MAX_CONCURRENT_REQUESTS` | `10` | 1–50 | Max concurrent API calls |
 
 ### Circuit Breaker
 
@@ -869,7 +871,7 @@ sequenceDiagram
 
     Note over Backend: ... Processing Pipeline ...
 
-    Backend->>DB: Update status â†’ EXENSIO_MONITORING
+    Backend->>DB: Update status → EXENSIO_MONITORING
 
     Note over Backend: ExensioLoadMonitor @Scheduled poll
 
@@ -891,15 +893,15 @@ sequenceDiagram
     end
 
     alt Wafer found (COMPLETED)
-        Backend->>DB: Update â†’ DONE (wafer_key, pg_key)
+        Backend->>DB: Update → DONE (wafer_key, pg_key)
         Backend-->>User: SSE: ROW_UPDATE (success)
     else Not found + timeout
-        Backend->>DB: Update â†’ MANUAL_VERIFICATION_REQUIRED
+        Backend->>DB: Update → MANUAL_VERIFICATION_REQUIRED
         Backend-->>User: SSE: ROW_UPDATE (timeout)
     else Load error detected
         Backend->>API: POST /v1/key/raw-sql (DP_LOG query)
         API-->>Backend: Error details
-        Backend->>DB: Update â†’ LOAD_FAILED
+        Backend->>DB: Update → LOAD_FAILED
         Backend-->>User: SSE: ROW_UPDATE (failure)
     end
 ```
@@ -989,7 +991,7 @@ CEBU-PROD:
   # NEW: Pipeline configuration (Task 15.2, Requirement 1.1)
   pipeline:
     stages:
-      # Stage 1: CP enrichment (no dependencies — first stage)
+      # Stage 1: CP enrichment (no dependencies � first stage)
       - name: cp
         type: CP
         timeoutMinutes: 30
@@ -1018,7 +1020,7 @@ pipeline:
       timeoutMinutes: 30
 `
 
-#### Pattern 2: CP → Exensio (skip PP_LOG)
+#### Pattern 2: CP ? Exensio (skip PP_LOG)
 `yaml
 pipeline:
   stages:
@@ -1092,7 +1094,7 @@ To add a new stage type (e.g., Scribe, Lot Genealogy):
    }
    `
 
-2. **Register in StageHandlerRegistry** — automatically discovered via @Component
+2. **Register in StageHandlerRegistry** � automatically discovered via @Component
 
 3. **Add to dbconnections.yml**:
    `yaml
@@ -1133,27 +1135,27 @@ POST /api/pipeline/retry/{recordId}
 #### JMX Metrics
 
 Monitor via JMX (ObjectName: com.onsemi.exensio:type=PipelineOrchestrator):
-- TotalRecordsProcessed — Total records processed across all stages
-- RecordsByStageType — Per-stage record counts
-- TimeoutsByStage — Timeouts per stage
-- DependencyWaitsByStage — Dependency wait counts
-- AverageStageDurationMs — Average duration per stage
+- TotalRecordsProcessed � Total records processed across all stages
+- RecordsByStageType � Per-stage record counts
+- TimeoutsByStage � Timeouts per stage
+- DependencyWaitsByStage � Dependency wait counts
+- AverageStageDurationMs � Average duration per stage
 
 ### Configuration Properties
 
 | Property | Default | Description |
 |---|---|---|
 | pipeline.cache.expire-after-minutes | 5 | Pipeline config cache expiration time (minutes) |
-| cp.elasticsearch.poll-interval-ms | 60000 | CP/Elasticsearch polling interval (ms) — Task 10.1 |
-| pplog.poll-interval-ms | 60000 | PP_LOG monitoring polling interval (ms) — Task 11.2 |
+| cp.elasticsearch.poll-interval-ms | 60000 | CP/Elasticsearch polling interval (ms) � Task 10.1 |
+| pplog.poll-interval-ms | 60000 | PP_LOG monitoring polling interval (ms) � Task 11.2 |
 
 ### Status Names
 
 Pipeline-aware records use status names that reflect their stage:
-- CP_MONITORING — Monitoring CP stage completion (replaces ELASTICSEARCH_MONITORING for pipeline sites)
-- PPLOG_MONITORING — Monitoring PP_LOG stage completion
-- EXENSIO_MONITORING — Monitoring Exensio stage completion
-- CP_TIMEOUT, PPLOG_TIMEOUT, etc. — Stage-specific timeout statuses
+- CP_MONITORING � Monitoring CP stage completion (replaces ELASTICSEARCH_MONITORING for pipeline sites)
+- PPLOG_MONITORING � Monitoring PP_LOG stage completion
+- EXENSIO_MONITORING � Monitoring Exensio stage completion
+- CP_TIMEOUT, PPLOG_TIMEOUT, etc. � Stage-specific timeout statuses
 
 Legacy sites (no pipeline config) continue using ELASTICSEARCH_MONITORING status.
 
@@ -1173,11 +1175,11 @@ The system maintains **full backward compatibility**:
 
 ### Requirements Met by Pipeline Orchestration
 
-- **Req 1.1–1.5**: Configuration schema, parsing, validation, circular dependency detection
-- **Req 2.1–2.5**: Orchestrator service, next-action determination, dependency checking
-- **Req 3–4**: CP and PP_LOG completion detection via handlers
-- **Req 5–6**: State tracking, timeout detection, API endpoints
-- **Req 9–11**: Error handling, timeout diagnostics, error thresholds, monitoring schedulers
+- **Req 1.1�1.5**: Configuration schema, parsing, validation, circular dependency detection
+- **Req 2.1�2.5**: Orchestrator service, next-action determination, dependency checking
+- **Req 3�4**: CP and PP_LOG completion detection via handlers
+- **Req 5�6**: State tracking, timeout detection, API endpoints
+- **Req 9�11**: Error handling, timeout diagnostics, error thresholds, monitoring schedulers
 - **Req 12**: Performance optimization (batch processing ready)
 
 ### Troubleshooting
