@@ -709,13 +709,9 @@ public class ExensioClient {
 
                 String cleanLot = record.lot().trim();
                 List<String> candidates = getLotCandidates(cleanLot);
-                String inList = candidates.stream()
-                        .map(c -> "'" + escapeSqlLiteral(c) + "'")
-                        .collect(Collectors.joining(", "));
                 StringBuilder clause = new StringBuilder();
                 clause.append("(ol.pgc_key = ").append(pgcKey)
-                        .append(" AND (l.lot_id IN (").append(inList).append(")")
-                        .append(" OR sl.lot_id IN (").append(inList).append(")))");
+                        .append(" AND ").append(buildLotMatchClause(cleanLot));
 
                 if (!waferBlank) {
                     clause.append(buildWaferMatchClause(record.wafer()));
@@ -733,6 +729,10 @@ public class ExensioClient {
                 lotToRecord.put(cleanLot.toUpperCase(Locale.ROOT), record);
                 for (String cand : candidates) {
                     lotToRecord.putIfAbsent(cand.toUpperCase(Locale.ROOT), record);
+                }
+                String prefix = extractLotPrefix(cleanLot);
+                if (prefix != null && !prefix.isBlank()) {
+                    lotToRecord.putIfAbsent(prefix.toUpperCase(Locale.ROOT), record);
                 }
             }
 
@@ -788,6 +788,15 @@ public class ExensioClient {
                         for (String cand : getLotCandidates(r.lot())) {
                             if (resolvedLots.contains(cand.toUpperCase(Locale.ROOT))) {
                                 return false;
+                            }
+                        }
+                        String prefix = extractLotPrefix(r.lot());
+                        if (prefix != null && !prefix.isBlank()) {
+                            String upperPrefix = prefix.toUpperCase(Locale.ROOT);
+                            for (String res : resolvedLots) {
+                                if (res.startsWith(upperPrefix)) {
+                                    return false;
+                                }
                             }
                         }
                         return true;
@@ -1178,7 +1187,20 @@ public class ExensioClient {
             candidates.add(stripped.toLowerCase(Locale.ROOT));
         }
 
-        // 3. If delimiters exist, also handle "loaded as base lot before delimiter"
+        // 3. Delimiter interchange: replace '.' with '-', '_', etc.
+        for (char sep : new char[]{'.', '-', '_'}) {
+            if (cleanLot.indexOf(sep) >= 0) {
+                for (char targetSep : new char[]{'.', '-', '_'}) {
+                    if (sep != targetSep) {
+                        String swapped = cleanLot.replace(sep, targetSep);
+                        candidates.add(swapped.toUpperCase(Locale.ROOT));
+                        candidates.add(swapped.toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+
+        // 4. If delimiters exist, also handle "loaded as base lot before delimiter"
         for (char sep : new char[]{'.', '-', '_'}) {
             int idx = cleanLot.indexOf(sep);
             if (idx >= 3) {
@@ -1192,16 +1214,51 @@ public class ExensioClient {
         return new ArrayList<>(candidates);
     }
 
-    private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers, String schemaLabel) {
-        String cleanLot = lot.trim();
-        StringBuilder where = new StringBuilder();
-        List<String> candidates = getLotCandidates(cleanLot);
+    private String extractLotPrefix(String lot) {
+        if (lot == null || lot.isBlank()) return null;
+        String clean = lot.trim();
+        // 1. If delimiters exist, take the base before the first delimiter if length >= 5
+        for (char sep : new char[]{'.', '-', '_'}) {
+            int idx = clean.indexOf(sep);
+            if (idx >= 5) {
+                return clean.substring(0, idx).trim();
+            }
+        }
+        // 2. If no delimiter, take first 8 characters (or whole string if >= 5)
+        String stripped = clean.replaceAll("[.\\-_]", "");
+        if (stripped.length() >= 8) {
+            return stripped.substring(0, 8);
+        } else if (stripped.length() >= 5) {
+            return stripped;
+        }
+        return null;
+    }
+
+    private String buildLotMatchClause(String lot) {
+        List<String> candidates = getLotCandidates(lot);
         String inList = candidates.stream()
                 .map(c -> "'" + escapeSqlLiteral(c) + "'")
                 .collect(Collectors.joining(", "));
+
+        StringBuilder clause = new StringBuilder();
+        clause.append("(l.lot_id IN (").append(inList).append(")")
+                .append(" OR sl.lot_id IN (").append(inList).append(")");
+
+        String prefix = extractLotPrefix(lot);
+        if (prefix != null && !prefix.isBlank()) {
+            String escapedPrefix = escapeSqlLiteral(prefix);
+            clause.append(" OR REGEXP_LIKE(l.lot_id, '^").append(escapedPrefix).append("', 'i')")
+                    .append(" OR REGEXP_LIKE(sl.lot_id, '^").append(escapedPrefix).append("', 'i')");
+        }
+        clause.append(")");
+        return clause.toString();
+    }
+
+    private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers, String schemaLabel) {
+        String cleanLot = lot.trim();
+        StringBuilder where = new StringBuilder();
         where.append("ol.pgc_key = ").append(pgcKey)
-                .append(" AND (l.lot_id IN (").append(inList).append(")")
-                .append(" OR sl.lot_id IN (").append(inList).append("))");
+                .append(" AND ").append(buildLotMatchClause(cleanLot));
 
         if (!isBlankOrNa(wafer)) {
             where.append(buildWaferMatchClause(wafer));
@@ -1613,15 +1670,19 @@ public class ExensioClient {
         StringBuilder wfClause = new StringBuilder();
         Integer waferNum = extractWaferNum(rawWafer);
         if (waferNum != null) {
-            if (waferNum < 10 && waferNum >= 0) {
-                String pad2 = String.format("%02d", waferNum);
-                wfClause.append(" AND (w.wf_num = ").append(waferNum)
-                        .append(" OR w.wf_num = '").append(waferNum).append("'")
-                        .append(" OR w.wf_num = '").append(pad2).append("')");
-            } else {
-                wfClause.append(" AND (w.wf_num = ").append(waferNum)
-                        .append(" OR w.wf_num = '").append(waferNum).append("')");
-            }
+            String numStr = String.valueOf(waferNum);
+            String pad2 = String.format("%02d", waferNum);
+            wfClause.append(" AND (w.wf_num = ").append(waferNum)
+                    .append(" OR w.wf_num = '").append(numStr).append("'")
+                    .append(" OR w.wf_num = '").append(pad2).append("'")
+                    .append(" OR w.wf_id = '").append(numStr).append("'")
+                    .append(" OR w.wf_id = '").append(pad2).append("'")
+                    .append(" OR UPPER(NVL(w.wf_id, '')) LIKE '%").append(pad2).append("%'")
+                    .append(" OR REGEXP_LIKE(w.wf_id, '[-_#.]0?").append(numStr).append("$'))");
+        } else if (!isBlankOrNa(rawWafer)) {
+            String cleanWafer = escapeSqlLiteral(rawWafer.trim());
+            wfClause.append(" AND (w.wf_id = '").append(cleanWafer).append("'")
+                    .append(" OR UPPER(NVL(w.wf_id, '')) LIKE '%").append(cleanWafer.toUpperCase(Locale.ROOT)).append("%')");
         }
         return wfClause;
     }
