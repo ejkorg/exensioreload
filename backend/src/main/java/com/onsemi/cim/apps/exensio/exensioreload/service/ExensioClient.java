@@ -1213,12 +1213,11 @@ public class ExensioClient {
         }
 
         String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
             " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
                 " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
                 " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
@@ -1229,7 +1228,7 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 dfExportJoin +
                 " WHERE " + where +
-                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
+                " ORDER BY ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1270,12 +1269,11 @@ public class ExensioClient {
         }
 
         String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
             " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
                 " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
                 " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
@@ -1286,7 +1284,7 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 dfExportJoin +
                 " WHERE " + where +
-                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
+                " ORDER BY ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1301,12 +1299,11 @@ public class ExensioClient {
     private String buildBatchRawSql(List<String> clauses, String schemaLabel) {
         String where = String.join(" OR ", clauses);
         String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
             " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
                 " NVL(de.file_name,'') AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
                 " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
                 " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
@@ -1317,7 +1314,7 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
-                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
+                " ORDER BY ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1397,32 +1394,17 @@ public class ExensioClient {
                 if (targetEndTime != null) {
                     if (delta < bestDelta) {
                         isBetter = true;
-                    } else if (delta == bestDelta) {
-                        // Tie-break when deltas to targetEndTime are equal: prefer latest INSERT_TIME, then LOT_KEY
-                        Instant currInsert = parseInstantSafe(getText(row, "INSERT_TIME"));
-                        Instant bestInsert = parseInstantSafe(getText(best, "INSERT_TIME"));
-                        int insertComp = compareInstants(currInsert, bestInsert);
-                        if (insertComp > 0) {
-                            isBetter = true;
-                        } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
-                            isBetter = true;
-                        }
+                    } else if (delta == bestDelta && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
+                        isBetter = true;
                     }
                 } else {
-                    // No targetEndTime: prefer latest END_TIME, then latest INSERT_TIME, then LOT_KEY
+                    // No targetEndTime: prefer latest END_TIME, then LOT_KEY
                     Instant bestEnd = parseInstantSafe(getText(best, "END_TIME"));
                     int endComp = compareInstants(end, bestEnd);
                     if (endComp > 0) {
                         isBetter = true;
-                    } else if (endComp == 0) {
-                        Instant currInsert = parseInstantSafe(getText(row, "INSERT_TIME"));
-                        Instant bestInsert = parseInstantSafe(getText(best, "INSERT_TIME"));
-                        int insertComp = compareInstants(currInsert, bestInsert);
-                        if (insertComp > 0) {
-                            isBetter = true;
-                        } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
-                            isBetter = true;
-                        }
+                    } else if (endComp == 0 && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
+                        isBetter = true;
                     }
                 }
             }
@@ -1443,10 +1425,9 @@ public class ExensioClient {
      * <p>Priority order:
      * <ol>
      *   <li>If targetEndTime provided: record with minimum |END_TIME - targetEndTime| delta (in UTC)</li>
-     *   <li>If deltas are identical: record with maximum INSERT_TIME, then maximum LOT_KEY</li>
+     *   <li>If deltas are identical: record with maximum LOT_KEY</li>
      *   <li>If no targetEndTime: record with maximum END_TIME</li>
-     *   <li>If END_TIME identical: record with maximum INSERT_TIME</li>
-     *   <li>If both timestamps NULL: record with maximum LOT_KEY</li>
+     *   <li>If END_TIME identical: record with maximum LOT_KEY</li>
      * </ol>
      *
      * <p>All NULL timestamp values are handled gracefully, treating NULL as less-than any actual value.
@@ -1480,16 +1461,8 @@ public class ExensioClient {
                 boolean isBetter = false;
                 if (bestRow == null || delta < bestDelta) {
                     isBetter = true;
-                } else if (delta == bestDelta) {
-                    // Tie-break when deltas to targetEndTime are equal: prefer latest INSERT_TIME, then LOT_KEY
-                    Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
-                    Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
-                    int insertComp = compareInstants(currentInsertTime, bestInsertTime);
-                    if (insertComp > 0) {
-                        isBetter = true;
-                    } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(bestRow, "LOT_KEY")) {
-                        isBetter = true;
-                    }
+                } else if (delta == bestDelta && getLong(row, "LOT_KEY") > getLong(bestRow, "LOT_KEY")) {
+                    isBetter = true;
                 }
 
                 if (isBetter) {
@@ -1498,7 +1471,7 @@ public class ExensioClient {
                 }
             }
         } else {
-            // Priority: Order by END_TIME DESC, INSERT_TIME DESC, LOT_KEY DESC
+            // Priority: Order by END_TIME DESC, LOT_KEY DESC
             for (JsonNode row : rows) {
                 recordsEvaluated++;
                 long waferKey = getLong(row, "WAFER_KEY");
@@ -1513,17 +1486,10 @@ public class ExensioClient {
                     if (endTimeComparison > 0) {
                         bestRow = row;
                     } else if (endTimeComparison == 0) {
-                        Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
-                        Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
-                        int insertTimeComparison = compareInstants(currentInsertTime, bestInsertTime);
-                        if (insertTimeComparison > 0) {
+                        long currentLotKey = getLong(row, "LOT_KEY");
+                        long bestLotKey = getLong(bestRow, "LOT_KEY");
+                        if (currentLotKey > bestLotKey) {
                             bestRow = row;
-                        } else if (insertTimeComparison == 0) {
-                            long currentLotKey = getLong(row, "LOT_KEY");
-                            long bestLotKey = getLong(bestRow, "LOT_KEY");
-                            if (currentLotKey > bestLotKey) {
-                                bestRow = row;
-                            }
                         }
                     }
                 }
@@ -1590,22 +1556,14 @@ public class ExensioClient {
             String cleanName = noExt.replaceAll("_?\\{[^}]*\\}", "").replaceAll("[._-]+$", "").trim();
             if (!cleanName.isBlank()) {
                 if (cleanName.length() > 35) {
-                    ids.add(cleanName.substring(0, 35));
-                    ids.add(cleanName.substring(0, 30));
+                    ids.add(cleanName.substring(0, 35).replaceAll("[._-]+$", ""));
+                    ids.add(cleanName.substring(0, 30).replaceAll("[._-]+$", ""));
                 } else if (cleanName.length() >= 30) {
                     ids.add(cleanName);
-                    ids.add(cleanName.substring(0, 30));
+                    ids.add(cleanName.substring(0, 30).replaceAll("[._-]+$", ""));
                 } else {
                     ids.add(cleanName);
                 }
-            }
-
-            // Use first 30 to 35 characters of noExt instead of full long name with trailing suffixes
-            if (noExt.length() > 35) {
-                ids.add(noExt.substring(0, 35));
-                ids.add(noExt.substring(0, 30));
-            } else {
-                ids.add(noExt);
             }
         }
         ids.removeIf(v -> v == null || v.isBlank());
