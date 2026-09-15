@@ -171,12 +171,20 @@ public class BatchLookupResult {
         // - waferId / cleanWafer / waferNum -> wafer entries
         // - lotKey:waferId / lotKey:cleanWafer / lotKey:waferNum -> wafer entries
         // - lotId -> all wafer entries under that lot
+        // - fileLookup -> all wafer entries by filename
         Map<String, List<LotResult.WaferResult>> waferLookup = new HashMap<>();
         Map<String, List<LotResult.WaferResult>> lotLookup = new HashMap<>();
+        Map<String, List<LotResult.WaferResult>> fileLookup = new HashMap<>();
+        Map<LotResult.WaferResult, String> waferToLot = new HashMap<>();
+
         for (LotResult lot : lots) {
             String lotKey = lot.lotId() == null ? null : lot.lotId().toUpperCase();
             if (lotKey != null) {
                 lotLookup.computeIfAbsent(lotKey, k -> new ArrayList<>()).addAll(lot.wafers());
+                String strippedLot = lotKey.replaceAll("[.\\-_]", "");
+                if (!strippedLot.equalsIgnoreCase(lotKey) && !strippedLot.isBlank()) {
+                    lotLookup.computeIfAbsent(strippedLot, k -> new ArrayList<>()).addAll(lot.wafers());
+                }
                 for (char sep : new char[]{'.', '-', '_'}) {
                     int idx = lotKey.indexOf(sep);
                     if (idx >= 3) {
@@ -186,11 +194,29 @@ public class BatchLookupResult {
                 }
             }
             for (LotResult.WaferResult wafer : lot.wafers()) {
+                if (lot.lotId() != null) {
+                    waferToLot.put(wafer, lot.lotId());
+                }
+                if (wafer.fileName() != null && !wafer.fileName().isBlank()) {
+                    String fn = wafer.fileName().trim().toUpperCase();
+                    fileLookup.computeIfAbsent(fn, k -> new ArrayList<>()).add(wafer);
+                    int lastSlash = Math.max(fn.lastIndexOf('/'), fn.lastIndexOf('\\'));
+                    String baseFile = lastSlash >= 0 ? fn.substring(lastSlash + 1) : fn;
+                    fileLookup.computeIfAbsent(baseFile, k -> new ArrayList<>()).add(wafer);
+                    int dot = baseFile.lastIndexOf('.');
+                    if (dot > 0) {
+                        fileLookup.computeIfAbsent(baseFile.substring(0, dot), k -> new ArrayList<>()).add(wafer);
+                    }
+                }
                 if (wafer.waferId() != null && !wafer.waferId().isBlank()) {
                     String rawWafer = wafer.waferId().trim().toUpperCase();
                     waferLookup.computeIfAbsent(rawWafer, k -> new ArrayList<>()).add(wafer);
                     if (lotKey != null) {
                         waferLookup.computeIfAbsent(lotKey + ":" + rawWafer, k -> new ArrayList<>()).add(wafer);
+                        String strippedLot = lotKey.replaceAll("[.\\-_]", "");
+                        if (!strippedLot.equalsIgnoreCase(lotKey) && !strippedLot.isBlank()) {
+                            waferLookup.computeIfAbsent(strippedLot + ":" + rawWafer, k -> new ArrayList<>()).add(wafer);
+                        }
                     }
 
                     String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer.waferId());
@@ -199,6 +225,10 @@ public class BatchLookupResult {
                         waferLookup.computeIfAbsent(cleanUpper, k -> new ArrayList<>()).add(wafer);
                         if (lotKey != null) {
                             waferLookup.computeIfAbsent(lotKey + ":" + cleanUpper, k -> new ArrayList<>()).add(wafer);
+                            String strippedLot = lotKey.replaceAll("[.\\-_]", "");
+                            if (!strippedLot.equalsIgnoreCase(lotKey) && !strippedLot.isBlank()) {
+                                waferLookup.computeIfAbsent(strippedLot + ":" + cleanUpper, k -> new ArrayList<>()).add(wafer);
+                            }
                         }
                         try {
                             int waferNum = Integer.parseInt(cleanWafer);
@@ -229,6 +259,13 @@ public class BatchLookupResult {
                     // Try lot:exact_wafer
                     candidates = waferLookup.get(recordLot + ":" + recordWafer);
                     if (candidates == null || candidates.isEmpty()) {
+                        // Try stripped lot delimiters
+                        String strippedLot = recordLot.replaceAll("[.\\-_]", "");
+                        if (!strippedLot.equalsIgnoreCase(recordLot) && !strippedLot.isBlank()) {
+                            candidates = waferLookup.get(strippedLot + ":" + recordWafer);
+                        }
+                    }
+                    if (candidates == null || candidates.isEmpty()) {
                         // Try lot:clean_wafer
                         String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(recordWafer);
                         candidates = waferLookup.get(recordLot + ":" + cleanWafer.toUpperCase());
@@ -251,6 +288,12 @@ public class BatchLookupResult {
             if ((candidates == null || candidates.isEmpty()) && recordLot != null && !recordLot.isBlank()) {
                 candidates = lotLookup.get(recordLot);
                 if (candidates == null || candidates.isEmpty()) {
+                    String strippedLot = recordLot.replaceAll("[.\\-_]", "");
+                    if (!strippedLot.equalsIgnoreCase(recordLot) && !strippedLot.isBlank()) {
+                        candidates = lotLookup.get(strippedLot);
+                    }
+                }
+                if (candidates == null || candidates.isEmpty()) {
                     for (char sep : new char[]{'.', '-', '_'}) {
                         int idx = recordLot.indexOf(sep);
                         if (idx >= 3) {
@@ -261,17 +304,35 @@ public class BatchLookupResult {
                 }
             }
 
+            // Fallback match by filename if lot/wafer did not match
+            if ((candidates == null || candidates.isEmpty()) && record.filename() != null && !record.filename().isBlank()) {
+                String fn = record.filename().trim().toUpperCase();
+                candidates = fileLookup.get(fn);
+                if (candidates == null || candidates.isEmpty()) {
+                    int lastSlash = Math.max(fn.lastIndexOf('/'), fn.lastIndexOf('\\'));
+                    String baseFile = lastSlash >= 0 ? fn.substring(lastSlash + 1) : fn;
+                    candidates = fileLookup.get(baseFile);
+                    if (candidates == null || candidates.isEmpty()) {
+                        int dot = baseFile.lastIndexOf('.');
+                        if (dot > 0) {
+                            candidates = fileLookup.get(baseFile.substring(0, dot));
+                        }
+                    }
+                }
+            }
+
             LotResult.WaferResult waferResult = selectBestCandidate(candidates, record.endTime());
 
             if (waferResult != null) {
-                // Wafer found - mark as COMPLETED
+                // Wafer found - mark as COMPLETED (use actual resolved lot from Exensio if available)
+                String resolvedLot = waferToLot.getOrDefault(waferResult, record.lot());
                 updates.add(new BatchResult.RecordUpdate(
                         record.id(),
                         BatchResult.UpdateType.COMPLETED,
                         waferResult.waferKey(),
                         waferResult.pgKey(),
                         null,
-                        record.lot(),
+                        resolvedLot,
                         waferResult.waferId(),
                         waferResult.fileName(),
                         traceId,

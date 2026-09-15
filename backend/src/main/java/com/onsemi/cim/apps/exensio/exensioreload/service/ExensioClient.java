@@ -271,6 +271,13 @@ public class ExensioClient {
         ArrayNode waferIds = body.putArray("wafer_ids");
         if (!waferBlank) {
             waferIds.add(wafer);
+            Integer wNum = extractWaferNum(wafer);
+            if (wNum != null) {
+                waferIds.add(String.valueOf(wNum));
+                if (wNum < 10 && wNum >= 0) {
+                    waferIds.add(String.format("%02d", wNum));
+                }
+            }
         }
 
         if (props.isLogRequestPayloads()) {
@@ -1162,9 +1169,18 @@ public class ExensioClient {
         if (lot == null || lot.isBlank()) return Collections.emptyList();
         String cleanLot = lot.trim();
         Set<String> candidates = new LinkedHashSet<>();
+        // 1. Always include exact lot as-is (both upper and lower) — no assumptions about delimiters
         candidates.add(cleanLot.toUpperCase(Locale.ROOT));
         candidates.add(cleanLot.toLowerCase(Locale.ROOT));
 
+        // 2. If delimiters exist, handle "sometimes not loaded with delimiters"
+        String stripped = cleanLot.replaceAll("[.\\-_]", "");
+        if (!stripped.equalsIgnoreCase(cleanLot) && !stripped.isBlank()) {
+            candidates.add(stripped.toUpperCase(Locale.ROOT));
+            candidates.add(stripped.toLowerCase(Locale.ROOT));
+        }
+
+        // 3. If delimiters exist, also handle "loaded as base lot before delimiter"
         for (char sep : new char[]{'.', '-', '_'}) {
             int idx = cleanLot.indexOf(sep);
             if (idx >= 3) {
@@ -1568,21 +1584,47 @@ public class ExensioClient {
         return "(" + String.join(" OR ", parts) + ")";
     }
 
-    private StringBuilder buildWaferMatchClause(String rawWafer) {
-        String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
-        Integer waferNum = null;
+    public static Integer extractWaferNum(String rawWafer) {
+        if (rawWafer == null || rawWafer.isBlank() || "NA".equalsIgnoreCase(rawWafer.trim())) {
+            return null;
+        }
+        String trimmed = rawWafer.trim();
+        // 1. Match trailing digits after delimiter: -11, _05, .01, #02
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[-_#.](\\d+)$").matcher(trimmed);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {}
+        }
+        // 2. Strip leading letter prefix(es) (e.g. W01, WF05, WAFER12)
+        String cleaned = trimmed.replaceFirst("^[A-Za-z]+[-_#.]*", "");
         try {
-            waferNum = Integer.parseInt(cleanWafer);
+            return Integer.parseInt(cleaned);
         } catch (NumberFormatException ignored) {}
 
+        // 3. Fall back to any trailing digits
+        m = java.util.regex.Pattern.compile("(\\d+)$").matcher(trimmed);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
+    }
+
+    private StringBuilder buildWaferMatchClause(String rawWafer) {
         StringBuilder wfClause = new StringBuilder();
+        Integer waferNum = extractWaferNum(rawWafer);
         if (waferNum != null) {
-            wfClause.append(" AND (w.wf_num = ").append(waferNum).append(")");
-        } else if (cleanWafer != null && !cleanWafer.isBlank()) {
-            // Can't parse as number — match by wafer ID string
-            wfClause.append(" AND (UPPER(w.wf_id) LIKE '%")
-                    .append(escapeLikeLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
-                    .append("%' ESCAPE '\\')" );
+            if (waferNum < 10 && waferNum >= 0) {
+                String pad2 = String.format("%02d", waferNum);
+                wfClause.append(" AND (w.wf_num = ").append(waferNum)
+                        .append(" OR w.wf_num = '").append(waferNum).append("'")
+                        .append(" OR w.wf_num = '").append(pad2).append("')");
+            } else {
+                wfClause.append(" AND (w.wf_num = ").append(waferNum)
+                        .append(" OR w.wf_num = '").append(waferNum).append("')");
+            }
         }
         return wfClause;
     }
