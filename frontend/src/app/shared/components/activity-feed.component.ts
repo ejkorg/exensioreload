@@ -1,5 +1,5 @@
-import { Component, Input, signal, effect, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { AfterViewInit, Component, effect, ElementRef, Input, signal, ViewChild } from '@angular/core';
 import { GlassIconComponent } from './glass-icon.component';
 
 export interface ActivityEvent {
@@ -29,11 +29,7 @@ export interface ActivityEvent {
         <div class="activity-list" *ngIf="activities().length > 0; else noActivity">
           <div class="activity-item" *ngFor="let activity of activities(); trackBy: trackByActivityId">
             <div class="activity-icon" [class]="'icon-' + activity.type">
-              <app-glass-icon
-                [name]="activity.icon"
-                [size]="16"
-                [color]="activity.color">
-              </app-glass-icon>
+              <app-glass-icon [name]="activity.icon" [size]="16" [color]="activity.color"> </app-glass-icon>
             </div>
             <div class="activity-content">
               <p class="activity-message">{{ activity.message }}</p>
@@ -52,178 +48,180 @@ export interface ActivityEvent {
       </div>
     </div>
   `,
-  styles: [`
-    .activity-feed {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 420px;
-    }
-
-    .feed-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .title-text {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--text-main);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .event-count {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      padding: 0.25rem 0.5rem;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 4px;
-    }
-
-    .feed-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0.5rem;
-    }
-
-    .feed-content::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .feed-content::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 3px;
-    }
-
-    .feed-content::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-    }
-
-    .feed-content::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
-    .activity-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .activity-item {
-      display: flex;
-      gap: 0.75rem;
-      padding: 0.75rem;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.02);
-      transition: background 0.2s ease;
-      animation: slideIn 0.3s ease;
-    }
-
-    .activity-item:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .activity-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .activity-icon.icon-file {
-      background: rgba(129, 140, 248, 0.15);
-    }
-
-    .activity-icon.icon-lot {
-      background: rgba(245, 158, 11, 0.15);
-    }
-
-    .activity-icon.icon-session {
-      background: rgba(16, 185, 129, 0.15);
-    }
-
-    .activity-content {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .activity-message {
-      font-size: 0.8125rem;
-      color: var(--text-main);
-      margin: 0;
-      line-height: 1.4;
-    }
-
-    .activity-time {
-      font-size: 0.6875rem;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 3rem 1rem;
-      gap: 0.75rem;
-      text-align: center;
-    }
-
-    .empty-message {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--text-main);
-      margin: 0;
-    }
-
-    .empty-hint {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin: 0;
-    }
-
-    @media (max-width: 768px) {
+  styles: [
+    `
       .activity-feed {
-        min-height: 300px;
-        height: auto;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 420px;
       }
 
       .feed-header {
-        flex-direction: column;
-        align-items: flex-start;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
         gap: 0.5rem;
       }
-    }
-  `]
+
+      .title-text {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-main);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .event-count {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        padding: 0.25rem 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+
+      .feed-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem;
+      }
+
+      .feed-content::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .feed-content::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 3px;
+      }
+
+      .feed-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+      }
+
+      .feed-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      .activity-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .activity-item {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        transition: background 0.2s ease;
+        animation: slideIn 0.3s ease;
+      }
+
+      .activity-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .activity-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .activity-icon.icon-file {
+        background: rgba(129, 140, 248, 0.15);
+      }
+
+      .activity-icon.icon-lot {
+        background: rgba(245, 158, 11, 0.15);
+      }
+
+      .activity-icon.icon-session {
+        background: rgba(16, 185, 129, 0.15);
+      }
+
+      .activity-content {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .activity-message {
+        font-size: 0.8125rem;
+        color: var(--text-main);
+        margin: 0;
+        line-height: 1.4;
+      }
+
+      .activity-time {
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1rem;
+        gap: 0.75rem;
+        text-align: center;
+      }
+
+      .empty-message {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-main);
+        margin: 0;
+      }
+
+      .empty-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      @media (max-width: 768px) {
+        .activity-feed {
+          min-height: 300px;
+          height: auto;
+        }
+
+        .feed-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.5rem;
+        }
+      }
+    `,
+  ],
 })
 export class ActivityFeedComponent implements AfterViewInit {
   @ViewChild('feedContent') feedContent?: ElementRef<HTMLDivElement>;
@@ -246,14 +244,18 @@ export class ActivityFeedComponent implements AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // Detect manual scrolling
-    this.feedContent?.nativeElement.addEventListener('scroll', () => {
-      const element = this.feedContent?.nativeElement;
-      if (element) {
-        const isAtBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
-        this.shouldAutoScroll = isAtBottom;
-      }
-    });
+    // Detect manual scrolling - use passive listener for better scroll performance
+    this.feedContent?.nativeElement.addEventListener(
+      'scroll',
+      () => {
+        const element = this.feedContent?.nativeElement;
+        if (element) {
+          const isAtBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
+          this.shouldAutoScroll = isAtBottom;
+        }
+      },
+      { passive: true },
+    );
   }
 
   private scrollToBottom(): void {
@@ -286,7 +288,7 @@ export class ActivityFeedComponent implements AfterViewInit {
         return date.toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
-          timeZone: 'UTC'
+          timeZone: 'UTC',
         });
       }
     } catch {

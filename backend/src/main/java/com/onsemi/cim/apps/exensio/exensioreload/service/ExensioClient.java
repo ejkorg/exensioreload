@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -567,13 +568,14 @@ public class ExensioClient {
             log.info("Primary lot_id query START (traceId={}): lot={}, wafer={}, pgcKey={}, targetEndTime={}", 
                      traceId, lot, wafer, pgcKey, targetEndTime);
             
-            String sql = buildSingleRawSql(lot, wafer, pgcKey, identifiers);
+            String sql = buildSingleRawSql(lot, wafer, pgcKey, identifiers, "PRODUCTION");
             JsonNode rows = executeRawSql(sql, token, traceId);
             if (rows == null || !rows.isArray() || rows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.login(fallbackSchema);
-                    rows = executeRawSql(sql, fallbackToken, traceId);
+                    String sandboxSql = buildSingleRawSql(lot, wafer, pgcKey, identifiers, "SANDBOX");
+                    rows = executeRawSql(sandboxSql, fallbackToken, traceId);
                 }
             }
             
@@ -616,7 +618,7 @@ public class ExensioClient {
             log.info("Primary lot_id query returned empty ({}ms), attempting fallback (traceId={})", primaryElapsed, traceId);
             
             int timeWindowHours = props.getFallbackQueryTimeWindowHours();
-            String fallbackSql = buildFallbackRawSql(pgcKey, wafer, identifiers, targetEndTime, timeWindowHours);
+            String fallbackSql = buildFallbackRawSql(pgcKey, wafer, identifiers, targetEndTime, timeWindowHours, "PRODUCTION");
             
             long fallbackStartTime = System.currentTimeMillis();
             log.debug("Fallback query execution START (traceId={}): timeWindowHours={}", traceId, timeWindowHours);
@@ -627,7 +629,8 @@ public class ExensioClient {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.login(fallbackSchema);
-                    rows = executeRawSql(fallbackSql, fallbackToken, traceId);
+                    String sandboxFallbackSql = buildFallbackRawSql(pgcKey, wafer, identifiers, targetEndTime, timeWindowHours, "SANDBOX");
+                    rows = executeRawSql(sandboxFallbackSql, fallbackToken, traceId);
                 }
             }
             
@@ -694,13 +697,14 @@ public class ExensioClient {
                 Set<String> identifiers = buildIdentifierTokens(record.filename(), record.metadataId(), record.dataId());
 
                 String cleanLot = record.lot().trim();
+                List<String> candidates = getLotCandidates(cleanLot);
+                String inList = candidates.stream()
+                        .map(c -> "'" + escapeSqlLiteral(c) + "'")
+                        .collect(Collectors.joining(", "));
                 StringBuilder clause = new StringBuilder();
                 clause.append("(ol.pgc_key = ").append(pgcKey)
-                        .append(" AND l.lot_id IN ('")
-                        .append(escapeSqlLiteral(cleanLot.toUpperCase(Locale.ROOT)))
-                        .append("', '")
-                        .append(escapeSqlLiteral(cleanLot.toLowerCase(Locale.ROOT)))
-                        .append("')");
+                        .append(" AND (l.lot_id IN (").append(inList).append(")")
+                        .append(" OR sl.lot_id IN (").append(inList).append(")))");
 
                 if (!waferBlank) {
                     clause.append(buildWaferMatchClause(record.wafer()));
@@ -715,7 +719,10 @@ public class ExensioClient {
                 clause.append(")");
                 primaryClauses.add(clause.toString());
                 indexedRecords.add(record);
-                lotToRecord.put(record.lot().toUpperCase(Locale.ROOT), record);
+                lotToRecord.put(cleanLot.toUpperCase(Locale.ROOT), record);
+                for (String cand : candidates) {
+                    lotToRecord.putIfAbsent(cand.toUpperCase(Locale.ROOT), record);
+                }
             }
 
             if (primaryClauses.isEmpty()) {
@@ -723,13 +730,14 @@ public class ExensioClient {
             }
 
             // Execute primary query
-            String primarySql = buildBatchRawSql(primaryClauses);
+            String primarySql = buildBatchRawSql(primaryClauses, "PRODUCTION");
             JsonNode primaryRows = executeRawSql(primarySql, token, traceId);
             if (primaryRows == null || !primaryRows.isArray() || primaryRows.isEmpty()) {
                 String fallbackSchema = props.resolvedDbschemaFallback();
                 if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                     String fallbackToken = authService.login(fallbackSchema);
-                    primaryRows = executeRawSql(primarySql, fallbackToken, traceId);
+                    String sandboxPrimarySql = buildBatchRawSql(primaryClauses, "SANDBOX");
+                    primaryRows = executeRawSql(sandboxPrimarySql, fallbackToken, traceId);
                 }
             }
 
@@ -765,7 +773,14 @@ public class ExensioClient {
 
             // Step 3: For unresolved lots, attempt fallback queries
             List<StageRecord> unresolvedRecords = indexedRecords.stream()
-                    .filter(r -> !resolvedLots.contains(r.lot().toUpperCase(Locale.ROOT)))
+                    .filter(r -> {
+                        for (String cand : getLotCandidates(r.lot())) {
+                            if (resolvedLots.contains(cand.toUpperCase(Locale.ROOT))) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    })
                     .toList();
 
             if (!unresolvedRecords.isEmpty()) {
@@ -798,8 +813,8 @@ public class ExensioClient {
                         clause.append(buildWaferMatchClause(record.wafer()));
                     }
 
-                    // Add file identifier matching if identifiers are provided
-                    if (!identifiers.isEmpty()) {
+                    // Add file identifier matching if wafer is blank and identifiers are provided
+                    if (waferBlank && !identifiers.isEmpty()) {
                         clause.append(" AND (de.file_name IS NULL OR ")
                                 .append(buildIdentifierLikeClause("de.file_name", identifiers))
                                 .append(")");
@@ -810,7 +825,7 @@ public class ExensioClient {
                 }
 
                 if (!fallbackClauses.isEmpty()) {
-                    String fallbackSql = buildBatchRawSql(fallbackClauses);
+                    String fallbackSql = buildBatchRawSql(fallbackClauses, "PRODUCTION");
                     log.debug("Batch fallback SQL execution (traceId={}): {} clauses, timeWindowHours={}", 
                               traceId, fallbackClauses.size(), timeWindowHours);
                     
@@ -819,7 +834,8 @@ public class ExensioClient {
                         String fallbackSchema = props.resolvedDbschemaFallback();
                         if (fallbackSchema != null && !fallbackSchema.isBlank()) {
                             String fallbackToken = authService.login(fallbackSchema);
-                            fallbackRows = executeRawSql(fallbackSql, fallbackToken, traceId);
+                            String sandboxFbSql = buildBatchRawSql(fallbackClauses, "SANDBOX");
+                            fallbackRows = executeRawSql(sandboxFbSql, fallbackToken, traceId);
                         }
                     }
 
@@ -1142,53 +1158,72 @@ public class ExensioClient {
         return result;
     }
 
-    private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers) {
+    private List<String> getLotCandidates(String lot) {
+        if (lot == null || lot.isBlank()) return Collections.emptyList();
+        String cleanLot = lot.trim();
+        Set<String> candidates = new LinkedHashSet<>();
+        candidates.add(cleanLot.toUpperCase(Locale.ROOT));
+        candidates.add(cleanLot.toLowerCase(Locale.ROOT));
+
+        for (char sep : new char[]{'.', '-', '_'}) {
+            int idx = cleanLot.indexOf(sep);
+            if (idx >= 3) {
+                String base = cleanLot.substring(0, idx).trim();
+                if (!base.isBlank()) {
+                    candidates.add(base.toUpperCase(Locale.ROOT));
+                    candidates.add(base.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return new ArrayList<>(candidates);
+    }
+
+    private String buildSingleRawSql(String lot, String wafer, int pgcKey, Set<String> identifiers, String schemaLabel) {
         String cleanLot = lot.trim();
         StringBuilder where = new StringBuilder();
+        List<String> candidates = getLotCandidates(cleanLot);
+        String inList = candidates.stream()
+                .map(c -> "'" + escapeSqlLiteral(c) + "'")
+                .collect(Collectors.joining(", "));
         where.append("ol.pgc_key = ").append(pgcKey)
-                .append(" AND l.lot_id IN ('")
-                .append(escapeSqlLiteral(cleanLot.toUpperCase(Locale.ROOT)))
-                .append("', '")
-                .append(escapeSqlLiteral(cleanLot.toLowerCase(Locale.ROOT)))
-                .append("')");
+                .append(" AND (l.lot_id IN (").append(inList).append(")")
+                .append(" OR sl.lot_id IN (").append(inList).append("))");
+
+        // Add time window to avoid full historical table scan
+        int timeWindowHours = props.getFallbackQueryTimeWindowHours();
+        if (timeWindowHours > 0) {
+            Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
+            where.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(formatInstantForSql(windowStart))
+                    .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
+        }
 
         if (!isBlankOrNa(wafer)) {
             where.append(buildWaferMatchClause(wafer));
         }
 
-        if (isBlankOrNa(wafer) && !identifiers.isEmpty()) {
-            where.append(" AND (de.file_name IS NULL OR ").append(buildIdentifierLikeClause("de.file_name", identifiers)).append(")");
+        String dfExportJoin = " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)";
+        if (!identifiers.isEmpty()) {
+            dfExportJoin += " AND (" + buildIdentifierLikeClause("de.file_name", identifiers) + ")";
         }
 
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
-            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+        String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+            " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'PRODUCTION' AS schema_name" +
+                " NVL(de.file_name,'') AS file_name," +
+                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
+                " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " LEFT JOIN lot sl ON sl.lot_key = ol.src_lot" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
                 " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
-                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                dfExportJoin +
                 " WHERE " + where +
-                " UNION ALL" +
-                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
-                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
-                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'SANDBOX' AS schema_name" +
-                " FROM op_log ol" +
-                " JOIN lot l ON l.lot_key = ol.lot_key" +
-                " JOIN program p ON p.pg_key = ol.pg_key" +
-                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
-                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
-                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
-                " WHERE " + where +
-                " ORDER BY end_time DESC" +
+                " ORDER BY ol.insert_time DESC, ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1208,13 +1243,13 @@ public class ExensioClient {
      *   <li>{@code timeWindowHours}: Number of hours to look back from targetEndTime (or now)</li>
      * </ul>
      *
-     * <p>Returns a UNION ALL query across both PRODUCTION and SANDBOX schemas with ROWNUM limit.
+     * <p>Returns a single-schema query with ROWNUM limit. The schema label is passed as a parameter.
      * Records are ordered by INSERT_TIME DESC, then END_TIME DESC for selection.
      *
      * <p>Requirements: 2.1, 2.2, 4.2</p>
      */
     private String buildFallbackRawSql(int pgcKey, String wafer, Set<String> identifiers,
-                                       Instant targetEndTime, int timeWindowHours) {
+                                       Instant targetEndTime, int timeWindowHours, String schemaLabel) {
         StringBuilder where = new StringBuilder();
         where.append("ol.pgc_key = ").append(pgcKey);
 
@@ -1239,44 +1274,29 @@ public class ExensioClient {
             where.append(buildWaferMatchClause(wafer));
         }
 
-        // Add file identifier matching if identifiers are provided
+        String dfExportJoin = " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)";
         if (!identifiers.isEmpty()) {
-            where.append(" AND (de.file_name IS NULL OR ")
-                    .append(buildIdentifierLikeClause("de.file_name", identifiers))
-                    .append(")");
+            dfExportJoin += " AND (" + buildIdentifierLikeClause("de.file_name", identifiers) + ")";
         }
 
+        String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
         return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
-            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+            " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS insert_time," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'PRODUCTION' AS schema_name" +
+                " NVL(de.file_name,'') AS file_name," +
+                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
+                " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " LEFT JOIN lot sl ON sl.lot_key = ol.src_lot" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
                 " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
-                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
+                dfExportJoin +
                 " WHERE " + where +
-                " UNION ALL" +
-                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
-                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
-                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.insert_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS insert_time," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'SANDBOX' AS schema_name" +
-                " FROM op_log ol" +
-                " JOIN lot l ON l.lot_key = ol.lot_key" +
-                " JOIN program p ON p.pg_key = ol.pg_key" +
-                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
-                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
-                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
-                " WHERE " + where +
-                " ORDER BY insert_time DESC, end_time DESC" +
+                " ORDER BY ol.insert_time DESC, ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1288,37 +1308,26 @@ public class ExensioClient {
         return sqlTimestamp.toString();
     }
 
-    private String buildBatchRawSql(List<String> clauses) {
+    private String buildBatchRawSql(List<String> clauses, String schemaLabel) {
         String where = String.join(" OR ", clauses);
-        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
-            " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
+        String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
+        return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, insert_time, end_time, schema_name FROM (" +
+            " SELECT NVL(l.lot_id, NVL(sl.lot_id,'')) AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
                 " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
                 " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'PRODUCTION' AS schema_name" +
+                " NVL(de.file_name,'') AS file_name," +
+                " NVL(TO_CHAR(ol.insert_time, " + tsFormat + "),'') AS insert_time," +
+                " NVL(TO_CHAR(ol.end_time, " + tsFormat + "),'') AS end_time," +
+                " '" + escapeSqlLiteral(schemaLabel) + "' AS schema_name" +
                 " FROM op_log ol" +
                 " JOIN lot l ON l.lot_key = ol.lot_key" +
+                " LEFT JOIN lot sl ON sl.lot_key = ol.src_lot" +
                 " JOIN program p ON p.pg_key = ol.pg_key" +
                 " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
-                " UNION ALL" +
-                " SELECT l.lot_id AS lot_id, NVL(w.wf_id,'') AS wafer_id," +
-                " ol.lot_key AS lot_key, NVL(w.wf_key,0) AS wafer_key," +
-                " NVL(ol.pg_key,0) AS pg_key, NVL(p.ppid,'') AS ppid," +
-                " SUBSTR(NVL(de.file_name,''), 1, 15) AS file_name," +
-                " NVL(TO_CHAR(ol.end_time, 'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'),'') AS end_time," +
-                " 'SANDBOX' AS schema_name" +
-                " FROM op_log ol" +
-                " JOIN lot l ON l.lot_key = ol.lot_key" +
-                " JOIN program p ON p.pg_key = ol.pg_key" +
-                " LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key" +
-                " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
-                " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
-                " WHERE (" + where + ")" +
-                " ORDER BY end_time DESC" +
+                " ORDER BY ol.end_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1569,6 +1578,11 @@ public class ExensioClient {
         StringBuilder wfClause = new StringBuilder();
         if (waferNum != null) {
             wfClause.append(" AND (w.wf_num = ").append(waferNum).append(")");
+        } else if (cleanWafer != null && !cleanWafer.isBlank()) {
+            // Can't parse as number — match by wafer ID string
+            wfClause.append(" AND (UPPER(w.wf_id) LIKE '%")
+                    .append(escapeLikeLiteral(cleanWafer.toUpperCase(Locale.ROOT)))
+                    .append("%' ESCAPE '\\')" );
         }
         return wfClause;
     }

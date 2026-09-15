@@ -177,6 +177,13 @@ public class BatchLookupResult {
             String lotKey = lot.lotId() == null ? null : lot.lotId().toUpperCase();
             if (lotKey != null) {
                 lotLookup.computeIfAbsent(lotKey, k -> new ArrayList<>()).addAll(lot.wafers());
+                for (char sep : new char[]{'.', '-', '_'}) {
+                    int idx = lotKey.indexOf(sep);
+                    if (idx >= 3) {
+                        String baseLot = lotKey.substring(0, idx).trim();
+                        lotLookup.computeIfAbsent(baseLot, k -> new ArrayList<>()).addAll(lot.wafers());
+                    }
+                }
             }
             for (LotResult.WaferResult wafer : lot.wafers()) {
                 if (wafer.waferId() != null && !wafer.waferId().isBlank()) {
@@ -243,6 +250,15 @@ public class BatchLookupResult {
             }
             if ((candidates == null || candidates.isEmpty()) && recordLot != null && !recordLot.isBlank()) {
                 candidates = lotLookup.get(recordLot);
+                if (candidates == null || candidates.isEmpty()) {
+                    for (char sep : new char[]{'.', '-', '_'}) {
+                        int idx = recordLot.indexOf(sep);
+                        if (idx >= 3) {
+                            candidates = lotLookup.get(recordLot.substring(0, idx).trim());
+                            if (candidates != null && !candidates.isEmpty()) break;
+                        }
+                    }
+                }
             }
 
             LotResult.WaferResult waferResult = selectBestCandidate(candidates, record.endTime());
