@@ -575,9 +575,6 @@ public class StageSessionService {
     }
 
     public StagingSessionDetail refreshExternalStatus(String sessionId, String username) {
-        StagingSessionDetail session = getOwnedSession(sessionId, username);
-        if (session == null) {
-    public StagingSessionDetail refreshExternalStatus(String sessionId, String username) {
         return refreshExternalStatus(sessionId, username, false);
     }
 

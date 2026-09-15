@@ -993,7 +993,7 @@ public class RefDbService {
     private void applyExensioLoading(long recordId, String outputPath, String outputTarget) {
         String table = properties.getStagingTable();
         String sql = "UPDATE " + table +
-                " SET status = 'EXENSIO_MONITORING', cp_output_path = ?, cp_output_target = ?, error_message = NULL WHERE id = ?";
+                " SET status = 'EXENSIO_MONITORING', cp_output_path = ?, cp_output_target = ?, error_message = NULL WHERE id = ? AND status != 'CANCELLED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, outputPath);
@@ -1034,7 +1034,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?, exensio_schema = ?," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             if (exensioWaferKey != null) {
