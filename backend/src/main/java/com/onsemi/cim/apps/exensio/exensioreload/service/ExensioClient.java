@@ -6,6 +6,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -41,6 +43,8 @@ import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 public class ExensioClient {
 
     private static final Logger log = LoggerFactory.getLogger(ExensioClient.class);
+    private static final DateTimeFormatter SQL_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
 
     private final ExensioProperties props;
     private final ExensioAuthService authService;
@@ -807,14 +811,6 @@ public class ExensioClient {
                     StringBuilder clause = new StringBuilder();
                     clause.append("(ol.pgc_key = ").append(pgcKey);
 
-                    // Add time window constraint on INSERT_TIME
-                    if (timeWindowHours > 0) {
-                        Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
-                        String windowStartStr = formatInstantForSql(windowStart);
-                        clause.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(windowStartStr)
-                                .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
-                    }
-
                     // Add wafer matching clause if wafer is provided
                     if (!waferBlank) {
                         clause.append(buildWaferMatchClause(record.wafer()));
@@ -1089,7 +1085,9 @@ public class ExensioClient {
         int timeoutMinutes = props.getTimeoutMinutes();
 
         for (StageRecord rec : records) {
-            String fileNameFilter = rec.filename() != null ? rec.filename().trim() : null;
+            String fileNameFilter = rec.filename() != null && !rec.filename().isBlank()
+                    ? rec.filename().trim()
+                    : (rec.dataId() != null ? rec.dataId().trim() : null);
             if (fileNameFilter == null || fileNameFilter.isBlank()) {
                 continue;
             }
@@ -1105,9 +1103,9 @@ public class ExensioClient {
                 continue;
             }
 
-            // Use first 15 characters for regex matching to reduce false positives from file reloads
-            String filePrefix = baseName.length() > 15 ? baseName.substring(0, 15) : baseName;
-            String escapedFilePrefix = escapeSqlLiteral(filePrefix.toUpperCase(Locale.ROOT));
+            // Use first 35 characters for regex matching to reduce false positives from file reloads
+            String filePrefix = baseName.length() > 35 ? baseName.substring(0, 35) : baseName;
+            String escapedFilePrefix = escapeSqlLiteral(escapeRegexLiteral(filePrefix.toUpperCase(Locale.ROOT)));
 
             // Calculate time window: 20 minutes before createdAt to timeoutMinutes after now
             // This ensures we only match the current loading instance, not previous reloads
@@ -1151,7 +1149,7 @@ public class ExensioClient {
                                 getText(row, "FULL_ERROR_MESSAGE"),
                                 getText(row, "ERROR_TIME")
                         ));
-                        log.info("[ExensioLoadError] Raw data error query hit for lot={} file={} in schema={} (first 15 chars match, time window={}-{}) (traceId={})",
+                        log.info("[ExensioLoadError] Raw data error query hit for lot={} file={} in schema={} (first 35 chars match, time window={}-{}) (traceId={})",
                                 rec.lot(), fileNameFilter, schema, windowStart, windowEnd, traceId);
                         break; // found in this schema, no need to check others
                     }
@@ -1205,14 +1203,6 @@ public class ExensioClient {
                 .append(" AND (l.lot_id IN (").append(inList).append(")")
                 .append(" OR sl.lot_id IN (").append(inList).append("))");
 
-        // Add time window to avoid full historical table scan
-        int timeWindowHours = props.getFallbackQueryTimeWindowHours();
-        if (timeWindowHours > 0) {
-            Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
-            where.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(formatInstantForSql(windowStart))
-                    .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
-        }
-
         if (!isBlankOrNa(wafer)) {
             where.append(buildWaferMatchClause(wafer));
         }
@@ -1239,7 +1229,7 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 dfExportJoin +
                 " WHERE " + where +
-                " ORDER BY ol.insert_time DESC, ol.end_time DESC" +
+                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1265,25 +1255,9 @@ public class ExensioClient {
      * <p>Requirements: 2.1, 2.2, 4.2</p>
      */
     private String buildFallbackRawSql(int pgcKey, String wafer, Set<String> identifiers,
-                                       Instant targetEndTime, int timeWindowHours, String schemaLabel) {
+                                        Instant targetEndTime, int timeWindowHours, String schemaLabel) {
         StringBuilder where = new StringBuilder();
         where.append("ol.pgc_key = ").append(pgcKey);
-
-        // Add time window constraint on INSERT_TIME
-        // If targetEndTime is provided, look back from that time
-        // Otherwise, look back from now
-        if (timeWindowHours > 0) {
-            String windowStartStr;
-            if (targetEndTime != null) {
-                Instant windowStart = targetEndTime.minus(Duration.ofHours(timeWindowHours));
-                windowStartStr = formatInstantForSql(windowStart);
-            } else {
-                Instant windowStart = Instant.now().minus(Duration.ofHours(timeWindowHours));
-                windowStartStr = formatInstantForSql(windowStart);
-            }
-            where.append(" AND ol.insert_time >= TO_TIMESTAMP('").append(windowStartStr)
-                    .append("', 'YYYY-MM-DD HH24:MI:SS.FF')");
-        }
 
         // Add wafer matching clause if wafer is provided and not blank/N/A
         if (!isBlankOrNa(wafer)) {
@@ -1312,16 +1286,16 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 dfExportJoin +
                 " WHERE " + where +
-                " ORDER BY ol.insert_time DESC, ol.end_time DESC" +
+                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
     /**
-     * Formats an Instant as a SQL-compatible timestamp string (YYYY-MM-DD HH24:MI:SS.FF).
+     * Formats an Instant as a SQL-compatible timestamp string in UTC (YYYY-MM-DD HH24:MI:SS.FF).
      */
     private String formatInstantForSql(Instant instant) {
-        java.sql.Timestamp sqlTimestamp = java.sql.Timestamp.from(instant);
-        return sqlTimestamp.toString();
+        if (instant == null) return "";
+        return SQL_TIMESTAMP_FORMATTER.format(instant);
     }
 
     private String buildBatchRawSql(List<String> clauses, String schemaLabel) {
@@ -1343,7 +1317,7 @@ public class ExensioClient {
                 " LEFT JOIN wafer w ON w.wf_key = wfl.wf_key" +
                 " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)" +
                 " WHERE (" + where + ")" +
-                " ORDER BY ol.end_time DESC" +
+                " ORDER BY ol.end_time DESC, ol.insert_time DESC" +
                 ") WHERE ROWNUM <= " + props.getRawSqlRowLimit();
     }
 
@@ -1414,7 +1388,46 @@ public class ExensioClient {
                     ? Math.abs(Duration.between(targetEndTime, end).getSeconds())
                     : 0L;
 
-            if (best == null || score > bestScore || (score == bestScore && delta < bestDelta)) {
+            boolean isBetter = false;
+            if (best == null) {
+                isBetter = true;
+            } else if (score > bestScore) {
+                isBetter = true;
+            } else if (score == bestScore) {
+                if (targetEndTime != null) {
+                    if (delta < bestDelta) {
+                        isBetter = true;
+                    } else if (delta == bestDelta) {
+                        // Tie-break when deltas to targetEndTime are equal: prefer latest INSERT_TIME, then LOT_KEY
+                        Instant currInsert = parseInstantSafe(getText(row, "INSERT_TIME"));
+                        Instant bestInsert = parseInstantSafe(getText(best, "INSERT_TIME"));
+                        int insertComp = compareInstants(currInsert, bestInsert);
+                        if (insertComp > 0) {
+                            isBetter = true;
+                        } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
+                            isBetter = true;
+                        }
+                    }
+                } else {
+                    // No targetEndTime: prefer latest END_TIME, then latest INSERT_TIME, then LOT_KEY
+                    Instant bestEnd = parseInstantSafe(getText(best, "END_TIME"));
+                    int endComp = compareInstants(end, bestEnd);
+                    if (endComp > 0) {
+                        isBetter = true;
+                    } else if (endComp == 0) {
+                        Instant currInsert = parseInstantSafe(getText(row, "INSERT_TIME"));
+                        Instant bestInsert = parseInstantSafe(getText(best, "INSERT_TIME"));
+                        int insertComp = compareInstants(currInsert, bestInsert);
+                        if (insertComp > 0) {
+                            isBetter = true;
+                        } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(best, "LOT_KEY")) {
+                            isBetter = true;
+                        }
+                    }
+                }
+            }
+
+            if (isBetter) {
                 best = row;
                 bestScore = score;
                 bestDelta = delta;
@@ -1429,15 +1442,14 @@ public class ExensioClient {
      *
      * <p>Priority order:
      * <ol>
-     *   <li>If targetEndTime provided: record with minimum |END_TIME - targetEndTime| delta</li>
-     *   <li>If no targetEndTime: record with maximum INSERT_TIME</li>
-     *   <li>If INSERT_TIME identical: record with maximum END_TIME</li>
+     *   <li>If targetEndTime provided: record with minimum |END_TIME - targetEndTime| delta (in UTC)</li>
+     *   <li>If deltas are identical: record with maximum INSERT_TIME, then maximum LOT_KEY</li>
+     *   <li>If no targetEndTime: record with maximum END_TIME</li>
+     *   <li>If END_TIME identical: record with maximum INSERT_TIME</li>
      *   <li>If both timestamps NULL: record with maximum LOT_KEY</li>
      * </ol>
      *
      * <p>All NULL timestamp values are handled gracefully, treating NULL as less-than any actual value.
-     *
-     * <p>Requirements: 1.2, 1.3, 3.1, 3.2, 3.3, 3.4
      *
      * @param rows the array of result rows from the query
      * @param targetEndTime optional target END_TIME for delta matching
@@ -1452,7 +1464,7 @@ public class ExensioClient {
         int recordsEvaluated = 0;
 
         if (targetEndTime != null) {
-            // Priority 1: Minimize |END_TIME - targetEndTime| delta
+            // Priority 1: Minimize |END_TIME - targetEndTime| delta in UTC
             long bestDelta = Long.MAX_VALUE;
 
             for (JsonNode row : rows) {
@@ -1461,23 +1473,32 @@ public class ExensioClient {
                 if (waferKey <= 0) continue;
 
                 Instant endTime = parseInstantSafe(getText(row, "END_TIME"));
-                if (endTime == null) {
-                    // NULL END_TIME gets worst delta score (lowest priority)
-                    long delta = Long.MAX_VALUE;
-                    if (bestRow == null || delta < bestDelta) {
-                        bestRow = row;
-                        bestDelta = delta;
+                long delta = (endTime == null)
+                        ? Long.MAX_VALUE
+                        : Math.abs(Duration.between(targetEndTime, endTime).getSeconds());
+
+                boolean isBetter = false;
+                if (bestRow == null || delta < bestDelta) {
+                    isBetter = true;
+                } else if (delta == bestDelta) {
+                    // Tie-break when deltas to targetEndTime are equal: prefer latest INSERT_TIME, then LOT_KEY
+                    Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
+                    Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
+                    int insertComp = compareInstants(currentInsertTime, bestInsertTime);
+                    if (insertComp > 0) {
+                        isBetter = true;
+                    } else if (insertComp == 0 && getLong(row, "LOT_KEY") > getLong(bestRow, "LOT_KEY")) {
+                        isBetter = true;
                     }
-                } else {
-                    long delta = Math.abs(Duration.between(targetEndTime, endTime).getSeconds());
-                    if (bestRow == null || delta < bestDelta) {
-                        bestRow = row;
-                        bestDelta = delta;
-                    }
+                }
+
+                if (isBetter) {
+                    bestRow = row;
+                    bestDelta = delta;
                 }
             }
         } else {
-            // Priority 2-4: Order by INSERT_TIME DESC, END_TIME DESC, LOT_KEY DESC
+            // Priority: Order by END_TIME DESC, INSERT_TIME DESC, LOT_KEY DESC
             for (JsonNode row : rows) {
                 recordsEvaluated++;
                 long waferKey = getLong(row, "WAFER_KEY");
@@ -1486,28 +1507,20 @@ public class ExensioClient {
                 if (bestRow == null) {
                     bestRow = row;
                 } else {
-                    // Compare INSERT_TIME (descending - newer is better)
-                    Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
-                    Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
-
-                    int insertTimeComparison = compareInstants(currentInsertTime, bestInsertTime);
-                    if (insertTimeComparison > 0) {
-                        // Current has newer/larger INSERT_TIME
+                    Instant currentEndTime = parseInstantSafe(getText(row, "END_TIME"));
+                    Instant bestEndTime = parseInstantSafe(getText(bestRow, "END_TIME"));
+                    int endTimeComparison = compareInstants(currentEndTime, bestEndTime);
+                    if (endTimeComparison > 0) {
                         bestRow = row;
-                    } else if (insertTimeComparison == 0) {
-                        // INSERT_TIME identical, check END_TIME (descending)
-                        Instant currentEndTime = parseInstantSafe(getText(row, "END_TIME"));
-                        Instant bestEndTime = parseInstantSafe(getText(bestRow, "END_TIME"));
-
-                        int endTimeComparison = compareInstants(currentEndTime, bestEndTime);
-                        if (endTimeComparison > 0) {
-                            // Current has newer/larger END_TIME
+                    } else if (endTimeComparison == 0) {
+                        Instant currentInsertTime = parseInstantSafe(getText(row, "INSERT_TIME"));
+                        Instant bestInsertTime = parseInstantSafe(getText(bestRow, "INSERT_TIME"));
+                        int insertTimeComparison = compareInstants(currentInsertTime, bestInsertTime);
+                        if (insertTimeComparison > 0) {
                             bestRow = row;
-                        } else if (endTimeComparison == 0) {
-                            // Both END_TIME identical, check LOT_KEY (descending)
+                        } else if (insertTimeComparison == 0) {
                             long currentLotKey = getLong(row, "LOT_KEY");
                             long bestLotKey = getLong(bestRow, "LOT_KEY");
-
                             if (currentLotKey > bestLotKey) {
                                 bestRow = row;
                             }
@@ -1563,10 +1576,36 @@ public class ExensioClient {
         }
         if (filename != null && !filename.isBlank()) {
             String name = filename.trim();
-            ids.add(name);
-            int dot = name.lastIndexOf('.');
-            if (dot > 0) {
-                ids.add(name.substring(0, dot));
+            // Match on basename (strip path separators if present)
+            String baseName = name.contains("/")
+                    ? name.substring(name.lastIndexOf('/') + 1)
+                    : name.contains("\\")
+                            ? name.substring(name.lastIndexOf('\\') + 1)
+                            : name;
+
+            int dot = baseName.lastIndexOf('.');
+            String noExt = dot > 0 ? baseName.substring(0, dot) : baseName;
+
+            // Strip bracketed suffixes like _{LASERSCRIBE} or {TAG}
+            String cleanName = noExt.replaceAll("_?\\{[^}]*\\}", "").replaceAll("[._-]+$", "").trim();
+            if (!cleanName.isBlank()) {
+                if (cleanName.length() > 35) {
+                    ids.add(cleanName.substring(0, 35));
+                    ids.add(cleanName.substring(0, 30));
+                } else if (cleanName.length() >= 30) {
+                    ids.add(cleanName);
+                    ids.add(cleanName.substring(0, 30));
+                } else {
+                    ids.add(cleanName);
+                }
+            }
+
+            // Use first 30 to 35 characters of noExt instead of full long name with trailing suffixes
+            if (noExt.length() > 35) {
+                ids.add(noExt.substring(0, 35));
+                ids.add(noExt.substring(0, 30));
+            } else {
+                ids.add(noExt);
             }
         }
         ids.removeIf(v -> v == null || v.isBlank());
@@ -1644,6 +1683,11 @@ public class ExensioClient {
                 .replace("%", "\\%")
                 .replace("_", "\\_")
                 .replace("'", "''");
+    }
+
+    private String escapeRegexLiteral(String value) {
+        if (value == null) return "";
+        return value.replaceAll("([\\\\.^$*+?()\\[\\]{}|])", "\\\\$1");
     }
 
     private String getText(JsonNode node, String field) {
