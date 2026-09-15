@@ -374,12 +374,12 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               <div class="metric-value">{{ stats.total }}</div>
               <div class="metric-label">Total</div>
             </div>
-            <div class="metric-card metric-card--staged" *ngIf="stats.staged > 0 || (stats.cancelled ?? 0) === 0">
+            <div class="metric-card metric-card--staged" *ngIf="stats.staged > 0 || stats.cancelled === 0">
               <app-glass-icon name="upload" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.staged }}</div>
               <div class="metric-label">Staged</div>
             </div>
-            <div class="metric-card metric-card--enqueued" *ngIf="stats.enqueued > 0 || (stats.cancelled ?? 0) === 0">
+            <div class="metric-card metric-card--enqueued" *ngIf="stats.enqueued > 0 || stats.cancelled === 0">
               <app-glass-icon name="clock" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.enqueued }}</div>
               <div class="metric-label">Enqueued</div>
@@ -394,7 +394,7 @@ import { formatUtcDate, formatUtcDateLabel, parseInstant, toUtcDayKey } from '..
               <div class="metric-value">{{ stats.failed }}</div>
               <div class="metric-label">Failed</div>
             </div>
-            <div class="metric-card metric-card--cancelled" *ngIf="(stats.cancelled ?? 0) > 0">
+            <div class="metric-card metric-card--cancelled" *ngIf="stats.cancelled > 0">
               <app-glass-icon name="close" [size]="18"></app-glass-icon>
               <div class="metric-value">{{ stats.cancelled }}</div>
               <div class="metric-label">Cancelled</div>
@@ -3620,7 +3620,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
     const failedCount = stats.failed;
     const enqueuedCount = stats.enqueued;
     const stagedCount = stats.staged;
-    const cancelledCount = stats.cancelled ?? Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount);
+    const cancelledCount = stats.cancelled;
     const otherCount = Math.max(0, total - completedCount - failedCount - enqueuedCount - stagedCount - cancelledCount);
 
     const data = [
