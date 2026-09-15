@@ -1264,10 +1264,12 @@ public class ExensioClient {
             where.append(buildWaferMatchClause(wafer));
         }
 
+        // Identifier LIKE filtering is intentionally excluded from the JOIN ON clause.
+        // A leading-wildcard LIKE on UPPER(NVL(de.file_name,'')) inside a JOIN forces a
+        // full df_export table scan for every op_log row, which is the primary cause of
+        // raw-sql timeouts. Identifier-based scoring is applied post-query by
+        // selectBestRawRow(), so omitting it here has no impact on correctness.
         String dfExportJoin = " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)";
-        if (!identifiers.isEmpty()) {
-            dfExportJoin += " AND (" + buildIdentifierLikeClause("de.file_name", identifiers) + ")";
-        }
 
         String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
         return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +
@@ -1320,10 +1322,10 @@ public class ExensioClient {
             where.append(buildWaferMatchClause(wafer));
         }
 
+        // Same rationale as buildSingleRawSql: identifier LIKE filters are excluded from
+        // the JOIN ON clause to prevent full df_export scans. Post-query record selection
+        // handles identifier scoring via selectBestRecordByTimestamp().
         String dfExportJoin = " LEFT JOIN df_export de ON de.lg_key = ol.lg_key AND (w.wf_key IS NULL OR de.wf_key = w.wf_key)";
-        if (!identifiers.isEmpty()) {
-            dfExportJoin += " AND (" + buildIdentifierLikeClause("de.file_name", identifiers) + ")";
-        }
 
         String tsFormat = "'YYYY-MM-DD" + '"' + "T" + '"' + "HH24:MI:SS.FF3" + '"' + "Z" + '"' + "'";
         return "SELECT lot_id, wafer_id, lot_key, wafer_key, pg_key, ppid, file_name, end_time, schema_name FROM (" +

@@ -180,8 +180,11 @@ public class ExensioProperties {
 
     /**
      * Timeout in seconds for raw SQL endpoint calls.
+     * Default raised to 60s: production df_export tables can be large and the
+     * raw-sql Oracle query requires full scan when lot data is first committed.
+     * Valid range: 5–300. Can be overridden via exensio.rawSqlTimeoutSeconds.
      */
-    private int rawSqlTimeoutSeconds = 20;
+    private int rawSqlTimeoutSeconds = 60;
 
     /**
      * Upper bound on rows returned by generated raw SQL queries.
@@ -298,8 +301,8 @@ public class ExensioProperties {
         if (circuitBreakerResetMs < 10_000 || circuitBreakerResetMs > 300_000) {
             throw new IllegalArgumentException("exensio.circuitBreakerResetMs must be between 10000 and 300000");
         }
-        if (rawSqlTimeoutSeconds < 5 || rawSqlTimeoutSeconds > 120) {
-            throw new IllegalArgumentException("exensio.rawSqlTimeoutSeconds must be between 5 and 120");
+        if (rawSqlTimeoutSeconds < 5 || rawSqlTimeoutSeconds > 300) {
+            throw new IllegalArgumentException("exensio.rawSqlTimeoutSeconds must be between 5 and 300");
         }
         if (rawSqlRowLimit < 10 || rawSqlRowLimit > 5000) {
             throw new IllegalArgumentException("exensio.rawSqlRowLimit must be between 10 and 5000");
