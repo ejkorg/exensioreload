@@ -81,7 +81,7 @@ public class StateAccountingService {
         String baseQuery = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*) AS total, " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS pending, " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END) AS enqueued, " +
-                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END) AS enrichment, " +
+                "SUM(CASE WHEN status IN ('ELASTICSEARCH_MONITORING', 'CP_MONITORING', 'PPLOG_MONITORING') THEN 1 ELSE 0 END) AS enrichment, " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END) AS enrichment_timeout, " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END) AS exensio_loading, " +
                 "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END) AS exensio_timeout, " +

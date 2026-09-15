@@ -577,41 +577,19 @@ public class StageSessionService {
     public StagingSessionDetail refreshExternalStatus(String sessionId, String username) {
         StagingSessionDetail session = getOwnedSession(sessionId, username);
         if (session == null) {
-            return null;
-        }
-
-        int offset = 0;
-        int pageSize = 500;
-        List<StageRecord> completedNow = new ArrayList<>();
-        while (true) {
-            List<StageRecord> enrichmentRecords = refDbService.listRecords(session.site(), session.senderId(), "QUEUED_FOR_CP", offset, pageSize, null, null, sessionId);
-            if (enrichmentRecords.isEmpty()) {
-                break;
-            }
-            Set<String> queueKeys = fetchQueueKeys(session.site(), session.senderId());
-            for (StageRecord row : enrichmentRecords) {
-                String key = buildKey(row.metadataId(), row.dataId());
-                if (!queueKeys.contains(key)) {
-                    completedNow.add(row);
-                }
-            }
-            if (enrichmentRecords.size() < pageSize) {
-                break;
-            }
-            offset += pageSize;
-        }
-
-        if (!completedNow.isEmpty()) {
-            pipelineOrchestrator.onCpQueueConsumed(completedNow, session.site(), session.senderId());
-        }
-        refreshCounters(sessionId, session.status());
-        return getOwnedSession(sessionId, username);
+    public StagingSessionDetail refreshExternalStatus(String sessionId, String username) {
+        return refreshExternalStatus(sessionId, username, false);
     }
 
     public StagingSessionDetail refreshExternalStatus(String sessionId, String username, boolean isAdmin) {
         StagingSessionDetail session = isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         if (session == null) {
             return null;
+        }
+
+        if ("CANCELLED".equalsIgnoreCase(session.status())) {
+            refreshCounters(sessionId, "CANCELLED");
+            return isAdmin ? getSessionRaw(sessionId) : getOwnedSession(sessionId, username);
         }
 
         int offset = 0;
@@ -643,31 +621,7 @@ public class StageSessionService {
     }
 
     public void cancelSession(String sessionId, String username) {
-        StagingSessionDetail session = getOwnedSession(sessionId, username);
-        if (session == null) {
-            return;
-        }
-        String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED'";
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement ps = connection.prepareStatement(stageSql)) {
-            ps.setString(1, sessionId);
-            ps.executeUpdate();
-        } catch (SQLException ex) {
-            throw new IllegalStateException("Failed cancelling staging session rows", ex);
-        }
-
-        String updateSql = "UPDATE staging_session SET status = 'CANCELLED', updated_at = ?, completed_at = ? WHERE id = ?";
-        Instant now = Instant.now();
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement ps = connection.prepareStatement(updateSql)) {
-            ps.setTimestamp(1, Timestamp.from(now));
-            ps.setTimestamp(2, Timestamp.from(now));
-            ps.setString(3, sessionId);
-            ps.executeUpdate();
-        } catch (SQLException ex) {
-            throw new IllegalStateException("Failed cancelling session", ex);
-        }
+        cancelSession(sessionId, username, false);
     }
 
     public void cancelSession(String sessionId, String username, boolean isAdmin) {
@@ -675,16 +629,11 @@ public class StageSessionService {
         if (session == null) {
             return;
         }
-        String table = refDbService.getStagingTable();
-        String stageSql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = 'Cancelled by user', updated_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = 'STAGED'";
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement ps = connection.prepareStatement(stageSql)) {
-            ps.setString(1, sessionId);
-            ps.executeUpdate();
-        } catch (SQLException ex) {
-            throw new IllegalStateException("Failed cancelling staging session rows", ex);
-        }
 
+        // 1. Clean up all active/in-flight records in the local staging table so monitors immediately cease polling
+        refDbService.cancelRecordsForSession(sessionId, "Cancelled by user");
+
+        // 2. Mark the session itself as CANCELLED with completion timestamp
         String updateSql = "UPDATE staging_session SET status = 'CANCELLED', updated_at = ?, completed_at = ? WHERE id = ?";
         Instant now = Instant.now();
         try (Connection connection = dataSource.getConnection();
@@ -696,6 +645,9 @@ public class StageSessionService {
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed cancelling session", ex);
         }
+
+        // 3. Refresh counters on the session so files_staged and files_enqueued are reset to 0 in staging_session
+        refreshCounters(sessionId, "CANCELLED");
     }
 
     public SessionAnalyticsResponse getSessionAnalytics(String sessionId,
@@ -851,7 +803,7 @@ public class StageSessionService {
         String table = refDbService.getStagingTable();
         String sql = "SELECT COUNT(*), " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) " +
                 "FROM " + table + " WHERE request_id = ?";
@@ -875,9 +827,9 @@ public class StageSessionService {
                 .append(timestampExpr)
                 .append(" AS DATE) AS day_bucket, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED') THEN 1 ELSE 0 END) AS done_count, ")
-                .append("SUM(CASE WHEN UPPER(status) IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued_count, ")
+                .append("SUM(CASE WHEN UPPER(status) IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END) AS enqueued_count, ")
                 .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) NOT LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS failed_count, ")
-                .append("SUM(CASE WHEN UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) LIKE 'CANCELLED BY USER%' THEN 1 ELSE 0 END) AS cancelled_count, ")
+                .append("SUM(CASE WHEN UPPER(status) = 'CANCELLED' OR (UPPER(status) IN ('CP_FAILED','LOAD_FAILED') AND UPPER(COALESCE(error_message, '')) LIKE 'CANCELLED BY USER%') THEN 1 ELSE 0 END) AS cancelled_count, ")
                 .append("SUM(CASE WHEN UPPER(status) = 'STAGED' THEN 1 ELSE 0 END) AS pending_count, ")
                 .append("COUNT(*) AS total_count ")
                 .append("FROM ").append(table).append(" WHERE request_id = ? ");

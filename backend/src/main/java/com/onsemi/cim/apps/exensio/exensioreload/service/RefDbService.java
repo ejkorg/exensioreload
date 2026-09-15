@@ -848,7 +848,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', cp_output_path = ?, cp_output_target = ?, error_message = NULL," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, outputPath);
@@ -884,7 +884,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', error_message = ?," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, message);
@@ -1112,9 +1112,9 @@ public class RefDbService {
         evt.put("cancelled", cancelled);
         evt.put("errorCount", failed);
 
-        double progress = total > 0 ? ((completed + exensioTimeout + failed) * 100.0 / total) : 0;
+        double progress = total > 0 ? ((completed + exensioTimeout + failed + cancelled) * 100.0 / total) : 0;
         evt.put("progress", progress);
-        // Success rate counts completed + manual verification out of all terminal
+        // Success rate counts completed + manual verification out of all completed/failed (excluding cancelled)
         long terminal = completed + exensioTimeout + failed;
         double successRate = terminal > 0 ? ((completed + exensioTimeout) * 100.0 / terminal) : 100.0;
         evt.put("successRate", successRate);
@@ -1148,7 +1148,7 @@ public class RefDbService {
         StringBuilder sql = new StringBuilder("SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('ELASTICSEARCH_MONITORING', 'CP_MONITORING', 'PPLOG_MONITORING') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
@@ -1222,7 +1222,7 @@ public class RefDbService {
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('ELASTICSEARCH_MONITORING', 'CP_MONITORING', 'PPLOG_MONITORING') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
@@ -1252,7 +1252,7 @@ public class RefDbService {
                                 rs.getLong(4),      // total
                                 rs.getLong(5),      // stagedToRefdb (STAGED)
                                 rs.getLong(6),      // queuedForCp (QUEUED_FOR_CP)
-                                rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING)
+                                rs.getLong(7),      // elasticsearchMonitoring (ELASTICSEARCH_MONITORING / CP_MONITORING / PPLOG_MONITORING)
                                 rs.getLong(8),      // cpTimeout (CP_TIMEOUT)
                                 rs.getLong(9),      // exensioMonitoring (EXENSIO_MONITORING)
                                 rs.getLong(10),     // completedManualVerification (COMPLETED_MANUAL_VERIFICATION_REQUIRED)
@@ -1284,7 +1284,7 @@ public class RefDbService {
         String sql = "SELECT site, sender_id, MAX(sender_name) AS sender_name, COUNT(*), " +
                 "SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'QUEUED_FOR_CP' THEN 1 ELSE 0 END), " +
-                "SUM(CASE WHEN status = 'ELASTICSEARCH_MONITORING' THEN 1 ELSE 0 END), " +
+                "SUM(CASE WHEN status IN ('ELASTICSEARCH_MONITORING', 'CP_MONITORING', 'PPLOG_MONITORING') THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'CP_TIMEOUT' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'EXENSIO_MONITORING' THEN 1 ELSE 0 END), " +
                 "SUM(CASE WHEN status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED' THEN 1 ELSE 0 END), " +
@@ -1769,7 +1769,7 @@ public class RefDbService {
 
             StringBuilder sb = new StringBuilder("SELECT lot, wafer, MIN(filename) AS filename, COUNT(*) AS total, ")
                     .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS ready, ")
-                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
+                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END) AS enqueued, ")
                     .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
                     .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
                     .append("FROM ")
@@ -1886,7 +1886,7 @@ public class RefDbService {
                     .append("SELECT ").append(bucketExpr).append(" AS bucket_date, ")
                     .append("COUNT(*) AS total, ")
                     .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END) AS ready, ")
-                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END) AS enqueued, ")
+                    .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END) AS enqueued, ")
                     .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END) AS failed, ")
                     .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed ")
                     .append("FROM ").append(table)
@@ -2177,15 +2177,69 @@ public class RefDbService {
         
         // Emit aggregation events for each affected session
         // This batches the cancellations across 1-second window to reduce SSE traffic
-        if (rowsUpdated > 0 && stateAggregationBatcher != null) {
-            for (String requestId : affectedRequestIds) {
-                recordStateChangeForBatcher(requestId, "CANCELLED");
-                if (monitorService != null) {
-                    broadcastStats(requestId);
+        if (rowsUpdated > 0) {
+            invalidateStatusCache();
+            if (stateAggregationBatcher != null) {
+                for (String requestId : affectedRequestIds) {
+                    recordStateChangeForBatcher(requestId, "CANCELLED");
+                    if (monitorService != null) {
+                        broadcastStats(requestId);
+                    }
                 }
             }
         }
         
+        return rowsUpdated;
+    }
+
+    /**
+     * Invalidate the in-memory cached dashboard status aggregation.
+     */
+    public void invalidateStatusCache() {
+        cachedStatuses = null;
+    }
+
+    /**
+     * Cancel all in-flight / non-terminal staged records for a specific session (request_id).
+     * Updates status to CANCELLED, sets error_message, updated_at, and processed_at so
+     * background monitors (ES, pp_log, Exensio API, CP dispatch) will immediately cease processing them.
+     * Invalidates status cache and broadcasts cancellation events.
+     *
+     * @param sessionId the session/request ID
+     * @param reason cancellation reason
+     * @return Number of rows updated.
+     */
+    public int cancelRecordsForSession(String sessionId, String reason) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return 0;
+        }
+        String table = properties.getStagingTable();
+        String sql = "UPDATE " + table + " SET status = 'CANCELLED', error_message = ?, " +
+                "updated_at = CURRENT_TIMESTAMP, processed_at = CURRENT_TIMESTAMP " +
+                "WHERE request_id = ? AND status NOT IN ('COMPLETED', 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', 'CP_FAILED', 'LOAD_FAILED', 'CANCELLED')";
+        int rowsUpdated = 0;
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, reason != null && !reason.isBlank() ? reason : "Cancelled by user");
+            ps.setString(2, sessionId.trim());
+            rowsUpdated = ps.executeUpdate();
+            log.info("Cancelled {} active record(s) for session {}", rowsUpdated, sessionId);
+        } catch (SQLException ex) {
+            log.error("Failed cancelling staging records for session {}: {}", sessionId, ex.getMessage(), ex);
+            throw new IllegalStateException("Failed cancelling staging records", ex);
+        }
+
+        // Invalidate status cache so dashboard queries immediately see fresh DB counts
+        invalidateStatusCache();
+
+        // Emit aggregation state change and broadcast updated stats
+        if (stateAggregationBatcher != null) {
+            recordStateChangeForBatcher(sessionId, "CANCELLED");
+        }
+        if (monitorService != null) {
+            broadcastStats(sessionId);
+        }
+
         return rowsUpdated;
     }
 
@@ -2222,8 +2276,8 @@ public class RefDbService {
         String table = properties.getStagingTable();
         boolean startsEnrichment = "ELASTICSEARCH_MONITORING".equals(status) || "EXENSIO_MONITORING".equals(status);
         String sql = startsEnrichment
-            ? "UPDATE " + table + " SET status = ?, error_message = ?, enrichment_started_at = COALESCE(enrichment_started_at, " + timestampExpr() + ") WHERE id = ?"
-            : "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ?";
+            ? "UPDATE " + table + " SET status = ?, error_message = ?, enrichment_started_at = COALESCE(enrichment_started_at, " + timestampExpr() + ") WHERE id = ? AND status != 'CANCELLED'"
+            : "UPDATE " + table + " SET status = ?, error_message = ? WHERE id = ? AND status != 'CANCELLED'";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Long id : ids) {
@@ -2885,7 +2939,7 @@ public class RefDbService {
                                                                           String userKeyFilter) throws SQLException {
         StringBuilder sb = new StringBuilder("SELECT site, sender_id, COALESCE(last_requested_by, staged_by) AS user_key, COUNT(*), ")
                 .append("SUM(CASE WHEN status = 'STAGED' THEN 1 ELSE 0 END), ")
-                .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING') THEN 1 ELSE 0 END), ")
+                .append("SUM(CASE WHEN status IN ('QUEUED_FOR_CP','ELASTICSEARCH_MONITORING','EXENSIO_MONITORING','CP_MONITORING','PPLOG_MONITORING','CP_TIMEOUT') THEN 1 ELSE 0 END), ")
                 .append("SUM(CASE WHEN status IN ('CP_FAILED','LOAD_FAILED') THEN 1 ELSE 0 END), ")
                 .append("SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END), ")
                 .append("MAX(last_requested_at) FROM ")
@@ -3696,7 +3750,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED', exensio_wafer_key = ?, exensio_pg_key = ?," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
 
         int totalUpdated = 0;
         int batchCount = 0;
@@ -3764,7 +3818,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'LOAD_FAILED', error_message = ?," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
 
         int totalUpdated = 0;
         int batchCount = 0;
@@ -3892,7 +3946,7 @@ public class RefDbService {
         String sql = "UPDATE " + table +
                 " SET status = 'COMPLETED_MANUAL_VERIFICATION_REQUIRED', error_message = ?," +
             " processed_at = " + timestampExpr() +
-                " WHERE id = ?";
+                " WHERE id = ? AND status != 'CANCELLED'";
 
         int totalUpdated = 0;
         int batchCount = 0;
