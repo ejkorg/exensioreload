@@ -1534,20 +1534,20 @@ public class ExensioClient {
 
     private Set<String> buildIdentifierTokens(String filename, String metadataId, String dataId) {
         Set<String> ids = new LinkedHashSet<>();
-        if (metadataId != null && !metadataId.isBlank()) {
-            ids.add(metadataId.trim());
-        }
-        if (dataId != null && !dataId.isBlank()) {
-            ids.add(dataId.trim());
-        }
-        if (filename != null && !filename.isBlank()) {
-            String name = filename.trim();
+
+        // Prioritize actual filename for matching against df_export.file_name.
+        // Internal numeric IDs (metadataId, dataId) do not exist in Exensio df_export.
+        String candidateName = (filename != null && !filename.isBlank())
+                ? filename.trim()
+                : (dataId != null && !dataId.isBlank() && !dataId.matches("^\\d+$") ? dataId.trim() : null);
+
+        if (candidateName != null && !candidateName.isBlank()) {
             // Match on basename (strip path separators if present)
-            String baseName = name.contains("/")
-                    ? name.substring(name.lastIndexOf('/') + 1)
-                    : name.contains("\\")
-                            ? name.substring(name.lastIndexOf('\\') + 1)
-                            : name;
+            String baseName = candidateName.contains("/")
+                    ? candidateName.substring(candidateName.lastIndexOf('/') + 1)
+                    : candidateName.contains("\\")
+                            ? candidateName.substring(candidateName.lastIndexOf('\\') + 1)
+                            : candidateName;
 
             int dot = baseName.lastIndexOf('.');
             String noExt = dot > 0 ? baseName.substring(0, dot) : baseName;
