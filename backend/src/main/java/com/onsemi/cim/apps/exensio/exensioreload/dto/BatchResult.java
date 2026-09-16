@@ -37,17 +37,24 @@ public record BatchResult(
             String fileName,
             String traceId,
             String requestId,
-            String schema
+            String schema,
+            String ppid
     ) {
         public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
                             String errorMessage, String lotId, String waferId, String fileName, String traceId) {
-            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, null, null);
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, null, null, null);
         }
 
         public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
                             String errorMessage, String lotId, String waferId, String fileName, String traceId,
                             String requestId) {
-            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, requestId, null);
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, requestId, null, null);
+        }
+
+        public RecordUpdate(long recordId, UpdateType type, Long waferKey, Long pgKey,
+                            String errorMessage, String lotId, String waferId, String fileName, String traceId,
+                            String requestId, String schema) {
+            this(recordId, type, waferKey, pgKey, errorMessage, lotId, waferId, fileName, traceId, requestId, schema, null);
         }
     }
 

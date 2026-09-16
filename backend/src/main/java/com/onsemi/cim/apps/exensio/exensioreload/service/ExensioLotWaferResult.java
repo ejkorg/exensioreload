@@ -8,16 +8,28 @@ public sealed interface ExensioLotWaferResult {
     /**
      * The wafer was found in Exensio — data has been loaded.
      *
-     * @param lotKey   internal Exensio lot key
-     * @param waferKey internal Exensio wafer key
-     * @param pgKey    program key (enables future results queries)
-     * @param ppid     parametric program ID
-     * @param lotId    the matched lot ID string
-     * @param waferId  the matched wafer ID string
-     * @param fileName the matched file name
-     * @param schema   the schema where data was found (PRODUCTION or SANDBOX)
+     * @param lotKey       internal Exensio lot key
+     * @param waferKey     internal Exensio wafer key
+     * @param pgKey        program key (enables future results queries)
+     * @param ppid         parametric program ID
+     * @param lotId        the matched lot ID string
+     * @param waferId      the matched wafer ID string
+     * @param fileName     the matched file name
+     * @param schema       the schema where data was found (PRODUCTION or SANDBOX)
+     * @param dataVerified true when actual parametric data rows were confirmed via
+     *                     the Results API ({@code POST /v1/result/results}), false when
+     *                     only lot/wafer keys were found via lot-wafer-lookup or raw-sql
      */
-    record Found(long lotKey, long waferKey, long pgKey, String ppid, String lotId, String waferId, String fileName, String schema) implements ExensioLotWaferResult {}
+    record Found(long lotKey, long waferKey, long pgKey, String ppid,
+                 String lotId, String waferId, String fileName, String schema,
+                 boolean dataVerified) implements ExensioLotWaferResult {
+
+        /** Backward-compatible constructor — defaults {@code dataVerified} to {@code false}. */
+        Found(long lotKey, long waferKey, long pgKey, String ppid,
+              String lotId, String waferId, String fileName, String schema) {
+            this(lotKey, waferKey, pgKey, ppid, lotId, waferId, fileName, schema, false);
+        }
+    }
 
     /**
      * No matching wafer found — data not yet loaded into Exensio.

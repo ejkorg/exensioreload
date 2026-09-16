@@ -175,8 +175,9 @@ public class ExensioProperties {
 
     /**
      * Prefer Exensio raw SQL endpoint before standard lot/wafer lookup.
+     * Default: false (direct lot-wafer-lookup is faster, more reliable, and avoids fragile SQL queries).
      */
-    private boolean preferRawSql = true;
+    private boolean preferRawSql = false;
 
     /**
      * Timeout in seconds for raw SQL endpoint calls.
@@ -198,6 +199,35 @@ public class ExensioProperties {
      * Default: 48 hours.
      */
     private int fallbackQueryTimeWindowHours = 48;
+
+    // --- Data Verification (Results API) ---
+
+    /**
+     * Enable/disable data verification via the Results API after lot-wafer-lookup.
+     * When enabled, a successful lot-wafer-lookup is followed by a call to
+     * {@code POST /v1/result/results} to confirm actual parametric data rows exist.
+     * Default: false (backward compatible).
+     */
+    private boolean verifyDataLoaded = false;
+
+    /**
+     * Minimum number of data rows required from the Results API to consider data "loaded".
+     * Default: 1 (at least one row of parametric data must exist).
+     */
+    private int verifyMinRows = 1;
+
+    /**
+     * Enable/disable program validation via the Programs API after lot-wafer-lookup.
+     * When enabled, validates that the PPID has valid indexes before marking DONE.
+     * Default: false.
+     */
+    private boolean validateProgram = false;
+
+    /**
+     * Timeout in seconds for verification API calls (Results API, Programs API).
+     * Default: 15 seconds.
+     */
+    private int verifyTimeoutSeconds = 15;
 
     // --- OAuth Authentication (Requirement 5.4, 5.5) ---
 
@@ -523,4 +553,18 @@ public class ExensioProperties {
 
     public String getSamlSecretName() { return samlSecretName; }
     public void setSamlSecretName(String samlSecretName) { this.samlSecretName = samlSecretName == null ? "" : samlSecretName; }
+
+    // --- Data Verification getters/setters ---
+
+    public boolean isVerifyDataLoaded() { return verifyDataLoaded; }
+    public void setVerifyDataLoaded(boolean verifyDataLoaded) { this.verifyDataLoaded = verifyDataLoaded; }
+
+    public int getVerifyMinRows() { return verifyMinRows; }
+    public void setVerifyMinRows(int verifyMinRows) { this.verifyMinRows = verifyMinRows; }
+
+    public boolean isValidateProgram() { return validateProgram; }
+    public void setValidateProgram(boolean validateProgram) { this.validateProgram = validateProgram; }
+
+    public int getVerifyTimeoutSeconds() { return verifyTimeoutSeconds; }
+    public void setVerifyTimeoutSeconds(int verifyTimeoutSeconds) { this.verifyTimeoutSeconds = verifyTimeoutSeconds; }
 }

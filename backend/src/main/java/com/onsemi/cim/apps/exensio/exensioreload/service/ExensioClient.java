@@ -200,6 +200,12 @@ public class ExensioClient {
                     filename, metadataId, dataId, token, traceId);
         }
 
+        if (result instanceof ExensioLotWaferResult.Found found) {
+            boolean waferBlank = wafer == null || wafer.isBlank();
+            int resolvedPgcKey = (pgcKey != null) ? pgcKey : (waferBlank ? 2 : 1);
+            result = verifyAndEnrich(found, resolvedPgcKey, traceId);
+        }
+
         return result;
     }
 
@@ -214,12 +220,14 @@ public class ExensioClient {
             // Use the explicit pgcKey when provided; otherwise fall back to wafer-presence logic.
             int resolvedPgcKey = (pgcKey != null) ? pgcKey : (waferBlank ? 2 : 1);
 
-            // Step 1: Try raw-SQL (already has PRODUCTION → SANDBOX fallback internally)
-            ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
-                    lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
-                    filename, metadataId, dataId, token, traceId);
-            if (rawSqlResult instanceof ExensioLotWaferResult.Found) {
-                return rawSqlResult;
+            // Step 1: Try raw-SQL only if preferRawSql is enabled
+            if (props.isPreferRawSql()) {
+                ExensioLotWaferResult rawSqlResult = doRawSqlLookupSingle(
+                        lot, wafer, targetEndTime, resolvedPgcKey, testPhase,
+                        filename, metadataId, dataId, token, traceId);
+                if (rawSqlResult instanceof ExensioLotWaferResult.Found) {
+                    return rawSqlResult;
+                }
             }
 
             // Step 2: Try lot-wafer-lookup endpoint with primary schema
@@ -421,17 +429,19 @@ public class ExensioClient {
         List<BatchLookupResult.LotResult> mergedLots = new ArrayList<>();
         Set<Long> resolvedRecordIds = new HashSet<>();
 
-        // Step 1: Try raw-SQL batch (already has PRODUCTION → SANDBOX fallback internally)
-        BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, traceId);
-        if (rawSqlResult.isSuccess()) {
-            mergedLots.addAll(rawSqlResult.getLots());
-            for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records, traceId)) {
-                if (update.type() == BatchResult.UpdateType.COMPLETED) {
-                    resolvedRecordIds.add(update.recordId());
+        // Step 1: Try raw-SQL batch only if preferRawSql is enabled
+        if (props.isPreferRawSql()) {
+            BatchLookupResult rawSqlResult = doRawSqlLookupBatch(records, token, traceId);
+            if (rawSqlResult.isSuccess()) {
+                mergedLots.addAll(rawSqlResult.getLots());
+                for (BatchResult.RecordUpdate update : rawSqlResult.mapToRecordUpdates(records, traceId)) {
+                    if (update.type() == BatchResult.UpdateType.COMPLETED) {
+                        resolvedRecordIds.add(update.recordId());
+                    }
                 }
+            } else {
+                log.warn("Raw SQL batch lookup failed (traceId={}), falling back to lot-wafer endpoint: {}", traceId, rawSqlResult.getErrorMessage());
             }
-        } else {
-            log.warn("Raw SQL batch lookup failed (traceId={}), falling back to lot-wafer endpoint: {}", traceId, rawSqlResult.getErrorMessage());
         }
 
         List<StageRecord> unresolvedRecords = records.stream()
@@ -1888,6 +1898,278 @@ public class ExensioClient {
         if (ppid == null || ppid.isBlank()) return true;
         // Case 3 / 4: compare suffix case-insensitively
         return ppid.toUpperCase().endsWith("_" + testPhase.trim().toUpperCase());
+    }
+
+    // -------------------------------------------------------------------------
+    // Data Verification — Results API and Programs API
+    // Modeled after Python lib's exAPI_Results() (line 676) and exAPI_Programs() (line 243)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Verification result from the Results API or Programs API check.
+     *
+     * @param verified     true when actual parametric data rows were confirmed
+     * @param rowCount     number of data rows found (-1 on error or not checked)
+     * @param indexCount   number of test indexes in the program (-1 on error or not checked)
+     * @param errorMessage error description if verification failed, null on success
+     */
+    public record DataVerificationResult(boolean verified, int rowCount, int indexCount, String errorMessage) {
+        public static DataVerificationResult success(int rowCount, int indexCount) {
+            return new DataVerificationResult(true, rowCount, indexCount, null);
+        }
+        public static DataVerificationResult notLoaded(int rowCount) {
+            return new DataVerificationResult(false, rowCount, -1, "No parametric data rows found");
+        }
+        public static DataVerificationResult error(String message) {
+            return new DataVerificationResult(false, -1, -1, message);
+        }
+        public static DataVerificationResult skipped() {
+            return new DataVerificationResult(true, -1, -1, null);
+        }
+    }
+
+    /**
+     * Verifies that a {@link ExensioLotWaferResult.Found} result has actual parametric
+     * data loaded, using the Results API and optionally the Programs API.
+     *
+     * <p>This is the key missing step identified from the Python lib's workflow:
+     * <ol>
+     *   <li>lot-wafer-lookup → get keys (current implementation stops here)</li>
+     *   <li>Programs API → validate program has valid indexes (optional)</li>
+     *   <li>Results API → confirm actual data rows exist (the fix)</li>
+     * </ol>
+     *
+     * <p>When verification is disabled in config, returns the Found result unchanged.
+     * When verification succeeds, returns Found with {@code dataVerified=true}.
+     * When verification fails (no data rows), returns {@code NotFound} to trigger retry.
+     *
+     * @param found   the successful lookup result containing pg_key, wafer_key, ppid
+     * @param pgcKey  the program group class key for this data type
+     * @param traceId correlation ID for logging
+     * @return the original Found (with dataVerified=true) or NotFound if data not yet loaded
+     */
+    public ExensioLotWaferResult verifyAndEnrich(ExensioLotWaferResult.Found found, int pgcKey, String traceId) {
+        if (!props.isVerifyDataLoaded()) {
+            return found; // Verification disabled — return as-is
+        }
+        if (found.dataVerified()) {
+            return found; // Already verified — return as-is
+        }
+
+        String token;
+        try {
+            // Use the schema from the Found result if available, otherwise use default
+            String schema = found.schema() != null && !found.schema().isBlank()
+                    ? found.schema()
+                    : props.resolvedDbschema();
+            token = authService.getToken(schema);
+        } catch (ExensioAuthService.ExensioAuthException e) {
+            log.warn("Data verification auth failed (traceId={}): {} — accepting Found result as unverified",
+                    traceId, e.getMessage());
+            return found; // Don't block on auth failure — accept unverified
+        }
+
+        // Step 1 (optional): Validate program via Programs API
+        if (props.isValidateProgram() && found.ppid() != null && !found.ppid().isBlank()) {
+            int indexCount = validateProgram(found.ppid(), pgcKey, token, traceId);
+            if (indexCount == 0) {
+                log.warn("Program validation failed — PPID '{}' has 0 indexes (traceId={}). " +
+                         "Downgrading to NotFound for retry.", found.ppid(), traceId);
+                return new ExensioLotWaferResult.NotFound();
+            }
+            if (indexCount > 0) {
+                log.debug("Program validation passed — PPID '{}' has {} indexes (traceId={})",
+                         found.ppid(), indexCount, traceId);
+            }
+            // indexCount == -1 means error — continue to data verification anyway
+        }
+
+        // Step 2: Verify actual data rows via Results API
+        int rowCount = verifyDataLoaded(found.pgKey(), found.waferKey(), pgcKey, token, traceId);
+
+        if (rowCount >= props.getVerifyMinRows()) {
+            log.info("Data verification PASSED: {} rows found for waferKey={}, pgKey={} (traceId={})",
+                     rowCount, found.waferKey(), found.pgKey(), traceId);
+            return new ExensioLotWaferResult.Found(
+                    found.lotKey(), found.waferKey(), found.pgKey(), found.ppid(),
+                    found.lotId(), found.waferId(), found.fileName(), found.schema(), true);
+        }
+
+        if (rowCount == 0) {
+            log.info("Data verification FAILED: 0 rows for waferKey={}, pgKey={} (traceId={}). " +
+                     "Keys exist but data not yet loaded — returning NotFound for retry.",
+                     found.waferKey(), found.pgKey(), traceId);
+            return new ExensioLotWaferResult.NotFound();
+        }
+
+        // rowCount == -1 means error — accept the Found result unverified to avoid blocking
+        log.warn("Data verification ERROR for waferKey={}, pgKey={} (traceId={}). " +
+                 "Accepting Found result as unverified.", found.waferKey(), found.pgKey(), traceId);
+        return found;
+    }
+
+    /**
+     * Calls {@code POST /v1/result/results} to verify that actual parametric data rows
+     * exist in Exensio for the given {@code pg_key + wafer_key} combination.
+     *
+     * <p>Modeled after the Python lib's {@code exAPI_Results()} (line 676) and
+     * {@code parse_Results()} (line 951). Request body:
+     * <pre>{
+     *   "pgc_key": &lt;pgcKey&gt;,
+     *   "rework_criteria": "LATEST",
+     *   "test_indexes": [1],
+     *   "stat_keys": [{ "pg_key": &lt;pgKey&gt;, "wafer_key": &lt;waferKey&gt; }]
+     * }</pre>
+     *
+     * <p>Uses {@code test_indexes: [1]} to request only the first index, minimizing
+     * response size since we only need existence confirmation, not the full dataset.
+     *
+     * @param pgKey    program key from lot-wafer-lookup
+     * @param waferKey wafer key from lot-wafer-lookup
+     * @param pgcKey   program group class key (1=PROBE, 2=FT, etc.)
+     * @param token    bearer token for authentication
+     * @param traceId  correlation ID for logging
+     * @return number of data rows found, 0 if no data, -1 on error
+     */
+    public int verifyDataLoaded(long pgKey, long waferKey, int pgcKey, String token, String traceId) {
+        String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/result/results";
+
+        try {
+            // Build request body — same structure as Python's exAPI_Results
+            ObjectNode body = objectMapper.createObjectNode();
+            body.put("pgc_key", pgcKey);
+            body.put("rework_criteria", "LATEST");
+
+            // Request only index 1 to minimize response size (we only need existence check)
+            ArrayNode testIndexes = body.putArray("test_indexes");
+            testIndexes.add(1);
+
+            // stat_keys: [{ "pg_key": pgKey, "wafer_key": waferKey }]
+            ArrayNode statKeys = body.putArray("stat_keys");
+            ObjectNode statKey = objectMapper.createObjectNode();
+            statKey.put("pg_key", pgKey);
+            statKey.put("wafer_key", waferKey);
+            statKeys.add(statKey);
+
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio verify-data request (traceId={}): url={}, body={}", traceId, url, body);
+            }
+
+            long startTime = System.currentTimeMillis();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(props.getVerifyTimeoutSeconds()))
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            long elapsed = System.currentTimeMillis() - startTime;
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Exensio verify-data FAILED (HTTP {}, {}ms, traceId={})",
+                        response.statusCode(), elapsed, traceId);
+                return -1;
+            }
+
+            // Parse response — structure from Python's parse_Results:
+            // { "results": { "result_sets": [{ "rows": [[...], ...] }] } }
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode resultSets = root.path("results").path("result_sets");
+            if (!resultSets.isArray() || resultSets.isEmpty()) {
+                log.debug("Exensio verify-data: no result_sets in response ({}ms, traceId={})", elapsed, traceId);
+                return 0;
+            }
+
+            JsonNode rows = resultSets.get(0).path("rows");
+            int rowCount = rows.isArray() ? rows.size() : 0;
+
+            log.debug("Exensio verify-data: {} rows found ({}ms, traceId={})", rowCount, elapsed, traceId);
+            return rowCount;
+
+        } catch (Exception e) {
+            log.warn("Exensio verify-data failed (traceId={}): {}", traceId, e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
+     * Calls {@code POST /v1/key/programs} to validate that the parametric test program
+     * (PPID) exists and has valid indexes.
+     *
+     * <p>Modeled after the Python lib's {@code exAPI_Programs()} (line 243) and
+     * {@code parse_Programs()} (line 776). Request body:
+     * <pre>{
+     *   "pgc_keys": [&lt;pgcKey&gt;],
+     *   "ppids": ["&lt;ppid&gt;"]
+     * }</pre>
+     *
+     * @param ppid    parametric program ID from lot-wafer-lookup
+     * @param pgcKey  program group class key
+     * @param token   bearer token for authentication
+     * @param traceId correlation ID for logging
+     * @return number of indexes in the program, 0 if program has no indexes, -1 on error
+     */
+    public int validateProgram(String ppid, int pgcKey, String token, String traceId) {
+        String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/programs";
+
+        try {
+            // Build request body — same structure as Python's exAPI_Programs
+            ObjectNode body = objectMapper.createObjectNode();
+            ArrayNode pgcKeys = body.putArray("pgc_keys");
+            pgcKeys.add(pgcKey);
+            ArrayNode ppids = body.putArray("ppids");
+            ppids.add(ppid);
+
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio validate-program request (traceId={}): url={}, body={}", traceId, url, body);
+            }
+
+            long startTime = System.currentTimeMillis();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(props.getVerifyTimeoutSeconds()))
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            long elapsed = System.currentTimeMillis() - startTime;
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Exensio validate-program FAILED (HTTP {}, {}ms, traceId={})",
+                        response.statusCode(), elapsed, traceId);
+                return -1;
+            }
+
+            // Parse response — structure from Python's parse_Programs:
+            // { "programs": [{ "indexes": 5, ... }] }
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode programs = root.path("programs");
+            if (!programs.isArray() || programs.isEmpty()) {
+                log.debug("Exensio validate-program: no programs in response ({}ms, traceId={})", elapsed, traceId);
+                return 0;
+            }
+
+            // Python lib checks: numPrograms > 1 → error
+            if (programs.size() > 1) {
+                log.warn("Exensio validate-program: {} programs found for PPID '{}' (expected 1) (traceId={})",
+                        programs.size(), ppid, traceId);
+            }
+
+            int indexes = programs.get(0).path("indexes").asInt(0);
+            log.debug("Exensio validate-program: PPID '{}' has {} indexes ({}ms, traceId={})",
+                     ppid, indexes, elapsed, traceId);
+            return indexes;
+
+        } catch (Exception e) {
+            log.warn("Exensio validate-program failed (traceId={}): {}", traceId, e.getMessage());
+            return -1;
+        }
     }
 
     private Instant parseInstantSafe(String value) {

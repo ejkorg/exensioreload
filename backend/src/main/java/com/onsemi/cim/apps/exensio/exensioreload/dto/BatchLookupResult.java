@@ -337,7 +337,8 @@ public class BatchLookupResult {
                         waferResult.fileName(),
                         traceId,
                         record.requestId(),
-                        waferResult.schema()
+                        waferResult.schema(),
+                        waferResult.ppid()
                 ));
             } else {
                 // Wafer not found in Exensio response

@@ -409,12 +409,45 @@ public class ExensioLoadMonitor {
                             updates.add(update);
                         }
                     } else if (update.type() == BatchResult.UpdateType.COMPLETED) {
-                        // Cache the successful result
                         StageRecord record = findRecord(apiRecords, update.recordId());
-                        if (record != null && lookupCache != null) {
-                            lookupCache.put(getCacheKey(record), new ExensioCacheValue(update.waferKey(), update.pgKey()));
+                        boolean verifiedPass = true;
+
+                        if (record != null && props.isVerifyDataLoaded() && update.waferKey() != null && update.pgKey() != null) {
+                            int pgcKey = ExensioPreCheckService.resolvePgcKey(record.dataType());
+                            ExensioLotWaferResult.Found found = new ExensioLotWaferResult.Found(
+                                    0L, update.waferKey(), update.pgKey(), update.ppid(),
+                                    update.lotId(), update.waferId(), update.fileName(), update.schema(), false);
+                            ExensioLotWaferResult verifiedResult = exensioClient.verifyAndEnrich(found, pgcKey, traceId);
+
+                            if (verifiedResult instanceof ExensioLotWaferResult.NotFound) {
+                                verifiedPass = false;
+                                log.info("Data verification: 0 rows found for record id={}, waferKey={}, pgKey={} (traceId={}) — keeping NOT_FOUND for retry",
+                                        record.id(), update.waferKey(), update.pgKey(), traceId);
+                                if (isTimedOut(record)) {
+                                    updates.add(new BatchResult.RecordUpdate(
+                                            update.recordId(),
+                                            BatchResult.UpdateType.COMPLETED_MANUAL_VERIFICATION_REQUIRED,
+                                            null, null,
+                                            "Exensio load timeout — wafer keys exist but parametric data not loaded after "
+                                                    + props.getTimeoutMinutes() + " minutes. May need retry.",
+                                            record.lot(), record.wafer(), record.filename(), traceId, record.requestId(), update.schema(), update.ppid()));
+                                } else {
+                                    updates.add(new BatchResult.RecordUpdate(
+                                            update.recordId(),
+                                            BatchResult.UpdateType.NOT_FOUND,
+                                            null, null, null,
+                                            record.lot(), record.wafer(), record.filename(), traceId, record.requestId(), update.schema(), update.ppid()));
+                                }
+                            }
                         }
-                        updates.add(update);
+
+                        if (verifiedPass) {
+                            // Cache the successful result
+                            if (record != null && lookupCache != null) {
+                                lookupCache.put(getCacheKey(record), new ExensioCacheValue(update.waferKey(), update.pgKey()));
+                            }
+                            updates.add(update);
+                        }
                     } else {
                         updates.add(update);
                     }
@@ -629,11 +662,14 @@ public class ExensioLoadMonitor {
 
                 switch (result) {
                     case ExensioLotWaferResult.Found found -> {
-                        log.debug("Individual retry found: id={} lot={} wafer={} waferKey={} pgKey={}",
-                                record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
+                        log.debug("Individual retry found (verified={}): id={} lot={} wafer={} waferKey={} pgKey={}",
+                                found.dataVerified(), record.id(), record.lot(), record.wafer(), found.waferKey(), found.pgKey());
+                        if (lookupCache != null) {
+                            lookupCache.put(getCacheKey(record), new ExensioCacheValue(found.waferKey(), found.pgKey()));
+                        }
                         updates.add(new BatchResult.RecordUpdate(
                                 record.id(), BatchResult.UpdateType.COMPLETED,
-                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId, record.requestId()));
+                                found.waferKey(), found.pgKey(), null, found.lotId(), found.waferId(), found.fileName(), traceId, record.requestId(), found.schema(), found.ppid()));
                     }
                     case ExensioLotWaferResult.NotFound notFound -> {
                         if (isTimedOut(record)) {

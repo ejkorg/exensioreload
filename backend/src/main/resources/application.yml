@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 8004
   forward-headers-strategy: native
 
@@ -215,8 +215,8 @@ exensio:
   enable-circuit-breaker: ${EXENSIO_ENABLE_CIRCUIT_BREAKER:true}
   circuit-breaker-threshold: ${EXENSIO_CIRCUIT_BREAKER_THRESHOLD:5}
   circuit-breaker-reset-ms: ${EXENSIO_CIRCUIT_BREAKER_RESET_MS:60000}
-  # Raw SQL priority lookup (preferred before lot-wafer-lookup)
-  prefer-raw-sql: ${EXENSIO_PREFER_RAW_SQL:true}
+  # Raw SQL priority lookup (default: false — native lot-wafer-lookup is faster and reliable)
+  prefer-raw-sql: ${EXENSIO_PREFER_RAW_SQL:false}
   raw-sql-timeout-seconds: ${EXENSIO_RAW_SQL_TIMEOUT_SECONDS:20}
   raw-sql-row-limit: ${EXENSIO_RAW_SQL_ROW_LIMIT:200}
   # Time window in hours for fallback queries when primary lot_id filtering returns empty.
@@ -224,6 +224,11 @@ exensio:
   # Used to constrain results when the lot_id filter is removed.
   # Default: 48 hours (Requirement: 4.2, 7.1, 7.2)
   fallback-query-time-window-hours: ${EXENSIO_FALLBACK_QUERY_TIME_WINDOW_HOURS:48}
+  # Data Verification via Results API & Programs API (replaces raw SQL guessing with verified data rows)
+  verify-data-loaded: ${EXENSIO_VERIFY_DATA_LOADED:true}
+  verify-min-rows: ${EXENSIO_VERIFY_MIN_ROWS:1}
+  validate-program: ${EXENSIO_VALIDATE_PROGRAM:false}
+  verify-timeout-seconds: ${EXENSIO_VERIFY_TIMEOUT_SECONDS:15}
 
 # AI Integration Configuration
 # Quick setup: Use preset + API key
