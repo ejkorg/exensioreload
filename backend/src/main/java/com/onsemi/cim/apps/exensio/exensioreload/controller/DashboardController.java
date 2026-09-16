@@ -69,6 +69,7 @@ public class DashboardController {
     private final IntegrationStatusService integrationStatusService;
     private final CpElasticsearchProperties elasticsearchProperties;
     private final ExensioProperties exensioProperties;
+    private final com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache pipelineConfigCache;
 
     // SSE emitters for real-time dashboard state updates (keyed by "dashboard" for global broadcast)
     private final Map<String, Set<SseEmitter>> dashboardEmitters = new ConcurrentHashMap<>();
@@ -77,12 +78,40 @@ public class DashboardController {
                                StageRecordMapper mapper,
                                IntegrationStatusService integrationStatusService,
                                CpElasticsearchProperties elasticsearchProperties,
-                               ExensioProperties exensioProperties) {
+                               ExensioProperties exensioProperties,
+                               @org.springframework.beans.factory.annotation.Autowired(required = false)
+                               com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigCache pipelineConfigCache) {
         this.refDbService = refDbService;
         this.mapper = mapper;
         this.integrationStatusService = integrationStatusService;
         this.elasticsearchProperties = elasticsearchProperties;
         this.exensioProperties = exensioProperties;
+        this.pipelineConfigCache = pipelineConfigCache;
+    }
+
+    /**
+     * Get list of configured reload pipelines for the dashboard.
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/pipelines")
+    public ResponseEntity<List<Map<String, Object>>> getPipelines() {
+        if (pipelineConfigCache == null) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+        List<com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfig> pipelines = pipelineConfigCache.getAllPipelines();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfig p : pipelines) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("pipelineKey", p.pipelineKey());
+            map.put("site", p.site());
+            map.put("server", p.server());
+            map.put("socketPort", p.socketPort());
+            map.put("configName", p.configName());
+            map.put("rerunPeriodMinutes", p.rerunPeriodMinutes());
+            map.put("stages", p.stages().stream().map(s -> Map.of("name", s.name(), "type", s.type().name())).toList());
+            result.add(map);
+        }
+        return ResponseEntity.ok(result);
     }
 
     /**

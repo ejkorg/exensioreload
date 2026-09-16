@@ -1,0 +1,244 @@
+# Clean 3-Tier Pipeline Architecture & ETL Crontab Trigger System
+
+## Overview & Architectural Vision
+
+We are decoupling the application into a **3-Tier Clean Architecture**:
+1. **Database Tier (`dbconnections.yml`)**: Strictly database topology per site (Oracle/PostgreSQL host, port, SID/service, credentials, Hikari pool).
+2. **ETL Host Infrastructure Tier (`etlservers.yml`)**: Strictly SSH connectivity and credentials for physical/virtual ETL servers (host, `sshPort: 22`, credentials, timeout).
+3. **Pipeline & Job Orchestration Tier (`etljobs.yml`)**: The single source of truth for pipelines and reload jobs. Each pipeline binds:
+   - Target database `site` (references `dbconnections.yml`)
+   - Target ETL `server` (references `etlservers.yml`)
+   - DataPort CP `socketPort` and `configName` (for exact crontab discovery/grep)
+   - `rerunPeriodMinutes` (optional rerun delay: 0 = single run, >0 = rerun after N minutes)
+   - Stage progression sequence (`CP` $\rightarrow$ `PPLOG` $\rightarrow$ `EXENSIO`, timeouts, and dependencies)
+
+```mermaid
+flowchart TD
+    subgraph Tier1 ["1. Database Tier (dbconnections.yml)"]
+        DB["Site Database Connections\n(host, port, credentials, Hikari)"]
+    end
+
+    subgraph Tier2 ["2. Infrastructure Tier (etlservers.yml)"]
+        SRV["ETL SSH Servers\n(host, sshPort: 22, user, password, timeout)"]
+    end
+
+    subgraph Tier3 ["3. Pipeline & Job Tier (etljobs.yml)"]
+        PIPE["Pipelines & Jobs\n- pipelineKey: 'CEBU-CP-DEFAULT'\n- site: 'CEBU-PROD' -> dbconnections\n- server: 'CEBU-PROD' -> etlservers\n- socketPort: 60170 & configName: 'CPYQSP'\n- rerunPeriodMinutes: 5\n- stages: [CP, PPLOG, EXENSIO]"]
+    end
+
+    subgraph Lifecycle ["4. Pipeline Execution Lifecycle"]
+        DISC["1. SSH Crontab Discovery\n(crontab -l | grep socketPort + configName)"]
+        TRIG["2. Trigger & Rerun Timer\n(Run command once + optional rerun delay)"]
+        CP_STG["3. CP Stage (Elasticsearch Log Verification)"]
+        PP_STG["4. PPLOG Stage (refdb.pp_log Verification)"]
+        EX_STG["5. EXENSIO Stage (Exensio API Verification)"]
+        DONE["6. COMPLETE / DONE"]
+    end
+
+    subgraph Observability ["5. Observability & Tracking"]
+        SESS["Stage Sessions & Audit Trail"]
+        DASH["Dashboard & SSE Live Monitoring"]
+        REP["Reload Reports"]
+    end
+
+    PIPE -->|Resolves DB config| DB
+    PIPE -->|Resolves SSH config| SRV
+    PIPE --> DISC
+    DISC --> TRIG
+    TRIG --> CP_STG --> PP_STG --> EX_STG --> DONE
+    TRIG & CP_STG & PP_STG & EX_STG --> SESS
+    SESS --> DASH
+    SESS --> REP
+```
+
+---
+
+## Proposed Changes
+
+### Component 1: Pipeline & Job Configuration (`etljobs.yml`)
+
+#### [MODIFY] [etljobs.yml](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/etljobs.yml)
+Transform `etljobs.yml` from sample/mock into the production definition of pipelines:
+
+```yaml
+# Pipeline & ETL Job Definitions
+# Links each pipeline to its DB site (dbconnections.yml) and ETL host (etlservers.yml)
+
+pipelines:
+  - pipelineKey: "CEBU-CP-DEFAULT"
+    site: "CEBU-PROD"              # References dbconnections.yml
+    server: "CEBU-PROD"            # References etlservers.yml
+    socketPort: 60170              # DataPort Command Processor port for crontab grep
+    configName: "CPYQSP"           # DataPort config name for crontab grep
+    rerunPeriodMinutes: 5          # 0 = single run, >0 = rerun after N minutes
+    stages:
+      - name: cp
+        type: CP
+        timeoutMinutes: 30
+      - name: pplog
+        type: PPLOG
+        dependsOn: [cp]
+        timeoutMinutes: 20
+      - name: exensio
+        type: EXENSIO
+        dependsOn: [pplog]
+        timeoutMinutes: 60
+
+  - pipelineKey: "CZ4-CZ2-DEFAULT"
+    site: "CZ4-CZ2-PROD"
+    server: "CZ4-CZ2-PROD"
+    socketPort: 60170
+    configName: "svcCZ4MFGP"
+    rerunPeriodMinutes: 0
+    stages:
+      - name: cp
+        type: CP
+        timeoutMinutes: 30
+      - name: pplog
+        type: PPLOG
+        timeoutMinutes: 25
+      - name: exensio
+        type: EXENSIO
+        dependsOn: [cp]
+        timeoutMinutes: 60
+```
+
+#### [MODIFY] [PipelineConfig.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfig.java)
+Update `PipelineConfig` to store the complete pipeline context:
+- `pipelineKey`: String (unique identifier)
+- `site`: String (target DB site)
+- `server`: String (target ETL server key in `etlservers.yml`)
+- `socketPort`: Integer (DataPort CP port)
+- `configName`: String (DataPort CP config name)
+- `rerunPeriodMinutes`: Integer (rerun delay)
+- `stages`: List of `StageDefinition`
+- `stagesByName`: Map of stage name to `StageDefinition`
+
+#### [MODIFY] [PipelineConfigLoader.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigLoader.java)
+- Primary source: Load and parse `pipelines` from `etljobs.yml`.
+- Fallback / Backward Compatibility: If a site isn't found in `etljobs.yml`, check `dbconnections.yml` so legacy configurations continue to function without disruption.
+- Build lookups:
+  - `getPipeline(String pipelineKey)`
+  - `getPipelinesForSite(String site)`
+  - `getDefaultPipelineForSite(String site)`
+
+#### [MODIFY] [PipelineConfigCache.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigCache.java)
+- Cache pipeline definitions with lookup by `pipelineKey` and by `site`.
+
+---
+
+### Component 2: ETL Server Host Infrastructure (`etlservers.yml`)
+
+#### [MODIFY] [etlservers.yml](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/etlservers.yml)
+Clean up server definitions:
+- Set `sshPort: 22` as the SSH connection port.
+- Keep `host`, `user`, `password`, `timeoutMs`.
+- (The application-level `socketPort` and `configName` move to `etljobs.yml` where they belong, but defaults can be preserved if needed).
+
+```yaml
+CEBU-PROD:
+  host: pbxprdjsrv04.onsemi.com
+  sshPort: 22
+  user: fecim
+  password: fecim
+  timeoutMs: 30000
+
+CZ4-CZ2-PROD:
+  host: cz4prdjsrv06.onsemi.com
+  sshPort: 22
+  user: fecim
+  password: CimDtp#567
+  timeoutMs: 30000
+```
+
+#### [MODIFY] [EtlServerConfig.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlServerConfig.java)
+- Add `sshPort` (default 22).
+
+#### [MODIFY] [EtlServerConfigLoader.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlServerConfigLoader.java)
+- Parse `sshPort` from YAML (defaulting to 22 if omitted).
+
+---
+
+### Component 3: SSH Crontab Discovery & Precise Grep Matching
+
+#### [MODIFY] [CrontabExtractor.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabExtractor.java)
+- Connect via SSH using `config.getSshPort()`.
+- Execute `crontab -l`.
+- Parse lines into `CrontabJob` (command, schedule, raw line).
+- Filter out comments and blank lines.
+
+#### [MODIFY] [CrontabJobMatcher.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabJobMatcher.java)
+- Match against both `socketPort` and `configName`:
+  - `socketPort`: Matches with word-boundary or option prefix (e.g., `-p\s*60170` or `\b60170\b`).
+  - `configName`: Matches substring or option prefix (e.g., `-c\s*CPYQSP` or `CPYQSP`).
+- If multiple lines match, pick the most specific match or log candidates.
+- Extract the exact executable command line from the crontab line (stripping the schedule fields).
+
+---
+
+### Component 4: Trigger Service with Rerun Scheduling
+
+#### [MODIFY] [EtlSshTriggerService.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/EtlSshTriggerService.java)
+- Add method: `discoverCrontabSetup(PipelineConfig pipeline)`:
+  - Looks up ETL server from `pipeline.server()`.
+  - SSHs to server, runs `crontab -l`, finds matching command using `pipeline.socketPort()` and `pipeline.configName()`.
+  - Returns discovered cron info (cron schedule, command, full line).
+- Add method: `triggerPipeline(PipelineConfig pipeline, String sessionId, Integer rerunPeriodMinutesOverride)`:
+  - Discovers crontab command (or uses cached).
+  - Executes the command over SSH.
+  - If `rerunPeriodMinutes > 0`: Schedules an asynchronous rerun task via `ScheduledExecutorService` with the specified delay.
+  - Records trigger result, execution timestamp, and scheduled rerun info in session metadata.
+
+#### [MODIFY] [EtlTriggerProperties.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlTriggerProperties.java)
+- Add rerun executor thread pool configuration (`rerunPoolSize: 4`).
+- Add `dryRun: false` support (allows logging what would run without executing SSH command).
+
+---
+
+### Component 5: Pipeline Orchestrator Integration & Stage Progress Tracking
+
+#### [MODIFY] [PipelineOrchestrator.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineOrchestrator.java)
+- Associate stage records and session states with the active `PipelineConfig`.
+- When CP stage is evaluated:
+  - Check whether initial ETL trigger succeeded.
+  - Track if a rerun is scheduled or pending.
+  - Feed into `CpCompletionHandler` for ES log detection.
+- Advance stages upon completion (`CP` $\rightarrow$ `PPLOG` $\rightarrow$ `EXENSIO` $\rightarrow$ `DONE`).
+
+#### [MODIFY] [StageSessionService.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/StageSessionService.java)
+- When a reload session is created:
+  - Resolve the pipeline for the given site/job.
+  - Call `etlSshTriggerService.triggerPipeline()`.
+  - Store trigger status, discovered crontab command, and rerun status in session record.
+
+---
+
+### Component 6: Dashboard & Diagnostic Endpoints
+
+#### [MODIFY] [EtlTriggerController.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/EtlTriggerController.java)
+- `GET /api/etl-trigger/discover?pipelineKey=...`:
+  - SSH to server and return the matched crontab command without executing.
+- `POST /api/etl-trigger/trigger`:
+  - Triggers the pipeline crontab command with optional rerun delay override.
+
+#### [MODIFY] [DashboardController.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/DashboardController.java)
+- Add pipeline overview to dashboard snapshot:
+  - List configured pipelines with their site, server, socketPort, configName.
+  - Current stage distribution per pipeline (`CP`, `PPLOG`, `EXENSIO`, `DONE`).
+  - Active triggers and pending reruns.
+
+---
+
+## Verification Plan
+
+### Automated Unit & Integration Tests
+- **`PipelineConfigLoaderTest`**: Verify loading `etljobs.yml` pipelines, DAG validation, and fallback to `dbconnections.yml`.
+- **`CrontabJobMatcherTest`**: Test matching with various crontab formats (with `-p`, `--port=`, `-c`, and varied spacing).
+- **`EtlSshTriggerServiceTest`**: Test trigger execution, dry-run mode, and asynchronous rerun scheduling using a mock executor.
+- **`PipelineOrchestratorTest`**: Test stage progression from trigger through CP, PPLOG, and EXENSIO to completion.
+
+### Manual Verification
+1. Verify configuration loading: check backend startup logs for loaded pipelines from `etljobs.yml`.
+2. Test discovery endpoint: `GET /api/etl-trigger/discover?pipelineKey=CEBU-CP-DEFAULT` to view the parsed crontab output.
+3. Test dry-run trigger: trigger a test reload session with dry-run enabled to confirm command formatting and rerun scheduling.
+4. Test live trigger & dashboard: verify session creation triggers the SSH cron, monitors ES/pplog/Exensio stages, and updates the dashboard in real time.

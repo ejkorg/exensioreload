@@ -1,5 +1,6 @@
 package com.onsemi.cim.apps.exensio.exensioreload.pipeline;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -9,80 +10,191 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 
 /**
- * Loads and parses pipeline configurations from dbconnections.yml.
- * Each site can optionally define a "pipeline" section containing stage definitions and dependencies.
+ * Loads and parses pipeline configurations from etljobs.yml (with backward-compatible
+ * fallback to dbconnections.yml).
  * 
- * This service is responsible for:
- * - Parsing YAML pipeline configurations per site
- * - Validating dependency graphs for circular dependencies
- * - Verifying all stage references are valid
- * - Building lookup maps for efficient stage access
+ * Each pipeline defines:
+ * - pipelineKey (unique ID)
+ * - site (references dbconnections.yml)
+ * - server (references etlservers.yml)
+ * - socketPort & configName (for crontab grep)
+ * - rerunPeriodMinutes (optional rerun delay)
+ * - stages & dependencies
  */
 @Component
 public class PipelineConfigLoader {
 
     private static final Logger log = LoggerFactory.getLogger(PipelineConfigLoader.class);
+    private static final String ETL_JOBS_FILE = "classpath:etljobs.yml";
 
     private final ExternalDbConfig externalDbConfig;
+    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    private final Map<String, PipelineConfig> pipelinesByKey = new ConcurrentHashMap<>();
+    private final Map<String, List<PipelineConfig>> pipelinesBySite = new ConcurrentHashMap<>();
 
     public PipelineConfigLoader(ExternalDbConfig externalDbConfig) {
         this.externalDbConfig = externalDbConfig;
     }
 
+    @PostConstruct
+    public void init() {
+        loadPipelinesFromEtlJobs();
+    }
+
     /**
-     * Load pipeline configuration for a specific site from dbconnections.yml via ExternalDbConfig
-     * 
-     * Returns Optional.empty() if the site has no pipeline section defined (indicating legacy behavior)
-     * Throws PipelineConfigException if the configuration is invalid
-     * 
-     * This method integrates with ExternalDbConfig to load the actual dbconnections configuration.
-     * 
-     * Requirements: 1.1, 1.2, 1.4
-     * 
-     * @param site the site name (e.g., "CEBU-PROD")
-     * @return Optional containing PipelineConfig if pipeline section exists and is valid, Optional.empty() otherwise
-     * @throws PipelineConfigException if configuration is invalid
+     * Load pipeline definitions from etljobs.yml.
+     */
+    public synchronized void loadPipelinesFromEtlJobs() {
+        pipelinesByKey.clear();
+        pipelinesBySite.clear();
+
+        ResourceLoader resourceLoader = new DefaultResourceLoader();
+        Resource resource = resourceLoader.getResource(ETL_JOBS_FILE);
+        if (!resource.exists()) {
+            log.info("No {} found, pipeline definitions will fall back to dbconnections.yml", ETL_JOBS_FILE);
+            return;
+        }
+
+        try (InputStream is = resource.getInputStream()) {
+            Map<String, Object> root = yamlMapper.readValue(is, new TypeReference<Map<String, Object>>() {});
+            if (root == null) {
+                return;
+            }
+
+            Object pipelinesObj = root.get("pipelines");
+            if (pipelinesObj instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> pipeMap = (Map<String, Object>) map;
+                        try {
+                            PipelineConfig cfg = parsePipelineFromMap(pipeMap);
+                            pipelinesByKey.put(cfg.pipelineKey().toUpperCase(Locale.ROOT), cfg);
+                            pipelinesBySite.computeIfAbsent(cfg.site().toUpperCase(Locale.ROOT), k -> new ArrayList<>()).add(cfg);
+                            log.info("Loaded pipeline '{}' for site '{}' (server={}, socketPort={}, configName={})",
+                                cfg.pipelineKey(), cfg.site(), cfg.server(), cfg.socketPort(), cfg.configName());
+                        } catch (Exception ex) {
+                            log.error("Failed to parse pipeline from etljobs.yml: {}", ex.getMessage(), ex);
+                        }
+                    }
+                }
+            }
+            log.info("PipelineConfigLoader: loaded {} pipeline(s) across {} site(s) from {}",
+                pipelinesByKey.size(), pipelinesBySite.size(), ETL_JOBS_FILE);
+        } catch (Exception e) {
+            log.warn("Failed to load pipelines from {}: {}", ETL_JOBS_FILE, e.getMessage());
+        }
+    }
+
+    public List<PipelineConfig> getAllPipelines() {
+        return List.copyOf(pipelinesByKey.values());
+    }
+
+    public Optional<PipelineConfig> getPipeline(String pipelineKey) {
+        if (pipelineKey == null || pipelineKey.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(pipelinesByKey.get(pipelineKey.trim().toUpperCase(Locale.ROOT)));
+    }
+
+    public List<PipelineConfig> getPipelinesForSite(String site) {
+        if (site == null || site.isBlank()) {
+            return Collections.emptyList();
+        }
+        List<PipelineConfig> list = pipelinesBySite.get(site.trim().toUpperCase(Locale.ROOT));
+        return list != null ? List.copyOf(list) : Collections.emptyList();
+    }
+
+    /**
+     * Load pipeline configuration for a specific site. Checks etljobs.yml first,
+     * then falls back to dbconnections.yml.
      */
     public Optional<PipelineConfig> loadPipelineConfig(String site) throws PipelineConfigException {
         if (site == null || site.isBlank()) {
             return Optional.empty();
         }
 
-        // Get the site configuration from ExternalDbConfig
-        Map<String, Object> siteConfig = externalDbConfig.getConfigForSite(site);
-        if (siteConfig == null) {
-            log.debug("No configuration found for site: {}", site);
-            return Optional.empty();
+        String normalizedSite = site.trim().toUpperCase(Locale.ROOT);
+        List<PipelineConfig> sitePipelines = pipelinesBySite.get(normalizedSite);
+        if (sitePipelines != null && !sitePipelines.isEmpty()) {
+            return Optional.of(sitePipelines.get(0));
         }
 
-        // Build a map with just this site for parsing
-        Map<String, Object> yamlData = new HashMap<>();
-        yamlData.put(site.toUpperCase(Locale.ROOT), siteConfig);
+        // Get the site configuration from ExternalDbConfig (fallback)
+        if (externalDbConfig != null) {
+            Map<String, Object> siteConfig = externalDbConfig.getConfigForSite(site);
+            if (siteConfig != null) {
+                Map<String, Object> yamlData = new HashMap<>();
+                yamlData.put(normalizedSite, siteConfig);
+                return loadPipelineConfig(site, yamlData);
+            }
+        }
 
-        // Parse using the internal method
-        return loadPipelineConfig(site, yamlData);
+        log.debug("No pipeline configuration found for site: {}", site);
+        return Optional.empty();
     }
 
     /**
-     * Load pipeline configuration for a specific site from raw YAML data
-     * 
-     * Returns Optional.empty() if the site has no pipeline section defined (indicating legacy behavior)
-     * Throws PipelineConfigException if the configuration is invalid
-     * 
-     * Requirements: 1.1, 1.2, 1.4
-     * 
-     * @param site the site name (e.g., "CEBU-PROD")
-     * @param yamlData the raw YAML map loaded from dbconnections.yml
-     * @return Optional containing PipelineConfig if pipeline section exists and is valid, Optional.empty() otherwise
-     * @throws PipelineConfigException if configuration is invalid
+     * Parse pipeline definition from etljobs.yml map.
+     */
+    private PipelineConfig parsePipelineFromMap(Map<String, Object> map) throws PipelineConfigException {
+        String site = getString(map, "site", "");
+        if (site.isBlank()) {
+            throw new PipelineConfigException("Pipeline definition missing 'site'");
+        }
+        String normalizedSite = site.trim().toUpperCase(Locale.ROOT);
+        String pipelineKey = getString(map, "pipelineKey", normalizedSite + "-PIPELINE");
+        String server = getString(map, "server", normalizedSite);
+        Integer socketPort = getInteger(map, "socketPort", 60170);
+        String configName = getString(map, "configName", "");
+        Integer senderId = getInteger(map, "senderId", null);
+        Integer rerunPeriodMinutes = getInteger(map, "rerunPeriodMinutes", 0);
+
+        Object stagesObj = map.get("stages");
+        if (!(stagesObj instanceof List<?> stagesList) || stagesList.isEmpty()) {
+            throw new PipelineConfigException("Pipeline '" + pipelineKey + "' must have a non-empty 'stages' array");
+        }
+
+        List<StageDefinition> stages = new ArrayList<>();
+        Map<String, StageDefinition> stagesByName = new LinkedHashMap<>();
+
+        for (int i = 0; i < stagesList.size(); i++) {
+            Object stageObj = stagesList.get(i);
+            if (!(stageObj instanceof Map<?, ?>)) {
+                throw new PipelineConfigException("Stage at index " + i + " in pipeline '" + pipelineKey + "' must be a map");
+            }
+            @SuppressWarnings("unchecked")
+            StageDefinition stageDef = parseStageDefinition((Map<String, Object>) stageObj, normalizedSite, i);
+            if (stagesByName.containsKey(stageDef.name())) {
+                throw new PipelineConfigException("Duplicate stage name '" + stageDef.name() + "' in pipeline '" + pipelineKey + "'");
+            }
+            stages.add(stageDef);
+            stagesByName.put(stageDef.name(), stageDef);
+        }
+
+        PipelineConfig config = new PipelineConfig(pipelineKey, normalizedSite, server, socketPort, configName, senderId, rerunPeriodMinutes, stages, stagesByName);
+        validatePipelineConfig(config);
+        return config;
+    }
+
+    /**
+     * Load pipeline configuration for a specific site from raw YAML data (dbconnections.yml legacy path)
      */
     private Optional<PipelineConfig> loadPipelineConfig(String site, Map<String, Object> yamlData) 
             throws PipelineConfigException {
@@ -103,7 +215,6 @@ public class PipelineConfigLoader {
         
         Object pipelineSection = siteConfig.get("pipeline");
         if (pipelineSection == null) {
-            // No pipeline section = legacy behavior
             return Optional.empty();
         }
 
@@ -115,7 +226,6 @@ public class PipelineConfigLoader {
         @SuppressWarnings("unchecked")
         Map<String, Object> pipelineMap = (Map<String, Object>) pipelineSection;
         
-        // Parse stages array
         Object stagesObj = pipelineMap.get("stages");
         if (stagesObj == null) {
             throw new PipelineConfigException("Pipeline for site '" + normalizedSite 
@@ -131,7 +241,6 @@ public class PipelineConfigLoader {
         List<StageDefinition> stages = new ArrayList<>();
         Map<String, StageDefinition> stagesByName = new LinkedHashMap<>();
 
-        // Parse each stage definition
         for (int i = 0; i < stagesList.size(); i++) {
             Object stageObj = stagesList.get(i);
             if (!(stageObj instanceof Map<?, ?>)) {
@@ -157,19 +266,19 @@ public class PipelineConfigLoader {
                 + "' must have at least one stage");
         }
 
-        PipelineConfig config = new PipelineConfig(normalizedSite, stages, stagesByName);
-        
-        // Validate the configuration
+        String pipelineKey = getString(pipelineMap, "pipelineKey", normalizedSite + "-LEGACY");
+        String server = getString(pipelineMap, "server", normalizedSite);
+        Integer socketPort = getInteger(pipelineMap, "socketPort", 60170);
+        String configName = getString(pipelineMap, "configName", "");
+        Integer rerunPeriodMinutes = getInteger(pipelineMap, "rerunPeriodMinutes", 0);
+        Integer senderId = getInteger(pipelineMap, "senderId", null);
+
+        PipelineConfig config = new PipelineConfig(pipelineKey, normalizedSite, server, socketPort, configName, senderId, rerunPeriodMinutes, stages, stagesByName);
         validatePipelineConfig(config);
         
         return Optional.of(config);
     }
 
-    /**
-     * Parse a single stage definition from YAML
-     * 
-     * Requirements: 1.1, 1.2, 1.4
-     */
     private StageDefinition parseStageDefinition(Map<String, Object> stageMap, String site, int index) 
             throws PipelineConfigException {
         
@@ -195,7 +304,6 @@ public class PipelineConfigLoader {
                 + String.join(", ", getStageTypeNames()), e);
         }
 
-        // Parse dependsOn array (optional)
         List<String> dependsOn = new ArrayList<>();
         Object dependsOnObj = stageMap.get("dependsOn");
         if (dependsOnObj != null) {
@@ -214,7 +322,6 @@ public class PipelineConfigLoader {
             }
         }
 
-        // Parse config map (optional)
         Map<String, Object> config = new HashMap<>();
         Object configObj = stageMap.get("config");
         if (configObj != null) {
@@ -231,16 +338,7 @@ public class PipelineConfigLoader {
             Collections.unmodifiableMap(config));
     }
 
-    /**
-     * Validate pipeline configuration for circular dependencies and invalid stage references.
-     * 
-     * Uses topological sort to detect circular dependencies.
-     * Throws PipelineConfigException if validation fails.
-     * 
-     * Requirements: 1.5
-     */
     public void validatePipelineConfig(PipelineConfig config) throws PipelineConfigException {
-        // Check all stage references exist
         for (StageDefinition stage : config.stages()) {
             for (String depName : stage.dependsOn()) {
                 if (config.findStage(depName) == null) {
@@ -249,39 +347,26 @@ public class PipelineConfigLoader {
                 }
             }
         }
-
-        // Check for circular dependencies using topological sort
         detectCircularDependencies(config);
     }
 
-    /**
-     * Detect circular dependencies using Kahn's algorithm for topological sorting.
-     * 
-     * If the algorithm cannot process all nodes, a circular dependency exists.
-     * 
-     * Requirements: 1.5
-     */
     private void detectCircularDependencies(PipelineConfig config) throws PipelineConfigException {
         Map<String, Integer> inDegree = new HashMap<>();
         Map<String, List<String>> dependents = new HashMap<>();
 
-        // Initialize
         for (StageDefinition stage : config.stages()) {
             inDegree.put(stage.name(), stage.dependsOn().size());
             dependents.put(stage.name(), new ArrayList<>());
         }
 
-        // Build dependents map (reverse of dependencies)
         for (StageDefinition stage : config.stages()) {
             for (String dep : stage.dependsOn()) {
                 dependents.get(dep).add(stage.name());
             }
         }
 
-        // Kahn's algorithm
         Queue<String> queue = new java.util.LinkedList<>();
         
-        // Find all nodes with no incoming edges
         for (String stageName : inDegree.keySet()) {
             if (inDegree.get(stageName) == 0) {
                 queue.add(stageName);
@@ -293,7 +378,6 @@ public class PipelineConfigLoader {
             String currentStage = queue.poll();
             processedCount++;
 
-            // For each dependent of current stage
             for (String dependent : dependents.get(currentStage)) {
                 inDegree.put(dependent, inDegree.get(dependent) - 1);
                 if (inDegree.get(dependent) == 0) {
@@ -302,7 +386,6 @@ public class PipelineConfigLoader {
             }
         }
 
-        // If we couldn't process all stages, there's a cycle
         if (processedCount < config.stages().size()) {
             List<String> cycleStages = new ArrayList<>();
             for (String stageName : inDegree.keySet()) {
@@ -315,14 +398,29 @@ public class PipelineConfigLoader {
         }
     }
 
-    /**
-     * Get all valid stage type names for error messages
-     */
     private List<String> getStageTypeNames() {
         List<String> names = new ArrayList<>();
         for (StageType type : StageType.values()) {
             names.add(type.name());
         }
         return names;
+    }
+
+    private String getString(Map<String, Object> map, String key, String defaultValue) {
+        Object val = map.get(key);
+        return val != null ? val.toString().trim() : defaultValue;
+    }
+
+    private Integer getInteger(Map<String, Object> map, String key, Integer defaultValue) {
+        Object val = map.get(key);
+        if (val instanceof Number num) {
+            return num.intValue();
+        }
+        if (val != null) {
+            try {
+                return Integer.parseInt(val.toString().trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        return defaultValue;
     }
 }

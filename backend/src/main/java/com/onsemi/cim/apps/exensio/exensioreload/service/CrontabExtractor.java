@@ -35,7 +35,7 @@ public class CrontabExtractor {
         try {
             // SSH connection setup
             com.jcraft.jsch.JSch jsch = new com.jcraft.jsch.JSch();
-            com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), config.getPort());
+            com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), config.getSshPort());
 
             // Set password if provided
             if (config.getPassword() != null && !config.getPassword().isEmpty()) {
@@ -80,10 +80,10 @@ public class CrontabExtractor {
             }
 
         } catch (com.jcraft.jsch.JSchException e) {
-            logger.error("SSH connection failed for ETL server {}:{}", config.getHost(), config.getPort(), e);
+            logger.error("SSH connection failed for ETL server {}:{}", config.getHost(), config.getSshPort(), e);
             throw new Exception("SSH connection failed: " + e.getMessage(), e);
         } catch (IOException e) {
-            logger.error("Error reading crontab output for ETL server {}:{}", config.getHost(), config.getPort(), e);
+            logger.error("Error reading crontab output for ETL server {}:{}", config.getHost(), config.getSshPort(), e);
             throw new Exception("Error reading crontab: " + e.getMessage(), e);
         }
 
@@ -96,7 +96,7 @@ public class CrontabExtractor {
      * @param line A single line from crontab output
      * @return CrontabJob if line is uncommented, null if it's a comment or empty
      */
-    private CrontabJob parseCrontabLine(String line) {
+    public CrontabJob parseCrontabLine(String line) {
         if (line == null || line.trim().isEmpty()) {
             return null;
         }
@@ -110,6 +110,7 @@ public class CrontabExtractor {
 
         // Parse schedule and command from uncommented line
         CrontabJob job = new CrontabJob();
+        job.setRawLine(line);
 
         // Crontab format: minute hour day month weekday command
         // Split by whitespace, first 5 fields are schedule, rest is command

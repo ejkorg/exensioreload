@@ -65,6 +65,19 @@ public class EtlServerConfigLoader {
         return matched;
     }
 
+    public EtlServerConfig getConfigByName(String name) {
+        ensureLoaded();
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        for (EtlServerConfig c : configs) {
+            if (c.getName().equalsIgnoreCase(name.trim())) {
+                return c;
+            }
+        }
+        return null;
+    }
+
     public boolean hasConfigs() {
         ensureLoaded();
         return !configs.isEmpty();
@@ -166,7 +179,9 @@ public class EtlServerConfigLoader {
             EtlServerConfig config = new EtlServerConfig();
             config.setName(serverName);
             config.setHost(getValue(configMap, "host", ""));
+            config.setSshPort(parseInt(getValue(configMap, "sshPort", null), null));
             config.setPort(parseInt(getValue(configMap, "port", "22"), 22));
+            config.setSocketPort(parseInt(getValue(configMap, "socketPort", null), null));
             config.setUser(getValue(configMap, "user", ""));
             config.setPassword(getValue(configMap, "password", ""));
             config.setTimeoutMs(parseInt(getValue(configMap, "timeoutMs", "30000"), 30000));
@@ -185,7 +200,10 @@ public class EtlServerConfigLoader {
         return value != null ? value.toString() : defaultValue;
     }
 
-    private Integer parseInt(String value, int defaultValue) {
+    private Integer parseInt(String value, Integer defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {

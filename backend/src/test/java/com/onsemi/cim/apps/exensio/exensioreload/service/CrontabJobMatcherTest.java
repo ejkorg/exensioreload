@@ -138,6 +138,47 @@ class CrontabJobMatcherTest {
         assertThat(result.getCommand()).contains("8080");
     }
 
+    @Test
+    void match_doesNotMatchSubstringOfLargerNumber() {
+        // Port 600 should NOT match port 60000 or 60170
+        List<CrontabJob> jobs = Arrays.asList(
+                createJob("* * * * *", "/opt/cp/run.sh -p 60170"),
+                createJob("* * * * *", "/opt/cp/run.sh -p 60000")
+        );
+
+        CrontabJob result = matcher.match(jobs, 600);
+        assertThat(result).isNull();
+
+        CrontabJob exact = matcher.match(jobs, 60170);
+        assertThat(exact).isNotNull();
+        assertThat(exact.getCommand()).contains("60170");
+    }
+
+    @Test
+    void match_withPortAndConfigName_returnsExactMatch() {
+        List<CrontabJob> jobs = Arrays.asList(
+                createJob("* * * * *", "/opt/cp/bin/cp.sh -p 60170 -c OTHER_CONFIG"),
+                createJob("* * * * *", "/opt/cp/bin/cp.sh -p 60170 -c CPYQSP"),
+                createJob("* * * * *", "/opt/cp/bin/cp.sh -p 64000 -c CPYQSP")
+        );
+
+        CrontabJob result = matcher.match(jobs, 60170, "CPYQSP");
+        assertThat(result).isNotNull();
+        assertThat(result.getCommand()).isEqualTo("/opt/cp/bin/cp.sh -p 60170 -c CPYQSP");
+    }
+
+    @Test
+    void match_withConfigNameOnly_matchesConfig() {
+        List<CrontabJob> jobs = Arrays.asList(
+                createJob("* * * * *", "/opt/cp/bin/cp.sh -p 60170 -c OTHER_CONFIG"),
+                createJob("* * * * *", "/opt/cp/bin/cp.sh -p 60170 -c CPYQSP")
+        );
+
+        CrontabJob result = matcher.match(jobs, null, "CPYQSP");
+        assertThat(result).isNotNull();
+        assertThat(result.getCommand()).contains("CPYQSP");
+    }
+
     private List<CrontabJob> createTestJobs() {
         return Arrays.asList(
                 createJob("* * * * *", "java -jar cp.jar --port 8080"),

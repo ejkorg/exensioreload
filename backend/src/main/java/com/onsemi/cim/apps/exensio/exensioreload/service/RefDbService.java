@@ -567,6 +567,40 @@ public class RefDbService {
         markEnqueued(records.stream().map(StageRecord::id).toList());
     }
 
+    /**
+     * Counts the number of records currently queued for CP or staged for a specific site and senderId.
+     * Strictly filters by senderId when provided.
+     */
+    public int countQueuedForSiteAndSender(String site, Integer senderId) {
+        if (site == null || site.isBlank()) return 0;
+        String table = properties.getStagingTable();
+        String sql;
+        if (senderId != null) {
+            sql = "SELECT COUNT(1) FROM " + table + " WHERE UPPER(site) = ? AND sender_id = ? AND status IN ('QUEUED_FOR_CP', 'STAGED')";
+        } else {
+            sql = "SELECT COUNT(1) FROM " + table + " WHERE UPPER(site) = ? AND status IN ('QUEUED_FOR_CP', 'STAGED')";
+        }
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, site.trim().toUpperCase(java.util.Locale.ROOT));
+            if (senderId != null) {
+                ps.setInt(2, senderId);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Error counting queued records for site {} sender {}: {}", site, senderId, ex.getMessage());
+        }
+        return 0;
+    }
+
+    public int countQueuedForSite(String site) {
+        return countQueuedForSiteAndSender(site, null);
+    }
+
     public void markCpFailed(long id, String message) {
         updateStatus(List.of(id), "CP_FAILED", message);
     }

@@ -16,6 +16,8 @@ public class EtlTriggerProperties {
      * returns {@code not_configured} without SSH. Set {@code ETL_TRIGGER_ENABLED=true} to activate.
      */
     private boolean enabled = false;
+    private boolean dryRun = false;
+    private int rerunPoolSize = 4;
 
     public boolean isEnabled() {
         return enabled;
@@ -23,5 +25,31 @@ public class EtlTriggerProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isDryRun() {
+        return dryRun;
+    }
+
+    public void setDryRun(boolean dryRun) {
+        this.dryRun = dryRun;
+    }
+
+    public int getRerunPoolSize() {
+        return rerunPoolSize;
+    }
+
+    public void setRerunPoolSize(int rerunPoolSize) {
+        this.rerunPoolSize = rerunPoolSize;
+    }
+
+    private int maxRerunIterations = 10;
+
+    public int getMaxRerunIterations() {
+        return maxRerunIterations;
+    }
+
+    public void setMaxRerunIterations(int maxRerunIterations) {
+        this.maxRerunIterations = maxRerunIterations;
     }
 }

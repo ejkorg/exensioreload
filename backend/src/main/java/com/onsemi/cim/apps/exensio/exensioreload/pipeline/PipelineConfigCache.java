@@ -115,6 +115,18 @@ public class PipelineConfigCache {
         return cache.stats();
     }
 
+    public List<PipelineConfig> getAllPipelines() {
+        return configLoader.getAllPipelines();
+    }
+
+    public Optional<PipelineConfig> getPipeline(String pipelineKey) {
+        return configLoader.getPipeline(pipelineKey);
+    }
+
+    public List<PipelineConfig> getPipelinesForSite(String site) {
+        return configLoader.getPipelinesForSite(site);
+    }
+
     /**
      * Get the configured expiration time in minutes.
      * 
