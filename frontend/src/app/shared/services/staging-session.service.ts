@@ -312,7 +312,7 @@ export class StagingSessionService {
     // EventSource doesn't support custom headers, so we need to pass the token as a query parameter
     // Use AuthService to get the current token
     const token = this.authService.getToken() || '';
-    const url = `/api/stage/sessions/${encodeURIComponent(sessionId)}/monitor?token=${encodeURIComponent(token)}`;
+    const url = `${environment.apiUrl}/stage/sessions/${encodeURIComponent(sessionId)}/monitor?token=${encodeURIComponent(token)}`;
 
     this.debugLog('[StagingSession] Connecting SSE to:', url);
     this.debugLog('[StagingSession] Token length:', token.length);

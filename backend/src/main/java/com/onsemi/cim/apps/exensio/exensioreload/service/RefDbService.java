@@ -416,17 +416,20 @@ public class RefDbService {
                 ps.setString(6, candidate.lot());
                 ps.setString(7, candidate.wafer());
                 ps.setString(8, candidate.device());
-                ps.setString(9, candidate.filename());
+                ps.setString(9, candidate.step());
+                ps.setString(10, candidate.testerId());
+                ps.setString(11, candidate.testProgram());
+                ps.setString(12, candidate.filename());
                 if (candidate.endTime() != null) {
-                    ps.setTimestamp(10, Timestamp.from(candidate.endTime()));
+                    ps.setTimestamp(13, Timestamp.from(candidate.endTime()));
                 } else {
-                    ps.setNull(10, java.sql.Types.TIMESTAMP);
+                    ps.setNull(13, java.sql.Types.TIMESTAMP);
                 }
-                ps.setString(11, user);
-                ps.setString(12, user);
-                ps.setString(13, requestId);
-                ps.setString(14, candidate.dataType());
-                ps.setString(15, candidate.testPhase());
+                ps.setString(14, user);
+                ps.setString(15, user);
+                ps.setString(16, requestId);
+                ps.setString(17, candidate.dataType());
+                ps.setString(18, candidate.testPhase());
                 try {
                     ps.executeUpdate();
                     freshInserted++;

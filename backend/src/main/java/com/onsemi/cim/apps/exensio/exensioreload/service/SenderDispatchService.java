@@ -185,38 +185,45 @@ public class SenderDispatchService {
 
             String insertSql;
             if (useSequence) {
-                insertSql = "INSERT INTO DTP_SENDER_QUEUE_ITEM (id, id_metadata, id_data, id_sender, record_created) VALUES (?, ?, ?, ?, ?)";
+                insertSql = "INSERT INTO DTP_SENDER_QUEUE_ITEM (id, id_metadata, id_data, id_sender, record_created) VALUES (DTP_SENDER_QUEUE_ITEM_SEQ.NEXTVAL, ?, ?, ?, ?)";
             } else {
                 insertSql = "INSERT INTO DTP_SENDER_QUEUE_ITEM (id_metadata, id_data, id_sender, record_created) VALUES (?, ?, ?, ?)";
             }
             try (PreparedStatement insert = connection.prepareStatement(insertSql)) {
+                Timestamp now = Timestamp.from(Instant.now());
                 for (StageRecord record : toDispatch) {
-                    try {
-                        Timestamp now = Timestamp.from(Instant.now());
-                        if (useSequence) {
-                            long queueId = nextQueueId(connection);
-                            insert.setLong(1, queueId);
-                            insert.setString(2, record.metadataId());
-                            insert.setString(3, record.dataId());
-                            insert.setInt(4, senderId);
-                            insert.setTimestamp(5, now);
-                        } else {
+                    insert.setString(1, record.metadataId());
+                    insert.setString(2, record.dataId());
+                    insert.setInt(3, senderId);
+                    insert.setTimestamp(4, now);
+                    insert.addBatch();
+                }
+                try {
+                    insert.executeBatch();
+                    for (StageRecord record : toDispatch) {
+                        success.add(record.id());
+                    }
+                } catch (SQLException batchEx) {
+                    log.warn("Batch insert into DTP_SENDER_QUEUE_ITEM failed, falling back to individual inserts: {}", batchEx.getMessage());
+                    // Fallback to row-by-row insert for individual duplicate/error handling
+                    for (StageRecord record : toDispatch) {
+                        try {
                             insert.setString(1, record.metadataId());
                             insert.setString(2, record.dataId());
                             insert.setInt(3, senderId);
                             insert.setTimestamp(4, now);
-                        }
-                        insert.executeUpdate();
-                        success.add(record.id());
-                    } catch (SQLException ex) {
-                        if (isDuplicate(ex)) {
-                            log.info("Duplicate detected for {} – marking as processing", record);
+                            insert.executeUpdate();
                             success.add(record.id());
-                        } else {
-                            log.error("Failed pushing record {}", record, ex);
-                            String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database push failed";
-                            String contextMessage = "[Preprocessing Failure] " + errorMsg;
-                            refDbService.markCpFailed(record.id(), contextMessage);
+                        } catch (SQLException ex) {
+                            if (isDuplicate(ex)) {
+                                log.info("Duplicate detected for {} in DTP_SENDER_QUEUE_ITEM – marking as processing", record);
+                                success.add(record.id());
+                            } else {
+                                log.error("Failed pushing record {}", record, ex);
+                                String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Database push failed";
+                                String contextMessage = "[Preprocessing Failure] " + errorMsg;
+                                refDbService.markCpFailed(record.id(), contextMessage);
+                            }
                         }
                     }
                 }
