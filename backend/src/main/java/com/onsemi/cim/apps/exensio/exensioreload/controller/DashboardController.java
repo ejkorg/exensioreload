@@ -134,10 +134,16 @@ public class DashboardController {
         emitter.onTimeout(() -> {
             log.debug("Dashboard state SSE emitter timeout");
             removeEmitter(channel, emitter);
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
         });
         emitter.onError(e -> {
             log.debug("Dashboard state SSE emitter error: {}", e.getMessage());
             removeEmitter(channel, emitter);
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
         });
 
         // Send initial connection event

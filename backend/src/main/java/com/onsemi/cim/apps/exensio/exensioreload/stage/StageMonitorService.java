@@ -47,6 +47,9 @@ public class StageMonitorService {
         emitter.onTimeout(() -> {
             log.warn("SSE emitter timeout for requestId: {}", requestId);
             removeEmitter(requestId, emitter);
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
         });
         emitter.onError((e) -> {
             if (isClientDisconnectError(e)) {
@@ -55,6 +58,9 @@ public class StageMonitorService {
                 log.error("SSE emitter error for requestId: {}", requestId, e);
             }
             removeEmitter(requestId, emitter);
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
         });
 
         // Send initial events asynchronously after emitter is returned

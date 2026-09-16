@@ -595,9 +595,9 @@ public class ExensioClient {
                 lotIds.add(lot);
             }
 
+            Set<String> uniqueWaferVariants = new LinkedHashSet<>();
             if (includeWafers) {
                 ArrayNode waferIds = body.putArray("wafer_ids");
-                Set<String> uniqueWaferVariants = new LinkedHashSet<>();
                 for (StageRecord record : records) {
                     String wafer = record.wafer();
                     String lot = record.lot();
@@ -648,7 +648,7 @@ public class ExensioClient {
             long responseTimeMs = System.currentTimeMillis() - startTime;
 
             log.debug("Batch API call completed: batchSize={}, uniqueLots={}, uniqueWafers={}, responseTimeMs={}, statusCode={}",
-                    batchSize, uniqueLots.size(), uniqueWafers.size(), responseTimeMs, response.statusCode());
+                    batchSize, uniqueLots.size(), uniqueWaferVariants.size(), responseTimeMs, response.statusCode());
 
             if (response.statusCode() == 401) {
                 return new BatchLookupResult("HTTP 401");
