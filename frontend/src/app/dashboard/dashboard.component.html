@@ -576,10 +576,10 @@
                 type="button"
                 class="sender-resume-btn"
                 *ngIf="hasActiveSessionForSender(site.site, sender.senderId)"
-                (click)="resumeMonitoring(); $event.stopPropagation()"
-                [matTooltip]="'Resume active monitoring for sender ' + sender.senderId + ' (Alt+R)'"
+                (click)="router.navigate(['/my-sessions']); $event.stopPropagation()"
+                [matTooltip]="'View active session for sender ' + sender.senderId"
               >
-                Resume Monitoring
+                View Session
               </button>
             </div>
             <button

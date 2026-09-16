@@ -26,9 +26,7 @@ import {
   StagingSessionDetail,
 } from '../api/backend.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
-import { GlassButtonComponent } from '../shared/components/glass-button.component';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
-import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
@@ -136,9 +134,7 @@ interface DashboardErrorDetails {
     MatProgressBarModule,
     RouterModule,
     BulkActionsComponent,
-    GlassButtonComponent,
     GlassCheckboxComponent,
-    GlassIconComponent,
     StateLegendTooltipComponent,
     DualTimestampComponent,
     TimeSeriesChartComponent,
@@ -612,7 +608,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   constructor(
     private backend: BackendService,
-    private router: Router,
+    public router: Router,
     private route: ActivatedRoute,
     private dialog: GlassDialogService,
     public stagingSession: StagingSessionService,
