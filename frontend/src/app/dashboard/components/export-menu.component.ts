@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, Input, OnDestroy, signal } from '@angular/core';
-import { ExportService, DashboardExportData, ExportFormat } from '../services/export.service';
+import { DashboardExportData, ExportFormat, ExportService } from '../services/export.service';
 
 export interface ExportOption {
   format: ExportFormat;
@@ -218,7 +218,7 @@ export class ExportMenuComponent implements OnDestroy {
         this.removeDocListener();
       }
     };
-    document.addEventListener('click', this.docClickListener);
+    document.addEventListener('click', this.docClickListener, { passive: true });
   }
 
   private removeDocListener(): void {

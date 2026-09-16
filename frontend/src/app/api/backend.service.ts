@@ -1313,9 +1313,29 @@ export class BackendService {
       let reconnectAttempts = 0;
       const maxReconnectAttempts = 5;
       let isDisposed = false;
+      let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      // Proper cleanup function to ensure all resources are released
+      const cleanup = () => {
+        if (eventSource) {
+          try {
+            eventSource.close();
+          } catch (e) {
+            // Ignore errors on close
+          }
+          eventSource = null;
+        }
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = null;
+        }
+      };
 
       const connect = () => {
         if (isDisposed) return;
+
+        // Clean up any existing connection before creating a new one
+        cleanup();
 
         // Get fresh auth token for SSE (EventSource can't send custom headers)
         const token = this.authService.getToken();
@@ -1326,47 +1346,43 @@ export class BackendService {
         try {
           eventSource = new EventSource(url);
 
-          eventSource.addEventListener('CP_TIMEOUT', (event: any) => {
+          // Set up connection open handler first
+          eventSource.onopen = () => {
+            console.log('Dashboard state stream connected');
+            reconnectAttempts = 0;
+          };
+
+          // Set up event handlers
+          const handleStateChange = (event: any) => {
             try {
               const data: StateChangeEvent = JSON.parse(event.data);
               observer.next(data);
               reconnectAttempts = 0; // Reset on successful data
             } catch (e) {
-              console.error('Failed to parse CP_TIMEOUT event:', e);
+              console.error('Failed to parse dashboard state event:', e);
             }
-          });
+          };
 
-          eventSource.addEventListener('COMPLETED_MANUAL_VERIFICATION_REQUIRED', (event: any) => {
-            try {
-              const data: StateChangeEvent = JSON.parse(event.data);
-              observer.next(data);
-              reconnectAttempts = 0; // Reset on successful data
-            } catch (e) {
-              console.error('Failed to parse COMPLETED_MANUAL_VERIFICATION_REQUIRED event:', e);
-            }
-          });
+          eventSource.addEventListener('CP_TIMEOUT', handleStateChange);
+          eventSource.addEventListener('COMPLETED_MANUAL_VERIFICATION_REQUIRED', handleStateChange);
 
+          // Set up error handler
           eventSource.addEventListener('error', () => {
             if (isDisposed) return;
 
             console.warn('Dashboard state stream error, attempting reconnect...');
-            eventSource?.close();
+            cleanup();
 
             // Attempt to reconnect with exponential backoff
             if (reconnectAttempts < maxReconnectAttempts) {
               const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Max 30s delay
               reconnectAttempts++;
-              setTimeout(connect, delay);
+              reconnectTimeout = setTimeout(connect, delay);
             } else {
               console.error('Dashboard state stream: max reconnect attempts reached');
               observer.error(new Error('Dashboard state stream closed'));
             }
           });
-
-          eventSource.onopen = () => {
-            console.log('Dashboard state stream connected');
-            reconnectAttempts = 0;
-          };
         } catch (error) {
           if (!isDisposed) {
             console.error('Failed to connect to dashboard state stream:', error);
@@ -1378,10 +1394,10 @@ export class BackendService {
       // Initial connection
       connect();
 
-      // Cleanup function
+      // Proper cleanup function on disposal
       return () => {
         isDisposed = true;
-        eventSource?.close();
+        cleanup();
       };
     });
   }

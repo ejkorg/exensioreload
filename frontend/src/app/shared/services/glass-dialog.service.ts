@@ -1,12 +1,12 @@
 import {
-  ApplicationRef,
-  ComponentRef,
-  createComponent,
-  EnvironmentInjector,
-  Injectable,
-  Injector,
-  signal,
-  Type,
+    ApplicationRef,
+    ComponentRef,
+    createComponent,
+    EnvironmentInjector,
+    Injectable,
+    Injector,
+    signal,
+    Type,
 } from '@angular/core';
 
 export interface GlassDialogConfig<T = any> {
@@ -132,11 +132,11 @@ export class GlassDialogService {
       container.classList.add('visible');
     });
 
-    // Handle backdrop click
+    // Handle backdrop click - use passive listener since we don't preventDefault
     if (!config?.disableClose) {
       backdrop.addEventListener('click', () => {
         dialogRef.close();
-      });
+      }, { passive: true });
     }
 
     // Save previously focused element so we can restore focus on close

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, Subscription, timer } from 'rxjs';
-import { GlassDialogService, GlassDialogRef } from '../shared/services/glass-dialog.service';
+import { GlassDialogRef, GlassDialogService } from '../shared/services/glass-dialog.service';
 
 /**
  * Pure helper — exported for easy unit/property testing.
@@ -54,10 +54,10 @@ export class SessionExpiryService {
     this.scheduleIdleTimers();
     if (typeof document !== 'undefined') {
       this.activityHandler = () => this.onActivity();
-      document.addEventListener('mousemove', this.activityHandler);
-      document.addEventListener('mousedown', this.activityHandler);
-      document.addEventListener('keydown', this.activityHandler);
-      document.addEventListener('touchstart', this.activityHandler);
+      document.addEventListener('mousemove', this.activityHandler, { passive: true });
+      document.addEventListener('mousedown', this.activityHandler, { passive: true });
+      document.addEventListener('keydown', this.activityHandler, { passive: true });
+      document.addEventListener('touchstart', this.activityHandler, { passive: true });
     }
   }
 
