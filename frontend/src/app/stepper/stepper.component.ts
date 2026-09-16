@@ -35,9 +35,8 @@ import { SiteNamePipe, formatSiteName } from '../shared/pipes/site-name.pipe';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { MonitoringFile, MonitoringService } from '../shared/services/monitoring.service';
 import {
-  SessionActivityEvent,
   SessionStreamStatus,
-  StagingSessionService,
+  StagingSessionService
 } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
 import {
@@ -45,6 +44,11 @@ import {
   BulkLotInputDialogData,
   BulkLotInputDialogResult,
 } from './bulk-lot-input-dialog.component';
+import {
+  CheckExensioDialogComponent,
+  CheckExensioDialogData,
+  CheckExensioDialogResult,
+} from './check-exensio-dialog.component';
 import { ConfirmStageAllDialogComponent, ConfirmStageAllDialogData } from './confirm-stage-all-dialog.component';
 import {
   DuplicatePayloadInfo,
@@ -56,11 +60,6 @@ import {
   LotVerificationDialogData,
   LotVerificationDialogResult,
 } from './lot-verification-dialog.component';
-import {
-  CheckExensioDialogComponent,
-  CheckExensioDialogData,
-  CheckExensioDialogResult,
-} from './check-exensio-dialog.component';
 
 interface WaferMonitoringRow {
   lot: string;
@@ -578,6 +577,10 @@ export class StepperComponent implements OnInit, OnDestroy {
   skippedDuplicatesCount = signal(0);
   /** Set to true when ALL selected/discovered files were duplicates and user chose to skip — shows dedicated UI */
   allDuplicatesSkipped = signal(false);
+  /** Queue capacity status: true when sender queue is at capacity (>600 items) */
+  queueAtCapacity = signal(false);
+  /** Number of available slots in the sender queue (0 if at capacity) */
+  queueAvailableSlots = signal(0);
 
   canStageAll = computed(() => {
     return this.previewTotal() > 0 && !!this.getEffectiveDiscoveryFilters() && !this.staging();
@@ -2900,6 +2903,12 @@ export class StepperComponent implements OnInit, OnDestroy {
               const stagedCount = response?.staged ?? payloads.length;
               const duplicateCount = response?.duplicates ?? 0;
 
+              // Capture queue capacity status from response
+              if (response?.queueAtCapacity !== undefined) {
+                this.queueAtCapacity.set(!!response.queueAtCapacity);
+                this.queueAvailableSlots.set(response?.queueAvailable ?? 0);
+              }
+
               if (duplicateCount > 0) {
                 this.toast.success(
                   `Staged ${stagedCount} payload${stagedCount === 1 ? '' : 's'} (${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} skipped)`,
@@ -2907,6 +2916,15 @@ export class StepperComponent implements OnInit, OnDestroy {
                 );
               } else {
                 this.toast.success(`Successfully staged ${stagedCount} payload${stagedCount === 1 ? '' : 's'}`, 5000);
+              }
+
+              // Show warning if queue is at capacity
+              if (response?.queueAtCapacity) {
+                const available = response?.queueAvailable ?? 0;
+                this.toast.warning(
+                  `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Remaining files will be queued automatically.`,
+                  8000,
+                );
               }
 
               if (stagedCount <= 0) {
@@ -3372,6 +3390,12 @@ export class StepperComponent implements OnInit, OnDestroy {
       requiresConfirmation,
     });
 
+    // Capture queue capacity status from response
+    if (response?.queueAtCapacity !== undefined) {
+      this.queueAtCapacity.set(!!response.queueAtCapacity);
+      this.queueAvailableSlots.set(response?.queueAvailable ?? 0);
+    }
+
     // Persist skipped duplicate count so the monitor banner stays visible
     if (duplicateCount > 0) {
       this.skippedDuplicatesCount.set(duplicateCount);
@@ -3419,6 +3443,15 @@ export class StepperComponent implements OnInit, OnDestroy {
           (duplicateCount > 0 ? ` ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} skipped.` : '') +
           ` Enqueuing incrementally in the background.`,
         7000,
+      );
+    }
+
+    // Show warning if queue is at capacity
+    if (response?.queueAtCapacity) {
+      const available = response?.queueAvailable ?? 0;
+      this.toast.warning(
+        `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Remaining files will be queued automatically.`,
+        8000,
       );
     }
 
@@ -3690,6 +3723,16 @@ export class StepperComponent implements OnInit, OnDestroy {
   resumableSession = signal<{ sessionId: string; senderLabel: string; site: string } | null>(null);
 
   private tryRestoreMonitoringSession() {
+    // If explicitly navigated here for a new session, skip auto-resume for this
+    // stepper instance only. The persisted session ID is intentionally kept in
+    // localStorage so the user can still navigate back to session 1 via My Sessions
+    // or a future visit. We suppress the resume banner for this visit only.
+    const forceNew = this.route.snapshot.queryParamMap.get('newSession') === 'true';
+    if (forceNew) {
+      this.resumableSession.set(null);
+      return;
+    }
+
     const querySessionId = this.route.snapshot.queryParamMap.get('sessionId');
     const persistedId = querySessionId || this.getPersistedMonitoringSession();
     if (querySessionId) {

@@ -10,4 +10,8 @@ public record StagePayloadResponse(int staged,
                                    long totalAvailable,
                                    boolean truncated,
                                    /** Records that already existed and were re-queued (markRetry) rather than freshly inserted */
-                                   int requeued) {}
+                                   int requeued,
+                                   /** True when sender queue is at capacity and cannot accept more items immediately */
+                                   boolean queueAtCapacity,
+                                   /** Number of available slots in the sender queue (0 if at capacity) */
+                                   int queueAvailable) {}

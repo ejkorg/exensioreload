@@ -1231,9 +1231,9 @@ public class SenderController {
 
         StageResult result = refDbService.stagePayloads(site, resolvedSender, request.senderName(), requestedBy, candidates, request.forceDuplicates(), request.requestId());
         boolean requiresConfirmation = result.duplicates().stream().anyMatch(DuplicatePayload::requiresConfirmation);
-        int dispatched = 0;
+        com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult dispatchResult = null;
         if (request.triggerDispatch() && !requiresConfirmation) {
-            dispatched = senderDispatchService.dispatchSender(site, resolvedSender);
+            dispatchResult = senderDispatchService.dispatchSender(site, resolvedSender);
         } else if (request.triggerDispatch() && requiresConfirmation) {
             log.info("Dispatch deferred for site {} sender {} pending duplicate confirmation", site, resolvedSender);
         }
@@ -1271,7 +1271,10 @@ public class SenderController {
                 }).toList();
             }
         }
-        StagePayloadResponse response = new StagePayloadResponse(result.stagedCount(), duplicateViews.size(), duplicateViews, dispatched, requiresConfirmation, candidates.size(), false, result.requeuedCount());
+        int dispatched = dispatchResult != null ? dispatchResult.dispatchedCount() : 0;
+        boolean queueAtCapacity = dispatchResult != null && dispatchResult.queueAtCapacity();
+        int queueAvailable = dispatchResult != null ? dispatchResult.queueAvailable() : 0;
+        StagePayloadResponse response = new StagePayloadResponse(result.stagedCount(), duplicateViews.size(), duplicateViews, dispatched, requiresConfirmation, candidates.size(), false, result.requeuedCount(), queueAtCapacity, queueAvailable);
         return ResponseEntity.ok(response);
     }
 

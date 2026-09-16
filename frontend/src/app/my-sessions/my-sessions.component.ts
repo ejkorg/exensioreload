@@ -1,26 +1,26 @@
 import { CommonModule } from '@angular/common';
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  signal,
-  ViewChild,
+    ChangeDetectionStrategy,
+    Component,
+    computed,
+    ElementRef,
+    OnDestroy,
+    OnInit,
+    signal,
+    ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import * as echarts from 'echarts';
 import { forkJoin } from 'rxjs';
 import {
-  BackendService,
-  SessionAnalyticsResponse,
-  SessionDailyStatusPoint,
-  SessionLotWaferDailyPoint,
-  StageRecordView,
-  StagingSessionDetail,
-  StagingSessionSummary,
+    BackendService,
+    SessionAnalyticsResponse,
+    SessionDailyStatusPoint,
+    SessionLotWaferDailyPoint,
+    StageRecordView,
+    StagingSessionDetail,
+    StagingSessionSummary,
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
@@ -2913,7 +2913,7 @@ export class MySessionsComponent implements OnInit, OnDestroy {
       return;
     }
     this.persistMonitoringSession(session.sessionId);
-    this.router.navigate(['/new']);
+    this.router.navigate(['/new'], { queryParams: { resume: '1' } });
   }
 
   selectSession(session: StagingSessionSummary) {

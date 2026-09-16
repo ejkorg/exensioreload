@@ -157,23 +157,28 @@ public class SenderDispatchService {
         stageSessionService.refreshSessions(requestIds);
     }
 
-    private void pushGroup(String site, int senderId, List<StageRecord> records) {
+    private com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult pushGroup(String site, int senderId, List<StageRecord> records) {
         if (records.isEmpty()) {
-            return;
+            return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(0, false, 0);
         }
         int maxQueueSize = properties.getDispatch().getMaxQueueSize();
         List<Long> success = new ArrayList<>();
+        boolean queueAtCapacity = false;
+        int queueAvailable = 0;
         try (Connection connection = externalDbConfig.getConnection(site)) {
             boolean useSequence = requiresSequence(connection);
             List<StageRecord> toDispatch = records;
             if (maxQueueSize > 0) {
                 int existing = safeCountQueue(connection, senderId);
                 int available = maxQueueSize - existing;
+                queueAvailable = Math.max(0, available);
                 if (available <= 0) {
+                    queueAtCapacity = true;
                     log.info("Queue for site {} sender {} already at capacity {} ({} existing)", site, senderId, maxQueueSize, existing);
-                    return;
+                    return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(0, true, 0);
                 }
                 if (records.size() > available) {
+                    queueAtCapacity = true;
                     log.info("Dispatch for site {} sender {} limited to {} of {} staged records due to queue threshold {}", site, senderId, available, records.size(), maxQueueSize);
                     toDispatch = new ArrayList<>(records.subList(0, available));
                 }
@@ -235,8 +240,9 @@ public class SenderDispatchService {
             for (StageRecord record : records) {
                 refDbService.markCpFailed(record.id(), contextMessage);
             }
-            return;
+            return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(0, queueAtCapacity, queueAvailable);
         }
+        int dispatched = success.size();
         if (!success.isEmpty()) {
             List<StageRecord> dispatchedRecords = records.stream()
                     .filter(r -> success.contains(r.id()))
@@ -259,6 +265,7 @@ public class SenderDispatchService {
                 }
             });
         }
+        return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(dispatched, queueAtCapacity, queueAvailable);
     }
 
     /**
@@ -363,15 +370,17 @@ public class SenderDispatchService {
         }
     }
 
-    public int dispatchSender(String site, int senderId) {
+    public com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult dispatchSender(String site, int senderId) {
         return dispatchSender(site, senderId, null);
     }
 
-    public int dispatchSender(String site, int senderId, Integer limitOverride) {
+    public com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult dispatchSender(String site, int senderId, Integer limitOverride) {
         int configuredPerSend = properties.getDispatch().getPerSend();
         int defaultBatchSize = configuredPerSend > 0 ? configuredPerSend : 200;
         int remaining = (limitOverride != null && limitOverride > 0) ? limitOverride : Integer.MAX_VALUE;
         int processed = 0;
+        boolean anyQueueAtCapacity = false;
+        int minQueueAvailable = Integer.MAX_VALUE;
         
         // Check if site has pipeline configuration
         Optional<PipelineConfig> pipelineConfig = Optional.empty();
@@ -405,17 +414,30 @@ public class SenderDispatchService {
             if (shouldRouteToPipeline) {
                 // Route to first pipeline stage instead of CP dispatch
                 routeToFirstPipelineStage(batch, firstStage);
+                processed += batch.size();
             } else {
                 // Normal CP dispatch
-                pushGroup(site, senderId, batch);
+                com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult batchResult = pushGroup(site, senderId, batch);
+                processed += batchResult.dispatchedCount();
+                if (batchResult.queueAtCapacity()) {
+                    anyQueueAtCapacity = true;
+                }
+                if (batchResult.queueAvailable() < minQueueAvailable) {
+                    minQueueAvailable = batchResult.queueAvailable();
+                }
+                // If queue is at capacity, stop trying to dispatch more
+                if (batchResult.queueAtCapacity() && batchResult.dispatchedCount() == 0) {
+                    break;
+                }
             }
             
-            processed += batch.size();
             remaining -= batch.size();
             if (batch.size() < requestedBatch) {
                 break;
             }
         }
-        return processed;
+        
+        int finalQueueAvailable = minQueueAvailable == Integer.MAX_VALUE ? 0 : minQueueAvailable;
+        return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(processed, anyQueueAtCapacity, finalQueueAvailable);
     }
 }

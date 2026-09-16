@@ -1,13 +1,13 @@
 import { CommonModule } from '@angular/common';
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  OnDestroy,
-  OnInit,
-  signal,
-  ViewChild,
+    ChangeDetectionStrategy,
+    Component,
+    computed,
+    inject,
+    OnDestroy,
+    OnInit,
+    signal,
+    ViewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,16 +17,16 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subscription, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
-  BackendService,
-  DashboardSenderSnapshot,
-  DashboardSiteSnapshot,
-  DashboardSnapshot,
-  IntegrationStatusSnapshot,
-  LimitsConfig,
-  StagingSessionDetail,
+    BackendService,
+    DashboardSenderSnapshot,
+    DashboardSiteSnapshot,
+    DashboardSnapshot,
+    IntegrationStatusSnapshot,
+    LimitsConfig,
+    StagingSessionDetail,
 } from '../api/backend.service';
-import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
+import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
@@ -41,10 +41,9 @@ import { SenderDetailPanelComponent, SenderDetailView } from './components/sende
 import { TimeSeriesChartComponent } from './components/time-series-chart.component';
 import { MetricCardDetailSidebarComponent } from './metric-card-detail-sidebar.component';
 import { SenderAlertSettingsComponent } from './sender-alert-settings.component';
-import { SiteDetailModalComponent } from './site-detail-modal.component';
-import { DashboardExportData, ExportService } from './services/export.service';
-import { AlertThresholdService, AlertLevel } from './services/alert-threshold.service';
+import { AlertLevel, AlertThresholdService } from './services/alert-threshold.service';
 import { DashboardStateService } from './services/dashboard-state.service';
+import { DashboardExportData, ExportService } from './services/export.service';
 import { MetricsHistoryService } from './services/metrics-history.service';
 import { PredictiveAnalyticsService } from './services/predictive-analytics.service';
 import { StateLegendTooltipComponent } from './state-legend-tooltip.component';
@@ -704,6 +703,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const active = this.activeMonitoringSession();
     if (!active) return false;
     return active.site === site && active.senderId === senderId;
+  }
+
+  /** Whether an active monitoring session exists (for dashboard header buttons) */
+  hasActiveSession(): boolean {
+    const session = this.stagingSession.currentSession();
+    if (!session) return false;
+    const status = (session.status || '').toUpperCase();
+    // Active = session is in STAGING, IN_PROGRESS, or similar non-terminal state
+    return status === 'STAGING' || status === 'IN_PROGRESS' || status === 'QUEUED' || status === 'PROCESSING';
   }
 
   resumeMonitoring() {

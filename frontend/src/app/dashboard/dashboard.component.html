@@ -63,16 +63,43 @@
             )
           }}
         </span>
-        <button
-          mat-flat-button
-          color="primary"
-          routerLink="/new"
-          class="new-request-btn"
-          aria-label="Create new request"
-        >
-          <mat-icon aria-hidden="true">add</mat-icon>
-          <span class="btn-label">New Request</span>
-        </button>
+        <!-- Session action buttons: Resume or New Session -->
+        <div class="session-actions">
+          <button
+            *ngIf="hasActiveSession()"
+            mat-flat-button
+            color="accent"
+            (click)="resumeMonitoring()"
+            class="resume-monitoring-btn"
+            aria-label="Resume monitoring active session"
+          >
+            <mat-icon aria-hidden="true">play_arrow</mat-icon>
+            <span class="btn-label">Resume Monitoring</span>
+          </button>
+          <button
+            *ngIf="hasActiveSession()"
+            mat-stroked-button
+            color="primary"
+            routerLink="/new"
+            [queryParams]="{ newSession: 'true' }"
+            class="new-session-btn"
+            aria-label="Create new session request"
+          >
+            <mat-icon aria-hidden="true">add_circle</mat-icon>
+            <span class="btn-label">New Session Request</span>
+          </button>
+          <button
+            *ngIf="!hasActiveSession()"
+            mat-flat-button
+            color="primary"
+            routerLink="/new"
+            class="start-monitor-btn"
+            aria-label="Start monitoring"
+          >
+            <mat-icon aria-hidden="true">play_arrow</mat-icon>
+            <span class="btn-label">Start Monitor</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -721,11 +748,7 @@
   <div class="empty-state-container">
     <mat-icon class="empty-icon">inbox</mat-icon>
     <h3>No Sites Configured</h3>
-    <p>You don't have any sender sites set up yet. Create your first request to get started.</p>
-    <button mat-raised-button color="primary" routerLink="/new">
-      <mat-icon>add_circle</mat-icon>
-      Create New Request
-    </button>
+    <p>You don't have any sender sites set up yet. Start monitoring to track payload dispatch.</p>
   </div>
 </ng-template>
 

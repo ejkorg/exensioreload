@@ -235,6 +235,10 @@ export interface StagePayloadResponseBody {
   message?: string | null;
   /** Records that already existed and were re-queued rather than freshly inserted */
   requeued?: number;
+  /** True when sender queue is at capacity and cannot accept more items immediately */
+  queueAtCapacity?: boolean;
+  /** Number of available slots in the sender queue (0 if at capacity) */
+  queueAvailable?: number;
 }
 
 export interface StageRecordView {

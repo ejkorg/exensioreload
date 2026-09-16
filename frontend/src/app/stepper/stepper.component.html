@@ -784,6 +784,20 @@
         </div>
       </header>
 
+      <!-- Queue Status Banner: shown when queue is at capacity -->
+      <section class="queue-status-banner glass-panel" *ngIf="queueAtCapacity()">
+        <div class="banner-content">
+          <app-glass-icon name="warning" class="banner-icon" style="color: #f59e0b"></app-glass-icon>
+          <div class="banner-text">
+            <h3 class="banner-title">Sender Queue at Capacity</h3>
+            <p class="banner-message">
+              The sender queue has reached its maximum capacity (600+ items). New files are being queued automatically
+              and will be processed as slots become available. Current available slots: <strong>{{ queueAvailableSlots() }}</strong>
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- All-duplicates-skipped state: shown when every file was a duplicate and user chose to skip -->
       <section *ngIf="allDuplicatesSkipped()" class="all-duplicates-panel glass-panel">
         <div class="all-dup-icon">
