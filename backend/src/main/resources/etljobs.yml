@@ -2,6 +2,24 @@
 # Links each pipeline to its DB site (dbconnections.yml) and ETL host (etlservers.yml)
 
 pipelines:
+  - pipelineKey: "JND-PROBE-TESEC"
+    site: "JND-AIZU-PROD"
+    server: "JND-AIZU-PROD"
+    socketPort: "64153"
+    configName: "64153_JND_PROBE_MONITOR_PARAM_STDF_sender.xml"
+    senderId: 81
+    rerunPeriodMinutes: 3
+    stages: 
+      - name: cp
+        type: CP
+        timeoutMinutes: 30
+      - name: pplog
+        type: PPLOG
+        timeoutMinutes: 25
+      - name: exensio
+        type: EXENSIO
+        dependsOn: [cp,pplog]
+        timeoutMinutes: 60
   - pipelineKey: "CEBU-CP-DEFAULT"
     site: "CEBU-PROD"              # References dbconnections.yml
     server: "CEBU-PROD"            # References etlservers.yml

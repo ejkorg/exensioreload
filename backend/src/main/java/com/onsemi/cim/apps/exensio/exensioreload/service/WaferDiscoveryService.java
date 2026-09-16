@@ -66,10 +66,24 @@ public class WaferDiscoveryService {
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         String wafer = rs.getString("WAFER_ID");
+                        String waferNum = rs.getString("WAFER_NUM");
                         if (wafer != null && !wafer.isBlank()) {
                             String cleaned = ExensioSqlUtilService.stripWaferPrefix(wafer);
                             if (!cleaned.isBlank()) {
-                                wafers.add(cleaned.trim().toUpperCase());
+                                String cleanUpper = cleaned.trim().toUpperCase();
+                                wafers.add(cleanUpper);
+                                String pad2 = ExensioPreCheckService.zeroPadWaferId(cleaned);
+                                if (!pad2.isBlank()) {
+                                    wafers.add(pad2.toUpperCase());
+                                }
+                            }
+                        }
+                        if (waferNum != null && !waferNum.isBlank()) {
+                            String numTrim = waferNum.trim();
+                            wafers.add(numTrim.toUpperCase());
+                            String pad2 = ExensioPreCheckService.zeroPadWaferId(numTrim);
+                            if (!pad2.isBlank()) {
+                                wafers.add(pad2.toUpperCase());
                             }
                         }
                     }
@@ -99,7 +113,22 @@ public class WaferDiscoveryService {
     private String buildDiscoveryQuery(List<String> lotIds, int pgcKey) {
         StringBuilder sb = new StringBuilder();
         
-        sb.append("SELECT DISTINCT UPPER(TRIM(w.wf_id)) AS WAFER_ID\n");
+        java.util.Set<String> expandedLotIds = new java.util.LinkedHashSet<>();
+        for (String lot : lotIds) {
+            if (lot == null || lot.isBlank()) continue;
+            String lTrim = lot.trim();
+            expandedLotIds.add(lTrim);
+            int dot = lTrim.indexOf('.');
+            int dash = lTrim.indexOf('-');
+            int under = lTrim.indexOf('_');
+            int cut = -1;
+            if (dot > 0) cut = dot;
+            if (dash > 0 && (cut == -1 || dash < cut)) cut = dash;
+            if (under > 0 && (cut == -1 || under < cut)) cut = under;
+            if (cut > 0) expandedLotIds.add(lTrim.substring(0, cut).trim());
+        }
+
+        sb.append("SELECT DISTINCT UPPER(TRIM(w.wf_id)) AS WAFER_ID, UPPER(TRIM(TO_CHAR(w.wf_num))) AS WAFER_NUM\n");
         sb.append("FROM op_log ol\n");
         sb.append("JOIN lot l ON l.lot_key = ol.lot_key\n");
         sb.append("LEFT JOIN wf_log wfl ON wfl.lg_key = ol.lg_key\n");
@@ -107,13 +136,15 @@ public class WaferDiscoveryService {
         sb.append("WHERE ol.pgc_key = ").append(pgcKey).append("\n");
         sb.append("  AND UPPER(TRIM(l.lot_id)) IN (");
         
-        for (int i = 0; i < lotIds.size(); i++) {
+        int i = 0;
+        for (String lot : expandedLotIds) {
             if (i > 0) sb.append(", ");
-            sb.append("'").append(escapeSql(lotIds.get(i))).append("'");
+            sb.append("'").append(escapeSql(lot)).append("'");
+            i++;
         }
         
         sb.append(")\n");
-        sb.append("  AND w.wf_id IS NOT NULL\n");
+        sb.append("  AND (w.wf_id IS NOT NULL OR w.wf_num IS NOT NULL)\n");
         sb.append("ORDER BY WAFER_ID");
         
         return sb.toString();

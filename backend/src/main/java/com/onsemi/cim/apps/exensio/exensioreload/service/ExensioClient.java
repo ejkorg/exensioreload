@@ -315,6 +315,12 @@ public class ExensioClient {
                     if (!cleanWafer.isBlank()) {
                         uniqueWaferVariants.add(baseLot + "_" + cleanWafer);
                         uniqueWaferVariants.add(baseLot + "-" + cleanWafer);
+                        String pad2 = ExensioPreCheckService.zeroPadWaferId(cleanWafer);
+                        if (!pad2.isBlank()) {
+                            uniqueWaferVariants.add(baseLot + "_" + pad2);
+                            uniqueWaferVariants.add(baseLot + "-" + pad2);
+                            uniqueWaferVariants.add(baseLot + pad2);
+                        }
                     }
                 }
             }
@@ -622,6 +628,16 @@ public class ExensioClient {
                                 String baseLot = lot.substring(0, cut);
                                 uniqueWaferVariants.add(baseLot + "_" + wafer);
                                 uniqueWaferVariants.add(baseLot + "-" + wafer);
+                                if (!clean.isBlank()) {
+                                    uniqueWaferVariants.add(baseLot + "_" + clean);
+                                    uniqueWaferVariants.add(baseLot + "-" + clean);
+                                    String pad2 = ExensioPreCheckService.zeroPadWaferId(clean);
+                                    if (!pad2.isBlank()) {
+                                        uniqueWaferVariants.add(baseLot + "_" + pad2);
+                                        uniqueWaferVariants.add(baseLot + "-" + pad2);
+                                        uniqueWaferVariants.add(baseLot + pad2);
+                                    }
+                                }
                             }
                         }
                     }

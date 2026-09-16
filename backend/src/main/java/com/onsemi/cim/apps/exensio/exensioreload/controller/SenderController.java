@@ -1384,8 +1384,28 @@ public class SenderController {
             // Map each lot to its result
             for (String lot : lots) {
                 boolean found = preCheckResponse.lotsFound().contains(lot);
+                String baseLot = null;
+                if (lot != null) {
+                    int dot = lot.indexOf('.');
+                    int dash = lot.indexOf('-');
+                    int under = lot.indexOf('_');
+                    int cut = -1;
+                    if (dot > 0) cut = dot;
+                    if (dash > 0 && (cut == -1 || dash < cut)) cut = dash;
+                    if (under > 0 && (cut == -1 || under < cut)) cut = under;
+                    if (cut > 0) baseLot = lot.substring(0, cut).trim();
+                }
+                if (!found && baseLot != null) {
+                    found = preCheckResponse.lotsFound().contains(baseLot);
+                }
                 String schema = found ? lotToSchema.get(lot) : null;
+                if (schema == null && found && baseLot != null) {
+                    schema = lotToSchema.get(baseLot);
+                }
                 List<String> resultWafers = found ? lotToWafers.getOrDefault(lot, Collections.emptyList()) : Collections.emptyList();
+                if (resultWafers.isEmpty() && found && baseLot != null) {
+                    resultWafers = lotToWafers.getOrDefault(baseLot, Collections.emptyList());
+                }
                 lotResults.put(lot, new LotVerificationResult(found, schema, resultWafers));
             }
 

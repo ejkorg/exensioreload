@@ -797,15 +797,61 @@ export class StepperComponent implements OnInit, OnDestroy {
             const cleanWafer = rawWafer.replace(/^[A-Za-z]+[-_]*/, '');
             const rowKey = `${lot}::${rawWafer}`;
 
-            const result = (lotsRes as Record<string, any>)[lot];
+            const dotIdx = lot.indexOf('.');
+            const dashIdx = lot.indexOf('-');
+            const underIdx = lot.indexOf('_');
+            let cutIdx = -1;
+            if (dotIdx > 0) cutIdx = dotIdx;
+            if (dashIdx > 0 && (cutIdx === -1 || dashIdx < cutIdx)) cutIdx = dashIdx;
+            if (underIdx > 0 && (cutIdx === -1 || underIdx < cutIdx)) cutIdx = underIdx;
+            const baseLot = cutIdx > 0 ? lot.substring(0, cutIdx).trim() : lot;
+
+            const result =
+              (lotsRes as Record<string, any>)[lot] ||
+              (baseLot !== lot ? (lotsRes as Record<string, any>)[baseLot] : undefined);
+
             if (!result || !result.found) {
               statusMap.set(rowKey, 'NOT FOUND');
             } else {
-              const foundWafers = (result.wafers || []).map((w: string) => w.toUpperCase());
+              const foundWafers = (result.wafers || []).map((w: string) => String(w || '').toUpperCase().trim());
+
+              const pad2Wafer = /^\d+$/.test(cleanWafer) ? cleanWafer.padStart(2, '0') : cleanWafer;
+              const numWafer = /^\d+$/.test(cleanWafer) ? String(parseInt(cleanWafer, 10)) : cleanWafer;
+
+              const expectedVariants = new Set<string>([
+                rawWafer.toUpperCase(),
+                cleanWafer.toUpperCase(),
+                pad2Wafer.toUpperCase(),
+                numWafer.toUpperCase(),
+                `${lot}_${pad2Wafer}`.toUpperCase(),
+                `${lot}-${pad2Wafer}`.toUpperCase(),
+                `${lot}_${cleanWafer}`.toUpperCase(),
+                `${lot}-${cleanWafer}`.toUpperCase(),
+                `${baseLot}_${pad2Wafer}`.toUpperCase(),
+                `${baseLot}-${pad2Wafer}`.toUpperCase(),
+                `${baseLot}_${cleanWafer}`.toUpperCase(),
+                `${baseLot}-${cleanWafer}`.toUpperCase(),
+                `${baseLot}_${numWafer}`.toUpperCase(),
+                `${baseLot}-${numWafer}`.toUpperCase(),
+                `${baseLot}${pad2Wafer}`.toUpperCase(),
+              ]);
+
               const hasWaferMatch =
                 foundWafers.length === 0 ||
-                (rawWafer && foundWafers.includes(rawWafer.toUpperCase())) ||
-                (cleanWafer && foundWafers.includes(cleanWafer.toUpperCase()));
+                foundWafers.some((fw: string) => {
+                  if (expectedVariants.has(fw)) return true;
+                  const fwClean = fw.replace(/^.*[-_]/, '');
+                  if (fwClean && (fwClean === pad2Wafer.toUpperCase() || fwClean === numWafer.toUpperCase() || fwClean === cleanWafer.toUpperCase())) {
+                    return true;
+                  }
+                  if (fw.endsWith('_' + pad2Wafer.toUpperCase()) || fw.endsWith('-' + pad2Wafer.toUpperCase())) {
+                    return true;
+                  }
+                  if (fw.endsWith('_' + cleanWafer.toUpperCase()) || fw.endsWith('-' + cleanWafer.toUpperCase())) {
+                    return true;
+                  }
+                  return false;
+                });
 
               if (hasWaferMatch) {
                 const schemaUpper = String(result.schema || '').toUpperCase();

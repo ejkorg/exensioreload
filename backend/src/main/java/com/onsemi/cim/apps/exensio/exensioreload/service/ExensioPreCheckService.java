@@ -448,9 +448,19 @@ public class ExensioPreCheckService {
             return null;
         }
 
-        String lotIdsJson = buildLotIdsJson(request.lotIds());
-        String waferIdsJson = (request.waferIds() != null && !request.waferIds().isEmpty()) 
-                ? buildLotIdsJson(request.waferIds()) 
+        Set<String> expandedLots = new LinkedHashSet<>();
+        if (request.lotIds() != null) {
+            for (String lot : request.lotIds()) {
+                if (lot == null || lot.isBlank()) continue;
+                expandedLots.add(lot.trim());
+                int cut = getLotCutIndex(lot.trim());
+                if (cut > 0) expandedLots.add(lot.trim().substring(0, cut).trim());
+            }
+        }
+        String lotIdsJson = buildLotIdsJson(new ArrayList<>(expandedLots));
+        List<String> expandedWafers = buildExpandedWaferVariants(request.lotIds(), request.waferIds());
+        String waferIdsJson = (!expandedWafers.isEmpty()) 
+                ? buildLotIdsJson(expandedWafers) 
                 : "[]";
         String yearMonth  = deriveEarliestYearMonth(request.blocks());
         int pgcKey = resolvePgcKey(request.dataType());
@@ -759,13 +769,23 @@ public class ExensioPreCheckService {
                 .map(r -> r.lotId().toUpperCase())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        List<String> lotsFound = submittedLotIds.stream()
-                .filter(l -> foundUpper.contains(l.toUpperCase()))
-                .collect(Collectors.toList());
-
-        List<String> lotsNotFound = submittedLotIds.stream()
-                .filter(l -> !foundUpper.contains(l.toUpperCase()))
-                .collect(Collectors.toList());
+        List<String> lotsFound = new ArrayList<>();
+        List<String> lotsNotFound = new ArrayList<>();
+        for (String subLot : submittedLotIds) {
+            String subUpper = subLot.toUpperCase();
+            boolean found = foundUpper.contains(subUpper);
+            if (!found) {
+                int cut = getLotCutIndex(subUpper);
+                if (cut > 0 && foundUpper.contains(subUpper.substring(0, cut).trim())) {
+                    found = true;
+                }
+            }
+            if (found) {
+                lotsFound.add(subLot);
+            } else {
+                lotsNotFound.add(subLot);
+            }
+        }
 
         // Only include rows that were actually found (exclude NOT FOUND sentinel rows)
         // For wafer-level queries, keep all wafer rows per lot
@@ -799,8 +819,16 @@ public class ExensioPreCheckService {
 
         StringBuilder sb = new StringBuilder();
 
-        String lotInList = lotIds.stream()
-                .map(l -> "'" + escapeSql(l.trim().toUpperCase(java.util.Locale.ROOT)) + "'")
+        Set<String> expandedLots = new LinkedHashSet<>();
+        for (String l : lotIds) {
+            if (l == null || l.isBlank()) continue;
+            String lTrim = l.trim().toUpperCase(java.util.Locale.ROOT);
+            expandedLots.add(lTrim);
+            int cut = getLotCutIndex(lTrim);
+            if (cut > 0) expandedLots.add(lTrim.substring(0, cut).trim());
+        }
+        String lotInList = expandedLots.stream()
+                .map(l -> "'" + escapeSql(l) + "'")
                 .collect(java.util.stream.Collectors.joining(", "));
 
         if (isWaferLevel && (waferIds == null || waferIds.isEmpty())) {
@@ -926,6 +954,13 @@ public class ExensioPreCheckService {
                     String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
                     // HTTP fallback doesn't return SCHEMANAME — use "FOUND" as sentinel
                     rows.add(new ExensioPreCheckRow(lotId, "FOUND", waferId));
+                    if (!rawWafer.isBlank() && !rawWafer.equalsIgnoreCase(waferId)) {
+                        rows.add(new ExensioPreCheckRow(lotId, "FOUND", rawWafer));
+                    }
+                    String pad2 = zeroPadWaferId(waferId);
+                    if (!pad2.isBlank() && !pad2.equalsIgnoreCase(waferId) && !pad2.equalsIgnoreCase(rawWafer)) {
+                        rows.add(new ExensioPreCheckRow(lotId, "FOUND", pad2));
+                    }
                 }
             }
 
@@ -933,13 +968,24 @@ public class ExensioPreCheckService {
                     .map(r -> r.lotId().toUpperCase())
                     .collect(Collectors.toSet());
 
-            List<String> lotsFound = submittedLotIds.stream()
-                    .filter(l -> foundUpper.contains(l.toUpperCase()))
-                    .collect(Collectors.toList());
+            List<String> lotsFound = new ArrayList<>();
+            List<String> lotsNotFound = new ArrayList<>();
 
-            List<String> lotsNotFound = submittedLotIds.stream()
-                    .filter(l -> !foundUpper.contains(l.toUpperCase()))
-                    .collect(Collectors.toList());
+            for (String subLot : submittedLotIds) {
+                String subUpper = subLot.toUpperCase();
+                boolean found = foundUpper.contains(subUpper);
+                if (!found) {
+                    int cut = getLotCutIndex(subUpper);
+                    if (cut > 0 && foundUpper.contains(subUpper.substring(0, cut).trim())) {
+                        found = true;
+                    }
+                }
+                if (found) {
+                    lotsFound.add(subLot);
+                } else {
+                    lotsNotFound.add(subLot);
+                }
+            }
 
             return new ExensioPreCheckResponse(lotsFound, lotsNotFound, rows, null);
 
@@ -1198,8 +1244,24 @@ public class ExensioPreCheckService {
 
                 // Track what was found in this schema
                 for (LotWaferFoundRow row : lookupResult.rows()) {
-                    foundLots.add(row.lotId().toUpperCase());
+                    String foundUpper = row.lotId().toUpperCase();
+                    foundLots.add(foundUpper);
                     foundBySchema.computeIfAbsent(schema, k -> new java.util.ArrayList<>()).add(row);
+                    // If this found lot is a base lot of any requested lot (or vice versa), correlate them
+                    for (String reqLot : request.lotIds()) {
+                        String reqUpper = reqLot.trim().toUpperCase();
+                        int cut = getLotCutIndex(reqUpper);
+                        if (cut > 0 && reqUpper.substring(0, cut).trim().equalsIgnoreCase(foundUpper)) {
+                            foundLots.add(reqUpper);
+                            foundBySchema.get(schema).add(new LotWaferFoundRow(reqLot, row.waferId(), row.waferKey(), row.pgKey()));
+                        } else if (foundUpper.contains(".") || foundUpper.contains("-") || foundUpper.contains("_")) {
+                            int fCut = getLotCutIndex(foundUpper);
+                            if (fCut > 0 && foundUpper.substring(0, fCut).trim().equalsIgnoreCase(reqUpper)) {
+                                foundLots.add(reqUpper);
+                                foundBySchema.get(schema).add(new LotWaferFoundRow(reqLot, row.waferId(), row.waferKey(), row.pgKey()));
+                            }
+                        }
+                    }
                 }
 
                 // Optional parametric data verification matching ExensioLoadMonitor
@@ -1311,6 +1373,21 @@ public class ExensioPreCheckService {
     }
 
     /**
+     * Finds the index to cut a lot name to its base lot (before dot, dash, or underscore).
+     */
+    static int getLotCutIndex(String lot) {
+        if (lot == null) return -1;
+        int dot = lot.indexOf('.');
+        int dash = lot.indexOf('-');
+        int under = lot.indexOf('_');
+        int cut = -1;
+        if (dot > 0) cut = dot;
+        if (dash > 0 && (cut == -1 || dash < cut)) cut = dash;
+        if (under > 0 && (cut == -1 || under < cut)) cut = under;
+        return cut;
+    }
+
+    /**
      * Builds rich wafer variants matching ExensioClient logic (clean, zero-padded, lot-prefixed, baseLot-prefixed).
      */
     static List<String> buildExpandedWaferVariants(List<String> lotIds, List<String> waferIds) {
@@ -1323,9 +1400,11 @@ public class ExensioPreCheckService {
             String wTrim = wafer.trim();
             variants.add(wTrim);
             String clean = ExensioSqlUtilService.stripWaferPrefix(wTrim);
+            String pad2 = "";
             if (!clean.isBlank()) {
                 variants.add(clean);
-                variants.add(zeroPadWaferId(clean));
+                pad2 = zeroPadWaferId(clean);
+                variants.add(pad2);
             }
             if (lotIds != null) {
                 for (String lot : lotIds) {
@@ -1336,14 +1415,26 @@ public class ExensioPreCheckService {
                     if (!clean.isBlank()) {
                         variants.add(lTrim + "_" + clean);
                         variants.add(lTrim + "-" + clean);
+                        if (!pad2.isBlank()) {
+                            variants.add(lTrim + "_" + pad2);
+                            variants.add(lTrim + "-" + pad2);
+                            variants.add(lTrim + pad2);
+                        }
                     }
-                    int dot = lTrim.indexOf('.');
-                    int dash = lTrim.indexOf('-');
-                    int cut = dot > 0 ? dot : dash;
+                    int cut = getLotCutIndex(lTrim);
                     if (cut > 0) {
-                        String baseLot = lTrim.substring(0, cut);
+                        String baseLot = lTrim.substring(0, cut).trim();
                         variants.add(baseLot + "_" + wTrim);
                         variants.add(baseLot + "-" + wTrim);
+                        if (!clean.isBlank()) {
+                            variants.add(baseLot + "_" + clean);
+                            variants.add(baseLot + "-" + clean);
+                            if (!pad2.isBlank()) {
+                                variants.add(baseLot + "_" + pad2);
+                                variants.add(baseLot + "-" + pad2);
+                                variants.add(baseLot + pad2);
+                            }
+                        }
                     }
                 }
             }
@@ -1362,7 +1453,17 @@ public class ExensioPreCheckService {
         body.put("pgc_key", pgcKey);
 
         com.fasterxml.jackson.databind.node.ArrayNode lotIdsNode = body.putArray("lot_ids");
+        Set<String> expandedLots = new LinkedHashSet<>();
         for (String lot : lotIds) {
+            if (lot == null || lot.isBlank()) continue;
+            String lTrim = lot.trim();
+            expandedLots.add(lTrim);
+            int cut = getLotCutIndex(lTrim);
+            if (cut > 0) {
+                expandedLots.add(lTrim.substring(0, cut).trim());
+            }
+        }
+        for (String lot : expandedLots) {
             lotIdsNode.add(lot);
         }
 
@@ -1443,6 +1544,13 @@ public class ExensioPreCheckService {
                             long waferKey = waferNode.path("wafer_key").asLong(0);
                             long pgKey = waferNode.path("pg_key").asLong(0);
                             rows.add(new LotWaferFoundRow(lotId, waferId, waferKey, pgKey));
+                            if (!rawWafer.isBlank() && !rawWafer.equalsIgnoreCase(waferId)) {
+                                rows.add(new LotWaferFoundRow(lotId, rawWafer, waferKey, pgKey));
+                            }
+                            String pad2 = zeroPadWaferId(waferId);
+                            if (!pad2.isBlank() && !pad2.equalsIgnoreCase(waferId) && !pad2.equalsIgnoreCase(rawWafer)) {
+                                rows.add(new LotWaferFoundRow(lotId, pad2, waferKey, pgKey));
+                            }
                         }
                     } else {
                         // Lot found but no wafers (e.g., lot-level pgc_key)

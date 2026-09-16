@@ -123,10 +123,27 @@ public class ExensioRawSqlService {
         sb.append("  LEFT JOIN wafer   w   ON w.wf_key   = wfl.wf_key\n");
 
         sb.append("  WHERE ol.pgc_key = ").append(pgcKey).append("\n");
+        Set<String> expandedLotIds = new java.util.LinkedHashSet<>();
+        for (String lot : lotIds) {
+            if (lot == null || lot.isBlank()) continue;
+            String lTrim = lot.trim();
+            expandedLotIds.add(lTrim.toUpperCase(java.util.Locale.ROOT));
+            int dot = lTrim.indexOf('.');
+            int dash = lTrim.indexOf('-');
+            int under = lTrim.indexOf('_');
+            int cut = -1;
+            if (dot > 0) cut = dot;
+            if (dash > 0 && (cut == -1 || dash < cut)) cut = dash;
+            if (under > 0 && (cut == -1 || under < cut)) cut = under;
+            if (cut > 0) expandedLotIds.add(lTrim.substring(0, cut).trim().toUpperCase(java.util.Locale.ROOT));
+        }
+
         sb.append("    AND UPPER(TRIM(l.lot_id)) IN (");
-        for (int i = 0; i < lotIds.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append("'").append(escapeSql(lotIds.get(i).trim().toUpperCase(java.util.Locale.ROOT))).append("'");
+        int lIdx = 0;
+        for (String lot : expandedLotIds) {
+            if (lIdx > 0) sb.append(", ");
+            sb.append("'").append(escapeSql(lot)).append("'");
+            lIdx++;
         }
         sb.append(")\n");
 
@@ -134,6 +151,12 @@ public class ExensioRawSqlService {
         if (isWaferLevel && waferIds != null && !waferIds.isEmpty()) {
             Set<String> expandedWaferIds = new java.util.LinkedHashSet<>();
             Set<Integer> waferNums = new java.util.LinkedHashSet<>();
+            List<String> richVariants = ExensioPreCheckService.buildExpandedWaferVariants(lotIds, waferIds);
+            for (String v : richVariants) {
+                if (v != null && !v.isBlank()) {
+                    expandedWaferIds.add(v.trim().toUpperCase(java.util.Locale.ROOT));
+                }
+            }
             for (String w : waferIds) {
                 if (w != null && !w.isBlank()) {
                     String clean = ExensioSqlUtilService.stripWaferPrefix(w);
