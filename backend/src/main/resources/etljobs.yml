@@ -22,12 +22,12 @@ pipelines:
         dependsOn: [pplog]
         timeoutMinutes: 60
 
-  - pipelineKey: "CZ4-CZ2-DEFAULT"
+  - pipelineKey: "CZ4-CZ2-KLARF-DEFECT-Si"
     site: "CZ4-CZ2-PROD"
     server: "CZ4-CZ2-PROD"
-    socketPort: 60170
-    configName: "svcCZ4MFGP"
-    senderId: 1
+    socketPort: 64566
+    configName: "64566_CZ2_Defect_Klarf18_Si_Sender.xml"
+    senderId: 581
     rerunPeriodMinutes: 0
     stages:
       - name: cp
@@ -38,7 +38,7 @@ pipelines:
         timeoutMinutes: 25
       - name: exensio
         type: EXENSIO
-        dependsOn: [cp]
+        dependsOn: [cp,pplog]
         timeoutMinutes: 60
 
   - pipelineKey: "CNK-ONSC-DEFAULT"
