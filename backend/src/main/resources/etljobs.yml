@@ -28,7 +28,7 @@ pipelines:
     socketPort: 64566
     configName: "64566_CZ2_Defect_Klarf18_Si_Sender.xml"
     senderId: 581
-    rerunPeriodMinutes: 0
+    rerunPeriodMinutes: 3
     stages:
       - name: cp
         type: CP

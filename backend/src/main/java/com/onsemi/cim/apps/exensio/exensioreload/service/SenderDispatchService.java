@@ -37,13 +37,28 @@ public class SenderDispatchService {
     private final RefDbProperties properties;
     private final StageSessionService stageSessionService;
     private final PipelineConfigCache pipelineConfigCache;
+    private EtlSshTriggerService etlSshTriggerService;
+    private com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigLoader pipelineConfigLoader;
 
     public SenderDispatchService(RefDbService refDbService, ExternalDbConfig externalDbConfig, RefDbProperties properties, StageSessionService stageSessionService, PipelineConfigCache pipelineConfigCache) {
+        this(refDbService, externalDbConfig, properties, stageSessionService, pipelineConfigCache, null, null);
+    }
+
+    public SenderDispatchService(
+            RefDbService refDbService,
+            ExternalDbConfig externalDbConfig,
+            RefDbProperties properties,
+            StageSessionService stageSessionService,
+            PipelineConfigCache pipelineConfigCache,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) EtlSshTriggerService etlSshTriggerService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigLoader pipelineConfigLoader) {
         this.refDbService = refDbService;
         this.externalDbConfig = externalDbConfig;
         this.properties = properties;
         this.stageSessionService = stageSessionService;
         this.pipelineConfigCache = pipelineConfigCache;
+        this.etlSshTriggerService = etlSshTriggerService;
+        this.pipelineConfigLoader = pipelineConfigLoader;
     }
 
     @PostConstruct
@@ -225,6 +240,66 @@ public class SenderDispatchService {
                 refDbService.markEnqueuedRecords(
                         records.stream().filter(r -> success.contains(r.id())).toList());
             }
+
+            // Automatically trigger the ETL crontab execution now that items are inserted into DTP_SENDER_QUEUE_ITEM
+            triggerEtlAfterQueueInsert(site, senderId, dispatchedRecords);
+        }
+    }
+
+    /**
+     * Automatically triggers the ETL cronjob on the server after items are physically inserted
+     * into DTP_SENDER_QUEUE_ITEM. The Command Processor is launched to consume the pending queue.
+     */
+    private void triggerEtlAfterQueueInsert(String site, int senderId, List<StageRecord> dispatchedRecords) {
+        if (etlSshTriggerService == null) {
+            return;
+        }
+        try {
+            // 1. Resolve socket port from DTP_SENDER (or fallback YAML)
+            Integer port = etlSshTriggerService.resolveSenderPort(site, senderId, null);
+
+            // 2. Check if a pipeline matches this site/sender/port
+            PipelineConfig targetPipeline = null;
+            if (pipelineConfigLoader != null) {
+                List<PipelineConfig> sitePipelines = pipelineConfigLoader.getPipelinesForSite(site);
+                if (sitePipelines != null && !sitePipelines.isEmpty()) {
+                    for (PipelineConfig p : sitePipelines) {
+                        if (p.senderId() != null && p.senderId() == senderId) {
+                            targetPipeline = p;
+                            break;
+                        }
+                    }
+                    if (targetPipeline == null && port != null) {
+                        for (PipelineConfig p : sitePipelines) {
+                            if (p.socketPort() != null && java.util.Objects.equals(p.socketPort(), port)) {
+                                targetPipeline = p;
+                                break;
+                            }
+                        }
+                    }
+                    if (targetPipeline == null) {
+                        targetPipeline = sitePipelines.get(0);
+                    }
+                }
+            }
+
+            if (targetPipeline != null) {
+                log.info("Auto-triggering ETL cronjob for pipeline '{}' (site={}, senderId={}, port={}) after inserting items into DTP_SENDER_QUEUE_ITEM",
+                        targetPipeline.pipelineKey(), site, senderId, port);
+                etlSshTriggerService.triggerIfQueued(targetPipeline.pipelineKey(), "auto-dispatch", senderId, port);
+            } else if (port != null) {
+                // If no named pipeline in etljobs.yml, trigger crontab by port directly
+                log.info("Auto-triggering ETL cronjob by port {} (site={}, senderId={}) after inserting items into DTP_SENDER_QUEUE_ITEM",
+                        port, site, senderId);
+                String reqId = (dispatchedRecords != null && !dispatchedRecords.isEmpty())
+                        ? dispatchedRecords.get(0).requestId()
+                        : ("auto-dispatch-" + System.currentTimeMillis());
+                etlSshTriggerService.triggerByPort(port, site, null, reqId, "auto-dispatch");
+            } else {
+                log.debug("No pipeline or port resolved for site {} senderId {} - skipping automatic ETL trigger", site, senderId);
+            }
+        } catch (Exception ex) {
+            log.warn("Automatic ETL trigger failed after queue insert for site {} senderId {}: {}", site, senderId, ex.getMessage());
         }
     }
 
