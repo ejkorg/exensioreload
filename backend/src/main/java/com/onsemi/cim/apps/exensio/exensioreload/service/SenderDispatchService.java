@@ -185,7 +185,7 @@ public class SenderDispatchService {
             }
 
             if (toDispatch.isEmpty()) {
-                return;
+                return new com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult(0, queueAtCapacity, queueAvailable);
             }
 
             String insertSql;
@@ -418,7 +418,7 @@ public class SenderDispatchService {
             } else {
                 // Normal CP dispatch
                 com.onsemi.cim.apps.exensio.exensioreload.dto.DispatchResult batchResult = pushGroup(site, senderId, batch);
-                processed += batchResult.dispatchedCount();
+                processed += batchResult.dispatched();
                 if (batchResult.queueAtCapacity()) {
                     anyQueueAtCapacity = true;
                 }
@@ -426,7 +426,7 @@ public class SenderDispatchService {
                     minQueueAvailable = batchResult.queueAvailable();
                 }
                 // If queue is at capacity, stop trying to dispatch more
-                if (batchResult.queueAtCapacity() && batchResult.dispatchedCount() == 0) {
+                if (batchResult.queueAtCapacity() && batchResult.dispatched() == 0) {
                     break;
                 }
             }

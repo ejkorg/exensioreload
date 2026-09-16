@@ -105,7 +105,7 @@ public class DashboardBulkController {
             boolean senderOk = true;
             for (String site : activeSites) {
                 try {
-                    int dispatched = senderDispatchService.dispatchSender(site, senderId);
+                    int dispatched = senderDispatchService.dispatchSender(site, senderId).dispatched();
                     log.info("[BulkResume] sender={} site={} dispatched={}", senderId, site, dispatched);
                 } catch (Exception ex) {
                     log.error("[BulkResume] failed sender={} site={}: {}", senderId, site, ex.getMessage(), ex);

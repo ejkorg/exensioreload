@@ -423,7 +423,7 @@ public class SenderController {
         if (resolvedSender == null || resolvedSender <= 0) {
             return ResponseEntity.badRequest().build();
         }
-        int dispatched = senderDispatchService.dispatchSender(request.site(), resolvedSender, request.limit());
+        int dispatched = senderDispatchService.dispatchSender(request.site(), resolvedSender, request.limit()).dispatched();
         return ResponseEntity.ok(new DispatchResponse(request.site(), resolvedSender, dispatched));
     }
 
@@ -903,7 +903,7 @@ public class SenderController {
                         lotsParam != null ? lotsParam.size() : 0,
                         wafersParam != null ? wafersParam.size() : 0);
             }
-            return ResponseEntity.ok(new StagePayloadResponse(0, 0, java.util.List.of(), 0, false, 0, false, 0));
+            return ResponseEntity.ok(new StagePayloadResponse(0, 0, java.util.List.of(), 0, false, 0, false, 0, false, 0));
         }
 
         boolean truncated = totalAvailable > 0 && payloads.size() < totalAvailable;
@@ -927,7 +927,7 @@ public class SenderController {
         );
         StagePayloadResponse partial = stagePayloads(id, proxyRequest).getBody();
         if (partial == null) {
-            return ResponseEntity.ok(new StagePayloadResponse(0, 0, java.util.List.of(), 0, false, 0, false, 0));
+            return ResponseEntity.ok(new StagePayloadResponse(0, 0, java.util.List.of(), 0, false, 0, false, 0, false, 0));
         }
 
         // Send email notification if user email is provided
@@ -961,7 +961,9 @@ public class SenderController {
                 partial.requiresConfirmation(),
                 totalAvailable,
                 truncated,
-                partial.requeued()
+                partial.requeued(),
+                partial.queueAtCapacity(),
+                partial.queueAvailable()
         ));
     }
 
@@ -1201,7 +1203,7 @@ public class SenderController {
         }
         List<StagePayloadRequest.Payload> payloads = request.payloads();
         if (payloads == null || payloads.isEmpty()) {
-            return ResponseEntity.ok(new StagePayloadResponse(0, 0, List.<DuplicatePayloadView>of(), 0, false, 0, false, 0));
+            return ResponseEntity.ok(new StagePayloadResponse(0, 0, List.<DuplicatePayloadView>of(), 0, false, 0, false, 0, false, 0));
         }
         List<PayloadCandidate> candidates = payloads.stream()
                 .map(p -> new PayloadCandidate(p.metadataId(), p.dataId(), p.lot(), p.wafer(), p.filename(), parseIsoInstant(p.endTime()), request.dataType(), request.testPhase(), p.device()))
@@ -1271,7 +1273,7 @@ public class SenderController {
                 }).toList();
             }
         }
-        int dispatched = dispatchResult != null ? dispatchResult.dispatchedCount() : 0;
+        int dispatched = dispatchResult != null ? dispatchResult.dispatched() : 0;
         boolean queueAtCapacity = dispatchResult != null && dispatchResult.queueAtCapacity();
         int queueAvailable = dispatchResult != null ? dispatchResult.queueAvailable() : 0;
         StagePayloadResponse response = new StagePayloadResponse(result.stagedCount(), duplicateViews.size(), duplicateViews, dispatched, requiresConfirmation, candidates.size(), false, result.requeuedCount(), queueAtCapacity, queueAvailable);
