@@ -412,13 +412,18 @@
       <header class="step-header-compact">
         <div class="header-row">
           <h2>Discovery <span class="accent">Preview</span></h2>
-          <span class="found-count-badge">{{ previewTotal() | number }} found</span>
+          <span class="found-count-badge">{{ foundCountBadgeText() }}</span>
         </div>
       </header>
 
       <div class="preview-summary-strip" *ngIf="previewTotal() > 0">
-        <span class="summary-pill">Loaded in preview: {{ previewRows().length | number }}</span>
-        <span class="summary-pill subtle" *ngIf="previewTotal() > previewRows().length">
+        <span class="summary-pill" *ngIf="isFilterActive()">
+          Showing {{ effectivePreviewTotal() | number }} of {{ previewTotal() | number }} loaded rows
+        </span>
+        <span class="summary-pill" *ngIf="!isFilterActive()">
+          Loaded in preview: {{ previewRows().length | number }}
+        </span>
+        <span class="summary-pill subtle" *ngIf="!isFilterActive() && previewTotal() > previewRows().length">
           {{ previewTotal() | number }} total match your filters. Stage all will process every matching file.
         </span>
       </div>
@@ -470,8 +475,8 @@
                 *ngIf="hasMultiplePreviewPages()"
                 class="toolbar-btn"
                 (click)="selectAllPages()"
-                [attr.aria-label]="'Use stage all for ' + previewTotal() + ' discovered items'"
-                title="Use Stage All for {{ previewTotal() | number }} discovered items"
+                [attr.aria-label]="'Select all ' + effectivePreviewTotal() + ' matching items'"
+                title="Select all {{ effectivePreviewTotal() | number }} matching items across all pages"
               >
                 <app-glass-icon name="done_all" [size]="18"></app-glass-icon>
               </button>
@@ -682,8 +687,8 @@
         </div>
 
         <app-glass-pagination
-          *ngIf="!previewLoading() && previewTotal() > 0"
-          [length]="previewTotal()"
+          *ngIf="!previewLoading() && effectivePreviewTotal() > 0"
+          [length]="effectivePreviewTotal()"
           [pageSize]="pageSize()"
           [pageIndex]="pageIndex()"
           [pageSizeOptions]="pageSizeOptions()"

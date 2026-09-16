@@ -836,11 +836,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.exensioStatusFilter.set(filter);
     this.pageIndex.set(0);
 
-    if (filter === 'missing') {
-      const missingRows = this.filteredPreviewRows();
+    if (filter === 'missing' || filter === 'existing') {
+      const matchingRows = this.filteredPreviewRows();
       const newSelected = new Set<string>();
       const newLookup = new Map<string, DiscoveryPreviewRow>();
-      for (const row of missingRows) {
+      for (const row of matchingRows) {
         const key = this.getRowKey(row);
         newSelected.add(key);
         newLookup.set(key, row);
@@ -941,6 +941,29 @@ export class StepperComponent implements OnInit, OnDestroy {
   });
 
   previewTotal = signal(0);
+
+  isFilterActive = computed(() => {
+    const hasStatus = this.exensioStatusFilter() !== 'all';
+    const hasDevice = this.previewDeviceFilter().length > 0;
+    const hasFileType = this.selectedFileType() !== 'ALL';
+    const hasSearch = !!(this.filterText() && this.filterText().trim());
+    return hasStatus || hasDevice || hasFileType || hasSearch;
+  });
+
+  effectivePreviewTotal = computed(() => {
+    if (this.allPreviewRows().length > 0 || this.isFilterActive()) {
+      return this.filteredPreviewRows().length;
+    }
+    return this.previewTotal();
+  });
+
+  foundCountBadgeText = computed(() => {
+    if (this.isFilterActive()) {
+      return `${this.effectivePreviewTotal().toLocaleString()} matching (${this.previewTotal().toLocaleString()} total)`;
+    }
+    return `${this.previewTotal().toLocaleString()} found`;
+  });
+
   selectedRows = signal<Set<string>>(new Set());
   selectedRowLookup = signal<Map<string, DiscoveryPreviewRow>>(new Map());
 
@@ -2563,6 +2586,20 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   selectAllPages() {
+    if (this.allPreviewRows().length > 0 || this.filteredPreviewRows().length > 0) {
+      const rows = this.filteredPreviewRows();
+      const next = new Set<string>();
+      const lookup = new Map<string, DiscoveryPreviewRow>();
+      rows.forEach((r: DiscoveryPreviewRow) => {
+        const key = this.getRowKey(r);
+        next.add(key);
+        lookup.set(key, r);
+      });
+      this.selectedRows.set(next);
+      this.selectedRowLookup.set(lookup);
+      this.toast.info(`Selected all ${rows.length.toLocaleString()} matching rows across all pages`, 4000);
+      return;
+    }
     this.setStageExecutionMode('all');
     this.toast.info('Use Stage All Matching to include every discovered file across all pages.', 5000);
   }
@@ -2574,11 +2611,10 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   // Navigation methods
   totalPages = computed(() => {
-    // When paginating client-side, base page count on filtered rows
-    const total = this.allPreviewRows().length > 0 ? this.filteredPreviewRows().length : this.previewTotal();
+    const total = this.effectivePreviewTotal();
     return Math.max(1, Math.ceil(total / this.pageSize()));
   });
-  hasMultiplePreviewPages = computed(() => this.previewTotal() > this.pageSize());
+  hasMultiplePreviewPages = computed(() => this.effectivePreviewTotal() > this.pageSize());
 
   backToConfig() {
     // Clear all loaded preview data so a fresh discovery runs next time

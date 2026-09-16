@@ -1,0 +1,325 @@
+# Exensio Reload — Implementation Walkthrough
+
+## Part 1: Exensio Parametric Data Confirmation Flow
+
+*(Summarized from previous phase)*
+- Parametric verification via Results API (`POST /v1/result/results`).
+- Composite wafer matching and fallback for defect datasets.
+- Raw SQL 502 fix by switching from `REGEXP_LIKE` to SQL `LIKE` with 27-character prefix matching (`exensio.raw-file-match-chars: 27`).
+
+---
+
+## Part 2: Clean 3-Tier Pipeline Architecture & ETL Crontab Trigger System
+
+### Architecture Overview
+
+We have decoupled the system into a **3-Tier Clean Architecture**:
+
+1. **Database Connections Tier (`dbconnections.yml`)**: Strictly focused on database topology (Oracle/PostgreSQL, host, port, credentials, Hikari pool).
+2. **ETL Host Infrastructure Tier (`etlservers.yml`)**: Strictly focused on physical/virtual SSH server connectivity (host, `sshPort: 22`, user, password, timeout).
+3. **Pipeline & Job Orchestration Tier (`etljobs.yml`)**: The single source of truth for pipelines. Each pipeline binds:
+   - Target database `site` (references `dbconnections.yml`)
+   - Target ETL `server` (references `etlservers.yml`)
+   - DataPort CP `socketPort` (e.g. 60170) and `configName` (e.g. `CPYQSP`)
+   - `rerunPeriodMinutes` (optional rerun delay: 0 = single run, >0 = rerun after N minutes)
+   - Stage progression sequence (`CP` $\rightarrow$ `PPLOG` $\rightarrow$ `EXENSIO`, timeouts, and dependencies)
+
+```mermaid
+flowchart TD
+    subgraph Tier1 ["1. Database Tier: dbconnections.yml"]
+        DB["Site Database Connections\n(host, port, credentials, Hikari)"]
+    end
+
+    subgraph Tier2 ["2. Infrastructure Tier: etlservers.yml"]
+        SRV["ETL SSH Servers\n(host, sshPort: 22, user, password, timeout)"]
+    end
+
+    subgraph Tier3 ["3. Pipeline & Job Tier: etljobs.yml"]
+        PIPE["Pipelines & Jobs\n- pipelineKey: 'CEBU-CP-DEFAULT'\n- site: 'CEBU-PROD' -> dbconnections\n- server: 'CEBU-PROD' -> etlservers\n- socketPort: 60170 & configName: 'CPYQSP'\n- rerunPeriodMinutes: 5\n- stages: [CP, PPLOG, EXENSIO]"]
+    end
+
+    subgraph Lifecycle ["4. Execution & Monitoring Lifecycle"]
+        DISC["1. SSH Crontab Discovery\n(crontab -l | grep socketPort + configName)"]
+        TRIG["2. Trigger & Rerun Timer\n(Run command once + optional rerun delay)"]
+        CP_STG["3. CP Stage (Elasticsearch Log Verification)"]
+        PP_STG["4. PPLOG Stage (refdb.pp_log Verification)"]
+        EX_STG["5. EXENSIO Stage (Exensio API Verification)"]
+        DONE["6. COMPLETE / DONE"]
+    end
+
+    PIPE -->|Resolves DB config| DB
+    PIPE -->|Resolves SSH config| SRV
+    PIPE --> DISC
+    DISC --> TRIG
+    TRIG --> CP_STG --> PP_STG --> EX_STG --> DONE
+```
+
+---
+
+### Changes Implemented
+
+#### 1. Pipeline Definitions & Cache
+- **[etljobs.yml](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/etljobs.yml)**:
+  - Defined real production pipelines (`CEBU-CP-DEFAULT`, `CZ4-CZ2-DEFAULT`, `CNK-ONSC-DEFAULT`, `EFK-MT-DEFAULT`, `SUZHOU-DEFAULT`).
+- **[PipelineConfig.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfig.java)**:
+  - Updated record to include `pipelineKey`, `site`, `server`, `socketPort`, `configName`, and `rerunPeriodMinutes`.
+  - Added backward-compatible constructors so existing stage tests continue to pass.
+- **[PipelineConfigLoader.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigLoader.java)**:
+  - Parses `etljobs.yml` at startup with Jackson YAML parser.
+  - Retains fallback to `dbconnections.yml` for any site not yet migrated to `etljobs.yml`.
+  - Added `getAllPipelines()`, `getPipeline(pipelineKey)`, and `getPipelinesForSite(site)`.
+- **[PipelineConfigCache.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigCache.java)**:
+  - Added methods to query all pipelines and query by pipelineKey or site.
+
+#### 2. ETL Server Infrastructure & Ports
+- **[etlservers.yml](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/resources/etlservers.yml)**:
+  - Resolved the SSH vs. socket port distinction across all 16 servers:
+    - `sshPort: 22` for SSH connection.
+    - `socketPort: 60170` for the DataPort Command Processor process.
+- **[EtlServerConfig.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlServerConfig.java)** & **[EtlServerConfigLoader.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlServerConfigLoader.java)**:
+  - Added `getSshPort()` (defaults to 22) and `getSocketPort()` (defaults to 60170).
+  - Added `getConfigByName(String name)`.
+
+#### 3. Crontab Extraction & Precision Matching
+- **[CrontabExtractor.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabExtractor.java)**:
+  - Uses `config.getSshPort()` for SSH connection.
+  - Preserves original crontab line in `CrontabJob.rawLine`.
+- **[CrontabJobMatcher.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabJobMatcher.java)**:
+  - Word-boundary aware port regex matching (`(?<![0-9])PORT(?![0-9])`) preventing false positives (e.g. 600 matching 60170).
+  - Config name matching (case-insensitive substring/token matching).
+  - Matches BOTH port and configName when both are provided.
+
+#### 4. Trigger Service, Queue-Aware Rerun Scheduler & DTOs
+- **[EtlTriggerProperties.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/config/EtlTriggerProperties.java)**:
+  - Added `dryRun` flag (`etl.trigger.dry-run`), `rerunPoolSize` (`etl.trigger.rerun-pool-size`), and `maxRerunIterations` (`etl.trigger.max-rerun-iterations: 10`).
+- **[RefDbService.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/RefDbService.java)**:
+  - Added `countQueuedForSite(site)` to query records in `QUEUED_FOR_CP` / `STAGED` status.
+- **[CrontabDiscoveryResult.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/dto/CrontabDiscoveryResult.java)**:
+  - Structured DTO for reporting crontab inspection results (server, host, sshPort, socketPort, configName, matchedCommand, rawLine, schedule).
+- **[TriggerResult.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/TriggerResult.java)**:
+  - Added `command` and `rerunMinutes` fields.
+- **[EtlSshTriggerService.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/EtlSshTriggerService.java)**:
+  - **Queue Depth Inspection (`getSenderQueueCount`)**:
+    - Queries `DATAPORT_OWNER.DTP_SENDER_QUEUE_ITEM` in the external site database strictly for that `senderId` (`WHERE id_sender = ?`), with automatic fallback to unqualified table if needed.
+    - Falls back to querying local `SENDER_STAGE` records in `QUEUED_FOR_CP` / `STAGED` status strictly for that `senderId` (`WHERE UPPER(site) = ? AND sender_id = ? AND status IN ('QUEUED_FOR_CP', 'STAGED')`) if the external database is unreachable or during local testing.
+  - **Queue-Aware Rerun**: Scheduled rerun now verifies queue depth specifically for that pipeline's `senderId` before executing. If `queueCount == 0`, the rerun is **skipped** (not blindly fired). If `queueCount > 0`, the cronjob is executed, and subsequent checks continue up to `maxRerunIterations`.
+  - Added `triggerIfQueued(identifier, userId)`: only triggers cronjob when items actually remain in queue for that pipeline.
+  - Added `getQueueStatus(identifier)`: returns `pipelineKey`, `site`, `senderId`, `queuedItemCount`, and `hasQueuedItems`.
+  - Fixed `executeSshCommand` to connect on `config.getSshPort()`.
+
+#### 5. REST Endpoints & Dashboard Integration
+- **[EtlTriggerController.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/EtlTriggerController.java)**:
+  - `GET /api/etl-trigger/discover?identifier=...`: Live crontab inspection without execution.
+  - `GET /api/etl-trigger/pipelines`: List all loaded pipelines with socketPort, configName, server, and stages.
+  - `POST /api/etl-trigger/trigger-pipeline`: Trigger a pipeline by key with optional rerun period override.
+  - `GET /api/etl-trigger/queue-status?identifier=...`: Check queue depth for a pipeline or site.
+  - `POST /api/etl-trigger/trigger-if-queued?identifier=...`: Queue-guarded trigger (skips if queue is empty).
+  - `GET /api/etl-trigger/status`: Service status with `dryRun`, `rerunPoolSize`, and loaded pipeline count.
+- **[DashboardController.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/DashboardController.java)**:
+  - `GET /api/dashboard/pipelines`: Provides the UI with active pipeline definitions and stage metadata.
+
+#### 6. Unit Tests
+- **[PipelineConfigLoaderTest.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/test/java/com/onsemi/cim/apps/exensio/exensioreload/pipeline/PipelineConfigLoaderTest.java)**:
+  - Tests loading `etljobs.yml`, stage parsing, site lookups, fallback to `dbconnections.yml`, and cycle detection.
+- **[CrontabJobMatcherTest.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/test/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabJobMatcherTest.java)**:
+  - Added tests for word-boundary matching (600 does not match 60170), exact port + configName matching, and configName-only matching.
+- **[EtlSshTriggerServiceTest.java](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/test/java/com/onsemi/cim/apps/exensio/exensioreload/service/EtlSshTriggerServiceTest.java)**:
+  - Tests `triggerIfQueued` skipping when queue is empty.
+  - Tests execution when queue has pending items.
+  - Tests `getQueueStatus`.
+
+---
+
+## API Quick Reference
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/etl-trigger/discover?identifier=CEBU-CP-DEFAULT` | `GET` | Inspect remote crontab on ETL server without executing |
+| `/api/etl-trigger/pipelines` | `GET` | List all configured pipelines from `etljobs.yml` |
+| `/api/etl-trigger/queue-status?identifier=CEBU-CP-DEFAULT` | `GET` | Check sender queue table depth for pipeline/site |
+| `/api/etl-trigger/trigger-if-queued?identifier=CEBU-CP-DEFAULT` | `POST` | Queue-aware trigger: only runs cron if queue has items |
+| `/api/etl-trigger/trigger-pipeline?pipelineKey=CEBU-CP-DEFAULT&rerunPeriodMinutes=5` | `POST` | Trigger pipeline execution via SSH with queue-aware rerun |
+| `/api/etl-trigger/status` | `GET` | Health, dryRun status, server count, and pipeline count |
+| `/api/dashboard/pipelines` | `GET` | Dashboard pipeline configuration snapshot |
+| `/api/senders/info?senderId=...` | `GET` | Fetch sender name, port, and source from `dtp_sender` with YAML fallback |
+| `/api/etl-trigger/discover-by-port?port=...` | `GET` | Discover remote crontab setup matching ONLY the unique port |
+| `/api/etl-trigger/trigger-by-port?port=...` | `POST` | Execute crontab setup matching ONLY the unique port via SSH |
+
+---
+
+## Part 3: Dynamic Port Auto-Resolution from DTP_SENDER & Port-Only Crontab Grep/Execution
+
+### 1. Requirements Addressed
+1. **Dynamic Port and Sender Name from DB**:
+   - In Stepper Step 1, when a sender is chosen or auto-selected, the system queries table `DTP_SENDER` in the external site DB connected during discovery (linked via `id = ?`).
+   - Retrieves `name` and `port` directly from the database.
+   - Uses `etljobs.yml` / `etlservers.yml` strictly as fallback if `port` is null in the table or external DB is unreachable.
+2. **Port-Only Crontab Grep & Execution**:
+   - The command processor port (e.g. `64566`) uniquely identifies the cron setup across the server crontab.
+   - Greps crontab using **ONLY the port** via boundary-safe regex `(?<![0-9])` + port + `(?![0-9])`.
+   - Strips trailing shell output redirects (e.g. `> /dev/null 2>&1`) so clean commands run and report properly via SSH.
+3. **Queue-Aware Execution**:
+   - The trigger runs only if there are pending items remaining in the sender queue table (`DTP_SENDER_QUEUE_ITEM`) for that sender.
+
+### 2. Files Modified
+
+| Component | File | Changes |
+|---|---|---|
+| **Repository** | [`SenderCandidate.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/repository/SenderCandidate.java) | Added `port` field and getter `getPort()`. |
+| **Repository** | [`ExternalMetadataRepository.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/repository/ExternalMetadataRepository.java) | Added `findSenderByIdWithConnection(Connection, int)`. |
+| **Repository** | [`JdbcExternalMetadataRepository.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/repository/JdbcExternalMetadataRepository.java) | Added `s.port` to queries; implemented `findSenderByIdWithConnection` on `dtp_sender`. |
+| **Service** | [`MetadataImporterService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/MetadataImporterService.java) | Delegated `findSenderByIdWithConnection`. |
+| **Controller** | [`SenderController.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/SenderController.java) | Injected config loaders; added `resolveFallbackPort`; added `/api/senders/info`; added `port` & `portSource` to `/lookup` and `/historical/senders`. |
+| **Crontab Engine** | [`CrontabJobMatcher.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabJobMatcher.java) | Matches crontab using **ONLY port** when available via boundary-safe pattern. |
+| **Crontab Engine** | [`CrontabExtractor.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/CrontabExtractor.java) | Added `cleanRedirect` stripping `> /dev/null 2>&1` from crontab commands. |
+| **Trigger Service** | [`EtlSshTriggerService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/EtlSshTriggerService.java) | Added `discoverCrontabByPort`, `triggerByPort`, and `portOverride` support across methods. |
+| **Dispatch Service** | [`SenderDispatchService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/SenderDispatchService.java) | **Auto-Trigger**: Automatically fires the crontab execution on the ETL server as soon as records are inserted into `DTP_SENDER_QUEUE_ITEM`. |
+| **Trigger Controller** | [`EtlTriggerController.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/controller/EtlTriggerController.java) | Added `/discover-by-port` & `/trigger-by-port`; added `port` param to `/queue-status`, `/trigger-if-queued`, and `/trigger-pipeline`. |
+| **Frontend API** | [`backend.service.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/api/backend.service.ts) | Added `getSenderInfo`, `discoverCrontabByPort`, `triggerEtlByPort`; added `port` parameter to queue status/trigger methods. |
+| **Frontend UI** | [`glass-sender-selector.component.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/shared/components/glass-sender-selector.component.ts) | Shows `Port: <port>` badge on auto-resolved card and in options; synchronizes port on selection. |
+| **Frontend Stepper** | [`stepper.component.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.ts) & [`.html`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.html) | Transmits `selectedSenderPort` in queue depth checks and cron execution; added `triggerEtlBySelectedPort`. |
+
+---
+
+### 3. Automated Post-Queue Trigger Flow
+
+When a batch of files is staged and dispatched:
+1. `SenderDispatchService.pushGroup(...)` executes:
+   ```sql
+   INSERT INTO DTP_SENDER_QUEUE_ITEM (id, id_metadata, id_data, id_sender, record_created) VALUES (...)
+   ```
+2. Immediately upon successful insertion (`!success.isEmpty()`), `triggerEtlAfterQueueInsert(...)` runs.
+3. It resolves the sender port (from `DTP_SENDER`), locates the configured pipeline (e.g. `CZ4-CZ2-KLARF-DEFECT-Si`), and launches the Command Processor via SSH:
+   ```bash
+   /apps/fecim/cz4/command-processor/bin/single_launcher.sh /apps/fecim/cz4/command-processor/xml/64566_CZ2_Defect_Klarf18_Si_Sender.xml
+   ```
+4. CP immediately consumes the newly inserted items from `DTP_SENDER_QUEUE_ITEM` without waiting for the next cron cycle!
+
+---
+
+## Part 4: Stepper Step 1 Pre-Flight Exensio Check Alignment with Exensio Monitoring
+
+### 1. Requirements & Problem Statement
+- **Prior Pre-Check Issue**:
+  - Stepper Step 1 lot verification was trying Oracle **raw-SQL** (`POST /v1/key/raw-sql`) by default, querying tables (`op_log`, `df_export`, `wf_log`, etc.) with complex joins, which frequently failed with 500 / 403 / syntax errors or 30-60 second timeouts.
+  - If raw-SQL timed out or failed, it fell back to Snowflake JDBC (`ANALYTICSPRD.MFG.EXENSIO_PROD_OPLOG_METADATA`), which was slow or not configured.
+- **Exensio Monitoring Architecture (`ExensioLoadMonitor` + `ExensioClient`)**:
+  - Exensio Monitoring uses Exensio's dedicated REST endpoint: `POST /v1/key/lot-wafer-lookup`.
+  - It generates rich wafer variants (e.g. stripped prefix, 2-digit zero-padded, `lot_wafer`, `baseLot_wafer`).
+  - It queries the **primary schema** (`PRODUCTION`), falling back to lot-only if wafer filter yields empty.
+  - It automatically fails over to the **fallback schema** (`SANDBOX`), falling back to lot-only if wafer filter yields empty.
+  - If `props.isVerifyDataLoaded()` is enabled, it verifies actual parametric test rows via the Results API (`POST /v1/result/results`).
+
+### 2. Changes Implemented
+
+| Component | File | Changes |
+|---|---|---|
+| **DTO** | [`LotVerificationResult.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/dto/LotVerificationResult.java) | Added `Boolean dataVerified` field with backward-compatible 3-arg constructor. |
+| **Service** | [`ExensioPreCheckService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ExensioPreCheckService.java) | 1. Injected `ExensioClient` (autowired, optional).<br>2. Made `checkViaExensioLotWaferLookup` the **primary** checking path by default (matching `ExensioLoadMonitor`). Raw-SQL is only executed if `preferRawSql: true` or as a secondary fallback.<br>3. Implemented `buildExpandedWaferVariants` generating clean, zero-padded, lot-prefixed, and baseLot-prefixed wafer variants matching `ExensioClient`.<br>4. Extracted `waferKey` and `pgKey` in `parseLotWaferLookupResponse`.<br>5. Added parametric Results API check via `exensioClient.verifyDataLoaded(...)` when `isVerifyDataLoaded: true`. |
+| **Service** | [`ParallelSchemaCheckService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/ParallelSchemaCheckService.java) | Injected `ExensioProperties`. Updated `checkLotsParallel` to execute `checkViaExensioLotWaferLookup` in parallel across `PRODUCTION` and `SANDBOX` by default, eliminating raw-SQL timeouts and schema join failures while accurately tracking schemas and wafers. |
+| **Frontend** | [`stepper.component.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.ts) | In `verifyLotsBeforeDiscovery`, mapped discovered/found wafers from backend response into `verificationMap` so `LotVerificationDialogComponent` receives and renders the wafer lists. |
+
+### 3. Verification & Verification Flow Comparison
+
+```mermaid
+flowchart TD
+    subgraph OldFlow ["Previous Pre-Check Flow"]
+        OLD_REQ["Stepper Step 1 Verification Request"] --> OLD_RAW["Oracle raw-SQL query on op_log, df_export, wf_log\n(Prone to timeouts / 500 errors)"]
+        OLD_RAW -->|Timeout or Empty| OLD_SNOW["Snowflake JDBC Query\n(Slow or not configured)"]
+        OLD_SNOW -->|Only as last resort| OLD_LW["lot-wafer-lookup"]
+    end
+
+    subgraph NewFlow ["New Aligned Pre-Check Flow (Matching Exensio Monitoring)"]
+        NEW_REQ["Stepper Step 1 Verification Request"] --> EXPAND["Build Rich Wafer Variants\n(clean, zero-padded, lot_wafer, baseLot_wafer)"]
+        EXPAND --> LW_CALL["POST /v1/key/lot-wafer-lookup\n(Primary Schema 'PRODUCTION')"]
+        LW_CALL -->|Retry without wafers if needed| LW_CALL_NOWAFERS["Retry without wafer filter"]
+        LW_CALL_NOWAFERS -->|Auto-fallback if unresolved| LW_SBX["POST /v1/key/lot-wafer-lookup\n(Fallback Schema 'SANDBOX')"]
+        LW_SBX --> PARAMS{"verifyDataLoaded enabled?"}
+        PARAMS -->|Yes| RESULTS_API["POST /v1/result/results\n(Parametric row verification)"]
+        PARAMS -->|No| DONE["Fast Response to Stepper 1 Dialog\n(FOUND PROD, FOUND SBX, or NOT FOUND)"]
+    
+---
+
+## Part 5: Asynchronous ETL Cron Trigger & Stepper Step 3 Transition / Session Resume
+
+### 1. Root Cause Analysis
+- **Problem Reported**:
+  ```
+  chunk-E6IYI556.js:1 [API] stagePayloads timeout after 60s
+  chunk-BEZ3H3BB.js:519 [STAGING] Staging payloads failed: Error: Staging request timed out after 60 seconds.
+  ```
+  After staging, the backend had successfully queued items and triggered the SSH cron in the background, but the UI never moved to Stepper Step 3 (Monitoring) and could not resume session monitoring.
+- **Why It Happened**:
+  1. In `SenderDispatchService.java`, after items were inserted into `DTP_SENDER_QUEUE_ITEM`, `triggerEtlAfterQueueInsert(...)` was invoked **synchronously** on the HTTP servlet thread (`http-nio-8004-exec-*`).
+  2. Inside `triggerEtlAfterQueueInsert`, port discovery, SSH connection establishment, crontab line parsing, and remote shell command execution blocked the HTTP request thread for >60 seconds.
+  3. Angular's `backend.service.ts` had a strict `timeout(60000)` on `stagePayloads`. Once 60 seconds elapsed, the frontend threw a `TimeoutError`, triggering the error handler in `stepper.component.ts`.
+  4. The error handler cleared `staging.set(false)` and stayed stuck on Step 2. `completeStep(1)` and `currentStep.set(2)` were bypassed.
+  5. Furthermore, `persistMonitoringSession` was only executed inside `startMonitoring()`, so `localStorage` never saved the active session ID upon timeout, preventing session resumption.
+
+### 2. Solutions Implemented
+
+| Component | File | Fix Details |
+|---|---|---|
+| **Backend** | [`SenderDispatchService.java`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/backend/src/main/java/com/onsemi/cim/apps/exensio/exensioreload/service/SenderDispatchService.java) | Wrapped `triggerEtlAfterQueueInsert(site, senderId, dispatchedRecords)` in `CompletableFuture.runAsync(...)`. The HTTP request `/api/senders/{id}/stage` now returns `200 OK` in milliseconds immediately after DB insertion without waiting for SSH commands to complete. |
+| **Frontend** | [`stepper.component.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.ts) | 1. **Immediate Session Persistence**: Persist `session.sessionId` to `localStorage` immediately upon session creation in both `stageSelectedPayloads` and `stageAllMatching`.<br>2. **Graceful Timeout Recovery**: If `stagePayloads` encounters a client timeout (`isTimeout`) but `requestId()` is active, notify the user that staging is processing in the background and automatically advance to Step 3 Monitoring (`completeStep(1)`, `currentStep.set(2)`, `startMonitoring()`).<br>3. **Auto-Detect Active Sessions**: In `tryRestoreMonitoringSession`, support `?sessionId=` URL parameter and automatically query active non-terminal sessions via `getStagingSessions` so the user is immediately prompted with "Resume Monitoring". |
+| **Frontend** | [`backend.service.ts`](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/api/backend.service.ts) | Increased `stagePayloads` client timeout to 120 seconds (`120000ms`) to provide ample time for large batches. |
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Stepper as Stepper Component
+    participant Backend as Spring Boot Controller
+    participant DB as Site Oracle DB (DTP_SENDER_QUEUE_ITEM)
+    participant Async as Background Async Worker
+    participant SSH as ETL Host (Crontab / CP)
+
+    User->>Stepper: Click "Stage Payloads" (Step 2)
+    Stepper->>Backend: POST /api/stage/sessions (Create Session)
+    Backend-->>Stepper: 200 OK (sessionId)
+    Note over Stepper: Persists sessionId immediately to localStorage
+    Stepper->>Backend: POST /api/senders/{id}/stage
+    Backend->>DB: Batch INSERT into DTP_SENDER_QUEUE_ITEM
+    DB-->>Backend: Insert Success
+    Backend-)Async: CompletableFuture.runAsync(triggerEtlAfterQueueInsert)
+    Backend-->>Stepper: 200 OK (dispatchedCount) [Responds in < 300ms]
+    
+    par Background SSH Trigger
+        Async->>SSH: Connect SSH, match port & launch Command Processor
+        SSH-->>Async: CP Process Started
+    and Frontend Transition
+        Note over Stepper: Transitions to Step 3 (Monitoring)
+        Stepper->>Stepper: startMonitoring() & connectToSession(sessionId)
+        Stepper->>User: Real-time progress updates & live metrics
+
+---
+
+## Part 6: Discovery Preview Filter-Aware Count & Pagination Alignment
+
+### 1. Problem Description
+- **Symptoms**:
+  - In Stepper Step 2 (Discovery Preview), when filtering by Quick Filters (e.g. `Show Existing Only`, `Show Missing Only`), Device dropdown, File Type, or search text:
+    - The top count badge remained stuck displaying the unfiltered discovery total: `931 found`.
+    - The summary strip showed `Loaded in preview: 931`.
+    - The pagination bar at the bottom displayed `26-50 of 931` and `Page 2 of 38` instead of reflecting the filtered row count and filtered page count.
+    - If rows were selected before filtering, `selectedRows` still retained the full 931 items.
+
+### 2. Root Cause
+- `app-glass-pagination` had `[length]="previewTotal()"`, which was bound strictly to the raw unfiltered total count from the initial discovery request (`931`).
+- The count badge in `<span class="found-count-badge">` was bound strictly to `{{ previewTotal() | number }} found`.
+- `hasMultiplePreviewPages` was calculated using `this.previewTotal() > this.pageSize()` rather than the filtered row count.
+- In `setExensioStatusFilter`, only `'missing'` was updating `selectedRows`, while `'existing'` did not update the selection.
+
+### 3. Changes Implemented
+- **[stepper.component.ts](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.ts)**:
+  - Added `isFilterActive` computed signal: detects if `exensioStatusFilter !== 'all'`, `previewDeviceFilter.length > 0`, `selectedFileType !== 'ALL'`, or `filterText` is non-empty.
+  - Added `effectivePreviewTotal` computed signal: evaluates `this.filteredPreviewRows().length` when filters or client-side loaded rows are active, falling back to `previewTotal()`.
+  - Added `foundCountBadgeText` computed signal: renders formatted text like `X matching (Y total)` when filters are active, and `Y found` when unfiltered.
+  - Updated `totalPages` and `hasMultiplePreviewPages` to be derived from `effectivePreviewTotal()`.
+  - Updated `selectAllPages()` to select all rows matching the active filter across all pages.
+  - Updated `setExensioStatusFilter` to select matching rows for both `'missing'` and `'existing'`.
+- **[stepper.component.html](file:///c:/Users/fg8n8x/Desktop/wip/exensioreload/frontend/src/app/stepper/stepper.component.html)**:
+  - Bound header badge to `{{ foundCountBadgeText() }}`.
+  - Updated summary strip to show `Showing X of Y loaded rows` when `isFilterActive()`.
+  - Bound `<app-glass-pagination>` length to `[length]="effectivePreviewTotal()"`.
+
