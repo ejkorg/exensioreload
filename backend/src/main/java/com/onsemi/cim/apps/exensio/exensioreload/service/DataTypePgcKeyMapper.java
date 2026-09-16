@@ -38,22 +38,24 @@ public final class DataTypePgcKeyMapper {
      */
     public static int resolve(String dataType) {
         if (dataType == null || dataType.isBlank()) {
-            log.debug("[DataTypePgcKeyMapper] No dataType provided, defaulting to PGC_KEY=2 (FT)");
-            return PGC_KEY_FT;
+            throw new IllegalArgumentException("dataType is required (cannot be null or blank)");
         }
 
         String normalized = dataType.trim().toLowerCase();
-        int pgcKey = switch (normalized) {
-            case "probe" -> PGC_KEY_PROBE;
-            case "ft", "final test" -> PGC_KEY_FT;
-            case "pcm" -> PGC_KEY_PCM;
-            case "defect" -> PGC_KEY_DEFECT;
-            case "map", "binmap", "wxml", "upm" -> PGC_KEY_WMAP;
-            default -> {
-                log.warn("[DataTypePgcKeyMapper] Unknown dataType '{}', defaulting to PGC_KEY=2 (FT)", dataType);
-                yield PGC_KEY_FT;
-            }
-        };
+        int pgcKey;
+        if (normalized.equals("defect") || normalized.equals("defects") || normalized.contains("defect") || normalized.equals("klarf")) {
+            pgcKey = PGC_KEY_DEFECT; // 14
+        } else if (normalized.equals("probe") || normalized.equals("cp") || normalized.contains("probe") || normalized.contains("sort")) {
+            pgcKey = PGC_KEY_PROBE; // 1
+        } else if (normalized.equals("pcm") || normalized.equals("wat") || normalized.contains("pcm")) {
+            pgcKey = PGC_KEY_PCM; // 5
+        } else if (normalized.equals("map") || normalized.equals("binmap") || normalized.equals("wxml") || normalized.equals("upm") || normalized.contains("map")) {
+            pgcKey = PGC_KEY_WMAP; // 4
+        } else if (normalized.equals("ft") || normalized.equals("final test") || normalized.contains("final") || normalized.contains("ft")) {
+            pgcKey = PGC_KEY_FT; // 2
+        } else {
+            throw new IllegalArgumentException("Unknown or unsupported dataType: '" + dataType + "'. Supported values: PROBE, FT, PCM, DEFECT, MAP");
+        }
 
         log.debug("[DataTypePgcKeyMapper] Resolved dataType '{}' to PGC_KEY={}", dataType, pgcKey);
         return pgcKey;

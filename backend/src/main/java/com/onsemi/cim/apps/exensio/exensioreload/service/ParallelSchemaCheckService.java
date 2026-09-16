@@ -70,6 +70,16 @@ public class ParallelSchemaCheckService {
                     null);
         }
 
+        try {
+            ExensioPreCheckService.resolvePgcKey(preCheckRequest.dataType());
+        } catch (IllegalArgumentException e) {
+            return new ExensioPreCheckResponse(
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    e.getMessage());
+        }
+
         log.info("[ParallelSchemaCheck] Starting parallel check: lots={}, wafers={}, dataType={}",
                 lotIds.size(), discoveredWafers != null ? discoveredWafers.size() : 0, preCheckRequest.dataType());
 

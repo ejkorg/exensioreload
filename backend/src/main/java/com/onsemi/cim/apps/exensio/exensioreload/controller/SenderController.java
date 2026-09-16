@@ -1316,7 +1316,16 @@ public class SenderController {
             }
 
             // Step 3: Determine if wafer-level class and discover wafers if needed
-            int pgcKey = ExensioPreCheckService.resolvePgcKey(dataType);
+            int pgcKey;
+            try {
+                pgcKey = ExensioPreCheckService.resolvePgcKey(dataType);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(new LotVerificationResponse(
+                        Map.of(),
+                        e.getMessage()
+                    ));
+            }
             boolean isWaferLevel = ExensioSqlUtilService.isWaferLevelClass(pgcKey);
             boolean hasWaferFilter = request.wafers() != null && !request.wafers().isEmpty();
 

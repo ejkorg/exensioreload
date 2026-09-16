@@ -253,6 +253,12 @@ public class ExensioPreCheckService {
                     null);
         }
 
+        try {
+            resolvePgcKey(request.dataType());
+        } catch (IllegalArgumentException e) {
+            return softError(e.getMessage());
+        }
+
         long orchestrationStart = System.currentTimeMillis();
         log.info("[ExensioPreCheck] Starting orchestration: lots={}, env={}", request.lotIds().size(), request.environment());
 
