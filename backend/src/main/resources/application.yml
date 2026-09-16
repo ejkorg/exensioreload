@@ -260,7 +260,8 @@ ai:
 # Requires classpath:etlservers.yml. Independent of refdb.dispatch (queue) path.
 etl:
   trigger:
-    enabled: ${ETL_TRIGGER_ENABLED:false}
+    enabled: ${ETL_TRIGGER_ENABLED:true}
+    dry-run: ${ETL_TRIGGER_DRY_RUN:false}
 
 # Snowflake JDBC connection for lot pre-flight verification ONLY
 # Used ONLY by ExensioPreCheckService for fast lot existence validation

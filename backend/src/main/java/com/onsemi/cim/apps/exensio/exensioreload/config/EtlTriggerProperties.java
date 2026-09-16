@@ -12,10 +12,10 @@ import org.springframework.stereotype.Component;
 public class EtlTriggerProperties {
 
     /**
-     * When false (default), {@link com.onsemi.cim.apps.exensio.exensioreload.service.EtlSshTriggerService}
-     * returns {@code not_configured} without SSH. Set {@code ETL_TRIGGER_ENABLED=true} to activate.
+     * Master switch for the ETL SSH trigger. Defaults to true.
+     * Can be toggled via ETL_TRIGGER_ENABLED=false.
      */
-    private boolean enabled = false;
+    private boolean enabled = true;
     private boolean dryRun = false;
     private int rerunPoolSize = 4;
 
