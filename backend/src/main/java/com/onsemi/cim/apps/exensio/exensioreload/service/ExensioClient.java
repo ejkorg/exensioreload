@@ -1227,9 +1227,10 @@ public class ExensioClient {
                 continue;
             }
 
-            // Use first 35 characters for regex matching to reduce false positives from file reloads
-            String filePrefix = baseName.length() > 35 ? baseName.substring(0, 35) : baseName;
-            String escapedFilePrefix = escapeSqlLiteral(escapeRegexLiteral(filePrefix.toUpperCase(Locale.ROOT)));
+            // Use first matchChars (default: 27) characters for prefix matching to reduce false positives from file reloads
+            int matchChars = props.getRawFileMatchChars() > 0 ? props.getRawFileMatchChars() : 27;
+            String filePrefix = baseName.length() > matchChars ? baseName.substring(0, matchChars) : baseName;
+            String escapedFilePrefix = escapeLikeLiteral(filePrefix.toUpperCase(Locale.ROOT));
 
             // Calculate time window: 20 minutes before createdAt to timeoutMinutes after now
             // This ensures we only match the current loading instance, not previous reloads
@@ -1251,7 +1252,7 @@ public class ExensioClient {
             rawDataSql.append("LEFT JOIN string_holder sh3 ON sh3.str_key = em.str_key3 ");
             rawDataSql.append("LEFT JOIN string_holder sh4 ON sh4.str_key = em.str_key4 ");
             rawDataSql.append("WHERE dl.error_code != 0 ");
-            rawDataSql.append("AND REGEXP_LIKE(UPPER(rf.file_name), '^").append(escapedFilePrefix).append(".*') ");
+            rawDataSql.append("AND UPPER(rf.file_name) LIKE '").append(escapedFilePrefix).append("%' ESCAPE '\\' ");
             rawDataSql.append("AND dl.insert_time >= TO_TIMESTAMP('").append(sqlWindowStart).append("', 'YYYY-MM-DD HH24:MI:SS.FF') ");
             rawDataSql.append("AND dl.insert_time <= TO_TIMESTAMP('").append(sqlWindowEnd).append("', 'YYYY-MM-DD HH24:MI:SS.FF') ");
             rawDataSql.append("ORDER BY dl.insert_time DESC FETCH FIRST 1 ROW ONLY");
@@ -1273,8 +1274,8 @@ public class ExensioClient {
                                 getText(row, "FULL_ERROR_MESSAGE"),
                                 getText(row, "ERROR_TIME")
                         ));
-                        log.info("[ExensioLoadError] Raw data error query hit for lot={} file={} in schema={} (first 35 chars match, time window={}-{}) (traceId={})",
-                                rec.lot(), fileNameFilter, schema, windowStart, windowEnd, traceId);
+                        log.info("[ExensioLoadError] Raw data error query hit for lot={} file={} in schema={} (first {} chars match, time window={}-{}) (traceId={})",
+                                rec.lot(), fileNameFilter, schema, matchChars, windowStart, windowEnd, traceId);
                         break; // found in this schema, no need to check others
                     }
                 } catch (Exception ex) {
@@ -1361,9 +1362,9 @@ public class ExensioClient {
 
         String prefix = extractLotPrefix(lot);
         if (prefix != null && !prefix.isBlank()) {
-            String escapedPrefix = escapeSqlLiteral(prefix);
-            clause.append(" OR REGEXP_LIKE(l.lot_id, '^").append(escapedPrefix).append("', 'i')")
-                    .append(" OR REGEXP_LIKE(sl.lot_id, '^").append(escapedPrefix).append("', 'i')");
+            String escapedPrefix = escapeLikeLiteral(prefix.toUpperCase(Locale.ROOT));
+            clause.append(" OR UPPER(l.lot_id) LIKE '").append(escapedPrefix).append("%' ESCAPE '\\'")
+                    .append(" OR UPPER(sl.lot_id) LIKE '").append(escapedPrefix).append("%' ESCAPE '\\'");
         }
         clause.append(")");
         return clause.toString();
@@ -1729,15 +1730,11 @@ public class ExensioClient {
             // Strip bracketed suffixes like _{LASERSCRIBE} or {TAG}
             String cleanName = noExt.replaceAll("_?\\{[^}]*\\}", "").replaceAll("[._-]+$", "").trim();
             if (!cleanName.isBlank()) {
-                if (cleanName.length() > 35) {
-                    ids.add(cleanName.substring(0, 35).replaceAll("[._-]+$", ""));
-                    ids.add(cleanName.substring(0, 30).replaceAll("[._-]+$", ""));
-                } else if (cleanName.length() >= 30) {
-                    ids.add(cleanName);
-                    ids.add(cleanName.substring(0, 30).replaceAll("[._-]+$", ""));
-                } else {
-                    ids.add(cleanName);
+                int matchChars = props.getRawFileMatchChars() > 0 ? props.getRawFileMatchChars() : 27;
+                if (cleanName.length() > matchChars) {
+                    ids.add(cleanName.substring(0, matchChars).replaceAll("[._-]+$", ""));
                 }
+                ids.add(cleanName);
             }
         }
         ids.removeIf(v -> v == null || v.isBlank());
@@ -2108,6 +2105,26 @@ public class ExensioClient {
             return found; // Already verified — return as-is
         }
 
+        // The Results API (/v1/result/results) is strictly for parametric datasets (e.g. PROBE, PCM, FT).
+        // Non-parametric datasets like DEFECT (pgc_key=14) and WMAP (pgc_key=4) do not have test indexes
+        // or parametric measurement tables. Calling /v1/result/results for them causes Exensio to return HTTP 502.
+        if (pgcKey == DataTypePgcKeyMapper.PGC_KEY_DEFECT || pgcKey == DataTypePgcKeyMapper.PGC_KEY_WMAP) {
+            log.debug("Skipping Results API verification for non-parametric PGC_KEY={} (DEFECT/WMAP) — marking verified (traceId={})",
+                    pgcKey, traceId);
+            return new ExensioLotWaferResult.Found(
+                    found.lotKey(), found.waferKey(), found.pgKey(), found.ppid(),
+                    found.lotId(), found.waferId(), found.fileName(), found.schema(), true);
+        }
+
+        // If pgKey or waferKey are missing/zero (e.g. lot-level data), skip Results API
+        if (found.pgKey() <= 0 || found.waferKey() <= 0) {
+            log.debug("Skipping Results API verification because pgKey={} or waferKey={} <= 0 — marking verified (traceId={})",
+                    found.pgKey(), found.waferKey(), traceId);
+            return new ExensioLotWaferResult.Found(
+                    found.lotKey(), found.waferKey(), found.pgKey(), found.ppid(),
+                    found.lotId(), found.waferId(), found.fileName(), found.schema(), true);
+        }
+
         String token;
         try {
             // Use the schema from the Found result if available, otherwise use default
@@ -2184,6 +2201,9 @@ public class ExensioClient {
      * @return number of data rows found, 0 if no data, -1 on error
      */
     public int verifyDataLoaded(long pgKey, long waferKey, int pgcKey, String token, String traceId) {
+        if (pgcKey == DataTypePgcKeyMapper.PGC_KEY_DEFECT || pgcKey == DataTypePgcKeyMapper.PGC_KEY_WMAP || pgKey <= 0 || waferKey <= 0) {
+            return 1; // Non-parametric dataset or lot-level key — consider loaded
+        }
         String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/result/results";
 
         try {

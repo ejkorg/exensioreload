@@ -229,6 +229,12 @@ public class ExensioProperties {
      */
     private int verifyTimeoutSeconds = 15;
 
+    /**
+     * Default number of filename characters to match when performing RAW_FILE error matching.
+     * Default: 27.
+     */
+    private int rawFileMatchChars = 27;
+
     // --- OAuth Authentication (Requirement 5.4, 5.5) ---
 
     /**
@@ -567,4 +573,7 @@ public class ExensioProperties {
 
     public int getVerifyTimeoutSeconds() { return verifyTimeoutSeconds; }
     public void setVerifyTimeoutSeconds(int verifyTimeoutSeconds) { this.verifyTimeoutSeconds = verifyTimeoutSeconds; }
+
+    public int getRawFileMatchChars() { return rawFileMatchChars; }
+    public void setRawFileMatchChars(int rawFileMatchChars) { this.rawFileMatchChars = rawFileMatchChars; }
 }

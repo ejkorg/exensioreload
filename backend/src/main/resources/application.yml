@@ -229,6 +229,8 @@ exensio:
   verify-min-rows: ${EXENSIO_VERIFY_MIN_ROWS:1}
   validate-program: ${EXENSIO_VALIDATE_PROGRAM:false}
   verify-timeout-seconds: ${EXENSIO_VERIFY_TIMEOUT_SECONDS:15}
+  # Default characters of filename to match for RAW_FILE load error checks (default: 27)
+  raw-file-match-chars: ${EXENSIO_RAW_FILE_MATCH_CHARS:27}
 
 # AI Integration Configuration
 # Quick setup: Use preset + API key
