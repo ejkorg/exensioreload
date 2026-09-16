@@ -65,40 +65,37 @@
         </span>
         <!-- Session action buttons: Resume or New Session -->
         <div class="session-actions">
-          <button
+          <app-glass-button
             *ngIf="hasActiveSession()"
-            mat-flat-button
-            color="accent"
-            (click)="resumeMonitoring()"
-            class="resume-monitoring-btn"
+            variant="primary"
+            size="medium"
+            (clicked)="resumeMonitoring()"
             aria-label="Resume monitoring active session"
           >
-            <mat-icon aria-hidden="true">play_arrow</mat-icon>
-            <span class="btn-label">Resume Monitoring</span>
-          </button>
-          <button
+            <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
+            Resume Monitoring
+          </app-glass-button>
+          <app-glass-button
             *ngIf="hasActiveSession()"
-            mat-stroked-button
-            color="primary"
+            variant="secondary"
+            size="medium"
             routerLink="/new"
             [queryParams]="{ newSession: 'true' }"
-            class="new-session-btn"
             aria-label="Create new session request"
           >
-            <mat-icon aria-hidden="true">add_circle</mat-icon>
-            <span class="btn-label">New Session Request</span>
-          </button>
-          <button
+            <app-glass-icon name="add_circle" [size]="16"></app-glass-icon>
+            New Session Request
+          </app-glass-button>
+          <app-glass-button
             *ngIf="!hasActiveSession()"
-            mat-flat-button
-            color="primary"
+            variant="primary"
+            size="medium"
             routerLink="/new"
-            class="start-monitor-btn"
             aria-label="Start monitoring"
           >
-            <mat-icon aria-hidden="true">play_arrow</mat-icon>
-            <span class="btn-label">Start Monitor</span>
-          </button>
+            <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
+            Start Monitor
+          </app-glass-button>
         </div>
       </div>
     </div>

@@ -1,17 +1,16 @@
-import { Component, signal, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router, NavigationStart, NavigationEnd } from '@angular/router';
+import { Component, inject, signal } from '@angular/core';
+import { NavigationEnd, NavigationStart, Router, RouterModule } from '@angular/router';
+import { AiChatComponent } from './ai/ai-chat.component';
 import { AuthService } from './auth/auth.service';
 import { ThemeService } from './core/theme.service';
-import { ToastContainerComponent } from './shared/components/toast-container.component';
-import { GlassButtonComponent } from './shared/components/glass-button.component';
 import { GlassIconComponent } from './shared/components/glass-icon.component';
-import { AiChatComponent } from './ai/ai-chat.component';
+import { ToastContainerComponent } from './shared/components/toast-container.component';
 
 @Component({
     selector: 'app-root',
     standalone: true,
-    imports: [CommonModule, RouterModule, ToastContainerComponent, GlassButtonComponent, GlassIconComponent, AiChatComponent],
+    imports: [CommonModule, RouterModule, ToastContainerComponent, GlassIconComponent, AiChatComponent],
     templateUrl: './app.html',
     styleUrls: ['./app.scss']
 })
