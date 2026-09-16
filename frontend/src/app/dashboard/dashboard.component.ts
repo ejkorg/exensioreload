@@ -1,13 +1,13 @@
 import { CommonModule } from '@angular/common';
 import {
-    ChangeDetectionStrategy,
-    Component,
-    computed,
-    inject,
-    OnDestroy,
-    OnInit,
-    signal,
-    ViewChild,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,13 +17,13 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subscription, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
-    BackendService,
-    DashboardSenderSnapshot,
-    DashboardSiteSnapshot,
-    DashboardSnapshot,
-    IntegrationStatusSnapshot,
-    LimitsConfig,
-    StagingSessionDetail,
+  BackendService,
+  DashboardSenderSnapshot,
+  DashboardSiteSnapshot,
+  DashboardSnapshot,
+  IntegrationStatusSnapshot,
+  LimitsConfig,
+  StagingSessionDetail,
 } from '../api/backend.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassButtonComponent } from '../shared/components/glass-button.component';
@@ -275,7 +275,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.changedMetrics.set(new Set([key]));
     setTimeout(() => this.changedMetrics.set(new Set<string>()), 800);
     const cards = Array.from(document.querySelectorAll<HTMLElement>('.metric-card'));
-    const target = cards.find((c) => c.textContent?.toLowerCase().includes((label[stateKey] ?? stateKey).toLowerCase()));
+    const target = cards.find((c) =>
+      c.textContent?.toLowerCase().includes((label[stateKey] ?? stateKey).toLowerCase()),
+    );
     target?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
@@ -311,7 +313,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const delta = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
       const direction = delta > 0.05 ? '▲' : delta < -0.05 ? '▼' : '—';
       const up = delta >= 0;
-      return { label, current: cur, previous: prev, deltaPct: Math.round(delta), direction, up, significant: Math.abs(delta) >= 20 };
+      return {
+        label,
+        current: cur,
+        previous: prev,
+        deltaPct: Math.round(delta),
+        direction,
+        up,
+        significant: Math.abs(delta) >= 20,
+      };
     };
 
     return [row('Backlog', 'backlog'), row('Enqueued', 'enqueued'), row('Completed', 'completed')];
@@ -494,19 +504,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return map;
   });
 
-  // ── Monitoring action computeds ─────────────────────────────────
-
-  primaryMonitoringActionLabel = computed<string>(() =>
-    this.activeMonitoringSession() ? 'Resume Monitoring' : 'Start Monitoring',
-  );
-
-  primaryMonitoringActionTooltip = computed<string>(() => {
-    const active = this.activeMonitoringSession();
-    return active ? `Resume active session ${active.sessionId}` : 'Start a new monitoring session';
-  });
-
-  primaryMonitoringActionIcon = computed<string>(() => (this.activeMonitoringSession() ? 'play_circle' : 'play_arrow'));
-
   // ── Freshness / error computeds ─────────────────────────────────
 
   /** Seconds since last successful data fetch */
@@ -587,13 +584,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!query) return sites;
 
     // Only show sites that have at least one sender or site name matching the search
-    return sites.filter((site) =>
-      site.site.toLowerCase().includes(query) ||
-      site.senders.some(
-        (sender) =>
-          sender.senderLabel.toLowerCase().includes(query) ||
-          String(sender.senderId).includes(query)
-      )
+    return sites.filter(
+      (site) =>
+        site.site.toLowerCase().includes(query) ||
+        site.senders.some(
+          (sender) => sender.senderLabel.toLowerCase().includes(query) || String(sender.senderId).includes(query),
+        ),
     );
   });
 
@@ -707,27 +703,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const active = this.activeMonitoringSession();
     if (!active) return false;
     return active.site === site && active.senderId === senderId;
-  }
-
-  /** Whether an active monitoring session exists (for dashboard header buttons) */
-  hasActiveSession(): boolean {
-    const session = this.stagingSession.currentSession();
-    if (!session) return false;
-    const status = (session.status || '').toUpperCase();
-    // Active = session is in STAGING, IN_PROGRESS, or similar non-terminal state
-    return status === 'STAGING' || status === 'IN_PROGRESS' || status === 'QUEUED' || status === 'PROCESSING';
-  }
-
-  resumeMonitoring() {
-    this.router.navigate(['/new'], { queryParams: { resume: '1' } });
-  }
-
-  startOrResumeMonitoring(): void {
-    if (this.activeMonitoringSession()) {
-      this.resumeMonitoring();
-      return;
-    }
-    this.router.navigate(['/new']);
   }
 
   openAlertSettings(sender: SenderPerformance): void {
@@ -971,7 +946,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       filters,
       pdfElements: ['.health-card', '.metrics-grid', '.trends-grid'],
     };
-  }
+  };
 
   private autoRetry(): void {
     if (this.retryAttempts >= this.maxRetries) return;

@@ -43,60 +43,13 @@
           mat-flat-button
           color="accent"
           class="resume-monitoring-btn"
-          (click)="startOrResumeMonitoring()"
-          [matTooltip]="primaryMonitoringActionTooltip()"
-          [attr.aria-label]="primaryMonitoringActionLabel()"
+          routerLink="/new"
+          matTooltip="Start a new reload session"
+          aria-label="Start a Reload"
         >
-          <mat-icon aria-hidden="true">{{ primaryMonitoringActionIcon() }}</mat-icon>
-          <span class="btn-label">{{ primaryMonitoringActionLabel() }}</span>
+          <mat-icon aria-hidden="true">play_arrow</mat-icon>
+          <span class="btn-label">Start a Reload</span>
         </button>
-        <span
-          class="file-list-label"
-          *ngIf="activeMonitoringSession() && stagingSession.sessionFiles().length > 0"
-          aria-live="polite"
-        >
-          {{
-            getFileListLabel(
-              stagingSession.sessionFiles().length,
-              stagingSession.currentSession()?.totalFiles ?? 0,
-              resolvedMonitorMaxRows()
-            )
-          }}
-        </span>
-        <!-- Session action buttons: Resume or New Session -->
-        <div class="session-actions">
-          <app-glass-button
-            *ngIf="hasActiveSession()"
-            variant="primary"
-            size="medium"
-            (clicked)="resumeMonitoring()"
-            aria-label="Resume monitoring active session"
-          >
-            <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
-            Resume Monitoring
-          </app-glass-button>
-          <app-glass-button
-            *ngIf="hasActiveSession()"
-            variant="secondary"
-            size="medium"
-            routerLink="/new"
-            [queryParams]="{ newSession: 'true' }"
-            aria-label="Create new session request"
-          >
-            <app-glass-icon name="add_circle" [size]="16"></app-glass-icon>
-            New Session Request
-          </app-glass-button>
-          <app-glass-button
-            *ngIf="!hasActiveSession()"
-            variant="primary"
-            size="medium"
-            routerLink="/new"
-            aria-label="Start monitoring"
-          >
-            <app-glass-icon name="play_arrow" [size]="16"></app-glass-icon>
-            Start Monitor
-          </app-glass-button>
-        </div>
       </div>
     </div>
   </header>
@@ -155,7 +108,9 @@
   <!-- Active Site Filter Banner -->
   <div class="site-filter-banner" *ngIf="siteFilter()">
     <mat-icon class="filter-icon">filter_list</mat-icon>
-    <span class="filter-text">Viewing site: <strong>{{ siteFilter() }}</strong></span>
+    <span class="filter-text"
+      >Viewing site: <strong>{{ siteFilter() }}</strong></span
+    >
     <button mat-button class="clear-site-filter" (click)="clearSiteFilter()">
       <mat-icon>close</mat-icon>
       Clear Filter
@@ -174,7 +129,10 @@
     <p class="loading-text">Loading dashboard data...</p>
   </div>
 
-  <div class="dashboard-content" *ngIf="snapshot() && !error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState">
+  <div
+    class="dashboard-content"
+    *ngIf="snapshot() && !error() && !hasNoData() && !hasZeroMetrics(); else emptyOrErrorState"
+  >
     <!-- Health Overview Card -->
     <section class="health-section" [class.layout-hidden]="!sectionVisible('health')" aria-labelledby="health-heading">
       <div class="health-card glass-panel">
@@ -342,7 +300,11 @@
     </section>
 
     <!-- Live Pipeline Trends (Requirement 1.1 - time-series charts) -->
-    <section class="trends-section" [class.layout-hidden]="!sectionVisible('trends') || !showCharts()" aria-labelledby="trends-heading">
+    <section
+      class="trends-section"
+      [class.layout-hidden]="!sectionVisible('trends') || !showCharts()"
+      aria-labelledby="trends-heading"
+    >
       <div class="trends-head-row">
         <h2 class="section-title" id="trends-heading">Live Pipeline Trends</h2>
         <div class="compare-controls" *ngIf="compareActive()">
@@ -352,19 +314,25 @@
             class="compare-preset"
             [class.active]="compareMinutes() === 15"
             (click)="setCompareWindow(15)"
-          >15m</button>
+          >
+            15m
+          </button>
           <button
             type="button"
             class="compare-preset"
             [class.active]="compareMinutes() === 30"
             (click)="setCompareWindow(30)"
-          >30m</button>
+          >
+            30m
+          </button>
           <button
             type="button"
             class="compare-preset"
             [class.active]="compareMinutes() === 60"
             (click)="setCompareWindow(60)"
-          >1h</button>
+          >
+            1h
+          </button>
         </div>
         <button type="button" class="compare-toggle" [class.active]="compareActive()" (click)="toggleCompareMode()">
           {{ compareActive() ? 'Comparison on' : 'Compare periods' }}
@@ -387,37 +355,29 @@
         }
       </div>
       <div class="trends-grid">
-        <app-time-series-chart
-          metricKey="backlog"
-          displayLabel="Backlog"
-          windowInput="6h"
-        ></app-time-series-chart>
-        <app-time-series-chart
-          metricKey="enqueued"
-          displayLabel="Enqueued"
-          windowInput="6h"
-        ></app-time-series-chart>
-        <app-time-series-chart
-          metricKey="completed"
-          displayLabel="Completed"
-          windowInput="6h"
-        ></app-time-series-chart>
-        <app-time-series-chart
-          metricKey="failed"
-          displayLabel="Failed"
-          windowInput="6h"
-        ></app-time-series-chart>
+        <app-time-series-chart metricKey="backlog" displayLabel="Backlog" windowInput="6h"></app-time-series-chart>
+        <app-time-series-chart metricKey="enqueued" displayLabel="Enqueued" windowInput="6h"></app-time-series-chart>
+        <app-time-series-chart metricKey="completed" displayLabel="Completed" windowInput="6h"></app-time-series-chart>
+        <app-time-series-chart metricKey="failed" displayLabel="Failed" windowInput="6h"></app-time-series-chart>
       </div>
     </section>
 
     <!-- Live Activity Feed (Requirement 11) -->
-    <section class="activity-section" [class.layout-hidden]="!sectionVisible('activity')" aria-labelledby="activity-heading">
+    <section
+      class="activity-section"
+      [class.layout-hidden]="!sectionVisible('activity')"
+      aria-labelledby="activity-heading"
+    >
       <h2 class="section-title" id="activity-heading">Live Activity</h2>
       <app-live-activity-feed #activityFeed></app-live-activity-feed>
     </section>
 
     <!-- Integrations Health (Requirement 15 / 18) -->
-    <section class="integrations-section" [class.layout-hidden]="!sectionVisible('integrations')" aria-labelledby="integrations-heading">
+    <section
+      class="integrations-section"
+      [class.layout-hidden]="!sectionVisible('integrations')"
+      aria-labelledby="integrations-heading"
+    >
       <h2 class="section-title" id="integrations-heading">Integrations</h2>
       <app-integration-status-card [snapshot]="integrationSnapshot()"></app-integration-status-card>
     </section>
@@ -690,7 +650,9 @@
 
       <div class="error-code-section" *ngIf="errorDetails() as details">
         <span class="error-code">{{ details.code }}</span>
-        <span class="error-time"><app-dual-timestamp [value]="details.timestamp" layout="inline"></app-dual-timestamp></span>
+        <span class="error-time"
+          ><app-dual-timestamp [value]="details.timestamp" layout="inline"></app-dual-timestamp
+        ></span>
       </div>
 
       <div class="retry-info" *ngIf="errorDetails() as details">
@@ -726,11 +688,7 @@
   </app-bulk-actions>
 
   <!-- Sender deep-dive analytics panel (Req 2.5) -->
-  <div
-    class="sender-detail-overlay"
-    *ngIf="selectedSenderDetail()"
-    (click)="closeSenderDetail()"
-  >
+  <div class="sender-detail-overlay" *ngIf="selectedSenderDetail()" (click)="closeSenderDetail()">
     <app-sender-detail-panel
       [sender]="selectedSenderDetail()"
       [backlogHistory]="detailBacklogHistory()"

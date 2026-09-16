@@ -22,6 +22,12 @@
           >
             <app-glass-icon [name]="item.icon" [size]="18"></app-glass-icon>
             <span class="nav-label">{{ item.label }}</span>
+            <span
+              *ngIf="item.path === '/my-sessions' && activeSessionCount() > 0"
+              class="nav-badge"
+              [attr.aria-label]="activeSessionCount() + ' active sessions'"
+              >{{ activeSessionCount() }}</span
+            >
             <span *ngIf="loadingNavPath() === item.path" class="nav-item-spinner"></span>
           </a>
         </ng-container>
