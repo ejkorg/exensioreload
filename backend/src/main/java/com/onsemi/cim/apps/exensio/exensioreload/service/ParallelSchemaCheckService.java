@@ -243,47 +243,84 @@ public class ParallelSchemaCheckService {
             ExensioPreCheckResponse sandboxResult,
             List<String> allLotIds) {
 
-        Map<String, ExensioPreCheckRow> consolidatedRows = new ConcurrentHashMap<>();
-        List<String> lotsFound = new ArrayList<>();
-        List<String> lotsNotFound = new ArrayList<>();
+        List<ExensioPreCheckRow> allRows = new ArrayList<>();
+        java.util.Set<String> seenKeys = new java.util.LinkedHashSet<>();
+        java.util.Set<String> foundLotsUpper = new java.util.LinkedHashSet<>();
 
         // Process production results
         if (productionResult != null && productionResult.rows() != null) {
             for (ExensioPreCheckRow row : productionResult.rows()) {
-                consolidatedRows.put(row.lotId().toUpperCase(), row);
+                if (!"NOT FOUND".equalsIgnoreCase(row.schemaName())) {
+                    String key = (row.lotId() + "::" + row.schemaName() + "::" + row.waferId()).toUpperCase();
+                    if (seenKeys.add(key)) {
+                        allRows.add(row);
+                    }
+                    foundLotsUpper.add(row.lotId().toUpperCase());
+                }
+            }
+            if (productionResult.lotsFound() != null) {
+                for (String l : productionResult.lotsFound()) {
+                    foundLotsUpper.add(l.toUpperCase());
+                }
             }
         }
 
         // Process sandbox results - merge with production data
         if (sandboxResult != null && sandboxResult.rows() != null) {
             for (ExensioPreCheckRow row : sandboxResult.rows()) {
-                String lotKey = row.lotId().toUpperCase();
-                
-                // If already in production, indicate both schemas
-                if (consolidatedRows.containsKey(lotKey)) {
-                    // Keep production row, but log that it exists in both
-                    log.debug("[ParallelSchemaCheck] Lot {} found in both PRODUCTION and SANDBOX", row.lotId());
-                } else {
-                    // Add sandbox row
-                    consolidatedRows.put(lotKey, row);
+                if (!"NOT FOUND".equalsIgnoreCase(row.schemaName())) {
+                    String key = (row.lotId() + "::" + row.schemaName() + "::" + row.waferId()).toUpperCase();
+                    if (seenKeys.add(key)) {
+                        allRows.add(row);
+                    }
+                    foundLotsUpper.add(row.lotId().toUpperCase());
+                }
+            }
+            if (sandboxResult.lotsFound() != null) {
+                for (String l : sandboxResult.lotsFound()) {
+                    foundLotsUpper.add(l.toUpperCase());
+                }
+            }
+        }
+
+        // Correlate found base lots with requested sub-lots and propagate wafer rows
+        List<ExensioPreCheckRow> correlatedRows = new ArrayList<>(allRows);
+        for (String reqLot : allLotIds) {
+            String reqUpper = reqLot.trim().toUpperCase();
+            int cut = ExensioPreCheckService.getLotCutIndex(reqUpper);
+            String baseLot = cut > 0 ? reqUpper.substring(0, cut).trim() : null;
+
+            if (baseLot != null && foundLotsUpper.contains(baseLot)) {
+                foundLotsUpper.add(reqUpper);
+                for (ExensioPreCheckRow row : allRows) {
+                    if (row.lotId().equalsIgnoreCase(baseLot)) {
+                        String k = (reqLot + "::" + row.schemaName() + "::" + row.waferId()).toUpperCase();
+                        if (seenKeys.add(k)) {
+                            correlatedRows.add(new ExensioPreCheckRow(reqLot, row.schemaName(), row.waferId()));
+                        }
+                    }
                 }
             }
         }
 
         // Determine found vs not found
+        List<String> lotsFound = new ArrayList<>();
+        List<String> lotsNotFound = new ArrayList<>();
         for (String lot : allLotIds) {
-            if (consolidatedRows.containsKey(lot.toUpperCase())) {
+            String lotUpper = lot.trim().toUpperCase();
+            int cut = ExensioPreCheckService.getLotCutIndex(lotUpper);
+            String baseLot = cut > 0 ? lotUpper.substring(0, cut).trim() : null;
+
+            if (foundLotsUpper.contains(lotUpper) || (baseLot != null && foundLotsUpper.contains(baseLot))) {
                 lotsFound.add(lot);
             } else {
                 lotsNotFound.add(lot);
             }
         }
 
-        List<ExensioPreCheckRow> finalRows = new ArrayList<>(consolidatedRows.values());
+        log.info("[ParallelSchemaCheck] Consolidated results: {} found, {} not found, {} wafer rows",
+                lotsFound.size(), lotsNotFound.size(), correlatedRows.size());
 
-        log.info("[ParallelSchemaCheck] Consolidated results: {} found, {} not found",
-                lotsFound.size(), lotsNotFound.size());
-
-        return new ExensioPreCheckResponse(lotsFound, lotsNotFound, finalRows, null);
+        return new ExensioPreCheckResponse(lotsFound, lotsNotFound, correlatedRows, null);
     }
 }

@@ -839,10 +839,11 @@ public class ExensioPreCheckService {
 
         if (isWaferLevel && (waferIds == null || waferIds.isEmpty())) {
             // ── Wafer-level, no wafer filter: return all wafers per lot ──
-            sb.append("SELECT DISTINCT lot_id, wafer_id FROM (\n");
+            sb.append("SELECT DISTINCT lot_id, wafer_id, wafer_num FROM (\n");
             sb.append("  SELECT\n");
             sb.append("    l.lot_id                    AS lot_id,\n");
-            sb.append("    NVL(w.wf_id, '')            AS wafer_id\n");
+            sb.append("    NVL(w.wf_id, '')            AS wafer_id,\n");
+            sb.append("    NVL(TO_CHAR(w.wf_num), '')  AS wafer_num\n");
             sb.append("  FROM op_log ol\n");
             sb.append("  JOIN lot      l   ON l.lot_key  = ol.lot_key\n");
             sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
@@ -859,12 +860,13 @@ public class ExensioPreCheckService {
             sb.append(") WHERE ROWNUM <= ").append(precheckRowLimit);
         } else {
             // ── Lot-level OR wafer-filtered: replace wafer filter with filename prefix match ──
-            sb.append("SELECT lot_id, end_time, ppid, wafer_id FROM (\n");
+            sb.append("SELECT lot_id, end_time, ppid, wafer_id, wafer_num FROM (\n");
             sb.append("  SELECT\n");
             sb.append("    l.lot_id                                                         AS lot_id,\n");
             sb.append("    NVL(TO_CHAR(ol.end_time,'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), '') AS end_time,\n");
             sb.append("    NVL(p.ppid, '')                                                  AS ppid,\n");
-            sb.append("    NVL(w.wf_id, '')                                                 AS wafer_id\n");
+            sb.append("    NVL(w.wf_id, '')                                                 AS wafer_id,\n");
+            sb.append("    NVL(TO_CHAR(w.wf_num), '')                                       AS wafer_num\n");
             sb.append("  FROM op_log ol\n");
             sb.append("  JOIN lot      l   ON l.lot_key  = ol.lot_key\n");
             sb.append("  JOIN program  p   ON p.pg_key   = ol.pg_key\n");
@@ -942,7 +944,7 @@ public class ExensioPreCheckService {
 
     /**
      * Parses the Exensio raw-SQL JSON response and partitions the submitted lot IDs.
-     * Maps HTTP fallback rows (LOT_ID / END_TIME / PPID / WAFER_ID) to the unified
+     * Maps HTTP fallback rows (LOT_ID / END_TIME / PPID / WAFER_ID / WAFER_NUM) to the unified
      * {@link ExensioPreCheckRow} shape ({@code lotId} + {@code schemaName} + {@code waferId}).
      * For HTTP fallback results, {@code schemaName} is set to {@code "FOUND"} when a
      * row is present (the Oracle query does not return a schema name).
@@ -957,15 +959,38 @@ public class ExensioPreCheckService {
                 for (JsonNode rowNode : rowsNode) {
                     String lotId = rowNode.path("LOT_ID").asText("");
                     String rawWafer = rowNode.path("WAFER_ID").asText("");
+                    String rawWaferNum = rowNode.path("WAFER_NUM").asText("");
                     String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
-                    // HTTP fallback doesn't return SCHEMANAME — use "FOUND" as sentinel
-                    rows.add(new ExensioPreCheckRow(lotId, "FOUND", waferId));
+
+                    if (!waferId.isBlank()) {
+                        rows.add(new ExensioPreCheckRow(lotId, "FOUND", waferId));
+                    }
                     if (!rawWafer.isBlank() && !rawWafer.equalsIgnoreCase(waferId)) {
                         rows.add(new ExensioPreCheckRow(lotId, "FOUND", rawWafer));
                     }
                     String pad2 = zeroPadWaferId(waferId);
                     if (!pad2.isBlank() && !pad2.equalsIgnoreCase(waferId) && !pad2.equalsIgnoreCase(rawWafer)) {
                         rows.add(new ExensioPreCheckRow(lotId, "FOUND", pad2));
+                    }
+                    if (waferId.matches("\\d+")) {
+                        try {
+                            String unpad = String.valueOf(Integer.parseInt(waferId));
+                            if (!unpad.equalsIgnoreCase(waferId) && !unpad.equalsIgnoreCase(pad2)) {
+                                rows.add(new ExensioPreCheckRow(lotId, "FOUND", unpad));
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+
+                    if (!rawWaferNum.isBlank()) {
+                        rows.add(new ExensioPreCheckRow(lotId, "FOUND", rawWaferNum));
+                        String pad2Num = zeroPadWaferId(rawWaferNum);
+                        if (!pad2Num.isBlank() && !pad2Num.equalsIgnoreCase(rawWaferNum)) {
+                            rows.add(new ExensioPreCheckRow(lotId, "FOUND", pad2Num));
+                        }
+                    }
+
+                    if (waferId.isBlank() && rawWafer.isBlank() && rawWaferNum.isBlank()) {
+                        rows.add(new ExensioPreCheckRow(lotId, "FOUND", ""));
                     }
                 }
             }
@@ -993,7 +1018,24 @@ public class ExensioPreCheckService {
                 }
             }
 
-            return new ExensioPreCheckResponse(lotsFound, lotsNotFound, rows, null);
+            // Propagate rows for requested sub-lots if only baseLot was in returned rows
+            List<ExensioPreCheckRow> correlatedRows = new ArrayList<>(rows);
+            for (String subLot : submittedLotIds) {
+                String subUpper = subLot.toUpperCase();
+                int cut = getLotCutIndex(subUpper);
+                if (cut > 0) {
+                    String baseUpper = subUpper.substring(0, cut).trim();
+                    if (foundUpper.contains(baseUpper) && !foundUpper.contains(subUpper)) {
+                        for (ExensioPreCheckRow r : rows) {
+                            if (r.lotId().equalsIgnoreCase(baseUpper)) {
+                                correlatedRows.add(new ExensioPreCheckRow(subLot, r.schemaName(), r.waferId()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new ExensioPreCheckResponse(lotsFound, lotsNotFound, correlatedRows, null);
 
         } catch (Exception e) {
             log.warn("[ExensioPreCheck] Failed to parse HTTP response: {}", e.getMessage());
@@ -1407,10 +1449,17 @@ public class ExensioPreCheckService {
             variants.add(wTrim);
             String clean = ExensioSqlUtilService.stripWaferPrefix(wTrim);
             String pad2 = "";
+            String unpad = "";
             if (!clean.isBlank()) {
                 variants.add(clean);
                 pad2 = zeroPadWaferId(clean);
                 variants.add(pad2);
+                if (clean.matches("\\d+")) {
+                    try {
+                        unpad = String.valueOf(Integer.parseInt(clean));
+                        variants.add(unpad);
+                    } catch (NumberFormatException ignored) {}
+                }
             }
             if (lotIds != null) {
                 for (String lot : lotIds) {
@@ -1426,6 +1475,11 @@ public class ExensioPreCheckService {
                             variants.add(lTrim + "-" + pad2);
                             variants.add(lTrim + pad2);
                         }
+                        if (!unpad.isBlank()) {
+                            variants.add(lTrim + "_" + unpad);
+                            variants.add(lTrim + "-" + unpad);
+                            variants.add(lTrim + unpad);
+                        }
                     }
                     int cut = getLotCutIndex(lTrim);
                     if (cut > 0) {
@@ -1439,6 +1493,11 @@ public class ExensioPreCheckService {
                                 variants.add(baseLot + "_" + pad2);
                                 variants.add(baseLot + "-" + pad2);
                                 variants.add(baseLot + pad2);
+                            }
+                            if (!unpad.isBlank()) {
+                                variants.add(baseLot + "_" + unpad);
+                                variants.add(baseLot + "-" + unpad);
+                                variants.add(baseLot + unpad);
                             }
                         }
                     }
@@ -1546,16 +1605,54 @@ public class ExensioPreCheckService {
                     if (wafersNode.isArray() && !wafersNode.isEmpty()) {
                         for (com.fasterxml.jackson.databind.JsonNode waferNode : wafersNode) {
                             String rawWafer = waferNode.path("wafer_id").asText("");
-                            String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
+                            if (rawWafer.isBlank()) {
+                                rawWafer = waferNode.path("wf_id").asText("");
+                            }
+                            if (rawWafer.isBlank()) {
+                                rawWafer = waferNode.path("name").asText("");
+                            }
+
+                            String rawWaferNum = waferNode.path("wafer_num").asText("");
+                            if (rawWaferNum.isBlank()) {
+                                rawWaferNum = waferNode.path("wf_num").asText("");
+                            }
+                            if (rawWaferNum.isBlank()) {
+                                rawWaferNum = waferNode.path("num").asText("");
+                            }
+
                             long waferKey = waferNode.path("wafer_key").asLong(0);
                             long pgKey = waferNode.path("pg_key").asLong(0);
-                            rows.add(new LotWaferFoundRow(lotId, waferId, waferKey, pgKey));
-                            if (!rawWafer.isBlank() && !rawWafer.equalsIgnoreCase(waferId)) {
-                                rows.add(new LotWaferFoundRow(lotId, rawWafer, waferKey, pgKey));
+
+                            if (!rawWafer.isBlank()) {
+                                String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
+                                rows.add(new LotWaferFoundRow(lotId, waferId, waferKey, pgKey));
+                                if (!rawWafer.equalsIgnoreCase(waferId)) {
+                                    rows.add(new LotWaferFoundRow(lotId, rawWafer, waferKey, pgKey));
+                                }
+                                String pad2 = zeroPadWaferId(waferId);
+                                if (!pad2.isBlank() && !pad2.equalsIgnoreCase(waferId) && !pad2.equalsIgnoreCase(rawWafer)) {
+                                    rows.add(new LotWaferFoundRow(lotId, pad2, waferKey, pgKey));
+                                }
+                                if (waferId.matches("\\d+")) {
+                                    try {
+                                        String unpad = String.valueOf(Integer.parseInt(waferId));
+                                        if (!unpad.equalsIgnoreCase(waferId) && !unpad.equalsIgnoreCase(pad2)) {
+                                            rows.add(new LotWaferFoundRow(lotId, unpad, waferKey, pgKey));
+                                        }
+                                    } catch (NumberFormatException ignored) {}
+                                }
                             }
-                            String pad2 = zeroPadWaferId(waferId);
-                            if (!pad2.isBlank() && !pad2.equalsIgnoreCase(waferId) && !pad2.equalsIgnoreCase(rawWafer)) {
-                                rows.add(new LotWaferFoundRow(lotId, pad2, waferKey, pgKey));
+
+                            if (!rawWaferNum.isBlank()) {
+                                rows.add(new LotWaferFoundRow(lotId, rawWaferNum, waferKey, pgKey));
+                                String pad2Num = zeroPadWaferId(rawWaferNum);
+                                if (!pad2Num.isBlank() && !pad2Num.equalsIgnoreCase(rawWaferNum)) {
+                                    rows.add(new LotWaferFoundRow(lotId, pad2Num, waferKey, pgKey));
+                                }
+                            }
+
+                            if (rawWafer.isBlank() && rawWaferNum.isBlank()) {
+                                rows.add(new LotWaferFoundRow(lotId, "", waferKey, pgKey));
                             }
                         }
                     } else {
