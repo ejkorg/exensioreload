@@ -44,6 +44,7 @@ public class SenderDispatchService {
         this(refDbService, externalDbConfig, properties, stageSessionService, pipelineConfigCache, null, null);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SenderDispatchService(
             RefDbService refDbService,
             ExternalDbConfig externalDbConfig,
