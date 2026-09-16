@@ -8,6 +8,52 @@ server:
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/octet-stream
     min-response-size: 1024
 
+# Internal refdb QA application DB used for staging and dispatch in the onsemi environment.
+# Define refdb properties FIRST before they're referenced in spring.datasource
+refdb:
+  db-type: postgresql
+  #  host: exndev-db.onsemi.com
+  host: "10.253.112.87"
+  #  port: 1739
+  port: 5432
+  database: "exnr"
+  # Service/SID are retained only for legacy Oracle profile compatibility.
+  #  service: EXNQA.onsemi.com
+  service: ""
+  user: exnr
+  #  password: "XBfjCq#$1542FFz"
+  password: ${REFDB_PASSWORD:}
+  # Disable legacy auth bootstrap - now using modern JPA-based AdminUserSeeder
+  auth-bootstrap-enabled: false
+  bootstrap-admins: "admin"
+  staging-table: SENDER_STAGE
+  pool:
+    max-size: 10
+  # Separate connection for pp_log queries — must point to PRODUCTION so that
+  # CP enrichment fallback reads real processing outcomes, not QA data.
+  pplog:
+    host: "exnprd-db.onsemi.com"
+    port: 1729
+    service: "EXNPRD.onsemi.com"
+    user: refdb
+    password: "88sgX%#$29-azx"
+    # Timezone of the Oracle pp_log server. process_datetime is written by third-party
+    # ETL processes in the server's local time (no TZ info stored). Set this to the
+    # Oracle server's local timezone so timestamps are correctly compared.
+    # Confirmed via: SELECT DBTIMEZONE, SESSIONTIMEZONE FROM DUAL → -07:00 (UTC-7 / Arizona)
+    server-timezone: "America/Phoenix"
+    pool:
+      max-size: 3
+      min-idle: 1
+    min-idle: 2
+  dispatch:
+    per-send: 100
+    interval-ms: 60000
+    # Maximum allowed queue size in the external DTP queue (per sender). When the external
+    # queue for a sender has >= this many rows, the dispatcher will skip pushing new items
+    # for that sender until the external queue drains below this value.
+    max-queue-size: 600
+
 spring:
   config:
     activate:
@@ -22,7 +68,7 @@ spring:
       hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
       hibernate.jdbc.time_zone: UTC
   datasource:
-    # Use refdb.* properties below via placeholders so the canonical values live in refdb
+    # Use refdb.* properties defined above
     # CRITICAL: TimeZone=UTC forces PostgreSQL JDBC driver to interpret TIMESTAMP columns as UTC
     # This ensures consistency between database, application, and Elasticsearch timestamps
     url: "jdbc:postgresql://${refdb.host}:${refdb.port}/${refdb.database}"
@@ -62,21 +108,6 @@ logging:
     max-size: 100MB
     max-history: 30
     total-size-cap: 3GB
-
-# Internal refdb QA application DB used for staging and dispatch in the onsemi environment.
-refdb:
-  db-type: postgresql
-  #  host: exndev-db.onsemi.com
-  host: "10.253.112.87"
-  #  port: 1739
-  port: 5432
-  database: "exnr"
-  # Service/SID are retained only for legacy Oracle profile compatibility.
-  #  service: EXNQA.onsemi.com
-  service: ""
-  user: exnr
-  #  password: "XBfjCq#$1542FFz"
-  password: ${REFDB_PASSWORD:}
   # Disable legacy auth bootstrap - now using modern JPA-based AdminUserSeeder
   auth-bootstrap-enabled: false
   bootstrap-admins: "admin"

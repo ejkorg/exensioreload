@@ -9,7 +9,7 @@ pipelines:
     configName: "64153_JND_PROBE_MONITOR_PARAM_STDF_sender.xml"
     senderId: 81
     rerunPeriodMinutes: 3
-    stages: 
+    stages:
       - name: cp
         type: CP
         timeoutMinutes: 30
@@ -18,15 +18,15 @@ pipelines:
         timeoutMinutes: 25
       - name: exensio
         type: EXENSIO
-        dependsOn: [cp,pplog]
+        dependsOn: [cp, pplog]
         timeoutMinutes: 60
   - pipelineKey: "CEBU-CP-DEFAULT"
-    site: "CEBU-PROD"              # References dbconnections.yml
-    server: "CEBU-PROD"            # References etlservers.yml
-    socketPort: 60170              # DataPort Command Processor socket_port for crontab grep
-    configName: "CPYQSP"           # DataPort config name for crontab grep
-    senderId: 1                    # Sender ID for queue table DTP_SENDER_QUEUE_ITEM filtering
-    rerunPeriodMinutes: 5          # 0 = single run, >0 = rerun after N minutes
+    site: "CEBU-PROD" # References dbconnections.yml
+    server: "CEBU-PROD" # References etlservers.yml
+    socketPort: 60170 # DataPort Command Processor socket_port for crontab grep
+    configName: "CPYQSP" # DataPort config name for crontab grep
+    senderId: 1 # Sender ID for queue table DTP_SENDER_QUEUE_ITEM filtering
+    rerunPeriodMinutes: 5 # 0 = single run, >0 = rerun after N minutes
     stages:
       - name: cp
         type: CP
@@ -56,7 +56,7 @@ pipelines:
         timeoutMinutes: 25
       - name: exensio
         type: EXENSIO
-        dependsOn: [cp,pplog]
+        dependsOn: [cp, pplog]
         timeoutMinutes: 60
 
   - pipelineKey: "CNK-ONSC-DEFAULT"
