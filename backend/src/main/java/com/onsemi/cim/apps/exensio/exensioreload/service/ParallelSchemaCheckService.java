@@ -212,7 +212,6 @@ public class ParallelSchemaCheckService {
 
         return consolidateResults(productionResult, sandboxResult, lotIds);
     }
-    }
 
     /**
      * Consolidates results from both schemas.
