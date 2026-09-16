@@ -9,6 +9,8 @@ import {
   CreateSessionResponse,
   DiscoveryPreviewRequest,
   DiscoveryPreviewRow,
+  EtlQueueStatus,
+  EtlTriggerResult,
   ReloadFilterOptions,
   SenderOption,
   StagePayloadRequestBody,
@@ -449,10 +451,18 @@ export class StepperComponent implements OnInit, OnDestroy {
   // Sender management (auto-resolution support)
   senderOptions = signal<SenderOption[]>([]);
   selectedSenderId = signal<number | null>(null);
+  selectedSenderPort = signal<number | null>(null);
+  selectedSenderPortSource = signal<string | null>(null);
+  selectedSenderName = signal<string | null>(null);
   senderAutoResolved = signal(false);
   senderLookupLoading = signal(false);
   senderFallback = signal(false);
   senderLookupQuery = signal<string | null>(null);
+
+  // ETL queue-aware trigger state (uses selectedSenderId from Step 1)
+  etlQueueStatus = signal<EtlQueueStatus | null>(null);
+  etlQueueLoading = signal(false);
+  etlTriggerLoading = signal(false);
 
   lotWaferPairs = signal<Array<{ lot: string; wafer: string }>>([{ lot: '', wafer: '' }]);
 
@@ -3799,9 +3809,50 @@ export class StepperComponent implements OnInit, OnDestroy {
   private resetSenderState() {
     this.senderOptions.set([]);
     this.selectedSenderId.set(null);
+    this.selectedSenderPort.set(null);
+    this.selectedSenderPortSource.set(null);
+    this.selectedSenderName.set(null);
     this.senderAutoResolved.set(false);
     this.senderFallback.set(false);
     this.senderLookupQuery.set(null);
+  }
+
+  /**
+   * Apply sender details (id, name, port, source) to signals, with auto-fetch from DTP_SENDER if port missing
+   */
+  private applySenderSelection(sender: SenderOption | null) {
+    if (!sender || (sender.idSender == null && sender.id == null)) {
+      this.selectedSenderId.set(null);
+      this.selectedSenderPort.set(null);
+      this.selectedSenderPortSource.set(null);
+      this.selectedSenderName.set(null);
+      return;
+    }
+
+    const sid = sender.idSender ?? sender.id!;
+    this.selectedSenderId.set(sid);
+    this.selectedSenderName.set(sender.name || `Sender #${sid}`);
+
+    if (sender.port != null) {
+      this.selectedSenderPort.set(sender.port);
+      this.selectedSenderPortSource.set(sender.portSource ?? 'dtp_sender');
+    } else {
+      // Fetch details directly from backend to get port from dtp_sender (with YAML fallback)
+      this.backend.getSenderInfo(sid, this.selectedSite(), this.selectedEnv()).subscribe({
+        next: (info: SenderOption) => {
+          if (info.port != null) {
+            this.selectedSenderPort.set(info.port);
+            this.selectedSenderPortSource.set(info.portSource ?? 'dtp_sender');
+          }
+          if (info.name && !this.selectedSenderName()) {
+            this.selectedSenderName.set(info.name);
+          }
+        },
+        error: (err: any) => {
+          console.debug('Could not fetch extra sender info:', err);
+        },
+      });
+    }
   }
 
   /**
@@ -3852,21 +3903,22 @@ export class StepperComponent implements OnInit, OnDestroy {
         if (filtered.length === 1) {
           // Single match - auto-resolve
           this.senderOptions.set(filtered);
-          this.selectedSenderId.set(filtered[0].idSender ?? null);
+          this.applySenderSelection(filtered[0]);
           this.senderAutoResolved.set(true);
           this.senderFallback.set(false);
-          this.toast.success('Sender auto-resolved using historical pattern');
+          const portMsg = filtered[0].port ? ` (Port: ${filtered[0].port})` : '';
+          this.toast.success(`Sender auto-resolved using historical pattern${portMsg}`);
         } else if (filtered.length > 1) {
           // Multiple matches - show dropdown
           this.senderOptions.set(filtered);
-          this.selectedSenderId.set(null);
+          this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.info(`Found ${filtered.length} matching senders - please select one`);
         } else {
           // No matches
           this.senderOptions.set([]);
-          this.selectedSenderId.set(null);
+          this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.warning(
@@ -3927,26 +3979,27 @@ export class StepperComponent implements OnInit, OnDestroy {
         const env = this.selectedEnv();
         const oppositeSuffix = env === 'PROD' ? '_QA' : '_PROD';
         const validCandidates = (candidates || []).filter((s: SenderOption) => {
-          if (!s || s.idSender == null) return false;
+          if (!s || (s.idSender == null && s.id == null)) return false;
           return !(s.name || '').toUpperCase().endsWith(oppositeSuffix);
         });
 
         // Count unique sender IDs (backend may return multiple rows for same sender)
-        const uniqueIds = new Set(validCandidates.map((s: SenderOption) => s.idSender));
+        const uniqueIds = new Set(validCandidates.map((s: SenderOption) => s.idSender ?? s.id));
 
         if (uniqueIds.size === 1) {
           // Single unique sender ID - auto-resolve
           // Backend already did the smart filtering, so this is the correct sender
           this.senderOptions.set(validCandidates);
-          this.selectedSenderId.set(validCandidates[0].idSender ?? null);
+          this.applySenderSelection(validCandidates[0]);
           this.senderAutoResolved.set(true);
           this.senderFallback.set(false);
-          this.toast.success('Sender auto-resolved');
+          const portMsg = validCandidates[0].port ? ` (Port: ${validCandidates[0].port})` : '';
+          this.toast.success(`Sender auto-resolved${portMsg}`);
         } else if (uniqueIds.size > 1) {
           // Multiple unique sender IDs - show dropdown
           // Backend returned multiple candidates because it couldn't uniquely resolve
           this.senderOptions.set(validCandidates);
-          this.selectedSenderId.set(null);
+          this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.info(`Found ${uniqueIds.size} matching senders - please select one`);
@@ -3954,7 +4007,7 @@ export class StepperComponent implements OnInit, OnDestroy {
           // No matches - this shouldn't happen with lookupSenders (it falls back internally)
           // but handle it gracefully
           this.senderOptions.set([]);
-          this.selectedSenderId.set(null);
+          this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.warning('No senders found for the selected filters');
@@ -3976,15 +4029,24 @@ export class StepperComponent implements OnInit, OnDestroy {
    * Handle manual sender selection from dropdown
    */
   onSenderSelected(senderId: number | null) {
-    this.selectedSenderId.set(senderId);
     // Manual selection overrides auto-resolution
     this.senderAutoResolved.set(false);
 
-    if (senderId) {
-      const sender = this.senderOptions().find((s: SenderOption) => s.idSender === senderId);
-      if (sender) {
-        this.toast.success(`Selected sender: ${sender.name || senderId}`);
-      }
+    if (!senderId) {
+      this.applySenderSelection(null);
+      return;
+    }
+
+    const sender = this.senderOptions().find(
+      (s: SenderOption) => (s.idSender ?? s.id) === senderId,
+    );
+    if (sender) {
+      this.applySenderSelection(sender);
+      const portMsg = sender.port ? ` (Port: ${sender.port})` : '';
+      this.toast.success(`Selected sender: ${sender.name || senderId}${portMsg}`);
+    } else {
+      this.applySenderSelection({ idSender: senderId, name: `Sender #${senderId}` });
+      this.toast.success(`Selected sender #${senderId}`);
     }
   }
 
@@ -3992,11 +4054,20 @@ export class StepperComponent implements OnInit, OnDestroy {
    * Get the name of the currently selected sender
    */
   getSelectedSenderName(): string | null {
+    const name = this.selectedSenderName();
+    if (name) return name;
     const senderId = this.selectedSenderId();
     if (!senderId) return null;
 
-    const sender = this.senderOptions().find((s: SenderOption) => s.idSender === senderId);
+    const sender = this.senderOptions().find((s: SenderOption) => (s.idSender ?? s.id) === senderId);
     return sender?.name || null;
+  }
+
+  /**
+   * Get the resolved port of the currently selected sender
+   */
+  getSelectedSenderPort(): number | null {
+    return this.selectedSenderPort();
   }
 
   /**
@@ -4004,6 +4075,108 @@ export class StepperComponent implements OnInit, OnDestroy {
    */
   private getSenderIdForRequest(): number | null {
     return this.selectedSenderId();
+  }
+
+  /**
+   * Check the ETL pipeline queue depth using the sender selected in Step 1.
+   * The user-selected senderId and port override the static etljobs.yml values so the
+   * correct DTP_SENDER_QUEUE_ITEM rows and crontab jobs are resolved for this sender.
+   *
+   * @param pipelineKey - the etljobs.yml pipelineKey (e.g. "CEBU-CP-DEFAULT")
+   */
+  checkEtlQueueStatus(pipelineKey: string): void {
+    const senderId = this.selectedSenderId();
+    const port = this.selectedSenderPort();
+    this.etlQueueLoading.set(true);
+    this.etlQueueStatus.set(null);
+
+    this.backend.getEtlQueueStatus(pipelineKey, senderId, port).subscribe({
+      next: (status: EtlQueueStatus) => {
+        this.etlQueueStatus.set(status);
+        this.etlQueueLoading.set(false);
+        if (status.error) {
+          this.toast.error(`ETL queue status error: ${status.error}`);
+        } else {
+          const senderLabel = senderId != null ? `sender #${senderId}` : `sender #${status.senderId ?? '?'}`;
+          const portLabel = status.socketPort ? ` (port ${status.socketPort})` : '';
+          this.toast.info(
+            `ETL queue [${pipelineKey}]: ${status.queuedItemCount} item(s) queued for ${senderLabel}${portLabel}`,
+          );
+        }
+      },
+      error: (err: any) => {
+        this.etlQueueLoading.set(false);
+        console.error('ETL queue status check failed:', err);
+        this.toast.error('Failed to check ETL queue status');
+      },
+    });
+  }
+
+  /**
+   * Trigger the ETL crontab for a pipeline only if items remain in the
+   * DTP_SENDER_QUEUE_ITEM table for the sender the user selected in Step 1.
+   * If the queue is empty, the backend skips execution (no blind runs).
+   * Passes the selected senderId and port so crontab grep targets the exact port.
+   *
+   * @param pipelineKey - the etljobs.yml pipelineKey (e.g. "CEBU-CP-DEFAULT")
+   */
+  triggerEtlPipelineIfQueued(pipelineKey: string): void {
+    const senderId = this.selectedSenderId();
+    const port = this.selectedSenderPort();
+    const userId = this.authService.currentUser()?.username ?? 'manual';
+    this.etlTriggerLoading.set(true);
+
+    this.backend.triggerEtlIfQueued(pipelineKey, userId, senderId, port).subscribe({
+      next: (result: EtlTriggerResult) => {
+        this.etlTriggerLoading.set(false);
+        if (result.status === 'success') {
+          if (result.command) {
+            this.toast.success(`ETL triggered: ${result.message}`);
+          } else {
+            // Queue was empty — skip message
+            this.toast.info(result.message);
+          }
+        } else {
+          this.toast.error(`ETL trigger failed: ${result.message}`);
+        }
+      },
+      error: (err: any) => {
+        this.etlTriggerLoading.set(false);
+        console.error('ETL trigger failed:', err);
+        this.toast.error('ETL trigger request failed');
+      },
+    });
+  }
+
+  /**
+   * Directly triggers the crontab job for the selected sender port on the ETL server.
+   * Greps the crontab on the server matching ONLY the acquired port (port is unique).
+   */
+  triggerEtlBySelectedPort(): void {
+    const port = this.selectedSenderPort();
+    if (!port) {
+      this.toast.warning('No port available for selected sender');
+      return;
+    }
+    const site = this.selectedSite() || undefined;
+    const userId = this.authService.currentUser()?.username ?? 'manual';
+    this.etlTriggerLoading.set(true);
+
+    this.backend.triggerEtlByPort(port, site, undefined, userId).subscribe({
+      next: (result: EtlTriggerResult) => {
+        this.etlTriggerLoading.set(false);
+        if (result.status === 'success') {
+          this.toast.success(`ETL triggered for port ${port}: ${result.message}`);
+        } else {
+          this.toast.error(`ETL trigger failed for port ${port}: ${result.message}`);
+        }
+      },
+      error: (err: any) => {
+        this.etlTriggerLoading.set(false);
+        console.error(`ETL trigger by port ${port} failed:`, err);
+        this.toast.error(`ETL trigger by port ${port} failed`);
+      },
+    });
   }
 
   /**

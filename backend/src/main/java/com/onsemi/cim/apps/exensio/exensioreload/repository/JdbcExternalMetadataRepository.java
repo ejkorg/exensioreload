@@ -302,7 +302,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
         // Query structure using subqueries with IN clauses as requested
         // Note: Modern database optimizers (Oracle, PostgreSQL) typically convert these subqueries to JOINs automatically
         // Performance should be good if indexes exist on: dtp_location.location, dtp_data_type.data_type, dtp_tester_type.type
-        sb.append("SELECT s.id, s.name, d.where_condition ");
+        sb.append("SELECT s.id, s.name, s.port, d.where_condition ");
         sb.append("FROM dtp_sender s ");
         sb.append("INNER JOIN dtp_dist_conf d ON s.id = d.id_sender ");
         sb.append("WHERE 1=1 ");
@@ -366,10 +366,12 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 try { id = rs.getInt("id"); if (rs.wasNull()) id = null; } catch (Exception ignore) {}
                 String name = null;
                 try { name = rs.getString("name"); } catch (Exception ignore) {}
+                Integer port = null;
+                try { port = rs.getInt("port"); if (rs.wasNull()) port = null; } catch (Exception ignore) {}
                 String where = null;
                 try { where = rs.getString("where_condition"); } catch (Exception ignore) {}
                 if (id != null || (name != null && !name.isBlank())) {
-                    out.add(new SenderCandidate(id, name, where));
+                    out.add(new SenderCandidate(id, name, where, port));
                 }
             }
             return out;
@@ -384,7 +386,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
     @Override
     public java.util.List<SenderCandidate> findHistoricalSendersWithConnection(Connection c, String dataType) {
-        SqlWithParams sql = new SqlWithParams("select id, name from dtp_sender where resender = 'N'");
+        SqlWithParams sql = new SqlWithParams("select id, name, port from dtp_sender where resender = 'N'");
         // Match any case of HIST in the sender name
         sql.append(" and regexp_like(name, ?, 'i')");
         sql.params.add("HIST");
@@ -405,8 +407,10 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 try { id = rs.getInt("id"); if (rs.wasNull()) id = null; } catch (Exception ignore) {}
                 String name = null;
                 try { name = rs.getString("name"); } catch (Exception ignore) {}
+                Integer port = null;
+                try { port = rs.getInt("port"); if (rs.wasNull()) port = null; } catch (Exception ignore) {}
                 if (id != null || (name != null && !name.isBlank())) {
-                    out.add(new SenderCandidate(id, name));
+                    out.add(new SenderCandidate(id, name, null, port));
                 }
             }
             return out;
@@ -436,7 +440,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
      */
     public String describeSenderLookupQueryWithParamsWithConnection(Connection c, String location, String dataType, String testerType, String dataTypeExt, String testPhase) {
         // Build the same SQL that findSendersWithConnection executes, but capture params
-        SqlWithParams sql = new SqlWithParams("SELECT s.id, s.name, d.where_condition ");
+        SqlWithParams sql = new SqlWithParams("SELECT s.id, s.name, s.port, d.where_condition ");
         sql.append("FROM dtp_sender s ");
         sql.append("INNER JOIN dtp_dist_conf d ON s.id = d.id_sender ");
         sql.append("WHERE 1=1 ");
@@ -543,7 +547,7 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
 
     @Override
     public java.util.List<SenderCandidate> findAllSendersWithConnection(Connection c) {
-        String sql = "select id, name from dtp_sender order by name";
+        String sql = "select id, name, port from dtp_sender order by name";
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
@@ -555,14 +559,46 @@ public class JdbcExternalMetadataRepository implements ExternalMetadataRepositor
                 try { id = rs.getInt("id"); if (rs.wasNull()) id = null; } catch (Exception ignore) {}
                 String name = null;
                 try { name = rs.getString("name"); } catch (Exception ignore) {}
+                Integer port = null;
+                try { port = rs.getInt("port"); if (rs.wasNull()) port = null; } catch (Exception ignore) {}
                 if (id != null || (name != null && !name.isBlank())) {
-                    out.add(new SenderCandidate(id, name));
+                    out.add(new SenderCandidate(id, name, null, port));
                 }
             }
             return out;
         } catch (Exception ex) {
             log.error("Failed fetching sender list: {}", ex.getMessage(), ex);
             throw new RuntimeException("Sender list query failed", ex);
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception ignore) {}
+            try { if (ps != null) ps.close(); } catch (Exception ignore) {}
+        }
+    }
+
+    @Override
+    public java.util.Optional<SenderCandidate> findSenderByIdWithConnection(Connection c, int senderId) {
+        String sql = "select id, name, port from dtp_sender where id = ?";
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            ps = c.prepareStatement(sql);
+            ps.setInt(1, senderId);
+            rs = ps.executeQuery();
+            if (rs.next()) {
+                Integer id = rs.getInt("id");
+                if (rs.wasNull()) id = null;
+                String name = rs.getString("name");
+                Integer port = null;
+                try {
+                    port = rs.getInt("port");
+                    if (rs.wasNull()) port = null;
+                } catch (Exception ignore) {}
+                return java.util.Optional.of(new SenderCandidate(id, name, null, port));
+            }
+            return java.util.Optional.empty();
+        } catch (Exception ex) {
+            log.error("Failed fetching sender by id {}: {}", senderId, ex.getMessage(), ex);
+            return java.util.Optional.empty();
         } finally {
             try { if (rs != null) rs.close(); } catch (Exception ignore) {}
             try { if (ps != null) ps.close(); } catch (Exception ignore) {}

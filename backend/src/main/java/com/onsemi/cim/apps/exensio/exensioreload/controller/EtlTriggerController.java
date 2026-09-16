@@ -98,14 +98,16 @@ public class EtlTriggerController {
     }
 
     /**
-     * Triggers a specific pipeline by pipelineKey with optional rerunPeriodMinutes override.
+     * Triggers a specific pipeline by pipelineKey with optional rerunPeriodMinutes, senderId, or port override.
      */
     @PostMapping("/trigger-pipeline")
     public ResponseEntity<TriggerResult> triggerPipeline(
             @RequestParam String pipelineKey,
             @RequestParam(required = false) String requestId,
             @RequestParam(required = false, defaultValue = "manual") String userId,
-            @RequestParam(required = false) Integer rerunPeriodMinutes) {
+            @RequestParam(required = false) Integer rerunPeriodMinutes,
+            @RequestParam(required = false) Integer senderId,
+            @RequestParam(required = false) Integer port) {
 
         Optional<PipelineConfig> pipelineOpt = pipelineConfigLoader.getPipeline(pipelineKey);
         if (pipelineOpt.isEmpty()) {
@@ -117,29 +119,62 @@ public class EtlTriggerController {
         }
 
         TriggerResult result = etlSshTriggerService.triggerPipeline(
-                pipelineOpt.get(), requestId, userId, rerunPeriodMinutes
+                pipelineOpt.get(), requestId, userId, rerunPeriodMinutes, senderId, port
         );
         return ResponseEntity.ok(result);
     }
 
     /**
      * Checks the sender queue table for a pipeline or site.
+     * If senderId or port is provided (from the stepper Step 1 user selection), it overrides the etljobs.yml value.
      */
     @GetMapping("/queue-status")
-    public ResponseEntity<Map<String, Object>> getQueueStatus(@RequestParam String identifier) {
-        Map<String, Object> status = etlSshTriggerService.getQueueStatus(identifier);
+    public ResponseEntity<Map<String, Object>> getQueueStatus(
+            @RequestParam String identifier,
+            @RequestParam(required = false) Integer senderId,
+            @RequestParam(required = false) Integer port) {
+        Map<String, Object> status = etlSshTriggerService.getQueueStatus(identifier, senderId, port);
         return ResponseEntity.ok(status);
     }
 
     /**
      * Triggers the cronjob for a pipeline ONLY if there are queued items remaining in the sender queue table.
      * Does not blindly trigger if queue is empty.
+     * If senderId or port is provided (from the stepper Step 1 user selection), it overrides the etljobs.yml value.
      */
     @PostMapping("/trigger-if-queued")
     public ResponseEntity<TriggerResult> triggerIfQueued(
             @RequestParam String identifier,
-            @RequestParam(required = false, defaultValue = "queue-monitor") String userId) {
-        TriggerResult result = etlSshTriggerService.triggerIfQueued(identifier, userId);
+            @RequestParam(required = false, defaultValue = "queue-monitor") String userId,
+            @RequestParam(required = false) Integer senderId,
+            @RequestParam(required = false) Integer port) {
+        TriggerResult result = etlSshTriggerService.triggerIfQueued(identifier, userId, senderId, port);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Discovers crontab setup on the ETL server by grepping ONLY for the unique port.
+     */
+    @GetMapping("/discover-by-port")
+    public ResponseEntity<CrontabDiscoveryResult> discoverCrontabByPort(
+            @RequestParam int port,
+            @RequestParam(required = false) String site,
+            @RequestParam(required = false) String server) {
+        CrontabDiscoveryResult result = etlSshTriggerService.discoverCrontabByPort(port, site, server);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Triggers crontab setup on the ETL server by grepping ONLY for the unique port.
+     */
+    @PostMapping("/trigger-by-port")
+    public ResponseEntity<TriggerResult> triggerByPort(
+            @RequestParam int port,
+            @RequestParam(required = false) String site,
+            @RequestParam(required = false) String server,
+            @RequestParam(required = false) String requestId,
+            @RequestParam(required = false, defaultValue = "manual") String userId) {
+        TriggerResult result = etlSshTriggerService.triggerByPort(port, site, server, requestId, userId);
         return ResponseEntity.ok(result);
     }
 

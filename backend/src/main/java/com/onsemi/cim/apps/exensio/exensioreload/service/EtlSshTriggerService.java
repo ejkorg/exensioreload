@@ -153,9 +153,86 @@ public class EtlSshTriggerService {
     }
 
     /**
+     * Resolves the socket port for a sender by querying DTP_SENDER from the external site DB.
+     * Falls back to the provided fallbackPort (from YAML) if not found, null, or on error.
+     */
+    public Integer resolveSenderPort(String site, Integer senderId, Integer fallbackPort) {
+        if (senderId == null || site == null || externalDbConfig == null) {
+            return fallbackPort;
+        }
+        try (Connection conn = externalDbConfig.getConnection(site)) {
+            String[] tableCandidates = new String[]{"DATAPORT_OWNER.DTP_SENDER", "DTP_SENDER"};
+            for (String table : tableCandidates) {
+                try (PreparedStatement ps = conn.prepareStatement("SELECT port FROM " + table + " WHERE id = ?")) {
+                    ps.setInt(1, senderId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            int p = rs.getInt("port");
+                            if (!rs.wasNull() && p > 0) {
+                                logger.info("Resolved port {} for senderId {} from {} (site {})", p, senderId, table, site);
+                                return p;
+                            }
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
+        } catch (Exception ex) {
+            logger.debug("Failed querying dtp_sender for port (senderId={}, site={}): {}", senderId, site, ex.getMessage());
+        }
+        return fallbackPort;
+    }
+
+    /**
+     * Resolves the sender name by querying DTP_SENDER from the external site DB.
+     * Falls back to the provided fallbackName if not found or on error.
+     */
+    public String resolveSenderName(String site, Integer senderId, String fallbackName) {
+        if (senderId == null || site == null || externalDbConfig == null) {
+            return fallbackName;
+        }
+        try (Connection conn = externalDbConfig.getConnection(site)) {
+            String[] tableCandidates = new String[]{"DATAPORT_OWNER.DTP_SENDER", "DTP_SENDER"};
+            for (String table : tableCandidates) {
+                try (PreparedStatement ps = conn.prepareStatement("SELECT name FROM " + table + " WHERE id = ?")) {
+                    ps.setInt(1, senderId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            String n = rs.getString("name");
+                            if (n != null && !n.isBlank()) {
+                                return n;
+                            }
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
+        } catch (Exception ex) {
+            logger.debug("Failed querying dtp_sender for name (senderId={}, site={}): {}", senderId, site, ex.getMessage());
+        }
+        return fallbackName;
+    }
+
+    /**
      * Gets queue status summary for a pipeline or site.
+     * Uses the senderId from the pipeline config in etljobs.yml.
      */
     public Map<String, Object> getQueueStatus(String identifier) {
+        return getQueueStatus(identifier, null);
+    }
+
+    /**
+     * Gets queue status summary for a pipeline or site.
+     * If senderIdOverride is provided (e.g. from the stepper Step 1 user selection),
+     * it overrides the senderId configured in etljobs.yml.
+     */
+    public Map<String, Object> getQueueStatus(String identifier, Integer senderIdOverride) {
+        return getQueueStatus(identifier, senderIdOverride, null);
+    }
+
+    /**
+     * Gets queue status summary for a pipeline or site.
+     * Overrides senderId and/or port if provided from the stepper Step 1 selection.
+     */
+    public Map<String, Object> getQueueStatus(String identifier, Integer senderIdOverride, Integer portOverride) {
         Optional<PipelineConfig> pipelineOpt = pipelineConfigLoader.getPipeline(identifier);
         if (pipelineOpt.isEmpty()) {
             pipelineOpt = pipelineConfigLoader.loadPipelineConfig(identifier);
@@ -163,12 +240,25 @@ public class EtlSshTriggerService {
         Map<String, Object> status = new LinkedHashMap<>();
         if (pipelineOpt.isPresent()) {
             PipelineConfig p = pipelineOpt.get();
-            int count = getSenderQueueCount(p);
+            // Prefer the caller-supplied senderId (from stepper form selection) over etljobs.yml value
+            Integer effectiveSenderId = (senderIdOverride != null) ? senderIdOverride : p.senderId();
+            int count = getSenderQueueCount(p.site(), effectiveSenderId);
+            Integer effectivePort = (portOverride != null) ? portOverride : resolveSenderPort(p.site(), effectiveSenderId, p.socketPort());
+            String portSource;
+            if (portOverride != null) {
+                portSource = "dtp_sender";
+            } else if (p.socketPort() != null && java.util.Objects.equals(effectivePort, p.socketPort())) {
+                portSource = "etljobs.yml";
+            } else {
+                portSource = "dtp_sender";
+            }
             status.put("pipelineKey", p.pipelineKey());
             status.put("site", p.site());
             status.put("server", p.server());
-            status.put("senderId", p.senderId());
-            status.put("socketPort", p.socketPort());
+            status.put("senderId", effectiveSenderId);
+            status.put("senderIdSource", (senderIdOverride != null) ? "user-selected" : "etljobs.yml");
+            status.put("socketPort", effectivePort);
+            status.put("portSource", portSource);
             status.put("configName", p.configName());
             status.put("queuedItemCount", count);
             status.put("hasQueuedItems", count > 0);
@@ -184,6 +274,22 @@ public class EtlSshTriggerService {
      * Inspects and discovers the crontab command on the ETL server for a pipeline without executing it.
      */
     public CrontabDiscoveryResult discoverCrontabSetup(PipelineConfig pipeline) {
+        return discoverCrontabSetup(pipeline, null, null);
+    }
+
+    /**
+     * Inspects and discovers the crontab command on the ETL server for a pipeline without executing it.
+     * Resolves the port from DTP_SENDER if a senderId is available, falling back to pipeline.socketPort().
+     */
+    public CrontabDiscoveryResult discoverCrontabSetup(PipelineConfig pipeline, Integer senderIdOverride) {
+        return discoverCrontabSetup(pipeline, senderIdOverride, null);
+    }
+
+    /**
+     * Inspects and discovers the crontab command on the ETL server for a pipeline without executing it.
+     * Uses portOverride directly if supplied, otherwise resolves from DTP_SENDER / fallback YAML.
+     */
+    public CrontabDiscoveryResult discoverCrontabSetup(PipelineConfig pipeline, Integer senderIdOverride, Integer portOverride) {
         if (pipeline == null) {
             return CrontabDiscoveryResult.failure(null, null, null, null, "Pipeline is null");
         }
@@ -199,18 +305,21 @@ public class EtlSshTriggerService {
 
         try {
             List<CrontabJob> jobs = crontabExtractor.extract(serverConfig);
-            CrontabJob matchedJob = jobMatcher.match(jobs, pipeline.socketPort(), pipeline.configName());
+            Integer effectiveSenderId = (senderIdOverride != null) ? senderIdOverride : pipeline.senderId();
+            Integer effectivePort = (portOverride != null) ? portOverride : resolveSenderPort(pipeline.site(), effectiveSenderId, pipeline.socketPort());
+            String effectiveConfigName = pipeline.configName();
+            CrontabJob matchedJob = jobMatcher.match(jobs, effectivePort, effectiveConfigName);
 
             if (matchedJob == null) {
                 return CrontabDiscoveryResult.notFound(
                         pipeline.pipelineKey(), pipeline.site(), serverConfig.getName(), serverConfig.getHost(),
-                        serverConfig.getSshPort(), pipeline.socketPort(), pipeline.configName(), jobs.size()
+                        serverConfig.getSshPort(), effectivePort, effectiveConfigName, jobs.size()
                 );
             }
 
             return CrontabDiscoveryResult.success(
                     pipeline.pipelineKey(), pipeline.site(), serverConfig.getName(), serverConfig.getHost(),
-                    serverConfig.getSshPort(), pipeline.socketPort(), pipeline.configName(),
+                    serverConfig.getSshPort(), effectivePort, effectiveConfigName,
                     matchedJob.getCommand(), matchedJob.getSchedule(), matchedJob.getRawLine(), jobs.size()
             );
         } catch (Exception e) {
@@ -220,6 +329,131 @@ public class EtlSshTriggerService {
                     pipeline.pipelineKey(), pipeline.site(), serverConfig.getName(), serverConfig.getHost(),
                     "SSH crontab extraction failed: " + e.getMessage()
             );
+        }
+    }
+
+    /**
+     * Discovers crontab setup by searching crontab for a specific port.
+     * Port uniquely identifies the command processor setup on the server.
+     */
+    public CrontabDiscoveryResult discoverCrontabByPort(int port, String site, String server) {
+        configLoader.ensureLoaded();
+        EtlServerConfig serverConfig = resolveServerConfig(server, site);
+        if (serverConfig == null) {
+            // Try all loaded server configs to see which one hosts this port in crontab
+            List<EtlServerConfig> all = configLoader.getConfigs();
+            if (all != null && !all.isEmpty()) {
+                for (EtlServerConfig cfg : all) {
+                    try {
+                        List<CrontabJob> jobs = crontabExtractor.extract(cfg);
+                        CrontabJob matched = jobMatcher.match(jobs, port, null);
+                        if (matched != null) {
+                            return CrontabDiscoveryResult.success(
+                                    null, cfg.getSite(), cfg.getName(), cfg.getHost(),
+                                    cfg.getSshPort(), port, null,
+                                    matched.getCommand(), matched.getSchedule(), matched.getRawLine(), jobs.size()
+                            );
+                        }
+                    } catch (Exception ex) {
+                        logger.debug("Failed checking server {} for port {}: {}", cfg.getName(), port, ex.getMessage());
+                    }
+                }
+            }
+            return CrontabDiscoveryResult.failure(null, site, server, null,
+                    "No matching ETL server configured or crontab job found for port " + port);
+        }
+
+        try {
+            List<CrontabJob> jobs = crontabExtractor.extract(serverConfig);
+            CrontabJob matched = jobMatcher.match(jobs, port, null);
+            if (matched == null) {
+                return CrontabDiscoveryResult.notFound(
+                        null, site, serverConfig.getName(), serverConfig.getHost(),
+                        serverConfig.getSshPort(), port, null, jobs.size()
+                );
+            }
+            return CrontabDiscoveryResult.success(
+                    null, site, serverConfig.getName(), serverConfig.getHost(),
+                    serverConfig.getSshPort(), port, null,
+                    matched.getCommand(), matched.getSchedule(), matched.getRawLine(), jobs.size()
+            );
+        } catch (Exception e) {
+            logger.error("Crontab discovery by port failed on server '{}': {}", serverConfig.getName(), e.getMessage(), e);
+            return CrontabDiscoveryResult.failure(
+                    null, site, serverConfig.getName(), serverConfig.getHost(),
+                    "SSH crontab extraction failed: " + e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Executes the crontab command on the ETL server matching a specific port.
+     * Port is unique across the server crontab.
+     */
+    public TriggerResult triggerByPort(int port, String site, String server, String requestId, String userId) {
+        if (!etlTriggerProperties.isEnabled()) {
+            logger.debug("ETL SSH trigger disabled (etl.trigger.enabled=false)");
+            return TriggerResult.notConfigured();
+        }
+
+        CrontabDiscoveryResult discovery = discoverCrontabByPort(port, site, server);
+        if (!"SUCCESS".equalsIgnoreCase(discovery.status()) || discovery.matchedCommand() == null) {
+            String msg = "Crontab matching by port " + port + " failed: " + discovery.message();
+            logger.warn(msg);
+            return TriggerResult.failure(msg);
+        }
+
+        EtlServerConfig serverConfig = resolveServerConfig(discovery.server(), discovery.site());
+        if (serverConfig == null) {
+            serverConfig = resolveServerConfig(server, site);
+        }
+        if (serverConfig == null) {
+            return TriggerResult.notConfigured();
+        }
+
+        String commandToRun = discovery.matchedCommand();
+        String remoteIp = getRemoteIp();
+
+        if (etlTriggerProperties.isDryRun()) {
+            String msg = "[DRY RUN] Would execute on " + serverConfig.getName() + ": " + commandToRun;
+            logger.info(msg);
+            TriggerResult res = TriggerResult.success(msg, commandToRun, 0);
+            if (requestId != null) {
+                storeIdempotency(requestId, res);
+            }
+            return res;
+        }
+
+        try {
+            logger.info("Executing ETL trigger by port {} on server {} ({}:{}): {}",
+                    port, serverConfig.getName(), serverConfig.getHost(), serverConfig.getSshPort(), commandToRun);
+            executeSshCommand(serverConfig, commandToRun);
+
+            TriggerResult result = TriggerResult.success(
+                    "ETL trigger executed by port " + port + " on " + serverConfig.getName() + ": " + commandToRun,
+                    commandToRun, 0
+            );
+
+            auditService.logEtlTrigger(
+                    requestId, userId, discovery.site() != null ? discovery.site() : site, null,
+                    serverConfig.getName(), port,
+                    result.getStatus(), result.getMessage(), remoteIp
+            );
+
+            if (requestId != null) {
+                storeIdempotency(requestId, result);
+            }
+
+            return result;
+        } catch (Exception e) {
+            logger.error("ETL trigger by port {} failed on server {}: {}", port, serverConfig.getName(), e.getMessage(), e);
+            TriggerResult failure = TriggerResult.failure("SSH execution error: " + e.getMessage());
+            auditService.logEtlTrigger(
+                    requestId, userId, discovery.site() != null ? discovery.site() : site, null,
+                    serverConfig.getName(), port,
+                    "failure", failure.getMessage(), remoteIp
+            );
+            return failure;
         }
     }
 
@@ -270,8 +504,28 @@ public class EtlSshTriggerService {
     /**
      * Checks if there are queued items in the sender queue table for this pipeline/site,
      * and only triggers the cronjob if queued items exist (does not blindly trigger).
+     * Uses the senderId from etljobs.yml.
      */
     public TriggerResult triggerIfQueued(String identifier, String userId) {
+        return triggerIfQueued(identifier, userId, null, null);
+    }
+
+    /**
+     * Checks if there are queued items in the sender queue table for this pipeline/site,
+     * and only triggers the cronjob if queued items exist (does not blindly trigger).
+     * If senderIdOverride is provided (e.g. from the stepper Step 1 user selection),
+     * it overrides the senderId configured in etljobs.yml for the queue depth check.
+     */
+    public TriggerResult triggerIfQueued(String identifier, String userId, Integer senderIdOverride) {
+        return triggerIfQueued(identifier, userId, senderIdOverride, null);
+    }
+
+    /**
+     * Checks if there are queued items in the sender queue table for this pipeline/site,
+     * and only triggers the cronjob if queued items exist (does not blindly trigger).
+     * Passes senderIdOverride and portOverride to target the exact sender and port.
+     */
+    public TriggerResult triggerIfQueued(String identifier, String userId, Integer senderIdOverride, Integer portOverride) {
         Optional<PipelineConfig> pipelineOpt = pipelineConfigLoader.getPipeline(identifier);
         if (pipelineOpt.isEmpty()) {
             pipelineOpt = pipelineConfigLoader.loadPipelineConfig(identifier);
@@ -282,16 +536,19 @@ public class EtlSshTriggerService {
         }
 
         PipelineConfig pipeline = pipelineOpt.get();
-        int queuedCount = getSenderQueueCount(pipeline);
+        // Prefer the caller-supplied senderId (from stepper form selection) over etljobs.yml value
+        Integer effectiveSenderId = (senderIdOverride != null) ? senderIdOverride : pipeline.senderId();
+        int queuedCount = getSenderQueueCount(pipeline.site(), effectiveSenderId);
         if (queuedCount == 0) {
-            String msg = "Sender queue table for pipeline '" + pipeline.pipelineKey() + "' is empty (0 items). Cronjob run skipped.";
+            String msg = "Sender queue table for pipeline '" + pipeline.pipelineKey()
+                    + "' (senderId=" + effectiveSenderId + ") is empty (0 items). Cronjob run skipped.";
             logger.info(msg);
             return TriggerResult.success(msg, null, 0);
         }
 
-        logger.info("Pipeline '{}' has {} queued item(s) in sender queue table. Triggering cronjob...",
-                pipeline.pipelineKey(), queuedCount);
-        return triggerPipeline(pipeline, "queue-trigger-" + System.currentTimeMillis(), userId, null);
+        logger.info("Pipeline '{}' (senderId={}) has {} queued item(s) in sender queue table. Triggering cronjob...",
+                pipeline.pipelineKey(), effectiveSenderId, queuedCount);
+        return triggerPipeline(pipeline, "queue-trigger-" + System.currentTimeMillis(), userId, null, effectiveSenderId, portOverride);
     }
 
     /**
@@ -299,6 +556,24 @@ public class EtlSshTriggerService {
      */
     public TriggerResult triggerPipeline(PipelineConfig pipeline, String requestId, String userId,
                                         Integer rerunPeriodMinutesOverride) {
+        return triggerPipeline(pipeline, requestId, userId, rerunPeriodMinutesOverride, null, null);
+    }
+
+    /**
+     * Triggers crontab execution for a specific pipeline with queue-aware rerun scheduling
+     * and optional senderIdOverride to resolve the crontab port from DTP_SENDER.
+     */
+    public TriggerResult triggerPipeline(PipelineConfig pipeline, String requestId, String userId,
+                                        Integer rerunPeriodMinutesOverride, Integer senderIdOverride) {
+        return triggerPipeline(pipeline, requestId, userId, rerunPeriodMinutesOverride, senderIdOverride, null);
+    }
+
+    /**
+     * Triggers crontab execution for a specific pipeline with queue-aware rerun scheduling,
+     * senderIdOverride, and portOverride to match crontab ONLY by port.
+     */
+    public TriggerResult triggerPipeline(PipelineConfig pipeline, String requestId, String userId,
+                                        Integer rerunPeriodMinutesOverride, Integer senderIdOverride, Integer portOverride) {
         if (!etlTriggerProperties.isEnabled()) {
             logger.debug("ETL SSH trigger disabled (etl.trigger.enabled=false) for requestId: {}", requestId);
             return TriggerResult.notConfigured();
@@ -327,13 +602,15 @@ public class EtlSshTriggerService {
         }
 
         String remoteIp = getRemoteIp();
-        CrontabDiscoveryResult discovery = discoverCrontabSetup(pipeline);
+        CrontabDiscoveryResult discovery = discoverCrontabSetup(pipeline, senderIdOverride, portOverride);
+        Integer effectiveSenderId = (senderIdOverride != null) ? senderIdOverride : pipeline.senderId();
+        Integer effectivePort = (portOverride != null) ? portOverride : resolveSenderPort(pipeline.site(), effectiveSenderId, pipeline.socketPort());
 
         if (!"SUCCESS".equalsIgnoreCase(discovery.status()) || discovery.matchedCommand() == null) {
             String msg = "Crontab matching failed: " + discovery.message();
             logger.warn("Cannot trigger pipeline '{}': {}", pipeline.pipelineKey(), msg);
             auditService.logEtlTrigger(requestId, userId, pipeline.site(), null, serverConfig.getName(),
-                    pipeline.socketPort(), "failure", msg, remoteIp);
+                    effectivePort, "failure", msg, remoteIp);
             return TriggerResult.failure(msg);
         }
 

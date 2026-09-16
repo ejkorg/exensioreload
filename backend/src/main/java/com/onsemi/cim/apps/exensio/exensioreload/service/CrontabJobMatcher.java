@@ -25,11 +25,12 @@ public class CrontabJobMatcher {
 
     /**
      * Matches a crontab job matching socketPort and/or configName.
+     * When socketPort is provided, matches ONLY by the unique port across the server's crontab.
      *
      * @param jobs List of crontab jobs extracted from server
-     * @param socketPort The DataPort CP socket_port (e.g. 60170)
-     * @param configName The DataPort CP config_name (e.g. "CPYQSP")
-     * @return The best matching CrontabJob, or null if none match
+     * @param socketPort The DataPort CP port (e.g. 64566)
+     * @param configName Fallback config name (used only if socketPort is null)
+     * @return The matching CrontabJob, or null if none match
      */
     public CrontabJob match(List<CrontabJob> jobs, Integer socketPort, String configName) {
         if (jobs == null || jobs.isEmpty()) {
@@ -37,23 +38,27 @@ public class CrontabJobMatcher {
             return null;
         }
 
-        String normalizedConfig = (configName != null && !configName.isBlank()) ? configName.trim() : null;
-
-        // 1. Try exact match on BOTH port and configName if both provided
-        if (socketPort != null && normalizedConfig != null) {
+        // Port is unique! If socketPort is provided, grep/match crontab by port ONLY.
+        if (socketPort != null) {
             for (CrontabJob job : jobs) {
-                if (job != null && job.getCommand() != null) {
-                    if (matchesPort(job.getCommand(), socketPort) && matchesConfig(job.getCommand(), normalizedConfig)) {
-                        logger.info("Found crontab job matching BOTH port {} and config '{}': {}",
-                                socketPort, normalizedConfig, job.getCommand());
+                if (job != null) {
+                    if (job.getCommand() != null && matchesPort(job.getCommand(), socketPort)) {
+                        logger.info("Found crontab job uniquely matching port {}: {}", socketPort, job.getCommand());
+                        return job;
+                    }
+                    if (job.getRawLine() != null && matchesPort(job.getRawLine(), socketPort)) {
+                        logger.info("Found crontab job uniquely matching port {} in raw line: {}", socketPort, job.getRawLine());
                         return job;
                     }
                 }
             }
+            logger.warn("No crontab job found matching port {}", socketPort);
+            return null;
         }
 
-        // 2. If configName provided, try matching configName
-        if (normalizedConfig != null) {
+        // Fallback: if no port was provided, match by configName
+        if (configName != null && !configName.isBlank()) {
+            String normalizedConfig = configName.trim();
             for (CrontabJob job : jobs) {
                 if (job != null && job.getCommand() != null && matchesConfig(job.getCommand(), normalizedConfig)) {
                     logger.info("Found crontab job matching config '{}': {}", normalizedConfig, job.getCommand());
@@ -62,31 +67,24 @@ public class CrontabJobMatcher {
             }
         }
 
-        // 3. If port provided, try matching port with word boundaries
-        if (socketPort != null) {
-            for (CrontabJob job : jobs) {
-                if (job != null && job.getCommand() != null && matchesPort(job.getCommand(), socketPort)) {
-                    logger.info("Found crontab job matching port {}: {}", socketPort, job.getCommand());
-                    return job;
-                }
-            }
-        }
-
-        logger.debug("No matching crontab job found for port={} and configName='{}'", socketPort, normalizedConfig);
+        logger.debug("No matching crontab job found for port={} and configName='{}'", socketPort, configName);
         return null;
     }
 
     /**
-     * Checks whether command contains the port as an isolated numeric token.
-     * Prevents 601 matching 60170.
+     * Checks whether command or line contains the port as an isolated numeric token or filename prefix.
+     * Prevents 601 matching 60170, while properly matching:
+     * - /path/to/64566_CZ2_Defect_Klarf18_Si_Sender.xml
+     * - port 64566
+     * - 64566.xml
      */
-    public boolean matchesPort(String command, int port) {
-        if (command == null || command.isBlank()) {
+    public boolean matchesPort(String text, int port) {
+        if (text == null || text.isBlank()) {
             return false;
         }
         String portStr = String.valueOf(port);
         Pattern pattern = Pattern.compile("(?<![0-9])" + Pattern.quote(portStr) + "(?![0-9])");
-        return pattern.matcher(command).find();
+        return pattern.matcher(text).find();
     }
 
     /**

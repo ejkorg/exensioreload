@@ -301,6 +301,8 @@ export interface SenderOption {
   idSender?: number | null;
   id?: number | null;
   name: string;
+  port?: number | null;
+  portSource?: 'dtp_sender' | 'yaml_fallback' | string | null;
 }
 
 export interface LimitsConfig {
@@ -735,12 +737,14 @@ export class BackendService {
   lookupSenders(params: Record<string, any>): Observable<SenderOption[]> {
     return this.http.get<any[]>(`${this.apiUrl}/senders/lookup`, { params: this.toParams(params) }).pipe(
       map((response: any[]) => {
-        // Backend returns array of {idSender, name, id, query}
+        // Backend returns array of {idSender, name, id, port, portSource, query}
         return (response || [])
           .map((item) => ({
             idSender: item.idSender ?? item.id_sender ?? item.id ?? null,
             id: item.id ?? item.idSender ?? item.id_sender ?? null,
             name: item.name ?? item.sender_name ?? '',
+            port: item.port != null ? Number(item.port) : null,
+            portSource: item.portSource ?? null,
           }))
           .filter((s) => s.idSender != null);
       }),
@@ -764,7 +768,43 @@ export class BackendService {
    * Requires: site, environment, dataType in params
    */
   getHistoricalSenders(params: Record<string, any>): Observable<SenderOption[]> {
-    return this.http.get<SenderOption[]>(`${this.apiUrl}/senders/historical/senders`, {
+    return this.http
+      .get<any[]>(`${this.apiUrl}/senders/historical/senders`, {
+        params: this.toParams(params),
+      })
+      .pipe(
+        map((response: any[]) => {
+          return (response || [])
+            .map((item) => ({
+              idSender: item.idSender ?? item.id_sender ?? item.id ?? null,
+              id: item.id ?? item.idSender ?? item.id_sender ?? null,
+              name: item.name ?? item.sender_name ?? '',
+              port: item.port != null ? Number(item.port) : null,
+              portSource: item.portSource ?? null,
+            }))
+            .filter((s) => s.idSender != null);
+        }),
+      );
+  }
+
+  /**
+   * Get sender details (name, port, source) by senderId directly from dtp_sender,
+   * falling back to etljobs.yml / etlservers.yml.
+   */
+  getSenderInfo(
+    senderId: number,
+    site?: string | null,
+    environment?: string | null,
+  ): Observable<SenderOption> {
+    const params: Record<string, any> = { senderId };
+    if (site) {
+      params['site'] = site;
+      params['connectionKey'] = site;
+    }
+    if (environment) {
+      params['environment'] = environment.toLowerCase();
+    }
+    return this.http.get<SenderOption>(`${this.apiUrl}/senders/info`, {
       params: this.toParams(params),
     });
   }
@@ -1345,4 +1385,119 @@ export class BackendService {
       };
     });
   }
+
+  // ============================================================================
+  // ETL Trigger API (queue-aware crontab trigger)
+  // ============================================================================
+
+  /**
+   * Check the sender queue depth for a pipeline.
+   * Pass the user-selected senderId and/or port from Step 1 to override the etljobs.yml static value.
+   */
+  getEtlQueueStatus(identifier: string, senderId?: number | null, port?: number | null): Observable<EtlQueueStatus> {
+    let params = new HttpParams().set('identifier', identifier);
+    if (senderId != null) {
+      params = params.set('senderId', String(senderId));
+    }
+    if (port != null) {
+      params = params.set('port', String(port));
+    }
+    return this.http.get<EtlQueueStatus>(`${this.apiUrl}/etl-trigger/queue-status`, { params });
+  }
+
+  /**
+   * Trigger the ETL crontab for a pipeline only when its sender queue is non-empty.
+   * Pass the user-selected senderId and/or port from Step 1 to override the etljobs.yml static value.
+   */
+  triggerEtlIfQueued(identifier: string, userId?: string, senderId?: number | null, port?: number | null): Observable<EtlTriggerResult> {
+    let params = new HttpParams()
+      .set('identifier', identifier)
+      .set('userId', userId ?? 'manual');
+    if (senderId != null) {
+      params = params.set('senderId', String(senderId));
+    }
+    if (port != null) {
+      params = params.set('port', String(port));
+    }
+    return this.http.post<EtlTriggerResult>(`${this.apiUrl}/etl-trigger/trigger-if-queued`, null, { params });
+  }
+
+  /**
+   * Discovers the crontab setup on the server by grepping ONLY for the unique port.
+   */
+  discoverCrontabByPort(port: number, site?: string, server?: string): Observable<CrontabDiscoveryResult> {
+    let params = new HttpParams().set('port', String(port));
+    if (site) {
+      params = params.set('site', site);
+    }
+    if (server) {
+      params = params.set('server', server);
+    }
+    return this.http.get<CrontabDiscoveryResult>(`${this.apiUrl}/etl-trigger/discover-by-port`, { params });
+  }
+
+  /**
+   * Triggers the crontab command on the server matching the unique port.
+   */
+  triggerEtlByPort(
+    port: number,
+    site?: string,
+    server?: string,
+    userId?: string,
+    requestId?: string
+  ): Observable<EtlTriggerResult> {
+    let params = new HttpParams()
+      .set('port', String(port))
+      .set('userId', userId ?? 'manual');
+    if (site) {
+      params = params.set('site', site);
+    }
+    if (server) {
+      params = params.set('server', server);
+    }
+    if (requestId) {
+      params = params.set('requestId', requestId);
+    }
+    return this.http.post<EtlTriggerResult>(`${this.apiUrl}/etl-trigger/trigger-by-port`, null, { params });
+  }
+}
+
+// ============================================================================
+// ETL Trigger Interfaces
+// ============================================================================
+export interface EtlQueueStatus {
+  pipelineKey?: string;
+  site?: string;
+  server?: string;
+  senderId?: number | null;
+  senderIdSource?: 'user-selected' | 'etljobs.yml';
+  socketPort?: number;
+  portSource?: string;
+  configName?: string;
+  queuedItemCount: number;
+  hasQueuedItems: boolean;
+  error?: string;
+}
+
+export interface EtlTriggerResult {
+  status: string;
+  message: string;
+  command?: string | null;
+  rerunMinutes?: number | null;
+}
+
+export interface CrontabDiscoveryResult {
+  status: string;
+  pipelineKey?: string;
+  site?: string;
+  server?: string;
+  serverHost?: string;
+  sshPort?: number;
+  socketPort?: number;
+  configName?: string;
+  matchedCommand?: string;
+  schedule?: string;
+  rawCrontabLine?: string;
+  totalCrontabLines?: number;
+  message?: string;
 }

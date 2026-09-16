@@ -225,6 +225,13 @@ public class MetadataImporterService {
         throw new UnsupportedOperationException("Sender list only supported by JDBC implementation");
     }
 
+    public java.util.Optional<com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate> findSenderByIdWithConnection(java.sql.Connection c, int senderId) {
+        if (externalMetadataRepository instanceof com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) {
+            return ((com.onsemi.cim.apps.exensio.exensioreload.repository.JdbcExternalMetadataRepository) externalMetadataRepository).findSenderByIdWithConnection(c, senderId);
+        }
+        return java.util.Optional.empty();
+    }
+
     // Distinct value helpers — all stubs, no non-JDBC implementation exists.
     // @deprecated since v3.1 — kept to track migration progress.
 

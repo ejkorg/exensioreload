@@ -119,8 +119,9 @@ public class CrontabExtractor {
         if (parts.length >= 6) {
             // First 5 parts are schedule
             job.setSchedule(parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3] + " " + parts[4]);
-            // Remaining part is the command
-            job.setCommand(parts[5]);
+            // Remaining part is the command - clean trailing redirects (e.g. > /dev/null 2>&1)
+            String cmd = parts[5].trim();
+            job.setCommand(cleanRedirect(cmd));
         } else if (parts.length >= 5) {
             // Minimal valid crontab: 5 schedule fields + minimal command
             job.setSchedule(parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3] + " " + parts[4]);
@@ -128,5 +129,19 @@ public class CrontabExtractor {
         }
 
         return job;
+    }
+
+    /**
+     * Strips trailing output redirections such as '> /dev/null 2>&1', '> file.log 2>&1', '2>&1'
+     * so that the executed command runs cleanly.
+     */
+    public static String cleanRedirect(String cmd) {
+        if (cmd == null || cmd.isBlank()) {
+            return "";
+        }
+        return cmd.replaceAll("\\s*>\\s*[^\\s]+(?:\\s*2>&1)?\\s*$", "")
+                  .replaceAll("\\s*>\\s*/dev/null.*$", "")
+                  .replaceAll("\\s*2>&1\\s*$", "")
+                  .trim();
     }
 }

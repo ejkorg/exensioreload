@@ -113,6 +113,9 @@ public interface ExternalMetadataRepository {
         return null;
     }
     java.util.List<SenderCandidate> findAllSendersWithConnection(java.sql.Connection conn);
+    default java.util.Optional<SenderCandidate> findSenderByIdWithConnection(java.sql.Connection conn, int senderId) {
+        return java.util.Optional.empty();
+    }
 
     // Distinct value helpers (use existing Connection lifecycle)
     java.util.List<String> findDistinctLocationsWithConnection(java.sql.Connection conn, String dataType, String testerType, String testPhase);

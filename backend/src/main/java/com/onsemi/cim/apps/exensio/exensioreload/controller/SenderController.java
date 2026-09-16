@@ -96,6 +96,10 @@ public class SenderController {
     private final ExensioPreCheckCacheService exensioPreCheckService;
     private final com.onsemi.cim.apps.exensio.exensioreload.service.WaferDiscoveryService waferDiscoveryService;
     private final com.onsemi.cim.apps.exensio.exensioreload.service.ParallelSchemaCheckService parallelSchemaCheckService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfigLoader pipelineConfigLoader;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.onsemi.cim.apps.exensio.exensioreload.config.EtlServerConfigLoader etlServerConfigLoader;
 
     public SenderController(SenderService senderService, SenderQueueRepository repo, com.onsemi.cim.apps.exensio.exensioreload.service.MetadataImporterService metadataImporterService, com.onsemi.cim.apps.exensio.exensioreload.service.MetricsService metricsService, RefDbService refDbService, SenderDispatchService senderDispatchService, org.springframework.core.env.Environment env, com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository userRepository, com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig externalDbConfig, MailService mailService, com.onsemi.cim.apps.exensio.exensioreload.service.StageSessionService stageSessionService, ExensioPreCheckCacheService exensioPreCheckService, com.onsemi.cim.apps.exensio.exensioreload.service.WaferDiscoveryService waferDiscoveryService, com.onsemi.cim.apps.exensio.exensioreload.service.ParallelSchemaCheckService parallelSchemaCheckService) {
         this.senderService = senderService;
@@ -1451,6 +1455,38 @@ public class SenderController {
         return trimmed.isEmpty() ? "unknown" : trimmed;
     }
 
+    private Integer resolveFallbackPort(String site, Integer senderId) {
+        if (site != null && !site.isBlank()) {
+            String normSite = site.trim().toUpperCase(Locale.ROOT);
+            if (pipelineConfigLoader != null) {
+                try {
+                    List<com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfig> pipelines = pipelineConfigLoader.getPipelinesForSite(normSite);
+                    if (pipelines != null && !pipelines.isEmpty()) {
+                        if (senderId != null) {
+                            for (com.onsemi.cim.apps.exensio.exensioreload.pipeline.PipelineConfig p : pipelines) {
+                                if (java.util.Objects.equals(p.senderId(), senderId) && p.socketPort() != null) {
+                                    return p.socketPort();
+                                }
+                            }
+                        }
+                        if (pipelines.get(0).socketPort() != null) {
+                            return pipelines.get(0).socketPort();
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
+            if (etlServerConfigLoader != null) {
+                try {
+                    List<com.onsemi.cim.apps.exensio.exensioreload.config.EtlServerConfig> servers = etlServerConfigLoader.getConfigsForSite(normSite);
+                    if (servers != null && !servers.isEmpty() && servers.get(0).getSocketPort() != null) {
+                        return servers.get(0).getSocketPort();
+                    }
+                } catch (Exception ignore) {}
+            }
+        }
+        return 60170;
+    }
+
     // Lookup senders in selected external DB based on user-provided filters. Returns list of {idSender,name}
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('USER','ADMIN')")
     @GetMapping("/lookup")
@@ -1557,6 +1593,14 @@ public class SenderController {
                         java.util.Map<String,Object> m = new java.util.HashMap<>();
                         m.put("idSender", s.getIdSender());
                         m.put("name", s.getName());
+                        Integer p = s.getPort();
+                        String portSource = "dtp_sender";
+                        if (p == null) {
+                            p = resolveFallbackPort(connectionKey != null ? connectionKey : site, s.getIdSender());
+                            portSource = "yaml_fallback";
+                        }
+                        m.put("port", p);
+                        m.put("portSource", portSource);
                         if (sqlDesc != null) m.put("query", sqlDesc);
                         out.add(m);
                     }
@@ -1648,6 +1692,14 @@ public class SenderController {
                         m.put("idSender", s.getIdSender());
                         m.put("name", s.getName());
                         m.put("id", s.getIdSender());
+                        Integer p = s.getPort();
+                        String portSource = "dtp_sender";
+                        if (p == null) {
+                            p = resolveFallbackPort(connectionKey != null ? connectionKey : site, s.getIdSender());
+                            portSource = "yaml_fallback";
+                        }
+                        m.put("port", p);
+                        m.put("portSource", portSource);
                         if (sqlDesc != null) m.put("query", sqlDesc);
                         out.add(m);
                     }
@@ -1702,6 +1754,14 @@ public class SenderController {
                     m.put("idSender", s.getIdSender());
                     m.put("name", s.getName());
                     m.put("id", s.getIdSender());
+                    Integer p = s.getPort();
+                    String portSource = "dtp_sender";
+                    if (p == null) {
+                        p = resolveFallbackPort(connectionKey != null ? connectionKey : site, s.getIdSender());
+                        portSource = "yaml_fallback";
+                    }
+                    m.put("port", p);
+                    m.put("portSource", portSource);
                     out.add(m);
                 }
                 return ResponseEntity.ok(out);
@@ -1710,6 +1770,71 @@ public class SenderController {
             log.error("Historical sender lookup failed for connectionKey={} locationId={} dataType={}: {}", connectionKey, locationId, dataType, ex.getMessage(), ex);
             return ResponseEntity.status(500).body(java.util.List.of(java.util.Map.of("error", ex.getMessage())));
         }
+    }
+
+    /**
+     * Resolves details (name, port, source) for a specific sender ID from dtp_sender table
+     * with automatic fallback to etljobs.yml / etlservers.yml.
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('USER','ADMIN')")
+    @GetMapping("/info")
+    public ResponseEntity<java.util.Map<String, Object>> getSenderInfo(
+            @RequestParam(name = "senderId") int senderId,
+            @RequestParam(required = false, name = "locationId") Long locationId,
+            @RequestParam(required = false, name = "connectionKey") String connectionKey,
+            @RequestParam(required = false, name = "site") String site,
+            @RequestParam(defaultValue = "qa") String environment) {
+        if ((connectionKey == null || connectionKey.isBlank()) && site != null && !site.isBlank()) {
+            connectionKey = site;
+        }
+        java.sql.Connection conn = null;
+        try {
+            if (locationId != null) {
+                com.onsemi.cim.apps.exensio.exensioreload.entity.ExternalLocation loc = metadataImporterService.findLocationById(locationId);
+                if (loc != null) {
+                    conn = metadataImporterService.resolveConnectionForLocation(loc, environment);
+                }
+            } else if (connectionKey != null && !connectionKey.isBlank()) {
+                conn = metadataImporterService.resolveConnectionForKey(connectionKey, environment);
+            }
+        } catch (Exception ex) {
+            log.warn("Could not connect to external DB for sender info lookup: {}", ex.getMessage());
+        }
+
+        String name = null;
+        Integer port = null;
+        String source = "yaml_fallback";
+
+        if (conn != null) {
+            try (java.sql.Connection c = conn) {
+                java.util.Optional<com.onsemi.cim.apps.exensio.exensioreload.repository.SenderCandidate> cand =
+                        metadataImporterService.findSenderByIdWithConnection(c, senderId);
+                if (cand.isPresent()) {
+                    name = cand.get().getName();
+                    port = cand.get().getPort();
+                    if (port != null) {
+                        source = "dtp_sender";
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Error querying dtp_sender for id {}: {}", senderId, ex.getMessage());
+            }
+        }
+
+        if (port == null) {
+            port = resolveFallbackPort(connectionKey != null ? connectionKey : site, senderId);
+        }
+        if (name == null || name.isBlank()) {
+            name = "Sender #" + senderId;
+        }
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        resp.put("id", senderId);
+        resp.put("idSender", senderId);
+        resp.put("name", name);
+        resp.put("port", port);
+        resp.put("source", source);
+        return ResponseEntity.ok(resp);
     }
 
     // Fetch distinct location values from the selected external DB (for location dropdown)

@@ -19,7 +19,10 @@ import { SenderOption } from '../../api/backend.service';
                     <span class="sender-auto-resolved__label">Sender Auto-Resolved</span>
                 </div>
                 <div class="sender-auto-resolved__value">
-                    {{ selectedName() || ('Sender #' + selectedId()) }}
+                    <span>{{ selectedName() || ('Sender #' + selectedId()) }}</span>
+                    <span *ngIf="selectedPort()" class="sender-port-badge" [title]="selectedPortSource() === 'dtp_sender' ? 'Port from DTP_SENDER table' : 'Fallback port from YAML config'">
+                        Port: {{ selectedPort() }}
+                    </span>
                 </div>
                 <div class="sender-auto-resolved__note">
                     Automatically matched based on your filter selection
@@ -132,6 +135,26 @@ import { SenderOption } from '../../api/backend.service';
             border: 1px solid rgba(0, 0, 0, 0.12);
         }
 
+        .sender-port-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0.6rem;
+            margin-left: 0.6rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            vertical-align: middle;
+        }
+
+        :host-context(body.light-theme) .sender-port-badge {
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+            border-color: rgba(37, 99, 235, 0.3);
+        }
+
         .sender-auto-resolved__note {
             font-size: 0.875rem;
             color: var(--text-muted);
@@ -239,6 +262,12 @@ export class GlassSenderSelectorComponent {
     @Input() set selectedSenderName(value: string | null) {
         this.selectedName.set(value);
     }
+    @Input() set selectedSenderPort(value: number | null) {
+        this.selectedPort.set(value);
+    }
+    @Input() set selectedSenderPortSource(value: string | null) {
+        this.selectedPortSource.set(value);
+    }
     @Input() set senderAutoResolved(value: boolean) {
         this.autoResolved.set(value);
     }
@@ -262,6 +291,8 @@ export class GlassSenderSelectorComponent {
     private _senderOptions = signal<SenderOption[]>([]);
     selectedId = signal<number | null>(null);
     selectedName = signal<string | null>(null);
+    selectedPort = signal<number | null>(null);
+    selectedPortSource = signal<string | null>(null);
     autoResolved = signal(false);
     loading = signal(false);
     fallback = signal(false);
@@ -271,10 +302,15 @@ export class GlassSenderSelectorComponent {
 
     // Computed values - convert SenderOption[] to GlassOption[] for the select component
     senderOptionsForSelect = computed(() => {
-        return this._senderOptions().map(opt => ({
-            value: opt.idSender ?? opt.id,
-            label: opt.name || `Sender #${opt.idSender ?? opt.id}`
-        } as GlassOption));
+        return this._senderOptions().map(opt => {
+            const id = opt.idSender ?? opt.id;
+            const baseName = opt.name || `Sender #${id}`;
+            const portText = opt.port ? ` (Port: ${opt.port})` : '';
+            return {
+                value: id,
+                label: `${baseName}${portText}`
+            } as GlassOption;
+        });
     });
 
     // Expose options for template
@@ -284,6 +320,12 @@ export class GlassSenderSelectorComponent {
 
     onSenderChange(senderId: number | null) {
         this.selectedId.set(senderId);
+        const match = this._senderOptions().find(o => (o.idSender ?? o.id) === senderId);
+        if (match) {
+            this.selectedName.set(match.name || null);
+            this.selectedPort.set(match.port ?? null);
+            this.selectedPortSource.set(match.portSource ?? (match.port ? 'dtp_sender' : null));
+        }
         this.senderSelected.emit(senderId);
         this.showDropdown.set(false);
     }
