@@ -4263,14 +4263,14 @@ export class StepperComponent implements OnInit, OnDestroy {
       // Requirements: 1.3 - Display verification dialog showing results
       // Open verification dialog with GlassDialogService
       // Transform response to map of lot -> verification result with schema info
-      const verificationMap = new Map<string, { found: boolean; schema: string | null }>();
+      const verificationMap = new Map<string, { found: boolean; schema: string | null; wafers?: string[] }>();
       if (result.lots instanceof Map) {
         result.lots.forEach((value: any, key: string) => {
-          verificationMap.set(key, { found: value.found, schema: value.schema || null });
+          verificationMap.set(key, { found: value.found, schema: value.schema || null, wafers: value.wafers || [] });
         });
       } else {
         Object.entries(result.lots).forEach(([key, value]: [string, any]) => {
-          verificationMap.set(key, { found: Boolean(value.found), schema: value.schema || null });
+          verificationMap.set(key, { found: Boolean(value.found), schema: value.schema || null, wafers: value.wafers || [] });
         });
       }
 

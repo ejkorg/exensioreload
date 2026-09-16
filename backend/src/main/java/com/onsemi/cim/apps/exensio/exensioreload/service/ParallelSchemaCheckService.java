@@ -29,19 +29,28 @@ public class ParallelSchemaCheckService {
     private static final Logger log = LoggerFactory.getLogger(ParallelSchemaCheckService.class);
 
     private final ExensioPreCheckService exensioPreCheckService;
+    private final com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ParallelSchemaCheckService(
+            ExensioPreCheckService exensioPreCheckService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.onsemi.cim.apps.exensio.exensioreload.config.ExensioProperties exensioProperties) {
+        this.exensioPreCheckService = exensioPreCheckService;
+        this.exensioProperties = exensioProperties;
+    }
 
     public ParallelSchemaCheckService(ExensioPreCheckService exensioPreCheckService) {
-        this.exensioPreCheckService = exensioPreCheckService;
+        this(exensioPreCheckService, null);
     }
 
     /**
      * Executes preflight checks in parallel across PRODUCTION and SANDBOX schemas.
      * 
-     * Flow:
+     * Flow (aligned with ExensioLoadMonitor):
      * 1. Create requests for each schema with discovered wafers
-     * 2. Execute both in parallel via raw-SQL
+     * 2. Execute both in parallel via lot-wafer-lookup endpoint (primary)
      * 3. Consolidate results (both schemas if exists in both, otherwise union)
-     * 4. If nothing found → auto-switch to lot-wafer-lookup endpoint (PRODUCTION→SANDBOX)
+     * 4. If nothing found and preferRawSql enabled (or as secondary fallback) → try raw-SQL
      * 
      * @param lotIds list of lot IDs to verify
      * @param discoveredWafers list of discovered wafer IDs (from WaferDiscoveryService)
@@ -62,30 +71,120 @@ public class ParallelSchemaCheckService {
         }
 
         log.info("[ParallelSchemaCheck] Starting parallel check: lots={}, wafers={}, dataType={}",
-                lotIds.size(), discoveredWafers.size(), preCheckRequest.dataType());
+                lotIds.size(), discoveredWafers != null ? discoveredWafers.size() : 0, preCheckRequest.dataType());
 
-        // Create requests for each schema
+        // If preferRawSql is explicitly configured, run legacy raw-SQL first
+        if (exensioProperties != null && exensioProperties.isPreferRawSql()) {
+            log.debug("[ParallelSchemaCheck] PreferRawSql=true, running parallel raw-SQL query");
+            ExensioPreCheckResponse rawSqlResult = checkLotsParallelRawSql(lotIds, discoveredWafers, preCheckRequest);
+            if (rawSqlResult != null && rawSqlResult.lotsFound() != null && !rawSqlResult.lotsFound().isEmpty()) {
+                return rawSqlResult;
+            }
+        }
+
+        // Standard lot-wafer-lookup in parallel across PRODUCTION and SANDBOX (matching ExensioLoadMonitor)
         ExensioPreCheckRequest productionRequest = new ExensioPreCheckRequest(
-                "PRODUCTION",  // Force specific environment
+                "PRODUCTION",
                 lotIds,
-                discoveredWafers,  // Use discovered wafers
+                discoveredWafers,
                 preCheckRequest.blocks(),
                 preCheckRequest.dataType(),
                 preCheckRequest.enableSnowflakeFallback(),
-                preCheckRequest.filenames()  // pass through filenames for raw-SQL prefix matching
+                preCheckRequest.filenames()
         );
 
         ExensioPreCheckRequest sandboxRequest = new ExensioPreCheckRequest(
-                "SANDBOX",  // Force specific environment
+                "SANDBOX",
                 lotIds,
-                discoveredWafers,  // Use discovered wafers
+                discoveredWafers,
                 preCheckRequest.blocks(),
                 preCheckRequest.dataType(),
                 preCheckRequest.enableSnowflakeFallback(),
-                preCheckRequest.filenames()  // pass through filenames for raw-SQL prefix matching
+                preCheckRequest.filenames()
         );
 
-        // Step 1: Execute raw-SQL for both schemas in parallel
+        CompletableFuture<ExensioPreCheckResponse> productionFuture = CompletableFuture.supplyAsync(
+                () -> exensioPreCheckService.checkViaExensioLotWaferLookup(
+                        productionRequest, List.of("PRODUCTION"))
+        );
+
+        CompletableFuture<ExensioPreCheckResponse> sandboxFuture = CompletableFuture.supplyAsync(
+                () -> exensioPreCheckService.checkViaExensioLotWaferLookup(
+                        sandboxRequest, List.of("SANDBOX"))
+        );
+
+        ExensioPreCheckResponse productionResult = null;
+        ExensioPreCheckResponse sandboxResult = null;
+
+        try {
+            productionResult = productionFuture.get();
+            if (productionResult != null) {
+                log.debug("[ParallelSchemaCheck] PRODUCTION lot-wafer result: found={}, notFound={}",
+                        productionResult.lotsFound().size(), productionResult.lotsNotFound().size());
+            }
+        } catch (Exception e) {
+            log.warn("[ParallelSchemaCheck] PRODUCTION lot-wafer check failed: {}", e.getMessage());
+        }
+
+        try {
+            sandboxResult = sandboxFuture.get();
+            if (sandboxResult != null) {
+                log.debug("[ParallelSchemaCheck] SANDBOX lot-wafer result: found={}, notFound={}",
+                        sandboxResult.lotsFound().size(), sandboxResult.lotsNotFound().size());
+            }
+        } catch (Exception e) {
+            log.warn("[ParallelSchemaCheck] SANDBOX lot-wafer check failed: {}", e.getMessage());
+        }
+
+        // Consolidate results from both schemas
+        ExensioPreCheckResponse consolidated = consolidateResults(productionResult, sandboxResult, lotIds);
+
+        // Fallback: If lot-wafer-lookup found nothing, try raw-SQL as secondary attempt
+        if ((consolidated.lotsFound() == null || consolidated.lotsFound().isEmpty())
+                && (exensioProperties == null || !exensioProperties.isPreferRawSql())) {
+            log.debug("[ParallelSchemaCheck] Lot-wafer-lookup found nothing — attempting raw-SQL fallback");
+            try {
+                ExensioPreCheckResponse rawSqlResult = checkLotsParallelRawSql(lotIds, discoveredWafers, preCheckRequest);
+                if (rawSqlResult != null && rawSqlResult.lotsFound() != null && !rawSqlResult.lotsFound().isEmpty()) {
+                    log.info("[ParallelSchemaCheck] Raw-SQL fallback found {} lots", rawSqlResult.lotsFound().size());
+                    return rawSqlResult;
+                }
+            } catch (Exception e) {
+                log.debug("[ParallelSchemaCheck] Raw-SQL fallback failed: {}", e.getMessage());
+            }
+        }
+
+        return consolidated;
+    }
+
+    /**
+     * Executes legacy raw-SQL preflight checks in parallel across schemas.
+     */
+    private ExensioPreCheckResponse checkLotsParallelRawSql(
+            List<String> lotIds,
+            List<String> discoveredWafers,
+            ExensioPreCheckRequest preCheckRequest) {
+
+        ExensioPreCheckRequest productionRequest = new ExensioPreCheckRequest(
+                "PRODUCTION",
+                lotIds,
+                discoveredWafers,
+                preCheckRequest.blocks(),
+                preCheckRequest.dataType(),
+                preCheckRequest.enableSnowflakeFallback(),
+                preCheckRequest.filenames()
+        );
+
+        ExensioPreCheckRequest sandboxRequest = new ExensioPreCheckRequest(
+                "SANDBOX",
+                lotIds,
+                discoveredWafers,
+                preCheckRequest.blocks(),
+                preCheckRequest.dataType(),
+                preCheckRequest.enableSnowflakeFallback(),
+                preCheckRequest.filenames()
+        );
+
         CompletableFuture<ExensioPreCheckResponse> productionFuture = CompletableFuture.supplyAsync(
                 () -> exensioPreCheckService.checkViaExensioHttpMultiSchema(
                         productionRequest, List.of("PRODUCTION", "SANDBOX"))
@@ -101,75 +200,18 @@ public class ParallelSchemaCheckService {
 
         try {
             productionResult = productionFuture.get();
-            if (productionResult == null) {
-                productionResult = new ExensioPreCheckResponse(
-                        Collections.emptyList(), lotIds, Collections.emptyList(),
-                        "PRODUCTION raw-sql check returned no result");
-            } else {
-                log.debug("[ParallelSchemaCheck] PRODUCTION raw-sql result: found={}, notFound={}",
-                        productionResult.lotsFound().size(), productionResult.lotsNotFound().size());
-            }
         } catch (Exception e) {
             log.warn("[ParallelSchemaCheck] PRODUCTION raw-sql check failed: {}", e.getMessage());
-            productionResult = new ExensioPreCheckResponse(
-                    Collections.emptyList(),
-                    lotIds,
-                    Collections.emptyList(),
-                    "PRODUCTION raw-sql check failed: " + e.getMessage()
-            );
         }
 
         try {
             sandboxResult = sandboxFuture.get();
-            if (sandboxResult == null) {
-                sandboxResult = new ExensioPreCheckResponse(
-                        Collections.emptyList(), lotIds, Collections.emptyList(),
-                        "SANDBOX raw-sql check returned no result");
-            } else {
-                log.debug("[ParallelSchemaCheck] SANDBOX raw-sql result: found={}, notFound={}",
-                        sandboxResult.lotsFound().size(), sandboxResult.lotsNotFound().size());
-            }
         } catch (Exception e) {
             log.warn("[ParallelSchemaCheck] SANDBOX raw-sql check failed: {}", e.getMessage());
-            sandboxResult = new ExensioPreCheckResponse(
-                    Collections.emptyList(),
-                    lotIds,
-                    Collections.emptyList(),
-                    "SANDBOX raw-sql check failed: " + e.getMessage()
-            );
         }
 
-        // Step 2: Consolidate results from raw-SQL
-        ExensioPreCheckResponse consolidated = consolidateResults(productionResult, sandboxResult, lotIds);
-
-        // Step 3: Auto-switch to lot-wafer-lookup if raw-SQL found nothing
-        if (consolidated.lotsFound() == null || consolidated.lotsFound().isEmpty()) {
-            log.info("[ParallelSchemaCheck] raw-SQL found nothing — auto-switching to lot-wafer-lookup endpoint (PRODUCTION→SANDBOX)");
-            
-            // Build a simple lot-wafer request (no environment override — let it use schema priority)
-            ExensioPreCheckRequest lotWaferRequest = new ExensioPreCheckRequest(
-                    preCheckRequest.environment(),
-                    lotIds,
-                    discoveredWafers,
-                    preCheckRequest.blocks(),
-                    preCheckRequest.dataType(),
-                    preCheckRequest.enableSnowflakeFallback(),
-                    preCheckRequest.filenames()
-            );
-
-            ExensioPreCheckResponse lotWaferResult = exensioPreCheckService.checkViaExensioLotWaferLookup(
-                    lotWaferRequest, List.of("PRODUCTION", "SANDBOX"));
-
-            if (lotWaferResult != null && lotWaferResult.lotsFound() != null && !lotWaferResult.lotsFound().isEmpty()) {
-                log.info("[ParallelSchemaCheck] Lot-wafer-lookup found {} lots — using auto-switch results",
-                        lotWaferResult.lotsFound().size());
-                return lotWaferResult;
-            }
-
-            log.debug("[ParallelSchemaCheck] Lot-wafer-lookup also found nothing, returning raw-SQL consolidated result");
-        }
-
-        return consolidated;
+        return consolidateResults(productionResult, sandboxResult, lotIds);
+    }
     }
 
     /**

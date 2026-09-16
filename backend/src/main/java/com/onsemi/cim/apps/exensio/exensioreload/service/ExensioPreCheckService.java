@@ -117,7 +117,9 @@ public class ExensioPreCheckService {
     private final HttpClient httpClient;
     private final DataSource snowflakeDataSource; // may be null if not configured
     private final int precheckRowLimit;
+    private final ExensioClient exensioClient;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ExensioPreCheckService(
             ExensioProperties exensioProperties,
             SchemaFallbackConfig schemaFallbackConfig,
@@ -125,7 +127,8 @@ public class ExensioPreCheckService {
             ObjectMapper objectMapper,
             @Qualifier("exensioHttpClient") HttpClient exensioHttpClient,
             @Qualifier("snowflakeDataSource") @org.springframework.beans.factory.annotation.Autowired(required = false) DataSource snowflakeDataSource,
-            @Value("${exensio.precheck-row-limit:10000}") int precheckRowLimit) {
+            @Value("${exensio.precheck-row-limit:10000}") int precheckRowLimit,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) ExensioClient exensioClient) {
         this.exensioProperties = exensioProperties;
         this.schemaFallbackConfig = schemaFallbackConfig;
         this.authService = authService;
@@ -133,6 +136,7 @@ public class ExensioPreCheckService {
         this.httpClient = exensioHttpClient;
         this.snowflakeDataSource = snowflakeDataSource;
         this.precheckRowLimit = precheckRowLimit;
+        this.exensioClient = exensioClient;
         
         if (snowflakeDataSource == null) {
             log.info("[ExensioPreCheck] Snowflake DataSource not configured — will use Exensio HTTP only (no Snowflake fallback)");
@@ -140,6 +144,17 @@ public class ExensioPreCheckService {
         
         // Log schema fallback configuration at startup
         logSchemaFallbackConfiguration();
+    }
+
+    public ExensioPreCheckService(
+            ExensioProperties exensioProperties,
+            SchemaFallbackConfig schemaFallbackConfig,
+            ExensioAuthService authService,
+            ObjectMapper objectMapper,
+            @Qualifier("exensioHttpClient") HttpClient exensioHttpClient,
+            DataSource snowflakeDataSource,
+            int precheckRowLimit) {
+        this(exensioProperties, schemaFallbackConfig, authService, objectMapper, exensioHttpClient, snowflakeDataSource, precheckRowLimit, null);
     }
 
     /**
@@ -250,29 +265,25 @@ public class ExensioPreCheckService {
         log.debug("[ExensioPreCheck] Orchestration: schemaPriority={}, snowflakeFallback={}", 
                 schemaPriority, enableSnowflakeFallback);
 
-        // Step 2: Primary HTTP raw-SQL path with multi-schema fallback
+        // Step 2: HTTP check (aligned with ExensioLoadMonitor: lot-wafer-lookup by default, raw-sql only if preferRawSql)
         if (exensioProperties.isConfigured()) {
-            log.debug("[ExensioPreCheck] Attempting HTTP raw-sql path with schemas: {}", schemaPriority);
-            ExensioPreCheckResponse httpResult = checkViaExensioHttpMultiSchema(request, schemaPriority);
-            
-            if (httpResult != null && !httpResult.lotsFound().isEmpty()) {
-                long elapsed = System.currentTimeMillis() - orchestrationStart;
-                log.info("[ExensioPreCheck] Orchestration complete (HTTP raw-sql success) in {} ms", elapsed);
-                return httpResult; // HTTP found results, return success
-            }
-            
-            if (httpResult != null && httpResult.error() != null) {
-                long elapsed = System.currentTimeMillis() - orchestrationStart;
-                log.warn("[ExensioPreCheck] HTTP raw-sql path error: {}", httpResult.error());
-                // HTTP returned explicit error, but still try lot-wafer-lookup and Snowflake
-            } else {
-                long elapsed = System.currentTimeMillis() - orchestrationStart;
-                log.debug("[ExensioPreCheck] HTTP raw-sql path returned empty after {} ms", elapsed);
+            if (exensioProperties.isPreferRawSql()) {
+                log.debug("[ExensioPreCheck] PreferRawSql=true, attempting HTTP raw-sql path with schemas: {}", schemaPriority);
+                ExensioPreCheckResponse httpResult = checkViaExensioHttpMultiSchema(request, schemaPriority);
+                
+                if (httpResult != null && !httpResult.lotsFound().isEmpty()) {
+                    long elapsed = System.currentTimeMillis() - orchestrationStart;
+                    log.info("[ExensioPreCheck] Orchestration complete (HTTP raw-sql success) in {} ms", elapsed);
+                    return httpResult;
+                }
+                if (httpResult != null && httpResult.error() != null) {
+                    log.warn("[ExensioPreCheck] HTTP raw-sql path error: {}", httpResult.error());
+                }
             }
 
-            // Step 3: Auto-switch to lot-wafer-lookup endpoint (raw-SQL found nothing in any schema)
+            // Standard lot-wafer-lookup path (aligned with ExensioLoadMonitor & ExensioClient)
             lotWaferTried = true;
-            log.info("[ExensioPreCheck] Auto-switching to lot-wafer-lookup endpoint (raw-sql found nothing)");
+            log.info("[ExensioPreCheck] Executing lot-wafer-lookup endpoint (schemas: {})", schemaPriority);
             ExensioPreCheckResponse lotWaferResult = checkViaExensioLotWaferLookup(request, schemaPriority);
 
             if (lotWaferResult != null && !lotWaferResult.lotsFound().isEmpty()) {
@@ -286,6 +297,21 @@ public class ExensioPreCheckService {
             } else {
                 long elapsed = System.currentTimeMillis() - orchestrationStart;
                 log.debug("[ExensioPreCheck] Lot-wafer-lookup path returned empty after {} ms", elapsed);
+            }
+
+            // If lot-wafer-lookup returned empty and preferRawSql was false, try raw-sql as secondary HTTP attempt
+            if (!exensioProperties.isPreferRawSql()) {
+                log.debug("[ExensioPreCheck] Lot-wafer-lookup found nothing, trying raw-sql fallback with schemas: {}", schemaPriority);
+                try {
+                    ExensioPreCheckResponse httpResult = checkViaExensioHttpMultiSchema(request, schemaPriority);
+                    if (httpResult != null && !httpResult.lotsFound().isEmpty()) {
+                        long elapsed = System.currentTimeMillis() - orchestrationStart;
+                        log.info("[ExensioPreCheck] Orchestration complete (secondary HTTP raw-sql success) in {} ms", elapsed);
+                        return httpResult;
+                    }
+                } catch (Exception e) {
+                    log.debug("[ExensioPreCheck] Secondary HTTP raw-sql fallback failed: {}", e.getMessage());
+                }
             }
         } else {
             log.debug("[ExensioPreCheck] Exensio not configured — skipping HTTP raw-sql and lot-wafer-lookup paths");
@@ -1176,6 +1202,27 @@ public class ExensioPreCheckService {
                     foundBySchema.computeIfAbsent(schema, k -> new java.util.ArrayList<>()).add(row);
                 }
 
+                // Optional parametric data verification matching ExensioLoadMonitor
+                if (exensioProperties.isVerifyDataLoaded() && exensioClient != null) {
+                    for (LotWaferFoundRow row : lookupResult.rows()) {
+                        if (row.pgKey() > 0 && row.waferKey() > 0) {
+                            try {
+                                String traceId = java.util.UUID.randomUUID().toString();
+                                int rowCount = exensioClient.verifyDataLoaded(row.pgKey(), row.waferKey(), pgcKey, token, traceId);
+                                if (rowCount == 0) {
+                                    log.warn("[ExensioPreCheck] Data verification: lot={}, wafer={} has keys in schema {} but 0 parametric rows (traceId={})",
+                                            row.lotId(), row.waferId(), schema, traceId);
+                                } else if (rowCount > 0) {
+                                    log.debug("[ExensioPreCheck] Data verification: lot={}, wafer={} PASSED with {} rows (traceId={})",
+                                            row.lotId(), row.waferId(), rowCount, traceId);
+                                }
+                            } catch (Exception e) {
+                                log.debug("[ExensioPreCheck] Data verification call skipped: {}", e.getMessage());
+                            }
+                        }
+                    }
+                }
+
                 log.info("[ExensioPreCheck] Lot-wafer lookup {}: found {} lots, remaining={}",
                         schema, lookupResult.lotIds().size(),
                         request.lotIds().size() - foundLots.size());
@@ -1247,9 +1294,10 @@ public class ExensioPreCheckService {
         String url = exensioProperties.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
         boolean hasWafers = waferIds != null && !waferIds.isEmpty();
 
-        // Attempt 1: try with wafer IDs (matches against w.wf_id field in Exensio)
+        // Attempt 1: try with expanded wafer variants (matching ExensioClient logic)
         if (hasWafers) {
-            LotWaferLookupResponse result = doLotWaferLookupCall(lotIds, waferIds, pgcKey, token, url, schema);
+            List<String> expandedWaferVariants = buildExpandedWaferVariants(lotIds, waferIds);
+            LotWaferLookupResponse result = doLotWaferLookupCall(lotIds, expandedWaferVariants, pgcKey, token, url, schema);
             if (result != null && !result.lotIds().isEmpty()) {
                 return result;
             }
@@ -1260,6 +1308,47 @@ public class ExensioPreCheckService {
         log.debug("[ExensioPreCheck] Retrying lot-wafer-lookup without wafer filter for schema {} ({} lots)",
                 schema, lotIds.size());
         return doLotWaferLookupCall(lotIds, null, pgcKey, token, url, schema);
+    }
+
+    /**
+     * Builds rich wafer variants matching ExensioClient logic (clean, zero-padded, lot-prefixed, baseLot-prefixed).
+     */
+    static List<String> buildExpandedWaferVariants(List<String> lotIds, List<String> waferIds) {
+        if (waferIds == null || waferIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> variants = new LinkedHashSet<>();
+        for (String wafer : waferIds) {
+            if (wafer == null || wafer.isBlank()) continue;
+            String wTrim = wafer.trim();
+            variants.add(wTrim);
+            String clean = ExensioSqlUtilService.stripWaferPrefix(wTrim);
+            if (!clean.isBlank()) {
+                variants.add(clean);
+                variants.add(zeroPadWaferId(clean));
+            }
+            if (lotIds != null) {
+                for (String lot : lotIds) {
+                    if (lot == null || lot.isBlank()) continue;
+                    String lTrim = lot.trim();
+                    variants.add(lTrim + "_" + wTrim);
+                    variants.add(lTrim + "-" + wTrim);
+                    if (!clean.isBlank()) {
+                        variants.add(lTrim + "_" + clean);
+                        variants.add(lTrim + "-" + clean);
+                    }
+                    int dot = lTrim.indexOf('.');
+                    int dash = lTrim.indexOf('-');
+                    int cut = dot > 0 ? dot : dash;
+                    if (cut > 0) {
+                        String baseLot = lTrim.substring(0, cut);
+                        variants.add(baseLot + "_" + wTrim);
+                        variants.add(baseLot + "-" + wTrim);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(variants);
     }
 
     /**
@@ -1351,11 +1440,13 @@ public class ExensioPreCheckService {
                         for (com.fasterxml.jackson.databind.JsonNode waferNode : wafersNode) {
                             String rawWafer = waferNode.path("wafer_id").asText("");
                             String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
-                            rows.add(new LotWaferFoundRow(lotId, waferId));
+                            long waferKey = waferNode.path("wafer_key").asLong(0);
+                            long pgKey = waferNode.path("pg_key").asLong(0);
+                            rows.add(new LotWaferFoundRow(lotId, waferId, waferKey, pgKey));
                         }
                     } else {
                         // Lot found but no wafers (e.g., lot-level pgc_key)
-                        rows.add(new LotWaferFoundRow(lotId, ""));
+                        rows.add(new LotWaferFoundRow(lotId, "", 0L, 0L));
                     }
                 }
             }
@@ -1374,7 +1465,7 @@ public class ExensioPreCheckService {
     /**
      * Internal record for a row found via lot-wafer-lookup.
      */
-    private record LotWaferFoundRow(String lotId, String waferId) {}
+    private record LotWaferFoundRow(String lotId, String waferId, long waferKey, long pgKey) {}
 
     /**
      * Internal record for lot-wafer-lookup response data.

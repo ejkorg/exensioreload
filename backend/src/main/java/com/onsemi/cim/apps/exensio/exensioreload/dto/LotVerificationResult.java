@@ -14,5 +14,10 @@ import java.util.List;
 public record LotVerificationResult(
         boolean found,
         String schema,  // null if not found; "PRODUCTION", "SANDBOX", or "FOUND" (HTTP)
-        List<String> wafers  // wafer IDs found for this lot (wafer-level classes only)
-) {}
+        List<String> wafers,  // wafer IDs found for this lot (wafer-level classes only)
+        Boolean dataVerified // optional: true if parametric data verified loaded via Results API
+) {
+    public LotVerificationResult(boolean found, String schema, List<String> wafers) {
+        this(found, schema, wafers, null);
+    }
+}
