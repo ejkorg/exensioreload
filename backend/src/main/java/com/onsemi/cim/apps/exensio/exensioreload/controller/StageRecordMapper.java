@@ -128,7 +128,7 @@ public class StageRecordMapper {
                 record.dataId(),
                 lot,
                 wafer,
-                record.device(),
+                normalizeDisplayValue(record.device(), "-"),
                 normalizeDisplayValue(record.step(), "-"),
                 normalizeDisplayValue(record.testerId(), "-"),
                 normalizeDisplayValue(record.testProgram(), "-"),
