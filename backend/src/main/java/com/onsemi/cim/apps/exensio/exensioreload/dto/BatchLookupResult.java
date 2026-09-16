@@ -174,22 +174,26 @@ public class BatchLookupResult {
         // - fileLookup -> all wafer entries by filename
         Map<String, List<LotResult.WaferResult>> waferLookup = new HashMap<>();
         Map<String, List<LotResult.WaferResult>> lotLookup = new HashMap<>();
+        Map<String, LotResult> lotOnlyLookup = new HashMap<>();
         Map<String, List<LotResult.WaferResult>> fileLookup = new HashMap<>();
         Map<LotResult.WaferResult, String> waferToLot = new HashMap<>();
 
         for (LotResult lot : lots) {
             String lotKey = lot.lotId() == null ? null : lot.lotId().toUpperCase();
             if (lotKey != null) {
+                lotOnlyLookup.put(lotKey, lot);
                 lotLookup.computeIfAbsent(lotKey, k -> new ArrayList<>()).addAll(lot.wafers());
                 String strippedLot = lotKey.replaceAll("[.\\-_]", "");
                 if (!strippedLot.equalsIgnoreCase(lotKey) && !strippedLot.isBlank()) {
                     lotLookup.computeIfAbsent(strippedLot, k -> new ArrayList<>()).addAll(lot.wafers());
+                    lotOnlyLookup.put(strippedLot, lot);
                 }
                 for (char sep : new char[]{'.', '-', '_'}) {
                     int idx = lotKey.indexOf(sep);
                     if (idx >= 3) {
                         String baseLot = lotKey.substring(0, idx).trim();
                         lotLookup.computeIfAbsent(baseLot, k -> new ArrayList<>()).addAll(lot.wafers());
+                        lotOnlyLookup.put(baseLot, lot);
                     }
                 }
             }
@@ -341,19 +345,54 @@ public class BatchLookupResult {
                         waferResult.ppid()
                 ));
             } else {
-                // Wafer not found in Exensio response
-                updates.add(new BatchResult.RecordUpdate(
-                        record.id(),
-                        BatchResult.UpdateType.NOT_FOUND,
-                        null,
-                        null,
-                        null,
-                        record.lot(),
-                        record.wafer(),
-                        record.filename(),
-                        traceId,
-                        record.requestId()
-                ));
+                // Check if lot was found even if wafer list was empty or wafer didn't match (e.g. DEFECT pgc_key=14)
+                LotResult matchedLot = recordLot != null ? lotOnlyLookup.get(recordLot) : null;
+                if (matchedLot == null && recordLot != null) {
+                    String strippedLot = recordLot.replaceAll("[.\\-_]", "");
+                    matchedLot = lotOnlyLookup.get(strippedLot);
+                    if (matchedLot == null) {
+                        for (char sep : new char[]{'.', '-', '_'}) {
+                            int idx = recordLot.indexOf(sep);
+                            if (idx >= 3) {
+                                matchedLot = lotOnlyLookup.get(recordLot.substring(0, idx).trim());
+                                if (matchedLot != null) break;
+                            }
+                        }
+                    }
+                }
+
+                if (matchedLot != null && (recordWafer == null || recordWafer.isBlank() || matchedLot.wafers() == null || matchedLot.wafers().isEmpty())) {
+                    // Lot was verified present in Exensio for this PGC_KEY (e.g. DEFECT datasets where wafers are stored at lot level or empty)
+                    String resolvedLot = matchedLot.lotId() != null ? matchedLot.lotId() : record.lot();
+                    updates.add(new BatchResult.RecordUpdate(
+                            record.id(),
+                            BatchResult.UpdateType.COMPLETED,
+                            0L,
+                            0L,
+                            null,
+                            resolvedLot,
+                            record.wafer(),
+                            record.filename(),
+                            traceId,
+                            record.requestId(),
+                            schema != null ? schema : "PROD",
+                            null
+                    ));
+                } else {
+                    // Wafer not found in Exensio response
+                    updates.add(new BatchResult.RecordUpdate(
+                            record.id(),
+                            BatchResult.UpdateType.NOT_FOUND,
+                            null,
+                            null,
+                            null,
+                            record.lot(),
+                            record.wafer(),
+                            record.filename(),
+                            traceId,
+                            record.requestId()
+                    ));
+                }
             }
         }
 

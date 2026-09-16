@@ -1,0 +1,11 @@
+# Implementation Tasks
+
+- [x] 1. ExensioLotWaferResult — Add `dataVerified` flag to `Found` record
+- [x] 2. ExensioProperties — Add configuration properties for verification
+- [x] 3. ExensioClient — Add `verifyDataLoaded()` method (Results API)
+- [x] 4. ExensioClient — Add `validateProgram()` method (Programs API)
+- [x] 6. ExensioLoadMonitor — Update `retryIndividualRecords()` to call verification
+- [x] 7. Code verification & integration — Verified without CLI execution (Java/Maven CLI not permitted in environment)
+- [x] 8. ExensioClient & ExensioProperties — Raw-SQL bypass (prefer-raw-sql=false by default, use native REST API)
+- [x] 9. ExensioClient & BatchLookupResult — Defect (Class 14) composite wafer expansion & lot-only fallback retry
+

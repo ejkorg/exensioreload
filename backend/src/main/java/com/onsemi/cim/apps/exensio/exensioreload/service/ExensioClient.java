@@ -281,16 +281,77 @@ public class ExensioClient {
         ArrayNode lotIds = body.putArray("lot_ids");
         lotIds.add(lot);
         ArrayNode waferIds = body.putArray("wafer_ids");
+
         if (!waferBlank) {
-            waferIds.add(wafer);
+            Set<String> uniqueWaferVariants = new LinkedHashSet<>();
+            uniqueWaferVariants.add(wafer);
+            String cleanWafer = ExensioSqlUtilService.stripWaferPrefix(wafer);
+            if (!cleanWafer.isBlank()) {
+                uniqueWaferVariants.add(cleanWafer);
+            }
             Integer wNum = extractWaferNum(wafer);
             if (wNum != null) {
-                waferIds.add(String.valueOf(wNum));
+                uniqueWaferVariants.add(String.valueOf(wNum));
                 if (wNum < 10 && wNum >= 0) {
-                    waferIds.add(String.format("%02d", wNum));
+                    uniqueWaferVariants.add(String.format("%02d", wNum));
                 }
             }
+            // Add composite variants: lot + "_" + wafer, lot + "-" + wafer
+            // Exensio Defect (Class 14) and other loaders often store wafer IDs as <Lot>_<Wafer>
+            if (lot != null && !lot.isBlank()) {
+                uniqueWaferVariants.add(lot + "_" + wafer);
+                uniqueWaferVariants.add(lot + "-" + wafer);
+                if (!cleanWafer.isBlank()) {
+                    uniqueWaferVariants.add(lot + "_" + cleanWafer);
+                    uniqueWaferVariants.add(lot + "-" + cleanWafer);
+                }
+                int dotIdx = lot.indexOf('.');
+                int dashIdx = lot.indexOf('-');
+                int cut = dotIdx > 0 ? dotIdx : dashIdx;
+                if (cut > 0) {
+                    String baseLot = lot.substring(0, cut);
+                    uniqueWaferVariants.add(baseLot + "_" + wafer);
+                    uniqueWaferVariants.add(baseLot + "-" + wafer);
+                    if (!cleanWafer.isBlank()) {
+                        uniqueWaferVariants.add(baseLot + "_" + cleanWafer);
+                        uniqueWaferVariants.add(baseLot + "-" + cleanWafer);
+                    }
+                }
+            }
+            for (String v : uniqueWaferVariants) {
+                waferIds.add(v);
+            }
         }
+
+        ExensioLotWaferResult result = executeLotWaferLookupHttp(url, body, token, wafer, targetEndTime, testPhase, traceId);
+        if (result instanceof ExensioLotWaferResult.Found) {
+            return result;
+        }
+
+        // Attempt 2: If wafer was specified and returned NotFound, retry without wafer_ids filter!
+        // The Exensio API matches by lot alone, which avoids wafer-field mismatch issues
+        // (especially for Defect data where wafers are indexed by lot or under inspection steps).
+        if (!waferBlank && (result instanceof ExensioLotWaferResult.NotFound)) {
+            ObjectNode bodyWithoutWafers = body.deepCopy();
+            bodyWithoutWafers.remove("wafer_ids");
+            if (props.isLogRequestPayloads()) {
+                log.info("Exensio lot-wafer-lookup retry without wafer_ids (traceId={}): url={}, body={}",
+                        traceId, url, bodyWithoutWafers.toString());
+            }
+            ExensioLotWaferResult retryResult = executeLotWaferLookupHttp(url, bodyWithoutWafers, token, wafer, targetEndTime, testPhase, traceId);
+            if (retryResult instanceof ExensioLotWaferResult.Found) {
+                log.info("Lot-wafer lookup matched on retry without wafer_ids filter: lot={}, wafer={} (traceId={})",
+                        lot, wafer, traceId);
+                return retryResult;
+            }
+        }
+
+        return result;
+    }
+
+    private ExensioLotWaferResult executeLotWaferLookupHttp(
+            String url, ObjectNode body, String token, String wafer,
+            Instant targetEndTime, String testPhase, String traceId) {
 
         if (props.isLogRequestPayloads()) {
             log.info("Exensio lot-wafer-lookup request (traceId={}): url={}, body={}", traceId, url, body.toString());
@@ -453,9 +514,18 @@ public class ExensioClient {
         }
 
         // Step 2: Try lot-wafer-lookup batch endpoint with primary schema
-        BatchLookupResult primaryResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, token);
-        if (primaryResult.isSuccess()) {
+        BatchLookupResult primaryResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, token, true);
+        if (primaryResult.isSuccess() && !primaryResult.getLots().isEmpty()) {
             mergedLots.addAll(primaryResult.getLots());
+            return new BatchLookupResult(mergedLots);
+        }
+
+        // Retry without wafer filter on primary schema if wafer filter yielded empty
+        BatchLookupResult primaryLotOnly = doLotWaferLookupBatchEndpoint(unresolvedRecords, token, false);
+        if (primaryLotOnly.isSuccess() && !primaryLotOnly.getLots().isEmpty()) {
+            log.info("Batch lot-wafer-lookup primary schema matched without wafer filter ({} lots)",
+                    primaryLotOnly.getLots().size());
+            mergedLots.addAll(primaryLotOnly.getLots());
             return new BatchLookupResult(mergedLots);
         }
 
@@ -466,10 +536,16 @@ public class ExensioClient {
                     fallbackSchema, unresolvedRecords.size());
             try {
                 String fallbackToken = authService.login(fallbackSchema);
-                BatchLookupResult fallbackResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, fallbackToken);
-                if (fallbackResult.isSuccess()) {
+                BatchLookupResult fallbackResult = doLotWaferLookupBatchEndpoint(unresolvedRecords, fallbackToken, true);
+                if (fallbackResult.isSuccess() && !fallbackResult.getLots().isEmpty()) {
                     log.debug("Batch lot-wafer-lookup fallback schema {} found results", fallbackSchema);
                     mergedLots.addAll(fallbackResult.getLots());
+                    return new BatchLookupResult(mergedLots);
+                }
+                BatchLookupResult fallbackLotOnly = doLotWaferLookupBatchEndpoint(unresolvedRecords, fallbackToken, false);
+                if (fallbackLotOnly.isSuccess() && !fallbackLotOnly.getLots().isEmpty()) {
+                    log.debug("Batch lot-wafer-lookup fallback schema {} found results without wafer filter", fallbackSchema);
+                    mergedLots.addAll(fallbackLotOnly.getLots());
                     return new BatchLookupResult(mergedLots);
                 }
                 log.debug("Batch lot-wafer-lookup fallback schema {} also returned empty", fallbackSchema);
@@ -486,6 +562,10 @@ public class ExensioClient {
     }
 
     private BatchLookupResult doLotWaferLookupBatchEndpoint(List<StageRecord> records, String token) {
+        return doLotWaferLookupBatchEndpoint(records, token, true);
+    }
+
+    private BatchLookupResult doLotWaferLookupBatchEndpoint(List<StageRecord> records, String token, boolean includeWafers) {
         long startTime = System.currentTimeMillis();
         int batchSize = records.size();
 
@@ -493,10 +573,10 @@ public class ExensioClient {
             String url = props.resolvedBaseUrl().replaceAll("/$", "") + "/v1/key/lot-wafer-lookup";
 
             Set<String> uniqueLots = new HashSet<>();
-            Set<String> uniqueWafers = new HashSet<>();
             for (StageRecord record : records) {
-                uniqueLots.add(record.lot());
-                uniqueWafers.add(record.wafer());
+                if (record.lot() != null && !record.lot().isBlank()) {
+                    uniqueLots.add(record.lot());
+                }
             }
 
             ObjectNode body = objectMapper.createObjectNode();
@@ -514,15 +594,40 @@ public class ExensioClient {
             for (String lot : uniqueLots) {
                 lotIds.add(lot);
             }
-            ArrayNode waferIds = body.putArray("wafer_ids");
-            for (String wafer : uniqueWafers) {
-                if (wafer != null && !wafer.isBlank()) {
-                    waferIds.add(wafer);
-                    String clean = ExensioSqlUtilService.stripWaferPrefix(wafer);
-                    if (!clean.isBlank() && !clean.equalsIgnoreCase(wafer)) {
-                        waferIds.add(clean);
-                        waferIds.add(ExensioPreCheckService.zeroPadWaferId(clean));
+
+            if (includeWafers) {
+                ArrayNode waferIds = body.putArray("wafer_ids");
+                Set<String> uniqueWaferVariants = new LinkedHashSet<>();
+                for (StageRecord record : records) {
+                    String wafer = record.wafer();
+                    String lot = record.lot();
+                    if (wafer != null && !wafer.isBlank()) {
+                        uniqueWaferVariants.add(wafer);
+                        String clean = ExensioSqlUtilService.stripWaferPrefix(wafer);
+                        if (!clean.isBlank()) {
+                            uniqueWaferVariants.add(clean);
+                            uniqueWaferVariants.add(ExensioPreCheckService.zeroPadWaferId(clean));
+                        }
+                        if (lot != null && !lot.isBlank()) {
+                            uniqueWaferVariants.add(lot + "_" + wafer);
+                            uniqueWaferVariants.add(lot + "-" + wafer);
+                            if (!clean.isBlank()) {
+                                uniqueWaferVariants.add(lot + "_" + clean);
+                                uniqueWaferVariants.add(lot + "-" + clean);
+                            }
+                            int dot = lot.indexOf('.');
+                            int dash = lot.indexOf('-');
+                            int cut = dot > 0 ? dot : dash;
+                            if (cut > 0) {
+                                String baseLot = lot.substring(0, cut);
+                                uniqueWaferVariants.add(baseLot + "_" + wafer);
+                                uniqueWaferVariants.add(baseLot + "-" + wafer);
+                            }
+                        }
                     }
+                }
+                for (String wv : uniqueWaferVariants) {
+                    waferIds.add(wv);
                 }
             }
 
@@ -1801,19 +1906,57 @@ public class ExensioClient {
             long bestLotKey = 0;
             String bestLotId = null;
             long bestDeltaSeconds = Long.MAX_VALUE;
+            long firstLotKeyWithoutWafers = 0;
+            String firstLotIdWithoutWafers = null;
+            long firstPgKeyWithoutWafers = 0;
+            String firstPpidWithoutWafers = null;
 
             for (JsonNode lotNode : lots) {
                 long lotKey = lotNode.path("lot_key").asLong(0);
                 String lotIdStr = lotNode.path("lot_id").asText(null);
                 JsonNode wafers = lotNode.path("wafers");
-                if (!wafers.isArray()) continue;
+
+                if (!wafers.isArray() || wafers.isEmpty()) {
+                    if (lotKey > 0 && firstLotKeyWithoutWafers == 0) {
+                        firstLotKeyWithoutWafers = lotKey;
+                        firstLotIdWithoutWafers = lotIdStr;
+                        firstPgKeyWithoutWafers = lotNode.path("pg_key").asLong(0);
+                        firstPpidWithoutWafers = lotNode.path("ppid").asText(null);
+                    }
+                    continue;
+                }
 
                 for (JsonNode waferNode : wafers) {
-                    String waferId = ExensioSqlUtilService.stripWaferPrefix(waferNode.path("wafer_id").asText(null));
+                    String rawWafer = waferNode.path("wafer_id").asText(null);
+                    String waferId = ExensioSqlUtilService.stripWaferPrefix(rawWafer);
+
                     // Match by wafer_id if provided; otherwise use end_time proximity / first available.
-                    if (targetWaferId != null && !targetWaferId.isBlank()
-                            && !targetWaferId.equalsIgnoreCase(waferId)) {
-                        continue;
+                    if (targetWaferId != null && !targetWaferId.isBlank()) {
+                        boolean matches = targetWaferId.equalsIgnoreCase(waferId)
+                                || targetWaferId.equalsIgnoreCase(rawWafer);
+                        if (!matches) {
+                            String cleanTarget = ExensioSqlUtilService.stripWaferPrefix(targetWaferId);
+                            matches = cleanTarget.equalsIgnoreCase(waferId)
+                                    || cleanTarget.equalsIgnoreCase(rawWafer);
+                        }
+                        if (!matches && waferId != null) {
+                            try {
+                                int tNum = Integer.parseInt(ExensioSqlUtilService.stripWaferPrefix(targetWaferId));
+                                int wNum = Integer.parseInt(waferId);
+                                matches = (tNum == wNum);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        if (!matches && rawWafer != null) {
+                            String upperRaw = rawWafer.toUpperCase(Locale.ROOT);
+                            String upperTarget = targetWaferId.toUpperCase(Locale.ROOT);
+                            String cleanTarget = ExensioSqlUtilService.stripWaferPrefix(targetWaferId);
+                            matches = upperRaw.endsWith("_" + upperTarget)
+                                    || upperRaw.endsWith("-" + upperTarget)
+                                    || (!cleanTarget.isBlank() && (upperRaw.endsWith("_" + cleanTarget) || upperRaw.endsWith("-" + cleanTarget)));
+                        }
+                        if (!matches) {
+                            continue;
+                        }
                     }
 
                     if (targetEndTime == null) {
@@ -1849,6 +1992,15 @@ public class ExensioClient {
                             new ExensioLotWaferResult.Found(bestLotKey, waferKey, pgKey, ppid, bestLotId, finalWaferId, null, null);
                     return applyPpidCheck(candidate, ppid, testPhase, targetWaferId, finalWaferId);
                 }
+            }
+
+            // Fallback for lot-level data (e.g. DEFECT or PGC 2) where the lot exists in Exensio
+            // but wafers array is empty or not broken down into wafer objects by the API:
+            if (firstLotKeyWithoutWafers > 0) {
+                ExensioLotWaferResult candidate =
+                        new ExensioLotWaferResult.Found(firstLotKeyWithoutWafers, 0L, firstPgKeyWithoutWafers,
+                                firstPpidWithoutWafers, firstLotIdWithoutWafers, targetWaferId, null, null);
+                return applyPpidCheck(candidate, firstPpidWithoutWafers, testPhase, targetWaferId, targetWaferId);
             }
 
             return new ExensioLotWaferResult.NotFound();
