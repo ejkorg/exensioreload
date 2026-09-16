@@ -2768,6 +2768,7 @@ export class StepperComponent implements OnInit, OnDestroy {
         next: (session: CreateSessionResponse) => {
           console.log('[STAGING] Session created:', session.sessionId);
           this.requestId.set(session.sessionId);
+          this.persistMonitoringSession(session.sessionId);
 
           // Show toast notification based on ETL trigger status
           if (session.status === 'success') {
@@ -2853,6 +2854,19 @@ export class StepperComponent implements OnInit, OnDestroy {
             error: (err: any) => {
               console.error('[STAGING] Staging payloads failed:', err);
               this.staging.set(false);
+              const isTimeout = err?.name === 'TimeoutError' || 
+                (typeof err?.message === 'string' && err.message.toLowerCase().includes('timed out'));
+
+              if (isTimeout && this.requestId()) {
+                // If the request timed out on the client, the backend may have already enqueued the items
+                // and is running background triggers. Transition to Step 3 Monitoring so user can track progress.
+                this.toast.info('Staging request took longer than expected, but session is active. Opening monitoring...', 7000);
+                this.completeStep(1);
+                this.currentStep.set(2);
+                this.startMonitoring();
+                return;
+              }
+
               const errorMsg = err?.error?.message || err?.statusText || 'Failed to stage payloads';
               this.toast.error(`Staging failed: ${errorMsg}`, 7000);
             },
@@ -2929,6 +2943,7 @@ export class StepperComponent implements OnInit, OnDestroy {
           next: (session: CreateSessionResponse) => {
             console.log('[STAGING] Session created for stage-all:', session.sessionId);
             this.requestId.set(session.sessionId);
+            this.persistMonitoringSession(session.sessionId);
 
             // Show toast notification based on ETL trigger status
             if (session.status === 'success') {
@@ -3593,13 +3608,37 @@ export class StepperComponent implements OnInit, OnDestroy {
   resumableSession = signal<{ sessionId: string; senderLabel: string; site: string } | null>(null);
 
   private tryRestoreMonitoringSession() {
-    const persistedId = this.getPersistedMonitoringSession();
+    const querySessionId = this.route.snapshot.queryParamMap.get('sessionId');
+    const persistedId = querySessionId || this.getPersistedMonitoringSession();
+    if (querySessionId) {
+      this.persistMonitoringSession(querySessionId);
+    }
     if (!persistedId) {
+      // Check if there is an active session in progress for this user that can be resumed
+      this.backend.getStagingSessions(0, 5).subscribe({
+        next: (page: any) => {
+          if (page?.items && page.items.length > 0) {
+            const activeSession = page.items.find((s: any) => {
+              const st = (s.status || '').toUpperCase();
+              return !['COMPLETED', 'PARTIALLY_FAILED', 'CANCELLED'].includes(st);
+            });
+            if (activeSession) {
+              this.persistMonitoringSession(activeSession.sessionId);
+              this.resumableSession.set({
+                sessionId: activeSession.sessionId,
+                senderLabel: activeSession.senderName || `Sender ${activeSession.senderId}`,
+                site: activeSession.site || '',
+              });
+            }
+          }
+        },
+        error: () => {}
+      });
       return;
     }
 
-    // If navigated here with ?resume=1 (from dashboard "Resume Monitoring"), go straight to Step 3
-    const autoResume = this.route.snapshot.queryParamMap.get('resume') === '1';
+    // If navigated here with ?resume=1 (from dashboard "Resume Monitoring") or ?sessionId=, go straight to Step 3
+    const autoResume = this.route.snapshot.queryParamMap.get('resume') === '1' || !!querySessionId;
 
     this.backend.getStagingSession(persistedId).subscribe({
       next: (session: any) => {

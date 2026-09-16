@@ -242,8 +242,15 @@ public class SenderDispatchService {
                         records.stream().filter(r -> success.contains(r.id())).toList());
             }
 
-            // Automatically trigger the ETL crontab execution now that items are inserted into DTP_SENDER_QUEUE_ITEM
-            triggerEtlAfterQueueInsert(site, senderId, dispatchedRecords);
+            // Automatically trigger the ETL crontab execution asynchronously now that items are inserted into DTP_SENDER_QUEUE_ITEM.
+            // Running in background ensures HTTP staging request returns immediately (in milliseconds) without UI timing out.
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    triggerEtlAfterQueueInsert(site, senderId, dispatchedRecords);
+                } catch (Throwable t) {
+                    log.error("Async ETL trigger failed for site {} sender {}: {}", site, senderId, t.getMessage(), t);
+                }
+            });
         }
     }
 

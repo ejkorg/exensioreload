@@ -915,13 +915,13 @@ export class BackendService {
   // Staging
   // ========================================================================
   stagePayloads(senderId: number, body: StagePayloadRequestBody): Observable<StagePayloadResponseBody> {
-    // Add 60 second timeout to prevent browser hang if backend is stuck
+    // Add 120 second timeout to prevent browser hang if backend is stuck
     return this.http.post<StagePayloadResponseBody>(`${this.apiUrl}/senders/${senderId}/stage`, body).pipe(
-      timeout(60000),
+      timeout(120000),
       catchError((err: any) => {
         if (err.name === 'TimeoutError') {
-          console.error('[API] stagePayloads timeout after 60s');
-          throw new Error('Staging request timed out after 60 seconds. The backend may be overloaded or stuck.');
+          console.error('[API] stagePayloads timeout after 120s');
+          throw new Error('Staging request timed out after 120 seconds. The backend may be overloaded or stuck.');
         }
         throw err;
       }),
