@@ -349,7 +349,7 @@ public class EtlSshTriggerService {
                         CrontabJob matched = jobMatcher.match(jobs, port, null);
                         if (matched != null) {
                             return CrontabDiscoveryResult.success(
-                                    null, cfg.getSite(), cfg.getName(), cfg.getHost(),
+                                    null, site, cfg.getName(), cfg.getHost(),
                                     cfg.getSshPort(), port, null,
                                     matched.getCommand(), matched.getSchedule(), matched.getRawLine(), jobs.size()
                             );
@@ -403,7 +403,7 @@ public class EtlSshTriggerService {
             return TriggerResult.failure(msg);
         }
 
-        EtlServerConfig serverConfig = resolveServerConfig(discovery.server(), discovery.site());
+        EtlServerConfig serverConfig = resolveServerConfig(discovery.serverName(), discovery.site());
         if (serverConfig == null) {
             serverConfig = resolveServerConfig(server, site);
         }
