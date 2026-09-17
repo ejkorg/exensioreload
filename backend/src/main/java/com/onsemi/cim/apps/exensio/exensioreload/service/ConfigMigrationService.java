@@ -9,7 +9,6 @@ import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigPipeline;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigDbConnectionRepository;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigEtlServerRepository;
 import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigPipelineRepository;
-import com.onsemi.cim.apps.exensio.exensioreload.service.auth.AuthService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,7 @@ public class ConfigMigrationService {
     private final YamlConfigLoader yamlLoader;
     private final PasswordEncryptionService encryptionService;
     private final AuditService auditService;
-    private final AuthService authService;
+    private final RoleService roleService;
     private final ObjectMapper objectMapper;
 
     public ConfigMigrationService(
@@ -42,7 +41,7 @@ public class ConfigMigrationService {
         YamlConfigLoader yamlLoader,
         PasswordEncryptionService encryptionService,
         AuditService auditService,
-        AuthService authService,
+        RoleService roleService,
         ObjectMapper objectMapper
     ) {
         this.pipelineRepo = pipelineRepo;
@@ -51,7 +50,7 @@ public class ConfigMigrationService {
         this.yamlLoader = yamlLoader;
         this.encryptionService = encryptionService;
         this.auditService = auditService;
-        this.authService = authService;
+        this.roleService = roleService;
         this.objectMapper = objectMapper;
     }
 
@@ -128,14 +127,14 @@ public class ConfigMigrationService {
                             pipeline.setCreatedBy(existingOpt.get().getCreatedBy());
                         }
                         pipeline.setUpdatedAt(Instant.now());
-                        pipeline.setUpdatedBy(authService.getCurrentUserId());
+                        pipeline.setUpdatedBy(roleService.getCurrentUserId());
                         pipelineRepo.save(pipeline);
                         pipelinesImported++;
                         successfulEntries.add("Pipeline: " + pipeline.getPipelineKey());
                     } else {
                         log.debug("Creating new pipeline '{}'", pipeline.getPipelineKey());
                         pipeline.setCreatedAt(Instant.now());
-                        pipeline.setCreatedBy(authService.getCurrentUserId());
+                        pipeline.setCreatedBy(roleService.getCurrentUserId());
                         pipelineRepo.save(pipeline);
                         pipelinesImported++;
                         successfulEntries.add("Pipeline: " + pipeline.getPipelineKey());
@@ -178,14 +177,14 @@ public class ConfigMigrationService {
                             server.setCreatedBy(existingOpt.get().getCreatedBy());
                         }
                         server.setUpdatedAt(Instant.now());
-                        server.setUpdatedBy(authService.getCurrentUserId());
+                        server.setUpdatedBy(roleService.getCurrentUserId());
                         serverRepo.save(server);
                         serversImported++;
                         successfulEntries.add("ETL Server: " + server.getServerKey());
                     } else {
                         log.debug("Creating new ETL server '{}'", server.getServerKey());
                         server.setCreatedAt(Instant.now());
-                        server.setCreatedBy(authService.getCurrentUserId());
+                        server.setCreatedBy(roleService.getCurrentUserId());
                         serverRepo.save(server);
                         serversImported++;
                         successfulEntries.add("ETL Server: " + server.getServerKey());
@@ -224,14 +223,14 @@ public class ConfigMigrationService {
                             connection.setCreatedBy(existingOpt.get().getCreatedBy());
                         }
                         connection.setUpdatedAt(Instant.now());
-                        connection.setUpdatedBy(authService.getCurrentUserId());
+                        connection.setUpdatedBy(roleService.getCurrentUserId());
                         connectionRepo.save(connection);
                         connectionsImported++;
                         successfulEntries.add("DB Connection: " + connection.getConnectionKey());
                     } else {
                         log.debug("Creating new DB connection '{}'", connection.getConnectionKey());
                         connection.setCreatedAt(Instant.now());
-                        connection.setCreatedBy(authService.getCurrentUserId());
+                        connection.setCreatedBy(roleService.getCurrentUserId());
                         connectionRepo.save(connection);
                         connectionsImported++;
                         successfulEntries.add("DB Connection: " + connection.getConnectionKey());
@@ -290,7 +289,7 @@ public class ConfigMigrationService {
 
         // Create audit log entry
         auditService.logAction(
-            authService.getCurrentUserId(),
+            roleService.getCurrentUserId(),
             AuditLog.Actions.CONFIG_MIGRATED,
             AuditLog.ResourceTypes.SYSTEM,
             "YAML_TO_DB_MIGRATION",

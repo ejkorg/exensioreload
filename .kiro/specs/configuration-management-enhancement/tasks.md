@@ -324,7 +324,7 @@ The MVP **skips** (optional tasks marked with `*`):
   - Add GET /audit-logs/export endpoint returning CSV file
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
 
-- [-] 8. Configuration Migration Utility
+- [x] 8. Configuration Migration Utility
   - Create utility to import YAML configurations into database
   - _Requirements: 13.1-13.7_
 
