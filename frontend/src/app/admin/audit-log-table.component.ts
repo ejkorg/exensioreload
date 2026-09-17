@@ -11,7 +11,7 @@ import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.direct
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { ToastService } from '../shared/services/toast.service';
 import { AuditLogDetailDialogComponent } from './audit-log-detail-dialog.component';
-import { AuditService, EtlAuditLog } from './audit.service';
+import { AuditLogDto, AuditService, EtlAuditLog } from './audit.service';
 
 @Component({
   selector: 'app-audit-log-table',
@@ -97,7 +97,7 @@ import { AuditService, EtlAuditLog } from './audit.service';
             <app-glass-date-range
               label="Created Date"
               [includeTime]="true"
-              inline="true"
+              [inline]="true"
               [formControl]="dateRangeControl"
             ></app-glass-date-range>
           </div>
@@ -212,7 +212,7 @@ export class AuditLogTableComponent implements OnInit {
     return isNaN(d.getTime()) ? '' : String(d.getUTCSeconds()).padStart(2, '0');
   }
 
-  dataSource = signal<EtlAuditLog[]>([]);
+  dataSource = signal<(EtlAuditLog | AuditLogDto)[]>([]);
   loading = signal(false);
   exporting = signal(false);
   totalElements = signal(0);
@@ -288,7 +288,7 @@ export class AuditLogTableComponent implements OnInit {
     return this.sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward';
   }
 
-  trackById = (_: number, log: EtlAuditLog): number => log.id;
+  trackById = (_: number, log: EtlAuditLog | AuditLogDto): number => log.id;
 
   private loadMetadata(): void {
     // Load unique sites and servers from audit logs
@@ -297,8 +297,8 @@ export class AuditLogTableComponent implements OnInit {
         const sites = new Set<string>();
         const servers = new Set<string>();
         res.content.forEach((log) => {
-          if (log.site) sites.add(log.site);
-          if (log.etlServerName) servers.add(log.etlServerName);
+          if ('site' in log && log.site) sites.add(log.site);
+          if ('etlServerName' in log && log.etlServerName) servers.add(log.etlServerName);
         });
         this.sites = Array.from(sites).sort();
         this.servers = Array.from(servers).sort();
@@ -386,12 +386,12 @@ export class AuditLogTableComponent implements OnInit {
         window.URL.revokeObjectURL(url);
 
         this.exporting.set(false);
-        this.toastService.showSuccess('Audit logs exported successfully');
+        this.toastService.success('Audit logs exported successfully');
       },
       error: (error) => {
         this.exporting.set(false);
         console.error('Failed to export audit logs:', error);
-        this.toastService.showError('Failed to export audit logs');
+        this.toastService.error('Failed to export audit logs');
       },
     });
   }

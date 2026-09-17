@@ -2,8 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
-import { GlassInputComponent } from '../shared/components/glass-input.component';
-import { GlassSelectComponent } from '../shared/components/glass-select.component';
 import { GLASS_DIALOG_DATA, GlassDialogRef } from '../shared/services/glass-dialog.service';
 import { ToastService } from '../shared/services/toast.service';
 import { ConfigDbConnection, ConfigurationService } from './configuration.service';
@@ -16,7 +14,7 @@ interface DialogData {
 @Component({
   selector: 'app-db-connection-form-dialog',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, GlassIconComponent, GlassSelectComponent, GlassInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, GlassIconComponent],
   templateUrl: './db-connection-form-dialog.component.html',
   styleUrls: ['./db-connection-form-dialog.component.scss'],
 })
@@ -25,7 +23,7 @@ export class DbConnectionFormDialogComponent implements OnInit {
   private configService = inject(ConfigurationService);
   private dialogRef = inject(GlassDialogRef);
   private toast = inject(ToastService);
-  private data = inject(GLASS_DIALOG_DATA) as DialogData;
+  private data: DialogData = inject(GLASS_DIALOG_DATA as any);
 
   mode = this.data.mode;
   form!: FormGroup;

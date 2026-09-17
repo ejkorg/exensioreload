@@ -17,8 +17,8 @@
             label="Server Key"
             placeholder="unique-server-identifier"
             formControlName="serverKey"
-            [isReadOnly]="mode === 'edit'"
-            [error]="form.get('serverKey')?.touched && getServerKeyError()"
+            [disabled]="mode === 'edit'"
+            [error]="(form.get('serverKey')?.touched && getServerKeyError()) || null"
           ></app-glass-input>
         </div>
 
@@ -27,7 +27,7 @@
             label="Host"
             placeholder="192.168.1.100 or example.com"
             formControlName="host"
-            [error]="form.get('host')?.touched && getHostError()"
+            [error]="(form.get('host')?.touched && getHostError()) || null"
           ></app-glass-input>
         </div>
 
@@ -37,7 +37,7 @@
             type="number"
             placeholder="22"
             formControlName="sshPort"
-            [error]="form.get('sshPort')?.touched && getSshPortError()"
+            [error]="(form.get('sshPort')?.touched && getSshPortError()) || null"
           ></app-glass-input>
 
           <app-glass-input
@@ -45,7 +45,7 @@
             type="number"
             placeholder="9000"
             formControlName="socketPort"
-            [error]="form.get('socketPort')?.touched && getSocketPortError()"
+            [error]="(form.get('socketPort')?.touched && getSocketPortError()) || null"
           ></app-glass-input>
         </div>
       </div>
@@ -59,7 +59,7 @@
             label="User"
             placeholder="SSH username"
             formControlName="user"
-            [error]="form.get('user')?.touched && getUserError()"
+            [error]="(form.get('user')?.touched && getUserError()) || null"
           ></app-glass-input>
         </div>
 
@@ -70,7 +70,7 @@
               [type]="getPasswordFieldType()"
               placeholder="Enter SSH password"
               formControlName="encryptedPassword"
-              [error]="form.get('encryptedPassword')?.touched && getPasswordError()"
+              [error]="(form.get('encryptedPassword')?.touched && getPasswordError()) || null"
             ></app-glass-input>
 
             <button
@@ -105,13 +105,16 @@
         <h3>Configuration</h3>
 
         <div class="form-row">
-          <app-glass-input
-            label="Timeout (ms)"
-            type="number"
-            placeholder="30000"
-            formControlName="timeoutMs"
-            [hint]="'Connection timeout in milliseconds (1000-600000)'"
-          ></app-glass-input>
+          <div class="form-group-with-hint">
+            <app-glass-input
+              label="Timeout (ms)"
+              type="number"
+              placeholder="30000"
+              formControlName="timeoutMs"
+              [error]="(form.get('timeoutMs')?.touched && getTimeoutError()) || null"
+            ></app-glass-input>
+            <span class="input-hint">Connection timeout in milliseconds (1000-600000)</span>
+          </div>
         </div>
 
         <div class="form-row two-cols">

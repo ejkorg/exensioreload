@@ -203,6 +203,20 @@ export class EtlServerFormDialogComponent implements OnInit {
     return '';
   }
 
+  getTimeoutError(): string {
+    const control = this.form.get('timeoutMs');
+    if (control?.hasError('required')) {
+      return 'Timeout is required';
+    }
+    if (control?.hasError('min')) {
+      return 'Timeout must be at least 1000 milliseconds';
+    }
+    if (control?.hasError('max')) {
+      return 'Timeout cannot exceed 600000 milliseconds';
+    }
+    return '';
+  }
+
   submit(): void {
     if (this.form.invalid) {
       // Mark all fields as touched to show validation errors

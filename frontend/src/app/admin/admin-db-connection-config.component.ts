@@ -3,7 +3,6 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatDialogModule } from '@angular/material/dialog';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
-import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
@@ -25,7 +24,6 @@ import { DbConnectionFormDialogComponent } from './db-connection-form-dialog.com
     GlassIconComponent,
     GlassTooltipDirective,
     GlassPaginationComponent,
-    DualTimestampComponent,
   ],
   templateUrl: './admin-db-connection-config.component.html',
   styleUrls: ['./admin-db-connection-config.component.scss'],
