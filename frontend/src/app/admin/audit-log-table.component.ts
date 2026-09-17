@@ -265,7 +265,7 @@ export class AuditLogTableComponent implements OnInit {
       })
       .subscribe({
         next: (res) => {
-          this.dataSource.set(res.content);
+          this.dataSource.set(res.content as EtlAuditLog[]);
           this.totalElements.set(res.totalElements);
           this.loading.set(false);
         },
