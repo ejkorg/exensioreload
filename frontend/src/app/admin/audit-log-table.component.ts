@@ -127,23 +127,23 @@ import { AuditService, EtlAuditLog } from './audit.service';
           </thead>
           <tbody>
             <tr *ngFor="let log of dataSource(); trackBy: trackById">
-              <td>
+              <td *ngIf="isEtlAuditLog(log)">
                 <app-dual-timestamp [value]="log.timestamp"></app-dual-timestamp>
               </td>
-              <td>
+              <td *ngIf="isEtlAuditLog(log)">
                 <div class="request-id-cell">
                   <code class="request-id">{{ log.requestId }}</code>
                 </div>
               </td>
               <td>{{ log.userId }}</td>
-              <td>
+              <td *ngIf="isEtlAuditLog(log)">
                 <span class="resource-type-badge" [attr.data-resource-type]="getResourceType(log)">
                   {{ getResourceType(log) }}
                 </span>
               </td>
-              <td>{{ log.site }}</td>
-              <td>{{ log.etlServerName }}</td>
-              <td>
+              <td *ngIf="isEtlAuditLog(log)">{{ log.site }}</td>
+              <td *ngIf="isEtlAuditLog(log)">{{ log.etlServerName }}</td>
+              <td *ngIf="isEtlAuditLog(log)">
                 <span class="port-value" *ngIf="log.senderPort !== undefined && log.senderPort !== null">
                   {{ log.senderPort }}
                 </span>
@@ -156,12 +156,12 @@ import { AuditService, EtlAuditLog } from './audit.service';
                   {{ log.status }}
                 </span>
               </td>
-              <td class="message-cell">
+              <td class="message-cell" *ngIf="isEtlAuditLog(log)">
                 <span class="message-text" [title]="log.message || ''">
                   {{ log.message || '' | slice: 0 : 50 }}{{ (log.message || '').length > 50 ? '...' : '' }}
                 </span>
               </td>
-              <td class="action-column">
+              <td class="action-column" *ngIf="isEtlAuditLog(log)">
                 <button type="button" class="action-btn" (click)="viewDetails(log)" [glassTooltip]="'View Details'">
                   <app-glass-icon name="info" [size]="18"></app-glass-icon>
                 </button>
@@ -289,6 +289,10 @@ export class AuditLogTableComponent implements OnInit {
   }
 
   trackById = (_: number, log: EtlAuditLog): number => log.id;
+
+  isEtlAuditLog(log: any): log is EtlAuditLog {
+    return log && typeof log === 'object' && 'requestId' in log && 'site' in log;
+  }
 
   private loadMetadata(): void {
     // Load unique sites and servers from audit logs
