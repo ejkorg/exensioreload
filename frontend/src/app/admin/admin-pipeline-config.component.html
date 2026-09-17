@@ -1,0 +1,140 @@
+<div class="pipeline-hub-container">
+  <header class="hub-title">
+    <div class="hub-header-text">
+      <h1>Pipeline <span class="accent">Configuration</span></h1>
+      <p class="subtitle">Manage ETL pipeline configurations and settings.</p>
+    </div>
+    <div class="hub-actions">
+      <button type="button" (click)="createPipeline()" class="hub-action-btn">
+        <app-glass-icon name="add_circle" [size]="18"></app-glass-icon>
+        Add Pipeline
+      </button>
+    </div>
+  </header>
+
+  <div class="filter-bar glass-panel">
+    <div class="search-box">
+      <app-glass-icon name="search" [size]="18"></app-glass-icon>
+      <input type="text" [formControl]="searchControl" placeholder="Find pipeline by key, site, or server..." />
+    </div>
+    <div class="filter-group">
+      <app-glass-select
+        class="mini-filter"
+        label="Environment"
+        placeholder="All Environments"
+        [formControl]="environmentFilter"
+        [options]="['ALL', 'PROD', 'QA']"
+      ></app-glass-select>
+
+      <button type="button" (click)="loadPipelines()" [glassTooltip]="'Refresh data'" class="refresh-btn">
+        <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="content-area glass-panel table-overflow">
+    <table class="exensioreload-table">
+      <thead>
+        <tr>
+          <th>
+            <button type="button" class="sort-header-btn" (click)="setSort('pipelineKey')">
+              Pipeline Key
+              <app-glass-icon [name]="sortIcon('pipelineKey')" [size]="14"></app-glass-icon>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="sort-header-btn" (click)="setSort('site')">
+              Site
+              <app-glass-icon [name]="sortIcon('site')" [size]="14"></app-glass-icon>
+            </button>
+          </th>
+          <th>Server</th>
+          <th>Sender ID</th>
+          <th>Socket Port</th>
+          <th>Environment</th>
+          <th>Status</th>
+          <th>Mode</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let pipeline of dataSource.data; trackBy: trackByPipelineId">
+          <td>
+            <span class="pipeline-key">{{ pipeline.pipelineKey }}</span>
+          </td>
+          <td>
+            <span class="site-name">{{ pipeline.site }}</span>
+          </td>
+          <td>
+            <span class="server-name">{{ pipeline.server }}</span>
+          </td>
+          <td>
+            <span class="sender-id">{{ pipeline.senderId }}</span>
+          </td>
+          <td>
+            <span class="port-number">{{ pipeline.socketPort }}</span>
+          </td>
+          <td>
+            <span
+              class="environment-badge"
+              [class.prod]="pipeline.environment === 'PROD'"
+              [class.qa]="pipeline.environment === 'QA'"
+            >
+              {{ pipeline.environment }}
+            </span>
+          </td>
+          <td>
+            <span class="status-tag" [class.enabled]="pipeline.enabled" [class.disabled]="!pipeline.enabled">
+              {{ pipeline.enabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </td>
+          <td>
+            <span
+              *ngIf="pipeline.historicalModeEnabled"
+              class="historical-badge"
+              [glassTooltip]="'Historical mode pipeline for data queries'"
+            >
+              HISTORICAL
+            </span>
+            <span *ngIf="!pipeline.historicalModeEnabled" class="normal-badge">NORMAL</span>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button
+                type="button"
+                class="actions-menu-btn"
+                (click)="editPipeline(pipeline)"
+                [glassTooltip]="'Edit pipeline'"
+                aria-label="Edit pipeline"
+              >
+                <app-glass-icon name="edit" [size]="16"></app-glass-icon>
+              </button>
+              <button
+                type="button"
+                class="actions-menu-btn danger"
+                (click)="deletePipeline(pipeline)"
+                [glassTooltip]="'Delete pipeline'"
+                aria-label="Delete pipeline"
+              >
+                <app-glass-icon name="delete" [size]="16"></app-glass-icon>
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="loading-overlay" *ngIf="loading()">
+      <div class="hub-spinner" aria-label="Loading"></div>
+    </div>
+
+    <app-glass-pagination
+      [length]="totalElements()"
+      [pageSize]="pageSize"
+      [pageIndex]="pageIndex"
+      [pageSizeOptions]="[10, 20, 50]"
+      (page)="onPage($event)"
+    >
+    </app-glass-pagination>
+  </div>
+</div>

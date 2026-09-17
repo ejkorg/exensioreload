@@ -893,6 +893,60 @@
 }
 
 /* ==========================================================================
+   Historical Mode Banner
+   ========================================================================== */
+
+.historical-mode-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  border-radius: 12px;
+  color: #4f46e5;
+  margin-top: 1rem;
+
+  app-glass-icon {
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+  }
+
+  .banner-content {
+    flex: 1;
+
+    strong {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.875rem;
+      line-height: 1.4;
+      color: rgba(79, 70, 229, 0.9);
+    }
+  }
+}
+
+:host-context(body.light-theme) .historical-mode-banner {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.4);
+  color: #4f46e5;
+
+  .banner-content {
+    strong {
+      color: #4f46e5;
+    }
+
+    p {
+      color: #6366f1;
+    }
+  }
+}
+
+/* ==========================================================================
    Dedicated Time Range Subpanel
    ========================================================================== */
 

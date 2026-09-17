@@ -1,0 +1,138 @@
+<div class="admin-container">
+  <header class="admin-header">
+    <div>
+      <h1>Database Connection <span class="accent">Configuration</span></h1>
+      <p class="subtitle">Manage database connection strings and credentials</p>
+    </div>
+    <button class="glass-btn primary" (click)="createConnection()" [disabled]="loading()">
+      <app-glass-icon name="add"></app-glass-icon>
+      Add Connection
+    </button>
+  </header>
+
+  <div class="filter-bar glass-panel">
+    <app-glass-select
+      label="Environment"
+      [formControl]="environmentFilter"
+      [options]="['ALL', 'PROD', 'QA']"
+    ></app-glass-select>
+
+    <div class="search-input">
+      <app-glass-icon name="search"></app-glass-icon>
+      <input
+        type="text"
+        placeholder="Search by connection key, host, or schema..."
+        [formControl]="searchControl"
+        class="glass-input"
+      />
+    </div>
+  </div>
+
+  <div class="content-area glass-panel">
+    <div *ngIf="loading()" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Loading database connections...</p>
+    </div>
+
+    <div *ngIf="!loading() && dataSource.data.length === 0" class="empty-state">
+      <app-glass-icon name="storage"></app-glass-icon>
+      <h3>No Database Connections</h3>
+      <p>No database connections found. Create one to get started.</p>
+      <button class="glass-btn primary" (click)="createConnection()">
+        <app-glass-icon name="add"></app-glass-icon>
+        Create Connection
+      </button>
+    </div>
+
+    <div *ngIf="!loading() && dataSource.data.length > 0" class="table-wrapper">
+      <table class="exensioreload-table">
+        <thead>
+          <tr>
+            <th (click)="setSort('connectionKey')" class="sortable">
+              Connection Key
+              <app-glass-icon [name]="sortIcon('connectionKey')"></app-glass-icon>
+            </th>
+            <th (click)="setSort('dbType')" class="sortable">
+              Database Type
+              <app-glass-icon [name]="sortIcon('dbType')"></app-glass-icon>
+            </th>
+            <th (click)="setSort('host')" class="sortable">
+              Host
+              <app-glass-icon [name]="sortIcon('host')"></app-glass-icon>
+            </th>
+            <th (click)="setSort('schema')" class="sortable">
+              Schema
+              <app-glass-icon [name]="sortIcon('schema')"></app-glass-icon>
+            </th>
+            <th (click)="setSort('user')" class="sortable">
+              User
+              <app-glass-icon [name]="sortIcon('user')"></app-glass-icon>
+            </th>
+            <th>Password</th>
+            <th (click)="setSort('environment')" class="sortable">
+              Environment
+              <app-glass-icon [name]="sortIcon('environment')"></app-glass-icon>
+            </th>
+            <th (click)="setSort('enabled')" class="sortable">
+              Status
+              <app-glass-icon [name]="sortIcon('enabled')"></app-glass-icon>
+            </th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let connection of dataSource.data; trackBy: trackByConnectionId">
+            <td>
+              <code class="connection-key">{{ connection.connectionKey }}</code>
+            </td>
+            <td>
+              <span class="db-type-badge" [attr.data-type]="connection.dbType">{{ connection.dbType }}</span>
+            </td>
+            <td>{{ connection.host }}</td>
+            <td>
+              <code>{{ connection.schema }}</code>
+            </td>
+            <td>{{ connection.user }}</td>
+            <td>
+              <span class="password-masked">***</span>
+            </td>
+            <td>
+              <span class="env-badge" [attr.data-env]="connection.environment">{{ connection.environment }}</span>
+            </td>
+            <td>
+              <span class="status-badge" [attr.data-enabled]="connection.enabled">{{
+                connection.enabled ? 'Enabled' : 'Disabled'
+              }}</span>
+            </td>
+            <td class="actions-cell">
+              <button
+                class="icon-btn"
+                (click)="editConnection(connection)"
+                [glassTooltip]="'Edit'"
+                title="Edit connection"
+              >
+                <app-glass-icon name="edit"></app-glass-icon>
+              </button>
+              <button
+                class="icon-btn danger"
+                (click)="deleteConnection(connection)"
+                [glassTooltip]="'Delete'"
+                title="Delete connection"
+              >
+                <app-glass-icon name="delete"></app-glass-icon>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <app-glass-pagination
+        [length]="totalElements()"
+        [pageSize]="pageSize"
+        [pageIndex]="pageIndex"
+        (page)="onPage($event)"
+      >
+      </app-glass-pagination>
+    </div>
+  </div>
+</div>

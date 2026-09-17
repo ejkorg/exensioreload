@@ -107,6 +107,107 @@
   }
 }
 
+/* Submenu Wrapper */
+.nav-submenu-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+
+  .nav-submenu-toggle {
+    background: none;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.22s ease;
+    border: 1px solid transparent;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    &.active {
+      background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+      color: var(--accent-color);
+      border-color: color-mix(in srgb, var(--accent-color) 25%, transparent);
+    }
+
+    .nav-label {
+      @media (max-width: 900px) {
+        display: none;
+      }
+    }
+
+    .submenu-arrow {
+      font-size: 18px;
+      transition: transform 0.22s ease;
+      margin-left: auto;
+
+      &.expanded {
+        transform: rotate(180deg);
+      }
+    }
+  }
+}
+
+/* Submenu Items */
+.nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.22s ease,
+    opacity 0.22s ease;
+  opacity: 0;
+
+  &.expanded {
+    max-height: 500px;
+    opacity: 1;
+  }
+
+  .nav-submenu-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1.5rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.8rem;
+    transition: all 0.22s ease;
+    border-left: 2px solid transparent;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border-left-color: color-mix(in srgb, var(--accent-color) 40%, transparent);
+    }
+
+    &.active {
+      color: var(--accent-color);
+      background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+      border-left-color: var(--accent-color);
+    }
+
+    .nav-label {
+      @media (max-width: 900px) {
+        display: none;
+      }
+    }
+  }
+}
+
 .nav-item-spinner {
   display: inline-flex;
   align-items: center;

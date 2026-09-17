@@ -110,7 +110,7 @@ The MVP **skips** (optional tasks marked with `*`):
   - Add query method: countByResourceTypeAndAction for statistics
   - _Requirements: 11.4, 12.2_
 
-- [-] 3. Password Encryption Service
+- [x] 3. Password Encryption Service
   - Implement encryption/decryption for sensitive credentials
   - _Requirements: 8.5, 9.5_
 
@@ -368,12 +368,12 @@ The MVP **skips** (optional tasks marked with `*`):
   - **Do NOT proceed to frontend until backend tests pass remotely**
   - _Note: All testing must occur on remote node with Java/Maven installed_
 
-- [ ] 10. Frontend Admin Panel - Pipeline Configuration
+- [x] 10. Frontend Admin Panel - Pipeline Configuration
   - Create Angular component for pipeline CRUD operations
   - _Requirements: 7.1-7.8_
 
-- [ ] 10.1 Create AdminPipelineConfigComponent
-  - Create standalone component with imports: CommonModule, ReactiveFormsModule, GlassTableComponent, GlassDialogService
+- [x] 10.1 Create AdminPipelineConfigComponent
+  - Create standalone component with imports: CommonModule, ReactiveFormsModule, GlassTableComponent, GlassDialogComponent
   - Add template with glass panel table displaying pipelines
   - Add columns: pipelineKey, site, server, senderId, socketPort, environment, historical badge, status badge, actions
   - Add pagination using GlassPaginationComponent
@@ -382,7 +382,7 @@ The MVP **skips** (optional tasks marked with `*`):
   - Add "Add Pipeline" button opening create dialog
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 10.2 Implement pipeline list loading with filters
+- [x] 10.2 Implement pipeline list loading with filters
   - Inject ConfigurationService
   - Load pipelines on component init and when filters change
   - Implement debounced search (300ms delay)
@@ -390,7 +390,7 @@ The MVP **skips** (optional tasks marked with `*`):
   - Handle errors with toast notifications
   - _Requirements: 7.2, 7.7_
 
-- [ ] 10.3 Create PipelineFormDialogComponent
+- [x] 10.3 Create PipelineFormDialogComponent
   - Create dialog component for create/edit pipeline
   - Add form fields: pipelineKey, site (dropdown), server (dropdown), socketPort, configName, senderId, rerunPeriodMinutes, environment (radio), historicalModeEnabled (checkbox), enabled (checkbox)
   - Add dynamic stages form array with add/remove stage buttons
@@ -398,7 +398,7 @@ The MVP **skips** (optional tasks marked with `*`):
   - Implement form validation (required fields, port range)
   - _Requirements: 7.3, 7.4_
 
-- [ ] 10.4 Implement pipeline create/update/delete operations
+- [x] 10.4 Implement pipeline create/update/delete operations
   - Wire create dialog to call ConfigurationService.createPipeline
   - Wire edit dialog to call ConfigurationService.updatePipeline
   - Wire delete button to show confirmation dialog then call ConfigurationService.deletePipeline
@@ -406,123 +406,123 @@ The MVP **skips** (optional tasks marked with `*`):
   - Reload pipeline list after successful operation
   - _Requirements: 7.3, 7.4, 7.5, 7.6_
 
-- [ ] 10.5 Add historical mode badge display
+- [x] 10.5 Add historical mode badge display
   - Add CSS for historical badge styling (gold/amber color)
   - Display "HISTORICAL" badge when historicalModeEnabled is true
   - Display tooltip explaining historical mode when hovering badge
   - _Requirements: 7.8, 16.8_
 
-- [ ] 11. Frontend Admin Panel - ETL Server Configuration
+- [x] 11. Frontend Admin Panel - ETL Server Configuration
   - Create Angular component for ETL server CRUD operations
   - _Requirements: 8.1-8.8_
 
-- [ ] 11.1 Create AdminEtlServerConfigComponent
+- [x] 11.1 Create AdminEtlServerConfigComponent
   - Create component similar structure to AdminPipelineConfigComponent
   - Add columns: serverKey, host, sshPort, socketPort, user, password (masked), environment, historical badge, status, actions
   - Add filters for environment and historical-only toggle
   - _Requirements: 8.1, 8.2, 8.3_
 
-- [ ] 11.2 Create EtlServerFormDialogComponent
+- [x] 11.2 Create EtlServerFormDialogComponent
   - Add form fields: serverKey, host, sshPort, socketPort, user, password (password input), timeoutMs, environment, enabled, isHistoricalSender
   - Show password strength indicator
   - Implement "Show password" toggle button
   - Add "Test Connection" button to verify SSH connectivity
   - _Requirements: 8.4, 8.5, 8.7_
 
-- [ ] 11.3 Implement ETL server CRUD operations
+- [x] 11.3 Implement ETL server CRUD operations
   - Wire create/update/delete to ConfigurationService
   - Mask password in display (show "\*\*\*" instead of real password)
   - Show success/error toasts
   - _Requirements: 8.4, 8.5, 8.6, 8.8_
 
-- [ ] 12. Frontend Admin Panel - Database Connection Configuration
+- [x] 12. Frontend Admin Panel - Database Connection Configuration
   - Create Angular component for database connection CRUD operations
   - _Requirements: 9.1-9.8_
 
-- [ ] 12.1 Create AdminDbConnectionConfigComponent
+- [x] 12.1 Create AdminDbConnectionConfigComponent
   - Add columns: connectionKey, dbType, host, schema, user, password (masked), environment, status, actions
   - Add filter for environment
   - _Requirements: 9.1, 9.2_
 
-- [ ] 12.2 Create DbConnectionFormDialogComponent
+- [x] 12.2 Create DbConnectionFormDialogComponent
   - Add form fields: connectionKey, dbType (dropdown: Oracle/PostgreSQL), schema, host, user, password, connectionTimeoutMs, maximumPoolSize, minimumIdle, downloadUrl, environment, enabled
   - Show Hikari pool settings section
   - Add "Test Connection" button to verify DB connectivity
   - _Requirements: 9.3, 9.4, 9.5, 9.6, 9.7_
 
-- [ ] 12.3 Implement database connection CRUD operations
+- [x] 12.3 Implement database connection CRUD operations
   - Wire create/update/delete to ConfigurationService
   - Mask password in display
   - Show success/error toasts
   - _Requirements: 9.4, 9.5, 9.6, 9.8_
 
-- [ ] 13. Frontend Admin Navigation
+- [x] 13. Frontend Admin Navigation
   - Update navigation structure to include Admin section
   - _Requirements: 6.1-6.7_
 
-- [ ] 13.1 Create Admin navigation menu
+- [x] 13.1 Create Admin navigation menu
   - Add "Admin" top-level menu item with expansion
   - Add sub-items: "User Management", "Pipeline Configuration", "ETL Servers", "Database Connections", "Audit Logs"
   - Implement role-based visibility (show only to ADMIN and SUPER_ADMIN)
   - Wire sub-items to route to respective admin components
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
 
-- [ ] 13.2 Move existing User Management under Admin menu
+- [x] 13.2 Move existing User Management under Admin menu
   - Update routing to move user management under /admin/users
   - Update navigation links
   - _Requirements: 6.2_
 
-- [ ] 14. Frontend Enhanced Audit Log Viewer
+- [x] 14. Frontend Enhanced Audit Log Viewer
   - Enhance existing AuditLogTableComponent with new features
   - _Requirements: 11.1-11.8_
 
-- [ ] 14.1 Add resource type filter to AuditLogTableComponent
+- [x] 14.1 Add resource type filter to AuditLogTableComponent
   - Add resource type dropdown filter with options: USER, PIPELINE, ETL_SERVER, DB_CONNECTION, SESSION, ETL_TRIGGER, SYSTEM
   - Wire filter to loadAuditLogs method
   - _Requirements: 11.4_
 
-- [ ] 14.2 Add date range filter to AuditLogTableComponent
+- [x] 14.2 Add date range filter to AuditLogTableComponent
   - Add GlassDateRangeComponent for filtering by created date
   - Wire date range to loadAuditLogs method with startDate/endDate params
   - _Requirements: 11.4_
 
-- [ ] 14.3 Implement audit log detail view dialog
+- [x] 14.3 Implement audit log detail view dialog
   - Create dialog that displays full audit log entry with formatted JSON details
   - Show before/after comparison for update actions
   - Syntax highlight JSON details
   - _Requirements: 11.5_
 
-- [ ] 14.4 Implement audit log CSV export
+- [x] 14.4 Implement audit log CSV export
   - Add "Export" button to audit log viewer
   - Call AuditService.exportAuditLogs with current filters
   - Trigger browser download of CSV file
   - Show success/error toast
   - _Requirements: 11.6_
 
-- [ ] 14.5 Add audit log source indicator column
+- [x] 14.5 Add audit log source indicator column
   - Add column showing resource type badge (color-coded by type)
   - Use different colors for USER, PIPELINE, ETL_SERVER, SESSION, etc.
   - _Requirements: 11.7_
 
-- [ ] 15. Frontend Step 1 UI Enhancements
+- [x] 15. Frontend Step 1 UI Enhancements
   - Update stepper component to use configuration service
   - _Requirements: 4.1-4.5, 5.1-5.5, 16.4, 16.5, 16.9_
 
-- [ ] 15.1 Update StepperComponent to load sites from configuration service
+- [x] 15.1 Update StepperComponent to load sites from configuration service
   - Replace existing site loading logic with ConfigurationService.getSites(environment)
   - Add effect to reload sites when environment changes
   - Display sites in formatted dropdown
   - Sort sites alphabetically
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 15.2 Update StepperComponent to load senders with historical mode support
+- [x] 15.2 Update StepperComponent to load senders with historical mode support
   - Replace existing sender loading logic with ConfigurationService.getSenders(site, environment, historicalMode)
   - Add effect to reload senders when site OR historicalMode changes
   - Auto-select sender if only one matches
   - Display sender source indicator (database/YAML) for admin users
   - _Requirements: 4.3, 4.4, 5.4, 5.5, 16.6, 16.9_
 
-- [ ] 15.3 Implement historical mode toggle behavior
+- [x] 15.3 Implement historical mode toggle behavior
   - When historical mode toggle changes, clear sender selection
   - Reload senders filtered by historical mode flag
   - Show informational message explaining historical mode if enabled

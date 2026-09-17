@@ -28,10 +28,24 @@ export class App implements OnInit, OnDestroy {
     { label: 'Dashboard', icon: 'dashboard', path: '/', exact: true },
     { label: 'Analytics', icon: 'insights', path: '/analytics', exact: false },
     { label: 'My Sessions', icon: 'history', path: '/my-sessions', exact: false },
-    { label: 'Users', icon: 'people', path: '/admin/users', admin: true, exact: false },
+    {
+      label: 'Admin',
+      icon: 'admin_panel_settings',
+      submenu: true,
+      admin: true,
+      exact: false,
+      children: [
+        { label: 'User Management', icon: 'people', path: '/admin/users', superAdmin: true },
+        { label: 'Pipeline Configuration', icon: 'settings_input_composite', path: '/admin/pipelines' },
+        { label: 'ETL Servers', icon: 'dns', path: '/admin/etl-servers' },
+        { label: 'Database Connections', icon: 'storage', path: '/admin/db-connections' },
+        { label: 'Audit Logs', icon: 'assessment', path: '/admin/audit' },
+      ],
+    },
   ];
 
   isNavExpanded = false;
+  adminMenuExpanded = signal<boolean>(false);
   loadingNavPath = signal<string | null>(null);
   /** Live count of active (non-terminal) sessions for the navbar badge. */
   activeSessionCount = signal<number>(0);
@@ -78,5 +92,9 @@ export class App implements OnInit, OnDestroy {
 
   logout() {
     this.auth.logout();
+  }
+
+  toggleAdminMenu() {
+    this.adminMenuExpanded.update((expanded) => !expanded);
   }
 }

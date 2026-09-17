@@ -1,0 +1,253 @@
+<div class="db-connection-form-dialog">
+  <div class="dialog-header">
+    <h2>{{ mode === 'create' ? 'Create New' : 'Edit' }} Database Connection</h2>
+    <button class="close-btn" (click)="cancel()" type="button" aria-label="Close">
+      <app-glass-icon name="close"></app-glass-icon>
+    </button>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="form-content">
+    <!-- Connection Key Section -->
+    <fieldset class="form-section">
+      <legend>Basic Information</legend>
+
+      <div class="form-group">
+        <label for="connectionKey">Connection Key</label>
+        <input
+          id="connectionKey"
+          type="text"
+          formControlName="connectionKey"
+          placeholder="e.g., CEBU_ORACLE_PROD"
+          [attr.aria-describedby]="form.get('connectionKey')?.invalid ? 'connectionKey-error' : null"
+          [disabled]="mode === 'edit' || loading()"
+        />
+        <div *ngIf="getConnectionKeyError()" id="connectionKey-error" class="error-message">
+          {{ getConnectionKeyError() }}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="dbType">Database Type</label>
+          <select
+            id="dbType"
+            formControlName="dbType"
+            [disabled]="mode === 'edit' || loading()"
+            [attr.aria-describedby]="form.get('dbType')?.invalid ? 'dbType-error' : null"
+          >
+            <option *ngFor="let type of dbTypes" [value]="type">{{ type }}</option>
+          </select>
+          <div *ngIf="form.get('dbType')?.invalid" id="dbType-error" class="error-message">
+            Database type is required
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="environment">Environment</label>
+          <select
+            id="environment"
+            formControlName="environment"
+            [disabled]="loading()"
+            [attr.aria-describedby]="form.get('environment')?.invalid ? 'environment-error' : null"
+          >
+            <option *ngFor="let env of environments" [value]="env">{{ env }}</option>
+          </select>
+          <div *ngIf="form.get('environment')?.invalid" id="environment-error" class="error-message">
+            Environment is required
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Connection Details Section -->
+    <fieldset class="form-section">
+      <legend>Connection Details</legend>
+
+      <div class="form-group">
+        <label for="host">Host</label>
+        <input
+          id="host"
+          type="text"
+          formControlName="host"
+          placeholder="e.g., oracle-db.example.com or 192.168.1.100"
+          [attr.aria-describedby]="form.get('host')?.invalid ? 'host-error' : null"
+          [disabled]="loading()"
+        />
+        <div *ngIf="getHostError()" id="host-error" class="error-message">
+          {{ getHostError() }}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="schema">Schema</label>
+          <input
+            id="schema"
+            type="text"
+            formControlName="schema"
+            placeholder="e.g., EXENSIO_DB"
+            [attr.aria-describedby]="form.get('schema')?.invalid ? 'schema-error' : null"
+            [disabled]="loading()"
+          />
+          <div *ngIf="getSchemaError()" id="schema-error" class="error-message">
+            {{ getSchemaError() }}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="user">User</label>
+          <input
+            id="user"
+            type="text"
+            formControlName="user"
+            placeholder="e.g., exensio_user"
+            [attr.aria-describedby]="form.get('user')?.invalid ? 'user-error' : null"
+            [disabled]="loading()"
+          />
+          <div *ngIf="getUserError()" id="user-error" class="error-message">
+            {{ getUserError() }}
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="password-input-wrapper">
+          <input
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="encryptedPassword"
+            placeholder="Enter database password"
+            [attr.aria-describedby]="form.get('encryptedPassword')?.invalid ? 'password-error' : null"
+            [disabled]="loading()"
+          />
+          <button
+            type="button"
+            class="show-password-btn"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            tabindex="-1"
+          >
+            <app-glass-icon [name]="showPassword() ? 'visibility_off' : 'visibility'"></app-glass-icon>
+          </button>
+        </div>
+        <div *ngIf="getPasswordError()" id="password-error" class="error-message">
+          {{ getPasswordError() }}
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Hikari Pool Settings Section -->
+    <fieldset class="form-section">
+      <legend>Connection Pool Settings (Hikari)</legend>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="connectionTimeoutMs">Connection Timeout (ms)</label>
+          <input
+            id="connectionTimeoutMs"
+            type="number"
+            formControlName="connectionTimeoutMs"
+            min="100"
+            max="120000"
+            [attr.aria-describedby]="form.get('connectionTimeoutMs')?.invalid ? 'timeout-error' : null"
+            [disabled]="loading()"
+          />
+          <div *ngIf="getTimeoutError()" id="timeout-error" class="error-message">
+            {{ getTimeoutError() }}
+          </div>
+          <p class="help-text">Connection timeout (100ms - 120000ms)</p>
+        </div>
+
+        <div class="form-group">
+          <label for="maximumPoolSize">Maximum Pool Size</label>
+          <input
+            id="maximumPoolSize"
+            type="number"
+            formControlName="maximumPoolSize"
+            min="1"
+            max="100"
+            [attr.aria-describedby]="form.get('maximumPoolSize')?.invalid ? 'max-pool-error' : null"
+            [disabled]="loading()"
+          />
+          <div *ngIf="getMaxPoolSizeError()" id="max-pool-error" class="error-message">
+            {{ getMaxPoolSizeError() }}
+          </div>
+          <p class="help-text">Maximum number of connections (1-100)</p>
+        </div>
+
+        <div class="form-group">
+          <label for="minimumIdle">Minimum Idle</label>
+          <input
+            id="minimumIdle"
+            type="number"
+            formControlName="minimumIdle"
+            min="1"
+            max="100"
+            [attr.aria-describedby]="form.get('minimumIdle')?.invalid ? 'min-idle-error' : null"
+            [disabled]="loading()"
+          />
+          <div *ngIf="getMinIdleError()" id="min-idle-error" class="error-message">
+            {{ getMinIdleError() }}
+          </div>
+          <p class="help-text">Minimum idle connections (1-100)</p>
+        </div>
+      </div>
+
+      <div *ngIf="getPoolSizeError()" class="error-message form-wide">
+        {{ getPoolSizeError() }}
+      </div>
+    </fieldset>
+
+    <!-- Optional Settings Section -->
+    <fieldset class="form-section">
+      <legend>Optional Settings</legend>
+
+      <div class="form-group">
+        <label for="downloadUrl">Download URL</label>
+        <input
+          id="downloadUrl"
+          type="url"
+          formControlName="downloadUrl"
+          placeholder="https://example.com/download"
+          [disabled]="loading()"
+        />
+        <p class="help-text">Optional download URL for connection documentation or tools</p>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="enabled" [disabled]="loading()" />
+          <span>Enabled</span>
+        </label>
+        <p class="help-text">Uncheck to disable this connection without deleting it</p>
+      </div>
+    </fieldset>
+
+    <!-- Form Actions -->
+    <div class="form-actions">
+      <button
+        type="button"
+        class="glass-btn secondary"
+        (click)="testConnection()"
+        [disabled]="form.invalid || loading() || testingConnection()"
+      >
+        <app-glass-icon name="link_check"></app-glass-icon>
+        {{ testingConnection() ? 'Testing...' : 'Test Connection' }}
+      </button>
+
+      <div class="spacer"></div>
+
+      <button type="button" class="glass-btn secondary" (click)="cancel()" [disabled]="loading()">Cancel</button>
+
+      <button
+        type="submit"
+        class="glass-btn primary"
+        [disabled]="form.invalid || submitting() || loading() || testingConnection()"
+      >
+        <app-glass-icon name="save"></app-glass-icon>
+        {{ submitting() ? 'Saving...' : mode === 'create' ? 'Create Connection' : 'Update Connection' }}
+      </button>
+    </div>
+  </form>
+</div>

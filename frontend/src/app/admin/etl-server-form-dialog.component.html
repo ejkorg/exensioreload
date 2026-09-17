@@ -1,0 +1,162 @@
+<div class="etl-server-form-dialog">
+  <div class="dialog-header">
+    <h2>{{ mode === 'create' ? 'Create ETL Server' : 'Edit ETL Server' }}</h2>
+    <button type="button" class="close-btn" (click)="cancel()">
+      <app-glass-icon name="close" [size]="20"></app-glass-icon>
+    </button>
+  </div>
+
+  <div class="dialog-content">
+    <form [formGroup]="form">
+      <!-- Basic Information Section -->
+      <div class="form-section">
+        <h3>Basic Information</h3>
+
+        <div class="form-row">
+          <app-glass-input
+            label="Server Key"
+            placeholder="unique-server-identifier"
+            formControlName="serverKey"
+            [isReadOnly]="mode === 'edit'"
+            [error]="form.get('serverKey')?.touched && getServerKeyError()"
+          ></app-glass-input>
+        </div>
+
+        <div class="form-row">
+          <app-glass-input
+            label="Host"
+            placeholder="192.168.1.100 or example.com"
+            formControlName="host"
+            [error]="form.get('host')?.touched && getHostError()"
+          ></app-glass-input>
+        </div>
+
+        <div class="form-row two-cols">
+          <app-glass-input
+            label="SSH Port"
+            type="number"
+            placeholder="22"
+            formControlName="sshPort"
+            [error]="form.get('sshPort')?.touched && getSshPortError()"
+          ></app-glass-input>
+
+          <app-glass-input
+            label="Socket Port"
+            type="number"
+            placeholder="9000"
+            formControlName="socketPort"
+            [error]="form.get('socketPort')?.touched && getSocketPortError()"
+          ></app-glass-input>
+        </div>
+      </div>
+
+      <!-- Credentials Section -->
+      <div class="form-section">
+        <h3>Credentials</h3>
+
+        <div class="form-row">
+          <app-glass-input
+            label="User"
+            placeholder="SSH username"
+            formControlName="user"
+            [error]="form.get('user')?.touched && getUserError()"
+          ></app-glass-input>
+        </div>
+
+        <div class="form-row">
+          <div class="password-input-wrapper">
+            <app-glass-input
+              label="Password"
+              [type]="getPasswordFieldType()"
+              placeholder="Enter SSH password"
+              formControlName="encryptedPassword"
+              [error]="form.get('encryptedPassword')?.touched && getPasswordError()"
+            ></app-glass-input>
+
+            <button
+              type="button"
+              class="toggle-password-btn"
+              (click)="toggleShowPassword()"
+              aria-label="Toggle password visibility"
+            >
+              <app-glass-icon [name]="showPassword() ? 'visibility' : 'visibility_off'" [size]="18"></app-glass-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="password-strength-indicator" *ngIf="form.get('encryptedPassword')?.value">
+          <div class="strength-bar">
+            <div
+              class="strength-fill"
+              [style.width]="
+                getPasswordStrength() === 'weak' ? '33%' : getPasswordStrength() === 'medium' ? '66%' : '100%'
+              "
+              [style.background]="getPasswordStrengthColor()"
+            ></div>
+          </div>
+          <span class="strength-text" [style.color]="getPasswordStrengthColor()">
+            Password Strength: {{ getPasswordStrength() | uppercase }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Configuration Section -->
+      <div class="form-section">
+        <h3>Configuration</h3>
+
+        <div class="form-row">
+          <app-glass-input
+            label="Timeout (ms)"
+            type="number"
+            placeholder="30000"
+            formControlName="timeoutMs"
+            [hint]="'Connection timeout in milliseconds (1000-600000)'"
+          ></app-glass-input>
+        </div>
+
+        <div class="form-row two-cols">
+          <app-glass-select
+            label="Environment"
+            formControlName="environment"
+            [options]="['PROD', 'QA']"
+          ></app-glass-select>
+
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" formControlName="enabled" />
+              <span>Enabled</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" formControlName="isHistoricalSender" />
+            <span>Historical Data Sender</span>
+          </label>
+          <span class="checkbox-hint">Enable for historical mode ETL processing</span>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="dialog-footer">
+    <div class="footer-actions">
+      <button type="button" class="btn-secondary" (click)="cancel()" [disabled]="submitting()">Cancel</button>
+
+      <button
+        type="button"
+        class="btn-test"
+        (click)="testConnection()"
+        [disabled]="form.invalid || testingConnection() || submitting()"
+      >
+        <app-glass-icon name="link_off" [size]="16"></app-glass-icon>
+        {{ testingConnection() ? 'Testing...' : 'Test Connection' }}
+      </button>
+
+      <button type="button" class="btn-primary" (click)="submit()" [disabled]="form.invalid || submitting()">
+        {{ submitting() ? 'Saving...' : mode === 'create' ? 'Create Server' : 'Update Server' }}
+      </button>
+    </div>
+  </div>
+</div>

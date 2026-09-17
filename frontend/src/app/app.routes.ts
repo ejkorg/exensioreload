@@ -28,14 +28,34 @@ export const routes: Routes = [
     loadComponent: () => import('./my-sessions/my-sessions.component').then((m) => m.MySessionsComponent),
   },
   {
-    path: 'admin/users',
-    canActivate: [AuthGuard, () => inject(AuthService).isSuperAdmin()],
-    loadComponent: () => import('./admin/user-list.component').then((m) => m.UserListComponent),
-  },
-  {
-    path: 'admin/audit',
+    path: 'admin',
     canActivate: [AuthGuard, () => inject(AuthService).isAdmin()],
-    loadComponent: () => import('./admin/audit-log-table.component').then((m) => m.AuditLogTableComponent),
+    children: [
+      {
+        path: 'users',
+        canActivate: [() => inject(AuthService).isSuperAdmin()],
+        loadComponent: () => import('./admin/user-list.component').then((m) => m.UserListComponent),
+      },
+      {
+        path: 'pipelines',
+        loadComponent: () =>
+          import('./admin/admin-pipeline-config.component').then((m) => m.AdminPipelineConfigComponent),
+      },
+      {
+        path: 'etl-servers',
+        loadComponent: () =>
+          import('./admin/admin-etl-server-config.component').then((m) => m.AdminEtlServerConfigComponent),
+      },
+      {
+        path: 'db-connections',
+        loadComponent: () =>
+          import('./admin/admin-db-connection-config.component').then((m) => m.AdminDbConnectionConfigComponent),
+      },
+      {
+        path: 'audit',
+        loadComponent: () => import('./admin/audit-log-table.component').then((m) => m.AuditLogTableComponent),
+      },
+    ],
   },
   {
     path: 'login',

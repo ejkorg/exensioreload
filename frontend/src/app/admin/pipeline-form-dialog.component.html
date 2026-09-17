@@ -1,0 +1,264 @@
+<div class="pipeline-form-dialog">
+  <div class="dialog-header">
+    <h2>{{ mode === 'create' ? 'Create Pipeline' : 'Edit Pipeline' }}</h2>
+    <button type="button" class="close-btn" (click)="cancel()" aria-label="Close dialog">
+      <app-glass-icon name="close" [size]="20"></app-glass-icon>
+    </button>
+  </div>
+
+  <div class="dialog-content" *ngIf="!loading()">
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <!-- Basic Information Section -->
+      <div class="form-section">
+        <h3>Basic Information</h3>
+
+        <div class="form-group">
+          <label for="pipelineKey">Pipeline Key *</label>
+          <input
+            id="pipelineKey"
+            type="text"
+            formControlName="pipelineKey"
+            class="form-input"
+            [class.error]="form.get('pipelineKey')?.invalid && form.get('pipelineKey')?.touched"
+            placeholder="e.g., CEBU_PROD_ETL_01"
+            [disabled]="mode === 'edit'"
+          />
+          <div class="error-text" *ngIf="form.get('pipelineKey')?.invalid && form.get('pipelineKey')?.touched">
+            {{ getPipelineKeyError() }}
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="environment">Environment *</label>
+            <select id="environment" formControlName="environment" class="form-select" (change)="onEnvironmentChange()">
+              <option value="PROD">PROD</option>
+              <option value="QA">QA</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="site">Site *</label>
+            <select
+              id="site"
+              formControlName="site"
+              class="form-select"
+              [class.error]="form.get('site')?.invalid && form.get('site')?.touched"
+            >
+              <option value="">Select a site</option>
+              <option *ngFor="let site of sites()" [value]="site">{{ site }}</option>
+            </select>
+            <div class="error-text" *ngIf="form.get('site')?.invalid && form.get('site')?.touched">
+              Site is required
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="server">ETL Server *</label>
+            <select
+              id="server"
+              formControlName="server"
+              class="form-select"
+              [class.error]="form.get('server')?.invalid && form.get('server')?.touched"
+            >
+              <option value="">Select a server</option>
+              <option *ngFor="let server of servers()" [value]="server.serverKey">
+                {{ server.serverKey }} ({{ server.host }})
+              </option>
+            </select>
+            <div class="error-text" *ngIf="form.get('server')?.invalid && form.get('server')?.touched">
+              Server is required
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="configName">Config Name</label>
+            <input
+              id="configName"
+              type="text"
+              formControlName="configName"
+              class="form-input"
+              placeholder="Optional config name"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue Configuration Section -->
+      <div class="form-section">
+        <h3>Queue Configuration</h3>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="senderId">Sender ID *</label>
+            <input
+              id="senderId"
+              type="number"
+              formControlName="senderId"
+              class="form-input"
+              [class.error]="form.get('senderId')?.invalid && form.get('senderId')?.touched"
+              placeholder="e.g., 1"
+            />
+            <div class="error-text" *ngIf="form.get('senderId')?.invalid && form.get('senderId')?.touched">
+              {{ getSenderIdError() }}
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="socketPort">Socket Port *</label>
+            <input
+              id="socketPort"
+              type="number"
+              formControlName="socketPort"
+              class="form-input"
+              [class.error]="form.get('socketPort')?.invalid && form.get('socketPort')?.touched"
+              placeholder="e.g., 8000"
+              min="1"
+              max="65535"
+            />
+            <div class="error-text" *ngIf="form.get('socketPort')?.invalid && form.get('socketPort')?.touched">
+              {{ getPortError() }}
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="rerunPeriodMinutes">Rerun Period (min) *</label>
+            <input
+              id="rerunPeriodMinutes"
+              type="number"
+              formControlName="rerunPeriodMinutes"
+              class="form-input"
+              placeholder="e.g., 60"
+              min="1"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Modes Section -->
+      <div class="form-section">
+        <h3>Configuration Modes</h3>
+
+        <div class="checkbox-row">
+          <div class="checkbox-group">
+            <input type="checkbox" id="enabled" formControlName="enabled" class="form-checkbox" />
+            <label for="enabled">Enabled</label>
+          </div>
+
+          <div class="checkbox-group">
+            <input
+              type="checkbox"
+              id="historicalModeEnabled"
+              formControlName="historicalModeEnabled"
+              class="form-checkbox"
+            />
+            <label for="historicalModeEnabled" [title]="'Enable for historical data queries'"> Historical Mode </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stages Section -->
+      <div class="form-section">
+        <div class="section-header">
+          <h3>Pipeline Stages</h3>
+          <button type="button" (click)="addStage()" class="add-stage-btn">
+            <app-glass-icon name="add" [size]="16"></app-glass-icon>
+            Add Stage
+          </button>
+        </div>
+
+        <div class="stages-list">
+          <div *ngIf="stagesArray.length === 0" class="no-stages">
+            No stages configured. Click "Add Stage" to create one.
+          </div>
+
+          <div *ngFor="let stage of stagesArray.controls; let i = index" class="stage-card" [formGroupName]="i">
+            <div class="stage-header">
+              <span class="stage-index">Stage {{ i + 1 }}</span>
+              <button
+                type="button"
+                (click)="removeStage(i)"
+                class="remove-stage-btn"
+                [disabled]="stagesArray.length === 0"
+                [title]="'Remove stage'"
+              >
+                <app-glass-icon name="delete" [size]="16"></app-glass-icon>
+              </button>
+            </div>
+
+            <div class="stage-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label [for]="'stageName_' + i">Stage Name *</label>
+                  <input
+                    [id]="'stageName_' + i"
+                    type="text"
+                    formControlName="name"
+                    class="form-input"
+                    [class.error]="stage.get('name')?.invalid && stage.get('name')?.touched"
+                    placeholder="e.g., DataPort"
+                  />
+                  <div class="error-text" *ngIf="stage.get('name')?.invalid && stage.get('name')?.touched">
+                    Stage name is required (min 2 characters)
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label [for]="'stageType_' + i">Stage Type *</label>
+                  <select [id]="'stageType_' + i" formControlName="type" class="form-select">
+                    <option *ngFor="let type of stageTypes" [value]="type">{{ type }}</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label [for]="'stageTimeout_' + i">Timeout (min) *</label>
+                  <input
+                    [id]="'stageTimeout_' + i"
+                    type="number"
+                    formControlName="timeoutMinutes"
+                    class="form-input"
+                    placeholder="e.g., 30"
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label [for]="'stageDeps_' + i">Dependencies (Multi-select)</label>
+                <div class="dependency-list">
+                  <div class="dependency-help">
+                    <app-glass-icon name="info" [size]="14"></app-glass-icon>
+                    <span>Select stages that must complete before this stage</span>
+                  </div>
+                  <div class="dependency-tags">
+                    <span *ngFor="let dep of stage.get('dependsOn')?.value || []" class="tag">
+                      {{ dep }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="cancel-btn" (click)="cancel()">Cancel</button>
+        <button type="submit" class="submit-btn" [disabled]="form.invalid || submitting()">
+          <span *ngIf="!submitting()">
+            {{ mode === 'create' ? 'Create Pipeline' : 'Update Pipeline' }}
+          </span>
+          <span *ngIf="submitting()">Saving...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="dialog-loading" *ngIf="loading()">
+    <div class="hub-spinner" aria-label="Loading form data"></div>
+    <p>Loading metadata...</p>
+  </div>
+</div>

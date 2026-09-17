@@ -1,0 +1,145 @@
+<div class="server-hub-container">
+  <header class="hub-title">
+    <div class="hub-header-text">
+      <h1>ETL Server <span class="accent">Configuration</span></h1>
+      <p class="subtitle">Manage ETL server connections and SSH settings.</p>
+    </div>
+    <div class="hub-actions">
+      <button type="button" (click)="createServer()" class="hub-action-btn">
+        <app-glass-icon name="add_circle" [size]="18"></app-glass-icon>
+        Add Server
+      </button>
+    </div>
+  </header>
+
+  <div class="filter-bar glass-panel">
+    <div class="search-box">
+      <app-glass-icon name="search" [size]="18"></app-glass-icon>
+      <input type="text" [formControl]="searchControl" placeholder="Find server by key, host, or user..." />
+    </div>
+    <div class="filter-group">
+      <app-glass-select
+        class="mini-filter"
+        label="Environment"
+        placeholder="All Environments"
+        [formControl]="environmentFilter"
+        [options]="['ALL', 'PROD', 'QA']"
+      ></app-glass-select>
+
+      <label class="checkbox-filter">
+        <input type="checkbox" [formControl]="historicalOnlyFilter" />
+        <span>Historical Senders Only</span>
+      </label>
+
+      <button type="button" (click)="loadEtlServers()" [glassTooltip]="'Refresh data'" class="refresh-btn">
+        <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="content-area glass-panel table-overflow">
+    <table class="exensioreload-table">
+      <thead>
+        <tr>
+          <th>
+            <button type="button" class="sort-header-btn" (click)="setSort('serverKey')">
+              Server Key
+              <app-glass-icon [name]="sortIcon('serverKey')" [size]="14"></app-glass-icon>
+            </button>
+          </th>
+          <th>
+            <button type="button" class="sort-header-btn" (click)="setSort('host')">
+              Host
+              <app-glass-icon [name]="sortIcon('host')" [size]="14"></app-glass-icon>
+            </button>
+          </th>
+          <th>SSH Port</th>
+          <th>Socket Port</th>
+          <th>User</th>
+          <th>Password</th>
+          <th>Environment</th>
+          <th>Status</th>
+          <th>Mode</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let server of dataSource.data; trackBy: trackByServerId">
+          <td>
+            <span class="server-key">{{ server.serverKey }}</span>
+          </td>
+          <td>
+            <span class="host-name">{{ server.host }}</span>
+          </td>
+          <td>
+            <span class="port-number">{{ server.sshPort }}</span>
+          </td>
+          <td>
+            <span class="port-number">{{ server.socketPort }}</span>
+          </td>
+          <td>
+            <span class="user-name">{{ server.user }}</span>
+          </td>
+          <td>
+            <span class="password-masked">***</span>
+          </td>
+          <td>
+            <span
+              class="environment-badge"
+              [class.prod]="server.environment === 'PROD'"
+              [class.qa]="server.environment === 'QA'"
+            >
+              {{ server.environment }}
+            </span>
+          </td>
+          <td>
+            <span class="status-tag" [class.enabled]="server.enabled" [class.disabled]="!server.enabled">
+              {{ server.enabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </td>
+          <td>
+            <span *ngIf="server.isHistoricalSender" class="historical-badge" [glassTooltip]="'Historical data sender'">
+              HISTORICAL
+            </span>
+            <span *ngIf="!server.isHistoricalSender" class="normal-badge">NORMAL</span>
+          </td>
+          <td>
+            <div class="row-actions">
+              <button
+                type="button"
+                class="actions-menu-btn"
+                (click)="editServer(server)"
+                [glassTooltip]="'Edit server'"
+                aria-label="Edit server"
+              >
+                <app-glass-icon name="edit" [size]="16"></app-glass-icon>
+              </button>
+              <button
+                type="button"
+                class="actions-menu-btn danger"
+                (click)="deleteServer(server)"
+                [glassTooltip]="'Delete server'"
+                aria-label="Delete server"
+              >
+                <app-glass-icon name="delete" [size]="16"></app-glass-icon>
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="loading-overlay" *ngIf="loading()">
+      <div class="hub-spinner" aria-label="Loading"></div>
+    </div>
+
+    <app-glass-pagination
+      [length]="totalElements()"
+      [pageSize]="pageSize"
+      [pageIndex]="pageIndex"
+      [pageSizeOptions]="[10, 20, 50]"
+      (page)="onPage($event)"
+    >
+    </app-glass-pagination>
+  </div>
+</div>

@@ -116,6 +116,10 @@
   overflow: hidden;
 }
 
+.table-overflow {
+  overflow-x: auto;
+}
+
 .exensioreload-table {
   width: 100%;
   border-collapse: collapse;
@@ -212,6 +216,51 @@
   font-style: italic;
 }
 
+.resource-type-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.resource-type-badge[data-resource-type='USER'] {
+  background: rgba(66, 133, 244, 0.15);
+  color: #4285f4;
+}
+
+.resource-type-badge[data-resource-type='PIPELINE'] {
+  background: rgba(233, 30, 99, 0.15);
+  color: #e91e63;
+}
+
+.resource-type-badge[data-resource-type='ETL_SERVER'] {
+  background: rgba(156, 39, 176, 0.15);
+  color: #9c27b0;
+}
+
+.resource-type-badge[data-resource-type='DB_CONNECTION'] {
+  background: rgba(103, 58, 183, 0.15);
+  color: #673ab7;
+}
+
+.resource-type-badge[data-resource-type='SESSION'] {
+  background: rgba(0, 150, 136, 0.15);
+  color: #009688;
+}
+
+.resource-type-badge[data-resource-type='ETL_TRIGGER'] {
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+}
+
+.resource-type-badge[data-resource-type='SYSTEM'] {
+  background: rgba(117, 117, 117, 0.15);
+  color: #757575;
+}
+
 .status-tag {
   display: inline-block;
   padding: 4px 12px;
@@ -246,6 +295,33 @@
 .message-text {
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.action-column {
+  text-align: center;
+  width: 50px;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.action-btn:hover {
+  opacity: 1;
+  color: var(--accent-color);
+}
+
+.action-btn:active {
+  transform: scale(0.95);
 }
 
 .loading-overlay {

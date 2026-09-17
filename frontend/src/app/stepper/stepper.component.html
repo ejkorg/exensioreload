@@ -46,7 +46,9 @@
           <div class="card-header-inline">
             <div class="header-title-group">
               <span class="card-title">Filter Configuration</span>
-              <span class="card-subtitle">Define target environment, pipeline attributes, time boundaries, and lot criteria</span>
+              <span class="card-subtitle"
+                >Define target environment, pipeline attributes, time boundaries, and lot criteria</span
+              >
             </div>
             <button
               class="reset-filters-btn"
@@ -272,7 +274,9 @@
                   label="Equipment ID (Admin)"
                   placeholder="e.g. TST-01, TST-02"
                   [ngModel]="equipmentIdFilter()"
-                  (ngModelChange)="equipmentIdFilter.set($event); equipmentIdFilterControl.setValue($event, { emitEvent: false })"
+                  (ngModelChange)="
+                    equipmentIdFilter.set($event); equipmentIdFilterControl.setValue($event, { emitEvent: false })
+                  "
                   prefixIcon="precision_manufacturing"
                 >
                 </app-glass-input>
@@ -316,6 +320,18 @@
                 (findSender)="onFindSenderClick()"
               >
               </app-glass-sender-selector>
+
+              <!-- Historical mode informational banner -->
+              <div *ngIf="historicalMode()" class="historical-mode-banner">
+                <app-glass-icon name="info" [size]="16"></app-glass-icon>
+                <div class="banner-content">
+                  <strong>Historical Mode Enabled</strong>
+                  <p>
+                    You are searching for data in archive records. Only historical senders will be used for this
+                    session.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -325,7 +341,9 @@
               <div class="subpanel-title-wrap">
                 <app-glass-icon name="layers" [size]="16" class="subpanel-icon"></app-glass-icon>
                 <span class="subpanel-title">Lot / Wafer Criteria</span>
-                <span class="subpanel-tag count-tag">{{ lotWaferPairs().length }} {{ lotWaferPairs().length === 1 ? 'pair' : 'pairs' }}</span>
+                <span class="subpanel-tag count-tag"
+                  >{{ lotWaferPairs().length }} {{ lotWaferPairs().length === 1 ? 'pair' : 'pairs' }}</span
+                >
               </div>
 
               <div class="lot-wafer-header-actions">
@@ -639,12 +657,18 @@
                     [ngClass]="{
                       'badge-prod': getTargetBoundForRow(row) === 'PRODUCTION',
                       'badge-sandbox': getTargetBoundForRow(row) === 'SANDBOX',
-                      'badge-unresolved': getTargetBoundForRow(row) === '-'
+                      'badge-unresolved': getTargetBoundForRow(row) === '-',
                     }"
                     [glassTooltip]="getTargetBoundReason(row)"
                   >
                     <span class="target-dot"></span>
-                    {{ getTargetBoundForRow(row) === 'PRODUCTION' ? 'PROD BOUND' : (getTargetBoundForRow(row) === 'SANDBOX' ? 'SANDBOX BOUND' : '-') }}
+                    {{
+                      getTargetBoundForRow(row) === 'PRODUCTION'
+                        ? 'PROD BOUND'
+                        : getTargetBoundForRow(row) === 'SANDBOX'
+                          ? 'SANDBOX BOUND'
+                          : '-'
+                    }}
                   </span>
                 </td>
                 <td class="col-status">
@@ -655,7 +679,7 @@
                       'badge-sbx': getExensioStatusForRow(row) === 'FOUND SBX',
                       'badge-found': getExensioStatusForRow(row) === 'FOUND',
                       'badge-not-found': getExensioStatusForRow(row) === 'NOT FOUND',
-                      'badge-unchecked': getExensioStatusForRow(row) === '-'
+                      'badge-unchecked': getExensioStatusForRow(row) === '-',
                     }"
                   >
                     {{ getExensioStatusForRow(row) }}
@@ -792,7 +816,8 @@
             <h3 class="banner-title">Sender Queue at Capacity</h3>
             <p class="banner-message">
               The sender queue has reached its maximum capacity (600+ items). New files are being queued automatically
-              and will be processed as slots become available. Current available slots: <strong>{{ queueAvailableSlots() }}</strong>
+              and will be processed as slots become available. Current available slots:
+              <strong>{{ queueAvailableSlots() }}</strong>
             </p>
           </div>
         </div>
