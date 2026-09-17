@@ -11,7 +11,7 @@ import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.direct
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { ToastService } from '../shared/services/toast.service';
 import { AuditLogDetailDialogComponent } from './audit-log-detail-dialog.component';
-import { AuditLogDto, AuditService, EtlAuditLog } from './audit.service';
+import { AuditService, EtlAuditLog } from './audit.service';
 
 @Component({
   selector: 'app-audit-log-table',
@@ -212,7 +212,7 @@ export class AuditLogTableComponent implements OnInit {
     return isNaN(d.getTime()) ? '' : String(d.getUTCSeconds()).padStart(2, '0');
   }
 
-  dataSource = signal<(EtlAuditLog | AuditLogDto)[]>([]);
+  dataSource = signal<EtlAuditLog[]>([]);
   loading = signal(false);
   exporting = signal(false);
   totalElements = signal(0);
@@ -288,7 +288,7 @@ export class AuditLogTableComponent implements OnInit {
     return this.sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward';
   }
 
-  trackById = (_: number, log: EtlAuditLog | AuditLogDto): number => log.id;
+  trackById = (_: number, log: EtlAuditLog): number => log.id;
 
   private loadMetadata(): void {
     // Load unique sites and servers from audit logs
@@ -297,8 +297,8 @@ export class AuditLogTableComponent implements OnInit {
         const sites = new Set<string>();
         const servers = new Set<string>();
         res.content.forEach((log) => {
-          if ('site' in log && log.site) sites.add(log.site);
-          if ('etlServerName' in log && log.etlServerName) servers.add(log.etlServerName);
+          if (log instanceof Object && 'site' in log) sites.add((log as EtlAuditLog).site);
+          if (log instanceof Object && 'etlServerName' in log) servers.add((log as EtlAuditLog).etlServerName);
         });
         this.sites = Array.from(sites).sort();
         this.servers = Array.from(servers).sort();

@@ -25,7 +25,7 @@ export class EtlServerFormDialogComponent implements OnInit {
   private configService = inject(ConfigurationService);
   private dialogRef = inject(GlassDialogRef);
   private toast = inject(ToastService);
-  private data = inject(GLASS_DIALOG_DATA) as DialogData;
+  private data: DialogData = inject(GLASS_DIALOG_DATA as any);
 
   mode = this.data.mode;
   form!: FormGroup;
