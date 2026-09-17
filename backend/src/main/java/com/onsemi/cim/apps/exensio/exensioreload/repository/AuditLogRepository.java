@@ -58,4 +58,26 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     
     // Clean up old audit logs (for maintenance)
     void deleteByCreatedAtBefore(Instant cutoffDate);
+    
+    /**
+     * Find audit logs by resource type and created date range
+     * @param resourceType the resource type to filter by
+     * @param startDate the start date (inclusive)
+     * @param endDate the end date (inclusive)
+     * @param pageable pagination info
+     * @return page of matching audit logs ordered by creation date descending
+     */
+    Page<AuditLog> findByResourceTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+            String resourceType, 
+            Instant startDate, 
+            Instant endDate, 
+            Pageable pageable);
+    
+    /**
+     * Count audit logs by resource type and action
+     * @param resourceType the resource type
+     * @param action the action type
+     * @return count of matching audit logs
+     */
+    long countByResourceTypeAndAction(String resourceType, String action);
 }

@@ -39,6 +39,12 @@ public class AuditLog {
     @JdbcTypeCode(SqlTypes.TIMESTAMP_WITH_TIMEZONE)
     private Instant createdAt;
 
+    @Column(length = 20)
+    private String status;
+
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {
@@ -88,8 +94,15 @@ public class AuditLog {
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public String getErrorMessage() { return errorMessage; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
     // Audit action constants
     public static final class Actions {
+        // Existing actions
         public static final String USER_CREATED = "USER_CREATED";
         public static final String USER_UPDATED = "USER_UPDATED";
         public static final String USER_DELETED = "USER_DELETED";
@@ -100,13 +113,34 @@ public class AuditLog {
         public static final String PASSWORD_CHANGED = "PASSWORD_CHANGED";
         public static final String ACCOUNT_LOCKED = "ACCOUNT_LOCKED";
         public static final String ACCOUNT_UNLOCKED = "ACCOUNT_UNLOCKED";
+
+        // Configuration management actions
+        public static final String PIPELINE_CREATED = "PIPELINE_CREATED";
+        public static final String PIPELINE_UPDATED = "PIPELINE_UPDATED";
+        public static final String PIPELINE_DELETED = "PIPELINE_DELETED";
+        public static final String ETL_SERVER_CREATED = "ETL_SERVER_CREATED";
+        public static final String ETL_SERVER_UPDATED = "ETL_SERVER_UPDATED";
+        public static final String ETL_SERVER_DELETED = "ETL_SERVER_DELETED";
+        public static final String DB_CONNECTION_CREATED = "DB_CONNECTION_CREATED";
+        public static final String DB_CONNECTION_UPDATED = "DB_CONNECTION_UPDATED";
+        public static final String DB_CONNECTION_DELETED = "DB_CONNECTION_DELETED";
+
+        // Session and ETL events
+        public static final String SESSION_CREATED = "SESSION_CREATED";
+        public static final String SESSION_COMPLETED = "SESSION_COMPLETED";
+        public static final String SESSION_FAILED = "SESSION_FAILED";
+        public static final String ETL_TRIGGERED = "ETL_TRIGGERED";
+        public static final String CONFIG_MIGRATED = "CONFIG_MIGRATED";
     }
 
     // Resource type constants
     public static final class ResourceTypes {
         public static final String USER = "USER";
+        public static final String PIPELINE = "PIPELINE";
+        public static final String ETL_SERVER = "ETL_SERVER";
+        public static final String DB_CONNECTION = "DB_CONNECTION";
         public static final String RESENDER = "RESENDER";
-        public static final String SYSTEM = "SYSTEM";
         public static final String SESSION = "SESSION";
+        public static final String SYSTEM = "SYSTEM";
     }
 }

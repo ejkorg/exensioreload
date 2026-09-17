@@ -2,6 +2,10 @@ server:
   port: 8004
   forward-headers-strategy: native
 
+security:
+  encryption:
+    key: ${SECURITY_ENCRYPTION_KEY:default-dev-key-change-in-production}
+
 spring:
   autoconfigure:
     exclude:
