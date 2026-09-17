@@ -4,6 +4,7 @@ import { FormControl, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subject, Subscription, firstValueFrom, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { SenderOption as ConfigSenderOption, ConfigurationService } from '../admin/configuration.service';
 import {
   BackendService,
   CreateSessionResponse,
@@ -34,10 +35,7 @@ import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.direct
 import { SiteNamePipe, formatSiteName } from '../shared/pipes/site-name.pipe';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { MonitoringFile, MonitoringService } from '../shared/services/monitoring.service';
-import {
-  SessionStreamStatus,
-  StagingSessionService
-} from '../shared/services/staging-session.service';
+import { SessionStreamStatus, StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
 import {
   BulkLotInputDialogComponent,
@@ -738,11 +736,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     }
 
     const uniqueWafers = Array.from(
-      new Set(
-        rows
-          .map((r) => String(r.wafer || '').trim())
-          .filter((w) => w.length > 0 && w !== '-'),
-      ),
+      new Set(rows.map((r) => String(r.wafer || '').trim()).filter((w) => w.length > 0 && w !== '-')),
     );
 
     const dataType = this.selectedDataType() || '';
@@ -816,7 +810,11 @@ export class StepperComponent implements OnInit, OnDestroy {
             if (!result || !result.found) {
               statusMap.set(rowKey, 'NOT FOUND');
             } else {
-              const foundWafers = (result.wafers || []).map((w: string) => String(w || '').toUpperCase().trim());
+              const foundWafers = (result.wafers || []).map((w: string) =>
+                String(w || '')
+                  .toUpperCase()
+                  .trim(),
+              );
 
               const pad2Wafer = /^\d+$/.test(cleanWafer) ? cleanWafer.padStart(2, '0') : cleanWafer;
               const numWafer = /^\d+$/.test(cleanWafer) ? String(parseInt(cleanWafer, 10)) : cleanWafer;
@@ -844,7 +842,12 @@ export class StepperComponent implements OnInit, OnDestroy {
                 foundWafers.some((fw: string) => {
                   if (expectedVariants.has(fw)) return true;
                   const fwClean = fw.replace(/^.*[-_]/, '');
-                  if (fwClean && (fwClean === pad2Wafer.toUpperCase() || fwClean === numWafer.toUpperCase() || fwClean === cleanWafer.toUpperCase())) {
+                  if (
+                    fwClean &&
+                    (fwClean === pad2Wafer.toUpperCase() ||
+                      fwClean === numWafer.toUpperCase() ||
+                      fwClean === cleanWafer.toUpperCase())
+                  ) {
                     return true;
                   }
                   if (fw.endsWith('_' + pad2Wafer.toUpperCase()) || fw.endsWith('-' + pad2Wafer.toUpperCase())) {
@@ -1189,26 +1192,24 @@ export class StepperComponent implements OnInit, OnDestroy {
     });
 
     if (previewRows.length === 0) {
-      return files.map(
-        (file: StageRecordView): WaferMonitoringRow => {
-          const mappedStatus = this.mapBackendStatus(file.status);
-          return {
-            lot: file.lot || '',
-            wafer: file.wafer || '',
-            filename: file.filename || '',
-            status: mappedStatus,
-            errorMessage: file.errorMessage ?? undefined,
-            cpOutputPath: file.cpOutputPath,
-            cpOutputTarget: file.cpOutputTarget,
-            cpIntegrationStatus: file.cpIntegrationStatus ?? undefined,
-            cpIntegrationMessage: file.cpIntegrationMessage ?? undefined,
-            exensioIntegrationStatus: file.exensioIntegrationStatus ?? undefined,
-            exensioIntegrationMessage: file.exensioIntegrationMessage ?? undefined,
-            message: this.getStatusMessage(mappedStatus, file.errorMessage ?? undefined),
-            updatedAt: file.updatedAt || file.updated || undefined,
-          };
-        },
-      );
+      return files.map((file: StageRecordView): WaferMonitoringRow => {
+        const mappedStatus = this.mapBackendStatus(file.status);
+        return {
+          lot: file.lot || '',
+          wafer: file.wafer || '',
+          filename: file.filename || '',
+          status: mappedStatus,
+          errorMessage: file.errorMessage ?? undefined,
+          cpOutputPath: file.cpOutputPath,
+          cpOutputTarget: file.cpOutputTarget,
+          cpIntegrationStatus: file.cpIntegrationStatus ?? undefined,
+          cpIntegrationMessage: file.cpIntegrationMessage ?? undefined,
+          exensioIntegrationStatus: file.exensioIntegrationStatus ?? undefined,
+          exensioIntegrationMessage: file.exensioIntegrationMessage ?? undefined,
+          message: this.getStatusMessage(mappedStatus, file.errorMessage ?? undefined),
+          updatedAt: file.updatedAt || file.updated || undefined,
+        };
+      });
     }
 
     const rows = previewRows.map((row: DiscoveryPreviewRow): WaferMonitoringRow => {
@@ -1429,6 +1430,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   constructor(
     private backend: BackendService,
+    private configurationService: ConfigurationService,
     private router: Router,
     private route: ActivatedRoute,
     private authService: AuthService,
@@ -1721,12 +1723,14 @@ export class StepperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Load sites for the selected environment from backend
+    // Load sites for the selected environment from ConfigurationService
     console.log('Loading sites for environment:', safeEnv);
-    this.backend.listSitesForEnvironment(safeEnv).subscribe({
+    this.configurationService.getSites(safeEnv).subscribe({
       next: (sites: string[]) => {
         console.log(`Received ${sites.length} sites for ${safeEnv}:`, sites);
-        const options: GlassOption[] = sites.map((site) => ({
+        // Sort sites alphabetically
+        const sortedSites = [...sites].sort((a, b) => a.localeCompare(b));
+        const options: GlassOption[] = sortedSites.map((site) => ({
           value: site,
           label: formatSiteName(site, false), // strip -PROD/-QA suffix for display
         }));
@@ -1912,9 +1916,9 @@ export class StepperComponent implements OnInit, OnDestroy {
     const useEquipmentIdFilter = this.isAdminUser() && equipmentIdList.length > 0;
 
     // Sanitize wafer values in pairs - strip alpha characters
-    const sanitizedPairs = normalizedPairs.map(pair => ({
+    const sanitizedPairs = normalizedPairs.map((pair) => ({
       lot: pair.lot,
-      wafer: pair.wafer ? this.sanitizeWaferValue(pair.wafer) : pair.wafer
+      wafer: pair.wafer ? this.sanitizeWaferValue(pair.wafer) : pair.wafer,
     }));
 
     const useLargePreviewWindow = this.historicalMode() || useDateFilters;
@@ -2174,6 +2178,19 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   onHistoricalModeChange(checked: boolean) {
     this.historicalMode.set(!!checked);
+
+    // Clear sender selection when historical mode toggles
+    this.resetSenderState();
+
+    // Show informational message
+    if (checked) {
+      this.toast.info('Historical mode enabled - searching for historical senders...');
+    } else {
+      this.toast.info('Historical mode disabled - searching for standard senders...');
+    }
+
+    // The reactive sender lookup effect will automatically trigger and reload senders
+    // filtered by the new historicalMode value
   }
 
   onFileTypeChange(fileType: string | null) {
@@ -2954,13 +2971,17 @@ export class StepperComponent implements OnInit, OnDestroy {
             error: (err: any) => {
               console.error('[STAGING] Staging payloads failed:', err);
               this.staging.set(false);
-              const isTimeout = err?.name === 'TimeoutError' || 
+              const isTimeout =
+                err?.name === 'TimeoutError' ||
                 (typeof err?.message === 'string' && err.message.toLowerCase().includes('timed out'));
 
               if (isTimeout && this.requestId()) {
                 // If the request timed out on the client, the backend may have already enqueued the items
                 // and is running background triggers. Transition to Step 3 Monitoring so user can track progress.
-                this.toast.info('Staging request took longer than expected, but session is active. Opening monitoring...', 7000);
+                this.toast.info(
+                  'Staging request took longer than expected, but session is active. Opening monitoring...',
+                  7000,
+                );
                 this.completeStep(1);
                 this.currentStep.set(2);
                 this.startMonitoring();
@@ -3757,7 +3778,7 @@ export class StepperComponent implements OnInit, OnDestroy {
             }
           }
         },
-        error: () => {}
+        error: () => {},
       });
       return;
     }
@@ -3983,9 +4004,10 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   /**
    * Apply sender details (id, name, port, source) to signals, with auto-fetch from DTP_SENDER if port missing
+   * Accepts both SenderOption and ConfigSenderOption types
    */
-  private applySenderSelection(sender: SenderOption | null) {
-    if (!sender || (sender.idSender == null && sender.id == null)) {
+  private applySenderSelection(sender: any | null) {
+    if (!sender || (sender.idSender == null && sender.id == null && sender.senderId == null)) {
       this.selectedSenderId.set(null);
       this.selectedSenderPort.set(null);
       this.selectedSenderPortSource.set(null);
@@ -3993,13 +4015,14 @@ export class StepperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const sid = sender.idSender ?? sender.id!;
+    // Handle both SenderOption and ConfigSenderOption types
+    const sid = sender.idSender ?? sender.id ?? sender.senderId;
     this.selectedSenderId.set(sid);
     this.selectedSenderName.set(sender.name || `Sender #${sid}`);
 
     if (sender.port != null) {
       this.selectedSenderPort.set(sender.port);
-      this.selectedSenderPortSource.set(sender.portSource ?? 'dtp_sender');
+      this.selectedSenderPortSource.set(sender.portSource ?? sender.source ?? 'configuration');
     } else {
       // Fetch details directly from backend to get port from dtp_sender (with YAML fallback)
       this.backend.getSenderInfo(sid, this.selectedSite(), this.selectedEnv()).subscribe({
@@ -4033,7 +4056,8 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Perform historical sender lookup using HIST regex pattern matching
+   * Perform historical sender lookup via ConfigurationService.
+   * Returns only senders marked as historical in the database.
    */
   private performHistoricalSenderLookup() {
     if (!this.selectedSite() || !this.selectedDataType()) {
@@ -4044,25 +4068,19 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.senderAutoResolved.set(false);
     this.senderFallback.set(false);
 
-    const params: Record<string, any> = {
-      // historical sender endpoint requires connectionKey or locationId
-      // keep site for backward compatibility and provide connectionKey explicitly
-      site: this.selectedSite(),
-      connectionKey: this.selectedSite(),
-      environment: this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa',
-      dataType: this.selectedDataType(),
-    };
+    const site = this.selectedSite()!;
+    const environment = this.selectedEnv() || 'PROD';
 
-    return this.backend.getHistoricalSenders(params).pipe(
-      map((candidates: SenderOption[]) => {
+    // Use ConfigurationService to get historical senders
+    return this.configurationService.getSenders(site, environment, true).pipe(
+      map((candidates: ConfigSenderOption[]) => {
         this.senderLookupLoading.set(false);
 
-        // Enforce env boundary — filter out senders belonging to the opposite env
-        const env = this.selectedEnv();
-        const oppositeSuffix = env === 'PROD' ? '_QA' : '_PROD';
-        const filtered = (candidates || []).filter(
-          (s: SenderOption) => !(s.name || '').toUpperCase().endsWith(oppositeSuffix),
-        );
+        // Filter out invalid senders
+        const filtered = (candidates || []).filter((s: ConfigSenderOption) => {
+          if (!s || s.senderId == null) return false;
+          return true;
+        });
 
         if (filtered.length === 1) {
           // Single match - auto-resolve
@@ -4071,14 +4089,14 @@ export class StepperComponent implements OnInit, OnDestroy {
           this.senderAutoResolved.set(true);
           this.senderFallback.set(false);
           const portMsg = filtered[0].port ? ` (Port: ${filtered[0].port})` : '';
-          this.toast.success(`Sender auto-resolved using historical pattern${portMsg}`);
+          this.toast.success(`Historical sender auto-resolved${portMsg}`);
         } else if (filtered.length > 1) {
           // Multiple matches - show dropdown
           this.senderOptions.set(filtered);
           this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
-          this.toast.info(`Found ${filtered.length} matching senders - please select one`);
+          this.toast.info(`Found ${filtered.length} matching historical senders - please select one`);
         } else {
           // No matches
           this.senderOptions.set([]);
@@ -4086,7 +4104,7 @@ export class StepperComponent implements OnInit, OnDestroy {
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.warning(
-            'No historical sender matched. Verify a HIST sender exists in Dataport for this data type/env.',
+            'No historical sender found. Verify a historical sender exists for this site/environment.',
           );
         }
 
@@ -4103,8 +4121,8 @@ export class StepperComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Perform normal sender lookup using location-based filtering.
-   * Uses the /senders/lookup endpoint which has smart auto-resolution logic.
+   * Perform normal sender lookup using location-based filtering via ConfigurationService.
+   * Loads senders filtered by site, environment, and historical mode.
    */
   private performNormalSenderLookup() {
     if (!this.selectedSite() || !this.selectedLocation() || !this.selectedDataType()) {
@@ -4115,44 +4133,26 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.senderAutoResolved.set(false);
     this.senderFallback.set(false);
 
-    const params: Record<string, any> = {
-      connectionKey: this.selectedSite(),
-      environment: this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa',
-      metadataLocation: this.selectedLocation(), // Use metadataLocation (preferred by backend)
-      dataType: this.selectedDataType(),
-    };
+    const site = this.selectedSite()!;
+    const environment = this.selectedEnv() || 'PROD';
+    const historicalMode = this.historicalMode();
 
-    // Add optional filters if selected
-    const testerType = this.normalizeTesterType(this.selectedTesterType());
-    if (testerType) {
-      params['testerType'] = testerType;
-    }
-    if (this.selectedDataTypeExt()) {
-      params['dataTypeExt'] = this.selectedDataTypeExt();
-    }
-    if (this.selectedTestPhase()) {
-      params['testPhase'] = this.selectedTestPhase();
-    }
-
-    // Use lookupSenders() which has smart auto-resolution logic in the backend
-    return this.backend.lookupSenders(params).pipe(
-      map((candidates: SenderOption[]) => {
+    // Use ConfigurationService to get senders filtered by site, environment, and historical mode
+    return this.configurationService.getSenders(site, environment, historicalMode).pipe(
+      map((candidates: ConfigSenderOption[]) => {
         this.senderLookupLoading.set(false);
 
-        // Filter out invalid senders and enforce env boundary
-        const env = this.selectedEnv();
-        const oppositeSuffix = env === 'PROD' ? '_QA' : '_PROD';
-        const validCandidates = (candidates || []).filter((s: SenderOption) => {
-          if (!s || (s.idSender == null && s.id == null)) return false;
-          return !(s.name || '').toUpperCase().endsWith(oppositeSuffix);
+        // Filter out invalid senders
+        const validCandidates = (candidates || []).filter((s: ConfigSenderOption) => {
+          if (!s || s.senderId == null) return false;
+          return true;
         });
 
-        // Count unique sender IDs (backend may return multiple rows for same sender)
-        const uniqueIds = new Set(validCandidates.map((s: SenderOption) => s.idSender ?? s.id));
+        // Count unique sender IDs
+        const uniqueIds = new Set(validCandidates.map((s: ConfigSenderOption) => s.senderId));
 
         if (uniqueIds.size === 1) {
           // Single unique sender ID - auto-resolve
-          // Backend already did the smart filtering, so this is the correct sender
           this.senderOptions.set(validCandidates);
           this.applySenderSelection(validCandidates[0]);
           this.senderAutoResolved.set(true);
@@ -4161,20 +4161,18 @@ export class StepperComponent implements OnInit, OnDestroy {
           this.toast.success(`Sender auto-resolved${portMsg}`);
         } else if (uniqueIds.size > 1) {
           // Multiple unique sender IDs - show dropdown
-          // Backend returned multiple candidates because it couldn't uniquely resolve
           this.senderOptions.set(validCandidates);
           this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
           this.toast.info(`Found ${uniqueIds.size} matching senders - please select one`);
         } else {
-          // No matches - this shouldn't happen with lookupSenders (it falls back internally)
-          // but handle it gracefully
+          // No matches
           this.senderOptions.set([]);
           this.applySenderSelection(null);
           this.senderAutoResolved.set(false);
           this.senderFallback.set(true);
-          this.toast.warning('No senders found for the selected filters');
+          this.toast.warning('No senders found for the selected site and environment');
         }
 
         return null;
@@ -4201,9 +4199,7 @@ export class StepperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const sender = this.senderOptions().find(
-      (s: SenderOption) => (s.idSender ?? s.id) === senderId,
-    );
+    const sender = this.senderOptions().find((s: SenderOption) => (s.idSender ?? s.id) === senderId);
     if (sender) {
       this.applySenderSelection(sender);
       const portMsg = sender.port ? ` (Port: ${sender.port})` : '';
@@ -4434,7 +4430,11 @@ export class StepperComponent implements OnInit, OnDestroy {
         });
       } else {
         Object.entries(result.lots).forEach(([key, value]: [string, any]) => {
-          verificationMap.set(key, { found: Boolean(value.found), schema: value.schema || null, wafers: value.wafers || [] });
+          verificationMap.set(key, {
+            found: Boolean(value.found),
+            schema: value.schema || null,
+            wafers: value.wafers || [],
+          });
         });
       }
 
