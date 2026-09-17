@@ -3,11 +3,11 @@ import { interval, Observable, Subscription } from 'rxjs';
 import { distinctUntilChanged, filter, skip } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
-    BackendService,
-    CreateSessionRequest,
-    LotWaferProgress,
-    StageRecordView,
-    StagingSessionDetail,
+  BackendService,
+  CreateSessionRequest,
+  LotWaferProgress,
+  StageRecordView,
+  StagingSessionDetail,
 } from '../../api/backend.service';
 import { AuthService } from '../../auth/auth.service';
 import { ActivityEvent } from '../components/activity-feed.component';
@@ -32,6 +32,17 @@ export class StagingSessionService {
   activities = signal<SessionActivityEvent[]>([]);
   isConnected = signal(false);
   streamStatus = signal<SessionStreamStatus>('idle');
+
+  /** Real-time per-session file state counts aggregated from FILE_UPDATE events */
+  stateMetrics = signal<Record<string, number>>({
+    staged: 0,
+    queued: 0,
+    enriching: 0,
+    exensio: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0,
+  });
 
   progress = computed(() => this.currentSession()?.progress ?? 0);
   isComplete = computed(() => {
@@ -413,6 +424,7 @@ export class StagingSessionService {
         try {
           const fileUpdate = JSON.parse(event.data);
           this.updateFileInList(fileUpdate);
+          this.trackStateChange(fileUpdate); // Track state transition for real-time metrics
           this.pushActivity(
             'file',
             fileUpdate.msg || fileUpdate.message || `File ${fileUpdate.displayStatus || fileUpdate.status}`,
@@ -430,6 +442,7 @@ export class StagingSessionService {
           const updates = JSON.parse(event.data);
           if (Array.isArray(updates)) {
             const appliedUpdates = this.updateFilesInListBatch(updates);
+            updates.forEach((update: any) => this.trackStateChange(update)); // Track all state transitions
             if (appliedUpdates > 0) {
               this.pushActivity(
                 'file',
@@ -724,7 +737,10 @@ export class StagingSessionService {
           continue; // Cancelled records don't update session metrics directly
         }
         // For ENRICHMENT and EXENSIO_LOADING, only update filesEnqueued once
-        if ((stateName === 'ELASTICSEARCH_MONITORING' || stateName === 'EXENSIO_MONITORING') && fieldName === 'filesEnqueued') {
+        if (
+          (stateName === 'ELASTICSEARCH_MONITORING' || stateName === 'EXENSIO_MONITORING') &&
+          fieldName === 'filesEnqueued'
+        ) {
           // Both ENRICHMENT and EXENSIO_LOADING contribute to filesEnqueued
           // But since we get separate totals, we need to handle this carefully
           // For now, prioritize ENRICHMENT count if available
@@ -1098,5 +1114,43 @@ export class StagingSessionService {
       params.sessionId = sessionId;
     }
     return this.backend.getDistinctSessionDevices(params);
+  }
+
+  /**
+   * Track file state changes for real-time per-session metrics.
+   * Aggregates FILE_UPDATE events to show:
+   * - Staged: ready for dispatch
+   * - Queued: in CP queue (QUEUED_FOR_CP)
+   * - Enriching: being enriched (ELASTICSEARCH_MONITORING)
+   * - Exensio: being loaded in exensio (EXENSIO_MONITORING)
+   * - Completed: done
+   * - Failed: errors
+   * - Cancelled: cancelled
+   */
+  private trackStateChange(fileUpdate: any): void {
+    if (!fileUpdate?.status) return;
+
+    const metrics = { ...this.stateMetrics() };
+    const status = fileUpdate.status.toUpperCase();
+
+    // Map backend status to UI metric keys
+    const stateMap: Record<string, keyof typeof metrics> = {
+      STAGED: 'staged',
+      QUEUED_FOR_CP: 'queued',
+      ELASTICSEARCH_MONITORING: 'enriching',
+      EXENSIO_MONITORING: 'exensio',
+      COMPLETED: 'completed',
+      FAILED: 'failed',
+      CP_FAILED: 'failed',
+      CANCELLED: 'cancelled',
+      CP_TIMEOUT: 'failed', // timeout counts as failure
+      COMPLETED_MANUAL_VERIFICATION_REQUIRED: 'completed', // verification required still counts as completed
+    };
+
+    const metricKey = stateMap[status];
+    if (metricKey) {
+      metrics[metricKey] = Math.max(0, (metrics[metricKey] || 0) + 1);
+      this.stateMetrics.set(metrics);
+    }
   }
 }

@@ -1,14 +1,5 @@
 package com.onsemi.cim.apps.exensio.exensioreload.service;
 
-import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
-import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
-import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -19,6 +10,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.config.RefDbProperties;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageMonitorService;
+import com.onsemi.cim.apps.exensio.exensioreload.stage.StageRecord;
 
 /**
  * Periodically inspects the external sender queue and drives status transitions when
@@ -125,6 +126,10 @@ public class SenderQueueMonitor {
         if (!completed.isEmpty()) {
             pipelineOrchestrator.onCpQueueConsumed(completed, site, senderId);
 
+            // Emit FILE_UPDATE events for each file transitioning from QUEUED_FOR_CP
+            // This allows real-time per-session monitoring to track state changes
+            broadcastFileUpdates(completed, "QUEUED_FOR_CP");
+
             // Lot progress tracking for LOT_UPDATE events
             Map<String, Map<String, Integer>> lotProgressBySession = new HashMap<>();
             for (StageRecord record : completed) {
@@ -200,5 +205,65 @@ public class SenderQueueMonitor {
         } catch (Exception ex) {
             log.warn("Failed to broadcast lot progress for session {} lot {}: {}", requestId, lot, ex.getMessage());
         }
+    }
+
+    /**
+     * Broadcast FILE_UPDATE events for files transitioning from a given state.
+     * This enables real-time per-session monitoring to track exact state changes.
+     */
+    private void broadcastFileUpdates(List<StageRecord> records, String previousState) {
+        Map<String, List<com.onsemi.cim.apps.exensio.exensioreload.stage.FileUpdateEvent>> bySession = new HashMap<>();
+        
+        for (StageRecord record : records) {
+            if (record.requestId() == null || record.requestId().isBlank()) {
+                continue; // Skip records not tied to a session
+            }
+            
+            com.onsemi.cim.apps.exensio.exensioreload.stage.FileUpdateEvent event = 
+                new com.onsemi.cim.apps.exensio.exensioreload.stage.FileUpdateEvent(
+                    record.id(),
+                    record.metadataId(),
+                    record.dataId(),
+                    record.lot(),
+                    record.wafer(),
+                    record.filename(),
+                    record.status(),
+                    record.status() != null ? displayStatus(record.status()) : "Unknown",
+                    null,
+                    record.updatedAt() != null ? record.updatedAt().toString() : null,
+                    null,
+                    null
+                );
+            
+            bySession.computeIfAbsent(record.requestId(), k -> new ArrayList<>())
+                    .add(event);
+        }
+        
+        // Broadcast per-session batches
+        for (Map.Entry<String, List<com.onsemi.cim.apps.exensio.exensioreload.stage.FileUpdateEvent>> entry : bySession.entrySet()) {
+            String sessionId = entry.getKey();
+            List<com.onsemi.cim.apps.exensio.exensioreload.stage.FileUpdateEvent> events = entry.getValue();
+            
+            if (events.size() == 1) {
+                monitorService.broadcastFileUpdate(sessionId, events.get(0));
+            } else {
+                monitorService.broadcastFileUpdates(sessionId, events);
+            }
+        }
+    }
+
+    private String displayStatus(String status) {
+        return switch(status) {
+            case "STAGED" -> "Staged";
+            case "QUEUED_FOR_CP" -> "Queued for Enrichment";
+            case "ELASTICSEARCH_MONITORING" -> "Enrichment Processing";
+            case "CP_TIMEOUT" -> "Enrichment Timeout";
+            case "EXENSIO_MONITORING" -> "Exensio Monitoring";
+            case "COMPLETED_MANUAL_VERIFICATION_REQUIRED" -> "Verify in Exensio";
+            case "COMPLETED" -> "Completed";
+            case "FAILED", "CP_FAILED" -> "Failed";
+            case "CANCELLED" -> "Cancelled";
+            default -> status;
+        };
     }
 }
