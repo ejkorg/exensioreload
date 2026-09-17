@@ -751,9 +751,9 @@ public class ConfigurationServiceImpl implements ConfigurationService {
             long serversDb = serverRepository.count();
             long connectionsDb = connectionRepository.count();
 
-            long pipelinesYaml = yamlConfigLoader.loadAllPipelinesFromYaml().size();
-            long serversYaml = yamlConfigLoader.loadAllServersFromYaml().size();
-            long connectionsYaml = yamlConfigLoader.loadAllConnectionsFromYaml().size();
+            long pipelinesYaml = (long) yamlConfigLoader.loadAllPipelinesFromYaml().size();
+            long serversYaml = (long) yamlConfigLoader.loadAllServersFromYaml().size();
+            long connectionsYaml = (long) yamlConfigLoader.loadAllConnectionsFromYaml().size();
 
             String status;
             String source;

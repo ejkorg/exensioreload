@@ -217,9 +217,6 @@ public class ConfigurationAuditLogController {
             return ResponseEntity.ok()
                     .header("Content-Disposition", "attachment; filename=\"audit_logs.csv\"")
                     .body(csvBytes);
-        } catch (IOException e) {
-            log.error("Error exporting audit logs", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         } catch (Exception e) {
             log.error("Error exporting audit logs", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
