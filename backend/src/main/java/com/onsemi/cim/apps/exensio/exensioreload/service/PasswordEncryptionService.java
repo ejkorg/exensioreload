@@ -3,15 +3,14 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.encrypt.Encryptors;
-import org.springframework.security.crypto.encrypt.StandardEncryptor;
-import org.springframework.security.crypto.keygen.KeyGenerators;
+import org.springframework.security.crypto.encrypt.TextEncryptor;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 
 /**
  * Service for encrypting and decrypting sensitive credentials.
- * Uses Spring Security's StandardEncryptor with AES-256 encryption.
+ * Uses Spring Security's TextEncryptor with AES-256 encryption.
  * 
  * Requirements: 8.5, 9.5
  */
@@ -22,7 +21,7 @@ public class PasswordEncryptionService {
     @Value("${security.encryption.key}")
     private String encryptionKey;
 
-    private StandardEncryptor encryptor;
+    private TextEncryptor encryptor;
 
     /**
      * Initializes the encryptor with the configured encryption key.
@@ -35,9 +34,8 @@ public class PasswordEncryptionService {
             throw new IllegalStateException("Encryption key must be configured via security.encryption.key property");
         }
 
-        // Initialize Spring Security's StandardEncryptor with AES-256
-        // KeyGenerators.string() generates a random salt for each encryption
-        this.encryptor = Encryptors.text(encryptionKey, KeyGenerators.string().generateKey());
+        // Initialize Spring Security's TextEncryptor with AES-256
+        this.encryptor = Encryptors.text(encryptionKey, "5c0744940b5c369b");
         log.info("PasswordEncryptionService initialized with AES-256 encryption");
     }
 

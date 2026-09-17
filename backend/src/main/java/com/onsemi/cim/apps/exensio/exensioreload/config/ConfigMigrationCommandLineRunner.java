@@ -26,22 +26,22 @@ public class ConfigMigrationCommandLineRunner implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // Check for migration arguments
-        boolean hasmigrate = false;
+        boolean hasMigrate = false;
         boolean overwriteExisting = false;
 
         for (String arg : args) {
             if (arg.equals("--migrate-config")) {
-                hasmigrate = true;
+                hasMigrate = true;
                 overwriteExisting = false;
                 break;
             } else if (arg.equals("--migrate-config-overwrite")) {
-                hasmigrate = true;
+                hasMigrate = true;
                 overwriteExisting = true;
                 break;
             }
         }
 
-        if (hasmigrate) {
+        if (hasMigrate) {
             log.info("Configuration migration triggered via CLI. Overwrite existing: {}", overwriteExisting);
             try {
                 ConfigMigrationService.MigrationReport report = configMigrationService.migrateYamlToDatabase(overwriteExisting);
