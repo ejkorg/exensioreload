@@ -394,7 +394,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         label: 'Queued for Enrichment',
         abbrev: 'QUE',
-        value: s.global.queued,
+        value: s.global.queued ?? s.global.queuedForCp ?? 0,
         icon: 'schedule',
         color: 'info',
         accentColor: '#3b82f6',
@@ -403,7 +403,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         label: 'Enrichment Processing',
         abbrev: 'ENR',
-        value: s.global.enriching,
+        value: s.global.enriching ?? s.global.elasticsearchMonitoring ?? 0,
         icon: 'auto_awesome',
         color: 'primary',
         accentColor: '#818cf8',
