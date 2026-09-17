@@ -49,7 +49,12 @@ needed):
       proxy_set_header X-Forwarded-Port $server_port;
       proxy_connect_timeout 300s;
       proxy_send_timeout 300s;
-      proxy_read_timeout 300s;
+      proxy_read_timeout 3600s;   # SSE connections must survive idle periods
+
+      # Required for SSE / chunked streaming
+      proxy_buffering           off;
+      proxy_cache               off;
+      chunked_transfer_encoding on;
 
       # Optional: scope cookie path to / if you want cookies to be delivered only
       # for requests under the SPA path.
@@ -99,3 +104,4 @@ needed):
     # - Confirm in browser DevTools that login responses include:
     #   `Set-Cookie: refresh_token=...; Path=/; HttpOnly; Secure; SameSite=None`.
 
+```
