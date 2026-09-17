@@ -785,7 +785,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         } catch (Exception e) {
             log.error("Error getting configuration health status", e);
             return new ConfigurationSourceHealth(
-                "UNHEALTHY", "unknown", 0, 0, 0, 0, 0, 0,
+                "UNHEALTHY", "unknown", 0L, 0L, 0L, 0L, 0L, 0L,
                 "Error checking configuration status: " + e.getMessage()
             );
         }
