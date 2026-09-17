@@ -486,7 +486,8 @@ public class StageController {
         response.setHeader("Expires", "0");
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
-        response.setHeader("Transfer-Encoding", "chunked");
+        // NOTE: Do NOT set Transfer-Encoding manually - Spring's SseEmitter sets it automatically
+        // Setting it here causes duplicate headers that nginx rejects with 502 Bad Gateway
 
         // CORS headers for SSE
         response.setHeader("Access-Control-Allow-Origin", "*");

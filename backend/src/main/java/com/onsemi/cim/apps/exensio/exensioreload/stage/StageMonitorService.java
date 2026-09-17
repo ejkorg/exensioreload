@@ -37,7 +37,7 @@ public class StageMonitorService {
             return dummy;
         }
         log.info("Creating SSE emitter for requestId: {}", requestId);
-        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
+        SseEmitter emitter = new SseEmitter(60 * 60 * 1000L); // 60 min — matches nginx proxy_read_timeout
         emitters.computeIfAbsent(requestId, ignored -> ConcurrentHashMap.newKeySet()).add(emitter);
 
         emitter.onCompletion(() -> {
