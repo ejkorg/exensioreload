@@ -47,19 +47,21 @@
 
             <!-- Submenu items -->
             <div class="nav-submenu" [class.expanded]="adminMenuExpanded()">
-              <a
-                *ngFor="let child of item.children"
-                [ngIf]="!child.superAdmin || auth.isSuperAdmin()"
-                [routerLink]="[child.path]"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: false }"
-                class="nav-submenu-link"
-                [class.nav-link-loading]="loadingNavPath() === child.path"
-              >
-                <app-glass-icon [name]="child.icon" [size]="16"></app-glass-icon>
-                <span class="nav-label">{{ child.label }}</span>
-                <span *ngIf="loadingNavPath() === child.path" class="nav-item-spinner"></span>
-              </a>
+              <ng-container *ngFor="let child of item.children">
+                <a
+                  *ngIf="!child.superAdmin || auth.isSuperAdmin()"
+                  [routerLink]="[child.path]"
+                  routerLinkActive="active"
+                  [routerLinkActiveOptions]="{ exact: false }"
+                  class="nav-submenu-link"
+                  [class.nav-link-loading]="loadingNavPath() === child.path"
+                  (click)="adminMenuExpanded.set(false)"
+                >
+                  <app-glass-icon [name]="child.icon" [size]="16"></app-glass-icon>
+                  <span class="nav-label">{{ child.label }}</span>
+                  <span *ngIf="loadingNavPath() === child.path" class="nav-item-spinner"></span>
+                </a>
+              </ng-container>
             </div>
           </div>
         </ng-container>

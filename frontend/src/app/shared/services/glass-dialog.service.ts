@@ -1,12 +1,13 @@
+import { HttpClient } from '@angular/common/http';
 import {
-    ApplicationRef,
-    ComponentRef,
-    createComponent,
-    EnvironmentInjector,
-    Injectable,
-    Injector,
-    signal,
-    Type,
+  ApplicationRef,
+  ComponentRef,
+  createComponent,
+  EnvironmentInjector,
+  Injectable,
+  Injector,
+  signal,
+  Type,
 } from '@angular/core';
 
 export interface GlassDialogConfig<T = any> {
@@ -66,6 +67,7 @@ export class GlassDialogService {
   constructor(
     private appRef: ApplicationRef,
     private injector: EnvironmentInjector,
+    private httpClient: HttpClient,
   ) {}
 
   open<T, D = any, R = any>(component: Type<T>, config?: GlassDialogConfig<D>): GlassDialogRef<T, R> {
@@ -104,6 +106,7 @@ export class GlassDialogService {
       providers: [
         { provide: GLASS_DIALOG_DATA, useValue: config?.data },
         { provide: GlassDialogRef, useValue: dialogRef },
+        { provide: HttpClient, useValue: this.httpClient },
       ],
     });
 
@@ -134,9 +137,13 @@ export class GlassDialogService {
 
     // Handle backdrop click - use passive listener since we don't preventDefault
     if (!config?.disableClose) {
-      backdrop.addEventListener('click', () => {
-        dialogRef.close();
-      }, { passive: true });
+      backdrop.addEventListener(
+        'click',
+        () => {
+          dialogRef.close();
+        },
+        { passive: true },
+      );
     }
 
     // Save previously focused element so we can restore focus on close
