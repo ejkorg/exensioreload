@@ -349,3 +349,90 @@
     }
   }
 }
+
+/* Light theme consistency */
+:host-context(body.light-theme) {
+  .audit-detail-dialog {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.1);
+
+    .dialog-header {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-bottom-color: rgba(15, 23, 42, 0.08);
+
+      h2 {
+        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+
+    .detail-section .section-title {
+      color: rgba(51, 65, 85, 0.85);
+      border-bottom-color: rgba(15, 23, 42, 0.08);
+    }
+
+    .detail-item {
+      background: rgba(241, 245, 249, 0.96);
+      border-color: rgba(15, 23, 42, 0.08);
+
+      .label {
+        color: rgba(51, 65, 85, 0.7);
+      }
+
+      .value {
+        color: #0f172a;
+      }
+    }
+
+    .error-message {
+      background: linear-gradient(135deg, rgba(244, 67, 54, 0.08), rgba(211, 47, 47, 0.04));
+      border-color: rgba(244, 67, 54, 0.2);
+      color: #b71c1c;
+    }
+
+    .details-container {
+      background: rgba(241, 245, 249, 0.96);
+      border-color: rgba(15, 23, 42, 0.08);
+    }
+
+    .comparison-view {
+      .before-section {
+        border-right-color: rgba(15, 23, 42, 0.08);
+      }
+
+      .before-label,
+      .after-label {
+        color: rgba(51, 65, 85, 0.7);
+        background: rgba(241, 245, 249, 0.96);
+        border-bottom-color: rgba(15, 23, 42, 0.08);
+      }
+
+      .arrow-divider {
+        background: rgba(241, 245, 249, 0.96);
+      }
+    }
+
+    .json-content {
+      background: rgba(241, 245, 249, 0.96);
+      color: #0f172a;
+    }
+
+    .user-agent {
+      background: rgba(241, 245, 249, 0.96);
+      border-color: rgba(15, 23, 42, 0.08);
+      color: #334155;
+    }
+
+    .dialog-footer {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-top-color: rgba(15, 23, 42, 0.08);
+
+      .btn-primary {
+        color: #eef2ff;
+      }
+    }
+  }
+}

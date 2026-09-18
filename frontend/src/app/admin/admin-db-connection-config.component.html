@@ -35,7 +35,7 @@
     </div>
 
     <div *ngIf="!loading() && dataSource.data.length === 0" class="empty-state">
-      <app-glass-icon name="storage"></app-glass-icon>
+      <app-glass-icon name="database" [size]="48"></app-glass-icon>
       <h3>No Database Connections</h3>
       <p>No database connections found. Create one to get started.</p>
       <button class="glass-btn primary" (click)="createConnection()">

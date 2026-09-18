@@ -363,6 +363,117 @@
   }
 }
 
+/* Light theme consistency */
+:host-context(body.light-theme) {
+  .pipeline-form-dialog {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+
+    .dialog-header {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-bottom-color: rgba(15, 23, 42, 0.08);
+
+      h2 {
+        color: #0f172a;
+      }
+
+      .close-btn {
+        color: #334155;
+
+        &:hover {
+          color: #0f172a;
+        }
+      }
+    }
+
+    .dialog-content {
+      .form-section {
+        background: rgba(241, 245, 249, 0.96);
+        border-color: rgba(15, 23, 42, 0.08);
+
+        h3 {
+          color: #334155;
+        }
+
+        .section-header .add-stage-btn {
+          color: #047857;
+        }
+      }
+
+      .form-group {
+        label {
+          color: #334155;
+        }
+
+        .form-input,
+        .form-select {
+          background: rgba(241, 245, 249, 0.96);
+          border-color: rgba(15, 23, 42, 0.12);
+          color: #0f172a;
+
+          &::placeholder {
+            color: #94a3b8;
+          }
+
+          &:focus {
+            background: rgba(255, 255, 255, 1);
+            border-color: rgba(120, 160, 240, 0.5);
+          }
+
+          &:disabled {
+            background: rgba(241, 245, 249, 0.5);
+            color: #94a3b8;
+          }
+        }
+      }
+
+      .checkbox-group label {
+        color: #334155;
+      }
+
+      .stages-list {
+        .no-stages {
+          color: #64748b;
+          background: rgba(241, 245, 249, 0.96);
+        }
+
+        .stage-card {
+          border-color: rgba(15, 23, 42, 0.08);
+          background: rgba(241, 245, 249, 0.96);
+
+          .stage-header {
+            background: rgba(248, 250, 252, 0.98);
+            border-bottom-color: rgba(15, 23, 42, 0.08);
+
+            .stage-index {
+              color: #78a0f0;
+            }
+          }
+        }
+      }
+    }
+
+    .form-actions {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-top-color: rgba(15, 23, 42, 0.08);
+
+      .cancel-btn {
+        background: rgba(241, 245, 249, 0.96);
+        color: #334155;
+        border-color: rgba(15, 23, 42, 0.12);
+
+        &:hover {
+          background: rgba(226, 232, 240, 0.98);
+          color: #0f172a;
+        }
+      }
+    }
+
+    .dialog-loading p {
+      color: #64748b;
+    }
+  }
+}
+
 @media (max-width: 600px) {
   .pipeline-form-dialog {
     max-height: 100vh;

@@ -234,6 +234,76 @@
     }
   }
 
+  /* Light theme consistency */
+  :host-context(body.light-theme) {
+    .dialog-header {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-bottom-color: rgba(15, 23, 42, 0.08);
+
+      h2 {
+        color: #0f172a;
+      }
+
+      .close-btn {
+        color: #334155;
+
+        &:hover {
+          color: #0f172a;
+        }
+      }
+    }
+
+    .dialog-content {
+      .form-section {
+        h3 {
+          color: #334155;
+          border-bottom-color: rgba(99, 102, 241, 0.15);
+        }
+
+        .checkbox-group .checkbox-label {
+          color: #334155;
+        }
+
+        .checkbox-hint {
+          color: #64748b;
+        }
+      }
+
+      .password-strength-indicator .strength-text {
+        color: #64748b;
+      }
+    }
+
+    .dialog-footer {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-top-color: rgba(15, 23, 42, 0.08);
+
+      .footer-actions {
+        .btn-secondary {
+          background: rgba(241, 245, 249, 0.96);
+          border-color: rgba(15, 23, 42, 0.12);
+          color: #334155;
+
+          &:hover:not(:disabled) {
+            background: rgba(226, 232, 240, 0.98);
+            border-color: rgba(15, 23, 42, 0.2);
+          }
+        }
+
+        .btn-test {
+          background: rgba(59, 130, 246, 0.08);
+          border-color: rgba(59, 130, 246, 0.2);
+          color: #2563eb;
+
+          &:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.3);
+          }
+        }
+      }
+    }
+  }
+
   @media (max-width: 600px) {
     .dialog-header {
       h2 {

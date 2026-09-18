@@ -643,6 +643,26 @@ import { Component, Input } from '@angular/core';
           />
         </g>
 
+        <!-- Add Circle -->
+        <g *ngSwitchCase="'add_circle'">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+          <path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Database -->
+        <g *ngSwitchCase="'database'">
+          <ellipse cx="12" cy="5" rx="9" ry="3" stroke="currentColor" stroke-width="2" />
+          <path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5" stroke="currentColor" stroke-width="2" />
+          <path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6" stroke="currentColor" stroke-width="2" />
+        </g>
+
+        <!-- Storage -->
+        <g *ngSwitchCase="'storage'">
+          <ellipse cx="12" cy="5" rx="9" ry="3" stroke="currentColor" stroke-width="2" />
+          <path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5" stroke="currentColor" stroke-width="2" />
+          <path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6" stroke="currentColor" stroke-width="2" />
+        </g>
+
         <!-- Default fallback — renders a visible question mark so missing icons are obvious -->
         <g *ngSwitchDefault>
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
