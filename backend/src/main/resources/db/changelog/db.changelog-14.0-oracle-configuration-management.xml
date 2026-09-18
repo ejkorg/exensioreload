@@ -34,10 +34,10 @@
             <column name="environment" type="VARCHAR2(10)">
                 <constraints nullable="false" />
             </column>
-            <column name="enabled" type="NUMBER(1,0)" defaultNumericValue="1">
+            <column name="enabled" type="NUMBER(1,0)" defaultValueNumeric="1">
                 <constraints nullable="false" />
             </column>
-            <column name="historical_mode_enabled" type="NUMBER(1,0)" defaultNumericValue="0">
+            <column name="historical_mode_enabled" type="NUMBER(1,0)" defaultValueNumeric="0">
                 <constraints nullable="false" />
             </column>
             <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
@@ -175,10 +175,10 @@
             <column name="environment" type="VARCHAR2(10)">
                 <constraints nullable="false" />
             </column>
-            <column name="enabled" type="NUMBER(1,0)" defaultNumericValue="1">
+            <column name="enabled" type="NUMBER(1,0)" defaultValueNumeric="1">
                 <constraints nullable="false" />
             </column>
-            <column name="is_historical_sender" type="NUMBER(1,0)" defaultNumericValue="0">
+            <column name="is_historical_sender" type="NUMBER(1,0)" defaultValueNumeric="0">
                 <constraints nullable="false" />
             </column>
             <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
@@ -255,7 +255,7 @@
             <column name="environment" type="VARCHAR2(10)">
                 <constraints nullable="false" />
             </column>
-            <column name="enabled" type="NUMBER(1,0)" defaultNumericValue="1">
+            <column name="enabled" type="NUMBER(1,0)" defaultValueNumeric="1">
                 <constraints nullable="false" />
             </column>
             <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
