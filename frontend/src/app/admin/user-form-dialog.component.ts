@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Inject, inject, OnInit, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
 import { ToastService } from '../shared/services/toast.service';

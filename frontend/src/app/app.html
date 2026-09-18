@@ -118,7 +118,9 @@
               <div class="user-avatar-large">{{ user.username.charAt(0).toUpperCase() }}</div>
               <div class="user-details">
                 <span class="user-name">{{ user.username }}</span>
-                <span class="user-role" *ngIf="auth.currentUser()?.roles"> {{ auth.currentUser()?.roles[0] }} </span>
+                <span class="user-role" *ngIf="auth.currentUser()?.roles?.[0]">
+                  {{ auth.currentUser()?.roles?.[0] }}
+                </span>
               </div>
             </div>
           </div>
