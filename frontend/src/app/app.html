@@ -14,7 +14,7 @@
         <ng-container *ngFor="let item of navItems">
           <!-- Regular menu item -->
           <a
-            *ngIf="(!item.admin || auth.isAdmin()) && !item.submenu"
+            *ngIf="(!item.admin || auth.isAdmin()) && !item.submenu; else adminMenu"
             [routerLink]="[item.path]"
             routerLinkActive="active"
             [routerLinkActiveOptions]="{ exact: item.exact }"

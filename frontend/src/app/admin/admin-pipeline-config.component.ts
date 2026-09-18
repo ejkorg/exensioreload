@@ -25,7 +25,6 @@ import { PipelineFormDialogComponent } from './pipeline-form-dialog.component';
     GlassTooltipDirective,
     GlassPaginationComponent,
   ],
-  providers: [ConfigurationService],
   templateUrl: './admin-pipeline-config.component.html',
   styleUrls: ['./admin-pipeline-config.component.scss'],
 })

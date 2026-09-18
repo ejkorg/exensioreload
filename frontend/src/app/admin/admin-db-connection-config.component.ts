@@ -25,7 +25,6 @@ import { DbConnectionFormDialogComponent } from './db-connection-form-dialog.com
     GlassTooltipDirective,
     GlassPaginationComponent,
   ],
-  providers: [ConfigurationService],
   templateUrl: './admin-db-connection-config.component.html',
   styleUrls: ['./admin-db-connection-config.component.scss'],
 })

@@ -15,7 +15,6 @@ interface DialogData {
   selector: 'app-db-connection-form-dialog',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, GlassIconComponent],
-  providers: [ConfigurationService],
   templateUrl: './db-connection-form-dialog.component.html',
   styleUrls: ['./db-connection-form-dialog.component.scss'],
 })
