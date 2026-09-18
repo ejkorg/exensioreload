@@ -2,7 +2,7 @@
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
-                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
     <!-- Create config_pipeline table -->
     <changeSet id="14.0-create-config-pipeline-table" author="exensioreload">
@@ -231,7 +231,6 @@
 
     <!-- Enhance audit_log table with new columns -->
     <changeSet id="14.0-enhance-audit-log-table" author="exensioreload">
-        <comment>Enhance audit_log table with status and error_message columns</comment>
         <preConditions onFail="MARK_RAN">
             <and>
                 <tableExists tableName="audit_log" />
@@ -240,6 +239,7 @@
                 </not>
             </and>
         </preConditions>
+        <comment>Enhance audit_log table with status and error_message columns</comment>
         <addColumn tableName="audit_log">
             <column name="status" type="VARCHAR(20)" />
             <column name="error_message" type="VARCHAR(1000)" />
@@ -248,7 +248,6 @@
 
     <!-- Add indexes to audit_log for performance -->
     <changeSet id="14.0-create-audit-log-indexes" author="exensioreload">
-        <comment>Create indexes on audit_log table for improved query performance</comment>
         <preConditions onFail="MARK_RAN">
             <and>
                 <tableExists tableName="audit_log" />
@@ -257,6 +256,7 @@
                 </not>
             </and>
         </preConditions>
+        <comment>Create indexes on audit_log table for improved query performance</comment>
         <createIndex indexName="idx_audit_user_created" tableName="audit_log">
             <column name="user_id" />
             <column name="created_at" />
