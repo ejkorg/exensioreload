@@ -105,7 +105,7 @@ export interface DbConnectionPage {
 })
 export class ConfigurationService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.apiUrl}/api/configuration`;
+  private readonly apiUrl = `${environment.apiUrl}/configuration`;
 
   // Pipeline endpoints
   getPipelines(
