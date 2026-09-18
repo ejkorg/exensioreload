@@ -2,8 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, Inject, inject, OnInit, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatIconModule } from '@angular/material/icon';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
 import { ToastService } from '../shared/services/toast.service';
@@ -21,15 +19,18 @@ export interface UserFormDialogData {
     CommonModule,
     ReactiveFormsModule,
     MatDialogModule,
-    MatIconModule,
-    MatSlideToggleModule,
     GlassInputComponent,
     GlassSelectComponent,
+    GlassIconComponent,
   ],
   template: `
     <div class="form-dialog glass-panel">
       <div class="dialog-header">
-        <mat-icon class="header-icon">{{ data.mode === 'create' ? 'person_add' : 'edit' }}</mat-icon>
+        <app-glass-icon
+          [name]="data.mode === 'create' ? 'person_add' : 'edit'"
+          [size]="24"
+          class="header-icon"
+        ></app-glass-icon>
         <h2>{{ data.mode === 'create' ? 'Create New User' : 'Edit User Profile' }}</h2>
       </div>
 
@@ -97,7 +98,11 @@ export interface UserFormDialogData {
 
           <div class="options-row">
             <div class="toggle-group">
-              <mat-slide-toggle formControlName="enabled" color="primary">Enable Account</mat-slide-toggle>
+              <label class="checkbox-label">
+                <input type="checkbox" formControlName="enabled" class="checkbox-input" />
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Enable Account</span>
+              </label>
               <span class="toggle-help">Allows the user to authenticate through the portal.</span>
             </div>
           </div>
@@ -114,7 +119,11 @@ export interface UserFormDialogData {
         >
           <span *ngIf="!loading()">{{ data.mode === 'create' ? 'Create User' : 'Save Changes' }}</span>
           <span *ngIf="loading()">Saving...</span>
-          <mat-icon *ngIf="!loading()">{{ data.mode === 'create' ? 'add' : 'check' }}</mat-icon>
+          <app-glass-icon
+            *ngIf="!loading()"
+            [name]="data.mode === 'create' ? 'add' : 'check'"
+            [size]="16"
+          ></app-glass-icon>
         </button>
       </div>
     </div>
@@ -137,16 +146,16 @@ export interface UserFormDialogData {
         align-items: center;
         gap: 1rem;
       }
+
       .header-icon {
-        font-size: 2.5rem;
-        width: 2.5rem;
-        height: 2.5rem;
         color: var(--accent-color);
       }
+
       .dialog-header h2 {
         margin: 0;
         font-size: 1.5rem;
         color: white;
+        font-weight: 600;
       }
 
       .dialog-body {
@@ -170,11 +179,60 @@ export interface UserFormDialogData {
       .toggle-group {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.5rem;
       }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .checkbox-input {
+        display: none;
+      }
+
+      .checkbox-custom {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.05);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        position: relative;
+      }
+
+      .checkbox-input:checked + .checkbox-custom {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+      }
+
+      .checkbox-input:checked + .checkbox-custom::after {
+        content: '✓';
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+      }
+
+      .checkbox-label:hover .checkbox-custom {
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+
+      .checkbox-text {
+        font-weight: 500;
+        color: white;
+      }
+
       .toggle-help {
         font-size: 0.8rem;
         color: var(--text-muted);
+        margin-left: 2.75rem;
       }
 
       .dialog-footer {
@@ -188,16 +246,23 @@ export interface UserFormDialogData {
 
       .cancel-btn {
         padding: 0.75rem 1.5rem;
-        background: transparent;
+        background: rgba(255, 255, 255, 0.05);
         color: var(--text-muted);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.3s ease;
+        font-size: 0.875rem;
+
         &:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.08);
           color: white;
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        &:active {
+          transform: scale(0.98);
         }
       }
 
@@ -214,19 +279,48 @@ export interface UserFormDialogData {
         gap: 0.5rem;
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(129, 140, 248, 0.2);
+        font-size: 0.875rem;
+
         &:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(129, 140, 248, 0.3);
         }
+
+        &:active:not(:disabled) {
+          transform: translateY(0);
+        }
+
         &:disabled {
           opacity: 0.6;
           cursor: not-allowed;
+        }
+
+        &.is-loading {
+          opacity: 0.8;
         }
       }
 
       @media (max-width: 600px) {
         .form-grid {
           grid-template-columns: 1fr;
+        }
+
+        .dialog-header {
+          padding: 1.5rem;
+        }
+
+        .dialog-body {
+          padding: 1.5rem;
+        }
+
+        .dialog-footer {
+          padding: 1rem 1.5rem;
+          gap: 0.75rem;
+        }
+
+        .cancel-btn,
+        .save-btn {
+          flex: 1;
         }
       }
     `,

@@ -46,6 +46,7 @@ export class App implements OnInit, OnDestroy {
 
   isNavExpanded = false;
   adminMenuExpanded = signal<boolean>(false);
+  userMenuExpanded = signal<boolean>(false);
   loadingNavPath = signal<string | null>(null);
   /** Live count of active (non-terminal) sessions for the navbar badge. */
   activeSessionCount = signal<number>(0);
@@ -96,5 +97,14 @@ export class App implements OnInit, OnDestroy {
 
   toggleAdminMenu() {
     this.adminMenuExpanded.update((expanded) => !expanded);
+  }
+
+  toggleUserMenu() {
+    this.userMenuExpanded.update((expanded) => !expanded);
+  }
+
+  closeMenus() {
+    this.adminMenuExpanded.set(false);
+    this.userMenuExpanded.set(false);
   }
 }
