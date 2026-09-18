@@ -1,21 +1,42 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigEtlServer;
-import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigEtlServer;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
 
 import jakarta.validation.Valid;
-import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST API controller for ETL server configuration management.
  * Provides CRUD operations for ETL server configurations with SSH connectivity details.
  * All administrative endpoints (POST, PUT, DELETE) require ADMIN or SUPER_ADMIN role.
  * Passwords are masked in responses for security.
+ * 
+ * Pagination: All list endpoints support standard Spring Data pagination parameters:
+ * - page: zero-indexed page number (default: 0)
+ * - size: page size (default: 20)
+ * - sort: comma-separated field names with optional desc/asc (e.g., "serverKey,asc" or "environment,desc")
+ * 
+ * Example: GET /api/configuration/etl-servers?environment=PROD&page=0&size=20&sort=serverKey,asc
  */
 @Slf4j
 @RestController
@@ -31,21 +52,25 @@ public class ConfigurationEtlServerController {
     }
 
     /**
-     * Get all ETL servers for a specific environment.
-     * Optionally filter by historical-only flag.
+     * Get paginated ETL servers for a specific environment with optional filtering.
      *
-     * GET /api/configuration/etl-servers?environment=PROD&historicalOnly=false
+     * GET /api/configuration/etl-servers?environment=PROD&historicalOnly=false&page=0&size=20&sort=serverKey,asc
      *
-     * @param environment the environment to query (e.g., PROD, QA)
-     * @param historicalOnly if true, returns only historical servers; default false
-     * @return list of ETL servers matching the criteria
+     * @param environment the environment to query (e.g., PROD, QA) - REQUIRED
+     * @param historicalOnly if true, returns only historical servers (default: false)
+     * @param search optional search filter for serverKey, host, or user
+     * @param pageable pagination parameters (page, size, sort)
+     * @return paginated list of ETL servers matching the criteria
      */
     @GetMapping
-    public ResponseEntity<List<ConfigEtlServer>> getEtlServers(
+    public ResponseEntity<Page<ConfigEtlServer>> getEtlServers(
             @RequestParam String environment,
-            @RequestParam(required = false, defaultValue = "false") Boolean historicalOnly) {
+            @RequestParam(required = false, defaultValue = "false") Boolean historicalOnly,
+            @RequestParam(required = false) String search,
+            Pageable pageable) {
         
-        log.info("Fetching ETL servers: environment={}, historicalOnly={}", environment, historicalOnly);
+        log.info("Fetching paginated ETL servers: environment={}, historicalOnly={}, search={}, page={}, size={}, sort={}",
+                environment, historicalOnly, search, pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort());
         
         try {
             List<ConfigEtlServer> servers;
@@ -55,11 +80,33 @@ public class ConfigurationEtlServerController {
                 servers = configurationService.getAllEtlServers(environment);
             }
             
+            // Apply search filter
+            if (search != null && !search.isBlank()) {
+                String searchLower = search.toLowerCase();
+                servers = servers.stream()
+                        .filter(s -> s.getServerKey().toLowerCase().contains(searchLower) ||
+                               s.getHost().toLowerCase().contains(searchLower) ||
+                               s.getUser().toLowerCase().contains(searchLower))
+                        .collect(Collectors.toList());
+            }
+
             // Mask passwords in response
             servers.forEach(this::maskPassword);
-            return ResponseEntity.ok(servers);
+
+            // Apply pagination
+            int pageNumber = pageable.getPageNumber();
+            int pageSize = pageable.getPageSize();
+            int start = pageNumber * pageSize;
+            int end = Math.min(start + pageSize, servers.size());
+
+            List<ConfigEtlServer> pageContent = servers.subList(start, end);
+            Page<ConfigEtlServer> page = new PageImpl<>(pageContent, pageable, servers.size());
+
+            log.info("Returned {} ETL servers (page {}/{}, total {})", 
+                    pageContent.size(), pageNumber, page.getTotalPages(), servers.size());
+            return ResponseEntity.ok(page);
         } catch (Exception e) {
-            log.error("Error fetching ETL servers", e);
+            log.error("Error fetching paginated ETL servers", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

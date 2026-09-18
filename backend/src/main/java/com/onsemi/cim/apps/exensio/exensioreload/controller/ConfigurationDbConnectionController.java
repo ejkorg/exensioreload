@@ -1,21 +1,42 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigDbConnection;
-import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigDbConnection;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
 
 import jakarta.validation.Valid;
-import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST API controller for database connection configuration management.
  * Provides CRUD operations for database connection configurations.
  * All administrative endpoints (POST, PUT, DELETE) require ADMIN or SUPER_ADMIN role.
  * Passwords are masked in responses for security.
+ * 
+ * Pagination: All list endpoints support standard Spring Data pagination parameters:
+ * - page: zero-indexed page number (default: 0)
+ * - size: page size (default: 20)
+ * - sort: comma-separated field names with optional desc/asc (e.g., "connectionKey,asc" or "dbType,desc")
+ * 
+ * Example: GET /api/configuration/db-connections?environment=PROD&page=0&size=20&sort=connectionKey,asc
  */
 @Slf4j
 @RestController
@@ -31,27 +52,54 @@ public class ConfigurationDbConnectionController {
     }
 
     /**
-     * Get all database connections for a specific environment.
+     * Get paginated database connections for a specific environment with optional filtering.
      *
-     * GET /api/configuration/db-connections?environment=PROD
+     * GET /api/configuration/db-connections?environment=PROD&page=0&size=20&sort=connectionKey,asc
      *
-     * @param environment the environment to query (e.g., PROD, QA)
-     * @return list of database connections for the environment
+     * @param environment the environment to query (e.g., PROD, QA) - REQUIRED
+     * @param search optional search filter for connectionKey, host, or schema
+     * @param pageable pagination parameters (page, size, sort)
+     * @return paginated list of database connections matching the criteria
      */
     @GetMapping
-    public ResponseEntity<List<ConfigDbConnection>> getDbConnections(
-            @RequestParam String environment) {
+    public ResponseEntity<Page<ConfigDbConnection>> getDbConnections(
+            @RequestParam String environment,
+            @RequestParam(required = false) String search,
+            Pageable pageable) {
         
-        log.info("Fetching database connections: environment={}", environment);
+        log.info("Fetching paginated database connections: environment={}, search={}, page={}, size={}, sort={}",
+                environment, search, pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort());
         
         try {
             List<ConfigDbConnection> connections = configurationService.getAllDbConnections(environment);
             
+            // Apply search filter
+            if (search != null && !search.isBlank()) {
+                String searchLower = search.toLowerCase();
+                connections = connections.stream()
+                        .filter(c -> c.getConnectionKey().toLowerCase().contains(searchLower) ||
+                               c.getHost().toLowerCase().contains(searchLower) ||
+                               c.getSchema().toLowerCase().contains(searchLower))
+                        .collect(Collectors.toList());
+            }
+
             // Mask passwords in response
             connections.forEach(this::maskPassword);
-            return ResponseEntity.ok(connections);
+
+            // Apply pagination
+            int pageNumber = pageable.getPageNumber();
+            int pageSize = pageable.getPageSize();
+            int start = pageNumber * pageSize;
+            int end = Math.min(start + pageSize, connections.size());
+
+            List<ConfigDbConnection> pageContent = connections.subList(start, end);
+            Page<ConfigDbConnection> page = new PageImpl<>(pageContent, pageable, connections.size());
+
+            log.info("Returned {} database connections (page {}/{}, total {})", 
+                    pageContent.size(), pageNumber, page.getTotalPages(), connections.size());
+            return ResponseEntity.ok(page);
         } catch (Exception e) {
-            log.error("Error fetching database connections", e);
+            log.error("Error fetching paginated database connections", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

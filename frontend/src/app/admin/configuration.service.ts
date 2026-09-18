@@ -119,14 +119,18 @@ export class ConfigurationService {
     } = {},
   ): Observable<PipelinePage> {
     let httpParams = new HttpParams();
-    if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
-    if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
     if (params.environment && params.environment !== 'ALL') {
       httpParams = httpParams.set('environment', params.environment);
     }
     if (params.search) httpParams = httpParams.set('search', params.search);
-    if (params.sortBy) httpParams = httpParams.set('sortBy', params.sortBy);
-    if (params.sortDir) httpParams = httpParams.set('sortDir', params.sortDir);
+    if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
+    if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
+
+    // Build sort parameter in Spring Data format: "field,direction"
+    if (params.sortBy) {
+      const direction = params.sortDir === 'desc' ? 'desc' : 'asc';
+      httpParams = httpParams.set('sort', `${params.sortBy},${direction}`);
+    }
 
     return this.http.get<PipelinePage>(`${this.apiUrl}/pipelines`, {
       params: httpParams,
@@ -212,15 +216,19 @@ export class ConfigurationService {
     } = {},
   ): Observable<EtlServerPage> {
     let httpParams = new HttpParams();
-    if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
-    if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
     if (params.environment && params.environment !== 'ALL') {
       httpParams = httpParams.set('environment', params.environment);
     }
     if (params.search) httpParams = httpParams.set('search', params.search);
     if (params.historicalOnly) httpParams = httpParams.set('historicalOnly', params.historicalOnly.toString());
-    if (params.sortBy) httpParams = httpParams.set('sortBy', params.sortBy);
-    if (params.sortDir) httpParams = httpParams.set('sortDir', params.sortDir);
+    if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
+    if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
+
+    // Build sort parameter in Spring Data format: "field,direction"
+    if (params.sortBy) {
+      const direction = params.sortDir === 'desc' ? 'desc' : 'asc';
+      httpParams = httpParams.set('sort', `${params.sortBy},${direction}`);
+    }
 
     return this.http.get<EtlServerPage>(`${this.apiUrl}/etl-servers`, {
       params: httpParams,
