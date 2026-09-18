@@ -17,6 +17,7 @@ interface DialogData {
   selector: 'app-etl-server-form-dialog',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, GlassIconComponent, GlassSelectComponent, GlassInputComponent],
+  providers: [ConfigurationService],
   templateUrl: './etl-server-form-dialog.component.html',
   styleUrls: ['./etl-server-form-dialog.component.scss'],
 })

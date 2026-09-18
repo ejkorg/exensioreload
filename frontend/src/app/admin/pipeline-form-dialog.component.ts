@@ -15,6 +15,7 @@ interface DialogData {
   selector: 'app-pipeline-form-dialog',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, GlassIconComponent],
+  providers: [ConfigurationService],
   templateUrl: './pipeline-form-dialog.component.html',
   styleUrls: ['./pipeline-form-dialog.component.scss'],
 })

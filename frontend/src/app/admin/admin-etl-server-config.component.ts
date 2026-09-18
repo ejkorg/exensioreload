@@ -25,6 +25,7 @@ import { EtlServerFormDialogComponent } from './etl-server-form-dialog.component
     GlassTooltipDirective,
     GlassPaginationComponent,
   ],
+  providers: [ConfigurationService],
   templateUrl: './admin-etl-server-config.component.html',
   styleUrls: ['./admin-etl-server-config.component.scss'],
 })

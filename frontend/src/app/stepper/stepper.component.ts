@@ -134,6 +134,7 @@ interface DuplicateStageContext {
     GlassLoadingOverlayComponent,
     SiteNamePipe,
   ],
+  providers: [ConfigurationService],
   templateUrl: './stepper.component.html',
   styleUrls: ['./stepper.component.scss'],
 })
