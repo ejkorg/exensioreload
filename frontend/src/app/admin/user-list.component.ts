@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassPaginationComponent, PaginationEvent } from '../shared/components/glass-pagination.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
@@ -12,7 +12,6 @@ import { GlassTooltipDirective } from '../shared/directives/glass-tooltip.direct
 import { ToastService } from '../shared/services/toast.service';
 import { UserFormDialogComponent } from './user-form-dialog.component';
 import { User, UserService, UserStatistics } from './user.service';
-import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-user-list',
@@ -20,7 +19,6 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
     GlassSelectComponent,
     GlassIconComponent,
     GlassTooltipDirective,
@@ -38,7 +36,7 @@ export class UserListComponent implements OnInit {
     const d = new Date(value);
     return isNaN(d.getTime()) ? '-' : d.toLocaleDateString([], { timeZone: 'UTC' });
   }
-  private dialog = inject(MatDialog);
+  private dialog = inject(GlassDialogService);
   private toast = inject(ToastService);
   private router = inject(Router);
 
@@ -139,7 +137,7 @@ export class UserListComponent implements OnInit {
       width: '600px',
       data: { mode, user },
     });
-    ref.afterClosed().subscribe((res) => {
+    ref.afterClosed().then((res) => {
       if (res) {
         this.loadUsers();
         this.loadMetadata();
@@ -157,7 +155,7 @@ export class UserListComponent implements OnInit {
         isDestructive: true,
       },
     });
-    ref.afterClosed().subscribe((res) => {
+    ref.afterClosed().then((res) => {
       if (res) {
         this.userService.deleteUser(user.id).subscribe({
           next: () => {

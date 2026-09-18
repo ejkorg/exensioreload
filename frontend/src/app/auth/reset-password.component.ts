@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { ToastService } from '../shared/services/toast.service';
@@ -10,12 +9,12 @@ import { AuthService } from './auth.service';
 @Component({
   selector: 'app-reset-password',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatIconModule, GlassInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, GlassIconComponent, GlassInputComponent],
   template: `
     <div class="auth-viewport">
       <div class="auth-box glass-panel">
         <div class="auth-header">
-          <mat-icon class="logo-icon">lock_open</mat-icon>
+          <app-glass-icon name="lock_open" [size]="56" class="logo-icon"></app-glass-icon>
           <h1>Set New <span class="accent">Password</span></h1>
           <p class="subtitle">Complete your orbital recovery.</p>
         </div>
@@ -53,12 +52,12 @@ import { AuthService } from './auth.service';
           >
             <span *ngIf="!loading()">Reset Password</span>
             <span *ngIf="loading()">Processing...</span>
-            <mat-icon *ngIf="!loading()">check_circle_outline</mat-icon>
+            <app-glass-icon *ngIf="!loading()" name="check_circle_outline" [size]="20"></app-glass-icon>
           </button>
         </form>
 
-        <div class="error-message glass-panel" *ngIf="!token()">
-          <mat-icon class="error-icon">error_outline</mat-icon>
+        <div class="error-message glass-panel">
+          <app-glass-icon name="error_outline" [size]="64" class="error-icon"></app-glass-icon>
           <h3>Invalid Token</h3>
           <p>Your password reset link is invalid or has expired.</p>
           <button class="submit-btn mt-4" routerLink="/request-reset">Request New Link</button>
@@ -91,9 +90,6 @@ import { AuthService } from './auth.service';
         text-align: center;
       }
       .logo-icon {
-        font-size: 3.5rem;
-        width: 3.5rem;
-        height: 3.5rem;
         color: var(--accent-color);
         margin-bottom: 1rem;
       }
@@ -156,9 +152,6 @@ import { AuthService } from './auth.service';
         border: 1px solid rgba(239, 68, 68, 0.1);
       }
       .error-icon {
-        font-size: 4rem;
-        width: 4rem;
-        height: 4rem;
         color: #f87171;
         margin-bottom: 1rem;
       }

@@ -12,7 +12,7 @@ import {
   ViewChildren,
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
+import { GlassIconComponent } from './glass-icon.component';
 
 export interface GlassOption {
   value: any;
@@ -22,7 +22,7 @@ export interface GlassOption {
 @Component({
   selector: 'app-glass-select',
   standalone: true,
-  imports: [CommonModule, MatIconModule, OverlayModule],
+  imports: [CommonModule, GlassIconComponent, OverlayModule],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -48,7 +48,7 @@ export interface GlassOption {
         [attr.tabindex]="editable ? null : 0"
         (keydown)="!editable && onTriggerKeydown($event)"
       >
-        <mat-icon *ngIf="prefixIcon" class="prefix-icon">{{ prefixIcon }}</mat-icon>
+        <app-glass-icon *ngIf="prefixIcon" [name]="prefixIcon" [size]="20" class="prefix-icon"></app-glass-icon>
 
         <div class="selected-content" *ngIf="!editable">
           <span class="selected-label" *ngIf="getSelectedLabel()">{{ getSelectedLabel() }}</span>
@@ -70,7 +70,12 @@ export interface GlassOption {
           (click)="$event.stopPropagation()"
         />
 
-        <mat-icon class="chevron-icon" (click)="toggleDropdown(); $event.stopPropagation()">expand_more</mat-icon>
+        <app-glass-icon
+          class="chevron-icon"
+          name="expand_more"
+          [size]="20"
+          (click)="toggleDropdown(); $event.stopPropagation()"
+        ></app-glass-icon>
       </div>
 
       <ng-template
@@ -106,7 +111,7 @@ export interface GlassOption {
             [attr.aria-selected]="isSelected(option)"
           >
             {{ getOptionLabel(option) }}
-            <mat-icon *ngIf="isSelected(option)" class="check-icon">check</mat-icon>
+            <app-glass-icon *ngIf="isSelected(option)" name="check" [size]="16" class="check-icon"></app-glass-icon>
           </div>
 
           <div *ngIf="dropdownOptions().length === 0 && !(editable && inputText().trim())" class="no-options">

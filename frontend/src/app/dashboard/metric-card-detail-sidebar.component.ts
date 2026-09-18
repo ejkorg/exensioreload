@@ -2,14 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
-import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService, StageRecordView } from '../api/backend.service';
-import { ToastService } from '../shared/services/toast.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
+import { ToastService } from '../shared/services/toast.service';
 
 interface MetricCardDetailData {
   state: string;
@@ -25,7 +24,6 @@ interface MetricCardDetailData {
   imports: [
     CommonModule,
     MatButtonModule,
-    MatIconModule,
     MatTooltipModule,
     MatProgressBarModule,
     MatTableModule,

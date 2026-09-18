@@ -12,7 +12,6 @@ import {
   signal,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterModule } from '@angular/router';
 import type { ECharts, EChartsOption } from 'echarts';
@@ -40,7 +39,7 @@ interface AnalyticsSample {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, RouterModule, GlassDeviceFilterComponent],
+  imports: [CommonModule, MatButtonModule, MatTooltipModule, RouterModule, GlassDeviceFilterComponent],
   templateUrl: './analytics.component.html',
   styleUrls: ['./analytics.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

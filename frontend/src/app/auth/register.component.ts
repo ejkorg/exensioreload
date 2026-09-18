@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
 import { Router, RouterModule } from '@angular/router';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { ToastService } from '../shared/services/toast.service';
@@ -10,12 +9,12 @@ import { AuthService } from './auth.service';
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatIconModule, GlassInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, GlassIconComponent, GlassInputComponent],
   template: `
     <div class="auth-viewport">
       <div class="auth-box glass-panel">
         <div class="auth-header">
-          <mat-icon class="logo-icon">person_add</mat-icon>
+          <app-glass-icon name="person_add" [size]="56" class="logo-icon"></app-glass-icon>
           <h1>Create <span class="accent">Account</span></h1>
           <p class="subtitle">Join the ExensioReload orchestration network.</p>
         </div>
@@ -58,7 +57,7 @@ import { AuthService } from './auth.service';
           >
             <span *ngIf="!loading()">Create Account</span>
             <span *ngIf="loading()">Processing...</span>
-            <mat-icon *ngIf="!loading()">chevron_right</mat-icon>
+            <app-glass-icon *ngIf="!loading()" name="chevron_right" [size]="20"></app-glass-icon>
           </button>
         </form>
 
@@ -90,9 +89,6 @@ import { AuthService } from './auth.service';
         text-align: center;
       }
       .logo-icon {
-        font-size: 3.5rem;
-        width: 3.5rem;
-        height: 3.5rem;
         color: var(--accent-color);
         margin-bottom: 1rem;
       }

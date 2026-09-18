@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, Input, OnDestroy, Renderer2, ViewChild, computed } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
 import { StateLegendService } from './state-legend.service';
 
 /**
@@ -11,7 +10,7 @@ import { StateLegendService } from './state-legend.service';
 @Component({
   selector: 'app-state-legend-tooltip',
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule, GlassIconComponent],
   template: `
     <div
       class="state-legend-wrapper"
@@ -32,7 +31,7 @@ import { StateLegendService } from './state-legend.service';
         (mouseleave)="onMouseLeave()"
         tabindex="0"
       >
-        <mat-icon class="legend-icon" aria-hidden="true">info</mat-icon>
+        <app-glass-icon class="legend-icon" name="info" [size]="14" aria-hidden="true"></app-glass-icon>
       </button>
 
       <!-- Tooltip popup -->
@@ -46,12 +45,16 @@ import { StateLegendService } from './state-legend.service';
         (mouseleave)="onPopupMouseLeave()"
       >
         <div class="legend-header">
-          <mat-icon class="legend-state-icon" [ngClass]="stateColor()" aria-hidden="true">
-            {{ stateIcon() }}
-          </mat-icon>
+          <app-glass-icon
+            class="legend-state-icon"
+            [ngClass]="stateColor()"
+            [name]="stateIcon()"
+            [size]="24"
+            aria-hidden="true"
+          ></app-glass-icon>
           <h4 class="legend-title">{{ stateLabel() }}</h4>
           <button type="button" class="legend-close-btn" (click)="closeTooltip()" aria-label="Close state legend">
-            <mat-icon aria-hidden="true">close</mat-icon>
+            <app-glass-icon name="close" [size]="18" aria-hidden="true"></app-glass-icon>
           </button>
         </div>
 
@@ -73,7 +76,7 @@ import { StateLegendService } from './state-legend.service';
               </span>
             </div>
             <div *ngIf="nextStates().length === 0" class="detail-row terminal-note">
-              <mat-icon aria-hidden="true">check_circle</mat-icon>
+              <app-glass-icon name="check_circle" [size]="16" aria-hidden="true"></app-glass-icon>
               <span>Terminal state — no further transitions</span>
             </div>
           </div>
@@ -131,9 +134,7 @@ import { StateLegendService } from './state-legend.service';
         }
 
         .legend-icon {
-          font-size: 14px;
-          width: 14px;
-          height: 14px;
+          color: rgba(255, 255, 255, 0.7);
         }
       }
 
@@ -180,10 +181,6 @@ import { StateLegendService } from './state-legend.service';
         padding-bottom: 12px;
 
         .legend-state-icon {
-          font-size: 24px;
-          width: 24px;
-          height: 24px;
-
           &.color-primary {
             color: #818cf8;
           }
@@ -232,12 +229,6 @@ import { StateLegendService } from './state-legend.service';
           &:focus {
             outline: 2px solid rgba(255, 255, 255, 0.5);
             outline-offset: 2px;
-          }
-
-          mat-icon {
-            font-size: 18px;
-            width: 18px;
-            height: 18px;
           }
         }
       }
@@ -294,12 +285,6 @@ import { StateLegendService } from './state-legend.service';
             gap: 8px;
             align-items: center;
             color: #10b981;
-
-            mat-icon {
-              font-size: 16px;
-              width: 16px;
-              height: 16px;
-            }
           }
         }
       }

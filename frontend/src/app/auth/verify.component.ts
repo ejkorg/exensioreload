@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { ToastService } from '../shared/services/toast.service';
@@ -11,14 +10,18 @@ import { AuthService } from './auth.service';
 @Component({
   selector: 'app-verify',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatCardModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, RouterModule, MatCardModule, MatButtonModule, GlassIconComponent, MatProgressSpinnerModule],
   template: `
     <div class="auth-viewport">
       <div class="auth-box glass-panel text-center">
         <div class="auth-header">
-          <mat-icon class="logo-icon" [class.success]="status === 'success'" [class.error]="status === 'error'">
-            {{ status === 'loading' ? 'hourglass_empty' : status === 'success' ? 'verified_user' : 'error_outline' }}
-          </mat-icon>
+          <app-glass-icon
+            [name]="status === 'loading' ? 'hourglass_empty' : status === 'success' ? 'verified_user' : 'error_outline'"
+            [size]="64"
+            class="logo-icon"
+            [class.success]="status === 'success'"
+            [class.error]="status === 'error'"
+          ></app-glass-icon>
           <h1>Account <span class="accent">Verification</span></h1>
           <p class="subtitle" *ngIf="status === 'loading'">Validating your orchestration credentials...</p>
           <p class="subtitle success-text" *ngIf="status === 'success'">Your account has been verified successfully!</p>
@@ -63,9 +66,6 @@ import { AuthService } from './auth.service';
         text-align: center;
       }
       .logo-icon {
-        font-size: 4rem;
-        width: 4rem;
-        height: 4rem;
         color: var(--text-muted);
         margin-bottom: 1rem;
       }

@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Inject, inject, OnInit, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
@@ -16,14 +15,7 @@ export interface UserFormDialogData {
 @Component({
   selector: 'app-user-form-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    MatDialogModule,
-    GlassInputComponent,
-    GlassSelectComponent,
-    GlassIconComponent,
-  ],
+  imports: [CommonModule, ReactiveFormsModule, GlassInputComponent, GlassSelectComponent, GlassIconComponent],
   template: `
     <div class="form-dialog glass-panel">
       <div class="dialog-header">
@@ -338,8 +330,8 @@ export class UserFormDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private userService: UserService,
-    public dialogRef: MatDialogRef<UserFormDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: UserFormDialogData,
+    public dialogRef: GlassDialogRef<UserFormDialogComponent>,
+    @Inject(GLASS_DIALOG_DATA) public data: UserFormDialogData,
   ) {
     this.toast = inject(ToastService) as ToastService;
     this.userForm = this.fb.group(

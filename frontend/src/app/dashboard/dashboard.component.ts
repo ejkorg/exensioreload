@@ -10,7 +10,6 @@ import {
   ViewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -128,7 +127,6 @@ interface DashboardErrorDetails {
   standalone: true,
   imports: [
     CommonModule,
-    MatIconModule,
     MatButtonModule,
     MatTooltipModule,
     MatProgressBarModule,

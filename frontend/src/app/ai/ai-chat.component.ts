@@ -13,13 +13,12 @@ import {
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { AiService } from './ai.service';
 import { ChatMessage, SuggestedAction } from './ai.types';
-import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 
 @Component({
   selector: 'app-ai-chat',
@@ -28,7 +27,6 @@ import { DualTimestampComponent } from '../shared/components/dual-timestamp.comp
     CommonModule,
     FormsModule,
     MatButtonModule,
-    MatIconModule,
     MatInputModule,
     MatFormFieldModule,
     MatTooltipModule,

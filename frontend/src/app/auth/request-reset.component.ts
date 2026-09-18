@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
 import { RouterModule } from '@angular/router';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { ToastService } from '../shared/services/toast.service';
@@ -10,12 +9,12 @@ import { AuthService } from './auth.service';
 @Component({
   selector: 'app-request-reset',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatIconModule, GlassInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, GlassIconComponent, GlassInputComponent],
   template: `
     <div class="auth-viewport">
       <div class="auth-box glass-panel">
         <div class="auth-header">
-          <mat-icon class="logo-icon">lock_reset</mat-icon>
+          <app-glass-icon name="lock_reset" [size]="56" class="logo-icon"></app-glass-icon>
           <h1>Request <span class="accent">Reset</span></h1>
           <p class="subtitle">Enter your email to receive recovery instructions.</p>
         </div>
@@ -39,12 +38,12 @@ import { AuthService } from './auth.service';
           >
             <span *ngIf="!loading()">Send Recovery Link</span>
             <span *ngIf="loading()">Processing...</span>
-            <mat-icon *ngIf="!loading()">send</mat-icon>
+            <app-glass-icon *ngIf="!loading()" name="send" [size]="20"></app-glass-icon>
           </button>
         </form>
 
         <div class="success-message glass-panel" *ngIf="emailSent()">
-          <mat-icon class="success-icon">mark_email_read</mat-icon>
+          <app-glass-icon name="mark_email_read" [size]="64" class="success-icon"></app-glass-icon>
           <h3>Email Sent</h3>
           <p>Verification instructions have been sent to your orbital uplink.</p>
           <button class="submit-btn mt-4" routerLink="/login">Return to Login</button>
@@ -78,9 +77,6 @@ import { AuthService } from './auth.service';
         text-align: center;
       }
       .logo-icon {
-        font-size: 3.5rem;
-        width: 3.5rem;
-        height: 3.5rem;
         color: var(--accent-color);
         margin-bottom: 1rem;
       }
@@ -143,9 +139,6 @@ import { AuthService } from './auth.service';
         border: 1px solid rgba(16, 185, 129, 0.1);
       }
       .success-icon {
-        font-size: 4rem;
-        width: 4rem;
-        height: 4rem;
         color: #10b981;
         margin-bottom: 1rem;
       }

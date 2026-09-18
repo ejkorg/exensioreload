@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { environment } from '../../environments/environment';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
@@ -10,13 +9,13 @@ import { AuthService } from './auth.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatIconModule, GlassInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, GlassIconComponent, GlassInputComponent],
   template: `
     <div class="login-viewport">
       <div class="login-box glass-panel">
         <div class="login-header">
           <div class="logo-area">
-            <mat-icon class="logo-icon">account_tree</mat-icon>
+            <app-glass-icon name="account_tree" [size]="56" class="logo-icon"></app-glass-icon>
             <div class="logo-text">
               <span class="accent">ExensioReload</span>
               <span class="v-tag">1.0</span>
@@ -62,7 +61,7 @@ import { AuthService } from './auth.service';
             >
               <span *ngIf="!loading()">Authenticate</span>
               <span *ngIf="loading()">Signing in...</span>
-              <mat-icon *ngIf="!loading()">login</mat-icon>
+              <app-glass-icon *ngIf="!loading()" name="login" [size]="20"></app-glass-icon>
             </button>
           </div>
         </form>
@@ -73,7 +72,7 @@ import { AuthService } from './auth.service';
           </div>
           <button class="sso-btn" type="button" (click)="onSsoLogin()" [disabled]="ssoLoading()">
             <span *ngIf="!ssoLoading()">
-              <mat-icon>business</mat-icon>
+              <app-glass-icon name="business" [size]="20"></app-glass-icon>
               Sign in with onsemi SSO
             </span>
             <span *ngIf="ssoLoading()">Redirecting to SSO...</span>
@@ -134,25 +133,8 @@ import { AuthService } from './auth.service';
         gap: 0.2rem;
       }
       .logo-icon {
-        font-size: 3.5rem;
-        width: 3.5rem;
-        height: 3.5rem;
         color: var(--accent-color);
         margin-bottom: 0.5rem;
-        font-family: 'Material Icons' !important;
-        font-weight: normal;
-        font-style: normal;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        -webkit-font-smoothing: antialiased;
-        text-rendering: optimizeLegibility;
-        -moz-osx-font-smoothing: grayscale;
-        font-feature-settings: 'liga';
       }
       .logo-text {
         font-size: 1.8rem;
@@ -266,10 +248,6 @@ import { AuthService } from './auth.service';
           opacity: 0.6;
           cursor: not-allowed;
         }
-
-        mat-icon {
-          font-family: 'Material Icons' !important;
-        }
       }
 
       :host-context(body.light-theme) .submit-btn {
@@ -340,10 +318,6 @@ import { AuthService } from './auth.service';
           display: flex;
           align-items: center;
           gap: 0.5rem;
-        }
-        mat-icon {
-          font-family: 'Material Icons' !important;
-          font-size: 1.2rem;
         }
         &:hover:not(:disabled) {
           background: rgba(255, 255, 255, 0.05);

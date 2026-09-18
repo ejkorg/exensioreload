@@ -599,6 +599,50 @@ import { Component, Input } from '@angular/core';
           <path d="M6 12h4M14 8l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </g>
 
+        <!-- Light Mode (Sun) -->
+        <g *ngSwitchCase="'light_mode'">
+          <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" />
+          <path
+            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </g>
+
+        <!-- Dark Mode (Moon) -->
+        <g *ngSwitchCase="'dark_mode'">
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="2" fill="none" />
+        </g>
+
+        <!-- Logout / Exit -->
+        <g *ngSwitchCase="'logout'">
+          <path
+            d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <path
+            d="M16 17l5-5-5-5M21 12H9"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- Expand More (Chevron Down) -->
+        <g *ngSwitchCase="'expand_more'">
+          <path
+            d="M6 9l6 6 6-6"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
         <!-- Default fallback — renders a visible question mark so missing icons are obvious -->
         <g *ngSwitchDefault>
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />

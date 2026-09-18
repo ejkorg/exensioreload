@@ -1,6 +1,5 @@
-import { Component, Input, Output, EventEmitter, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatIconModule } from '@angular/material/icon';
+import { Component, computed, EventEmitter, Input, Output, signal } from '@angular/core';
 
 export interface PaginationEvent {
   pageIndex: number;
@@ -11,22 +10,17 @@ export interface PaginationEvent {
 @Component({
   selector: 'app-glass-pagination',
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule, GlassIconComponent],
   template: `
     <div class="glass-pagination">
       <div class="pagination-info">
-        <span class="info-text">
-          {{ startIndex() }}-{{ endIndex() }} of {{ totalItems() }}
-        </span>
+        <span class="info-text"> {{ startIndex() }}-{{ endIndex() }} of {{ totalItems() }} </span>
       </div>
 
       <div class="pagination-controls">
         <div class="page-size-selector">
           <span class="selector-label">Rows per page:</span>
-          <select
-            [value]="currentPageSize()"
-            (change)="onPageSizeChange($event)"
-            class="glass-select">
+          <select [value]="currentPageSize()" (change)="onPageSizeChange($event)" class="glass-select">
             <option *ngFor="let size of currentPageSizeOptions()" [value]="size">
               {{ size }}
             </option>
@@ -34,188 +28,184 @@ export interface PaginationEvent {
         </div>
 
         <div class="page-navigation">
-          <button
-            class="nav-button"
-            [disabled]="!hasPrevious()"
-            (click)="firstPage()"
-            [attr.aria-label]="'First page'">
-            <mat-icon>first_page</mat-icon>
+          <button class="nav-button" [disabled]="!hasPrevious()" (click)="firstPage()" [attr.aria-label]="'First page'">
+            <app-glass-icon name="first_page" [size]="16"></app-glass-icon>
           </button>
 
           <button
             class="nav-button"
             [disabled]="!hasPrevious()"
             (click)="previousPage()"
-            [attr.aria-label]="'Previous page'">
-            <mat-icon>chevron_left</mat-icon>
+            [attr.aria-label]="'Previous page'"
+          >
+            <app-glass-icon name="chevron_left" [size]="16"></app-glass-icon>
           </button>
 
-          <span class="page-indicator">
-            Page {{ currentPage() }} of {{ totalPages() }}
-          </span>
+          <span class="page-indicator"> Page {{ currentPage() }} of {{ totalPages() }} </span>
 
-          <button
-            class="nav-button"
-            [disabled]="!hasNext()"
-            (click)="nextPage()"
-            [attr.aria-label]="'Next page'">
-            <mat-icon>chevron_right</mat-icon>
+          <button class="nav-button" [disabled]="!hasNext()" (click)="nextPage()" [attr.aria-label]="'Next page'">
+            <app-glass-icon name="chevron_right" [size]="16"></app-glass-icon>
           </button>
 
-          <button
-            class="nav-button"
-            [disabled]="!hasNext()"
-            (click)="lastPage()"
-            [attr.aria-label]="'Last page'">
-            <mat-icon>last_page</mat-icon>
+          <button class="nav-button" [disabled]="!hasNext()" (click)="lastPage()" [attr.aria-label]="'Last page'">
+            <app-glass-icon name="last_page" [size]="16"></app-glass-icon>
           </button>
         </div>
       </div>
     </div>
   `,
-  styles: [`
-    .glass-pagination {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.5rem 1rem;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-top: 0.5rem;
-    }
-
-    .pagination-info {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .info-text {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      font-weight: 600;
-      letter-spacing: 0.3px;
-    }
-
-    .pagination-controls {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .page-size-selector {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .selector-label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      font-weight: 600;
-      letter-spacing: 0.3px;
-    }
-
-    .glass-select {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      padding: 0.25rem 0.5rem;
-      color: var(--text-main);
-      font-size: 0.72rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      outline: none;
-
-      &:hover {
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
-        border-color: rgba(129, 140, 248, 0.3);
-      }
-
-      &:focus {
-        border-color: rgba(129, 140, 248, 0.5);
-        box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
-      }
-
-      option {
-        background: var(--bg-color);
-        color: var(--text-main);
-      }
-    }
-
-    .page-navigation {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .page-indicator {
-      font-size: 0.72rem;
-      color: var(--text-main);
-      font-weight: 600;
-      padding: 0 0.5rem;
-      min-width: 90px;
-      text-align: center;
-    }
-
-    .nav-button {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      color: var(--text-main);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      outline: none;
-
-      mat-icon {
-        font-size: 1rem;
-        width: 1rem;
-        height: 1rem;
-      }
-
-      &:hover:not(:disabled) {
-        background: rgba(129, 140, 248, 0.15);
-        border-color: rgba(129, 140, 248, 0.3);
-        color: var(--accent-color);
-      }
-
-      &:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-      }
-    }
-
-    @media (max-width: 768px) {
+  styles: [
+    `
       .glass-pagination {
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.5rem 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 1rem;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
       }
 
-      .pagination-info,
+      .pagination-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .info-text {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+
       .pagination-controls {
-        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .page-size-selector {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .selector-label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+
+      .glass-select {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        padding: 0.25rem 0.5rem;
+        color: var(--text-main);
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        outline: none;
+
+        &:hover {
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+          border-color: rgba(129, 140, 248, 0.3);
+        }
+
+        &:focus {
+          border-color: rgba(129, 140, 248, 0.5);
+          box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
+        }
+
+        option {
+          background: var(--bg-color);
+          color: var(--text-main);
+        }
+      }
+
+      .page-navigation {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .page-indicator {
+        font-size: 0.72rem;
+        color: var(--text-main);
+        font-weight: 600;
+        padding: 0 0.5rem;
+        min-width: 90px;
+        text-align: center;
+      }
+
+      .nav-button {
+        display: flex;
+        align-items: center;
         justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        color: var(--text-main);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        outline: none;
+
+        app-glass-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        &:hover:not(:disabled) {
+          background: rgba(129, 140, 248, 0.15);
+          border-color: rgba(129, 140, 248, 0.3);
+          color: var(--accent-color);
+        }
+
+        &:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
       }
 
-      .pagination-controls {
-        flex-direction: column;
-        gap: 0.75rem;
-      }
+      @media (max-width: 768px) {
+        .glass-pagination {
+          flex-direction: column;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+        }
 
-      .page-indicator { min-width: auto; padding: 0 0.25rem; }
-      .page-size-selector, .page-navigation { width: 100%; justify-content: center; }
-    }
-  `]
+        .pagination-info,
+        .pagination-controls {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .pagination-controls {
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .page-indicator {
+          min-width: auto;
+          padding: 0 0.25rem;
+        }
+        .page-size-selector,
+        .page-navigation {
+          width: 100%;
+          justify-content: center;
+        }
+      }
+    `,
+  ],
 })
 export class GlassPaginationComponent {
   @Input() set length(value: number) {
@@ -271,7 +261,7 @@ export class GlassPaginationComponent {
     this.page.emit({
       pageIndex: newPageIndex,
       pageSize: this.currentPageSize(),
-      previousPageIndex
+      previousPageIndex,
     });
   }
 
@@ -285,7 +275,7 @@ export class GlassPaginationComponent {
     this.page.emit({
       pageIndex: 0,
       pageSize: newSize,
-      previousPageIndex
+      previousPageIndex,
     });
   }
 

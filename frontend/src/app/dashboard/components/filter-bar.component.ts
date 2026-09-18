@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatIconModule } from '@angular/material/icon';
 import { GlassDeviceFilterComponent } from '../../shared/components/glass-device-filter.component';
 import { GlassSelectComponent } from '../../shared/components/glass-select.component';
 
@@ -14,7 +13,7 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
 @Component({
   selector: 'app-dashboard-filter-bar',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GlassDeviceFilterComponent, GlassSelectComponent],
+  imports: [CommonModule, FormsModule, GlassIconComponent, GlassDeviceFilterComponent, GlassSelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="dashboard-filter-bar glass-panel">
@@ -27,7 +26,7 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
 
         <label class="search-filter-wrap">
           <span class="filter-label">
-            <mat-icon aria-hidden="true">search</mat-icon>
+            <app-glass-icon name="search" [size]="14"></app-glass-icon>
             Sender
           </span>
           <input
@@ -52,7 +51,7 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
 
       <div class="filter-actions" *ngIf="activeCount > 0">
         <button type="button" class="clear-filters-btn" (click)="clearFilters.emit()">
-          <mat-icon>clear_all</mat-icon>
+          <app-glass-icon name="clear_all" [size]="16"></app-glass-icon>
           Clear filters ({{ activeCount }})
         </button>
       </div>
@@ -92,13 +91,10 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
         color: rgba(203, 213, 225, 0.8);
         text-transform: uppercase;
         letter-spacing: 0.03em;
+      }
 
-        mat-icon {
-          font-size: 0.875rem;
-          width: 0.875rem;
-          height: 0.875rem;
-          color: rgba(167, 139, 250, 0.7);
-        }
+      .filter-label app-glass-icon {
+        color: rgba(167, 139, 250, 0.7);
       }
 
       .search-input {
@@ -143,12 +139,6 @@ import { GlassSelectComponent } from '../../shared/components/glass-select.compo
         font-weight: 600;
         cursor: pointer;
         transition: all 0.2s ease;
-
-        mat-icon {
-          font-size: 1rem;
-          width: 1rem;
-          height: 1rem;
-        }
 
         &:hover {
           background: rgba(239, 68, 68, 0.2);

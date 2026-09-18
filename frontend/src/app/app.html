@@ -91,68 +91,27 @@
         <span class="hub-link-label">Hub</span>
       </a>
 
-      <!-- User Menu Dropdown -->
-      <div class="user-menu-wrapper">
-        <button
-          type="button"
-          class="user-menu-toggle"
-          (click)="toggleUserMenu()"
-          [class.active]="userMenuExpanded()"
-          [attr.aria-expanded]="userMenuExpanded()"
-          aria-label="User menu"
-        >
-          <div class="user-avatar">{{ user.username.charAt(0).toUpperCase() }}</div>
-          <span class="username">{{ user.username }}</span>
-          <app-glass-icon
-            name="expand_more"
-            [size]="16"
-            class="menu-arrow"
-            [class.expanded]="userMenuExpanded()"
-          ></app-glass-icon>
-        </button>
-
-        <!-- User Menu Dropdown Panel -->
-        <div class="user-menu-panel" [class.expanded]="userMenuExpanded()">
-          <div class="menu-header">
-            <div class="user-info-section">
-              <div class="user-avatar-large">{{ user.username.charAt(0).toUpperCase() }}</div>
-              <div class="user-details">
-                <span class="user-name">{{ user.username }}</span>
-                <span class="user-role" *ngIf="auth.currentUser()?.roles?.[0]">
-                  {{ auth.currentUser()?.roles?.[0] }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="menu-divider"></div>
-
-          <div class="menu-items">
-            <button
-              type="button"
-              class="menu-item"
-              (click)="themeService.toggleTheme(); userMenuExpanded.set(false)"
-              aria-label="Toggle theme"
-            >
-              <app-glass-icon
-                [name]="themeService.theme() === 'dark' ? 'light_mode' : 'dark_mode'"
-                [size]="16"
-              ></app-glass-icon>
-              <span>{{ themeService.theme() === 'dark' ? 'Light Mode' : 'Dark Mode' }}</span>
-              <span class="menu-shortcut">{{ themeService.theme() === 'dark' ? '☀️' : '🌙' }}</span>
-            </button>
-          </div>
-
-          <div class="menu-divider"></div>
-
-          <div class="menu-items">
-            <button type="button" class="menu-item logout" (click)="logout()" aria-label="Logout">
-              <app-glass-icon name="logout" [size]="16"></app-glass-icon>
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </div>
+      <!-- User Display & Actions -->
+      <div class="user-info-display">
+        <span class="username-display">{{ user.username }}</span>
       </div>
+
+      <button
+        type="button"
+        class="icon-btn theme-toggle-btn"
+        (click)="themeService.toggleTheme()"
+        [attr.aria-label]="themeService.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+        [title]="themeService.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+      >
+        <app-glass-icon
+          [name]="themeService.theme() === 'dark' ? 'light_mode' : 'dark_mode'"
+          [size]="18"
+        ></app-glass-icon>
+      </button>
+
+      <button type="button" class="icon-btn logout-btn" (click)="logout()" aria-label="Sign out" title="Sign out">
+        <app-glass-icon name="logout" [size]="18"></app-glass-icon>
+      </button>
     </div>
   </header>
 

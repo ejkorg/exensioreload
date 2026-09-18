@@ -1,15 +1,6 @@
-import { 
-  Component, 
-  OnInit, 
-  OnDestroy, 
-  signal, 
-  computed,
-  ChangeDetectionStrategy,
-  inject
-} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AiService } from './ai.service';
@@ -18,26 +9,20 @@ import { AiSummarizeResponse } from './ai.types';
 @Component({
   selector: 'app-ai-dashboard-widget',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    MatTooltipModule
-  ],
+  imports: [CommonModule, MatButtonModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './ai-dashboard-widget.component.html',
   styleUrls: ['./ai-dashboard-widget.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
   private readonly aiService = inject(AiService);
-  
+
   // State
   isExpanded = signal(false);
   isLoading = signal(false);
   summary = signal<AiSummarizeResponse | null>(null);
   error = signal<string | null>(null);
-  
+
   // Computed
   isAvailable = computed(() => this.aiService.isAvailable());
   isEnabled = computed(() => this.aiService.isEnabled());
@@ -56,7 +41,7 @@ export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
    * Toggle widget expansion.
    */
   toggleExpand(): void {
-    this.isExpanded.update(v => !v);
+    this.isExpanded.update((v) => !v);
   }
 
   /**
@@ -64,14 +49,14 @@ export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
    */
   loadSummary(): void {
     if (!this.isAvailable() || this.isLoading()) return;
-    
+
     this.isLoading.set(true);
     this.error.set(null);
-    
+
     // For demo, we'll call with sample alert data
     // In production, this would fetch real alerts from the backend
     const sampleAlerts = this.getSampleAlerts();
-    
+
     this.aiService.summarizeAlerts(sampleAlerts).subscribe({
       next: (response) => {
         this.summary.set(response);
@@ -81,7 +66,7 @@ export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
         this.error.set('Failed to load AI summary');
         this.isLoading.set(false);
         console.error('AI summary error:', err);
-      }
+      },
     });
   }
 
@@ -107,10 +92,14 @@ export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
    */
   getPriorityColor(priority: string): string {
     switch (priority?.toUpperCase()) {
-      case 'CRITICAL': return 'var(--color-error, #ef4444)';
-      case 'HIGH': return 'var(--color-warning, #f59e0b)';
-      case 'MEDIUM': return 'var(--color-info, #3b82f6)';
-      default: return 'var(--color-muted, #64748b)';
+      case 'CRITICAL':
+        return 'var(--color-error, #ef4444)';
+      case 'HIGH':
+        return 'var(--color-warning, #f59e0b)';
+      case 'MEDIUM':
+        return 'var(--color-info, #3b82f6)';
+      default:
+        return 'var(--color-muted, #64748b)';
     }
   }
 
@@ -119,10 +108,14 @@ export class AiDashboardWidgetComponent implements OnInit, OnDestroy {
    */
   getPriorityIcon(priority: string): string {
     switch (priority?.toUpperCase()) {
-      case 'CRITICAL': return 'error';
-      case 'HIGH': return 'warning';
-      case 'MEDIUM': return 'info';
-      default: return 'check_circle';
+      case 'CRITICAL':
+        return 'error';
+      case 'HIGH':
+        return 'warning';
+      case 'MEDIUM':
+        return 'info';
+      default:
+        return 'check_circle';
     }
   }
 }
