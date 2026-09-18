@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, Input, OnDestroy, Renderer2, ViewChild, computed } from '@angular/core';
-import { GlassIconComponent } from '../../shared/components/glass-icon.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { StateLegendService } from './state-legend.service';
 
 /**

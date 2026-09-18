@@ -25,6 +25,7 @@ import {
 } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
 import { GlassDeviceFilterComponent } from '../shared/components/glass-device-filter.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { formatSiteName } from '../shared/pipes/site-name.pipe';
 
 interface AnalyticsSample {
@@ -42,7 +43,6 @@ interface AnalyticsSample {
   imports: [
     CommonModule,
     MatButtonModule,
-    MatIconModule,
     MatTooltipModule,
     RouterModule,
     GlassDeviceFilterComponent,

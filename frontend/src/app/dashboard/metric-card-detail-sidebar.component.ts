@@ -8,6 +8,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService, StageRecordView } from '../api/backend.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { ToastService } from '../shared/services/toast.service';
 
 interface MetricCardDetailData {
