@@ -39,7 +39,15 @@ interface AnalyticsSample {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatTooltipModule, RouterModule, GlassDeviceFilterComponent],
+  imports: [
+    CommonModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule,
+    RouterModule,
+    GlassDeviceFilterComponent,
+    GlassIconComponent,
+  ],
   templateUrl: './analytics.component.html',
   styleUrls: ['./analytics.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

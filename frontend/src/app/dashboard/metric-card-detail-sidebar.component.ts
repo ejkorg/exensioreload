@@ -30,6 +30,7 @@ interface MetricCardDetailData {
     MatPaginatorModule,
     MatDialogModule,
     DualTimestampComponent,
+    GlassIconComponent,
   ],
   templateUrl: './metric-card-detail-sidebar.component.html',
   styleUrls: ['./metric-card-detail-sidebar.component.scss'],

@@ -4,6 +4,7 @@ import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, Validator
 import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { GlassSelectComponent } from '../shared/components/glass-select.component';
+import { GLASS_DIALOG_DATA, GlassDialogRef } from '../shared/services/glass-dialog.service';
 import { ToastService } from '../shared/services/toast.service';
 import { User, UserService } from './user.service';
 

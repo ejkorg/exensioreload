@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, RouterModule } from '@angular/router';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { ToastService } from '../shared/services/toast.service';
 import { AuthService } from './auth.service';
 

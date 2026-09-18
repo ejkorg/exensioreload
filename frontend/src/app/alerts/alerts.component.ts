@@ -11,6 +11,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { RouterModule } from '@angular/router';
 import { AlertConfiguration, BackendService } from '../api/backend.service';
 import { AuthService } from '../auth/auth.service';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 
 interface Alert {
   alertId: string;

@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, EventEmitter, Input, Output, signal } from '@angular/core';
+import { GlassIconComponent } from './glass-icon.component';
 
 export interface PaginationEvent {
   pageIndex: number;

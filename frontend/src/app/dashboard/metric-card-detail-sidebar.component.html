@@ -18,10 +18,10 @@
 
   <!-- Error State -->
   <div *ngIf="error() && !loading()" class="error-state">
-    <mat-icon>error_outline</mat-icon>
+    <app-glass-icon name="error_outline" [size]="32"></app-glass-icon>
     <p>{{ error() }}</p>
     <button mat-stroked-button (click)="loadRecords()">
-      <mat-icon>refresh</mat-icon>
+      <app-glass-icon name="refresh" [size]="18"></app-glass-icon>
       Try Again
     </button>
   </div>
@@ -94,7 +94,7 @@
 
   <!-- Empty State -->
   <div *ngIf="!loading() && !error() && displayedRecords().length === 0" class="empty-state">
-    <mat-icon>inbox</mat-icon>
+    <app-glass-icon name="inbox" [size]="48"></app-glass-icon>
     <p>No records found for this state</p>
   </div>
 </div>

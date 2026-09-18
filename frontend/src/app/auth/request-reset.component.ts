@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassInputComponent } from '../shared/components/glass-input.component';
 import { ToastService } from '../shared/services/toast.service';
 import { AuthService } from './auth.service';

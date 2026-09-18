@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GlassDeviceFilterComponent } from '../../shared/components/glass-device-filter.component';
+import { GlassIconComponent } from '../../shared/components/glass-icon.component';
 import { GlassSelectComponent } from '../../shared/components/glass-select.component';
 
 /**

@@ -18,7 +18,7 @@
     </div>
     <div class="header-actions">
       <button mat-stroked-button routerLink="/" aria-label="Back to dashboard overview">
-        <mat-icon aria-hidden="true">dashboard</mat-icon>
+        <app-glass-icon name="dashboard" [size]="18"></app-glass-icon>
         <span>Dashboard</span>
       </button>
       <button
@@ -29,7 +29,7 @@
         [matTooltip]="'Last updated: ' + formatTimeAgo(lastUpdated())"
         aria-label="Refresh analytics data"
       >
-        <mat-icon aria-hidden="true">{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+        <app-glass-icon name="{{ loading() ? 'autorenew' : 'refresh' }}" [size]="18"></app-glass-icon>
         <span>Refresh Analytics</span>
       </button>
       <button
@@ -38,7 +38,7 @@
         [disabled]="filteredHistory().length === 0"
         aria-label="Export analytics history to CSV"
       >
-        <mat-icon aria-hidden="true">download</mat-icon>
+        <app-glass-icon name="download" [size]="18"></app-glass-icon>
         <span>Export CSV</span>
       </button>
     </div>
@@ -98,13 +98,13 @@
   </div>
 
   <div class="error-container" *ngIf="error() as err">
-    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <app-glass-icon name="error_outline" [size]="32"></app-glass-icon>
     <p>{{ err }}</p>
     <button mat-stroked-button (click)="refresh()">Retry</button>
   </div>
 
   <div class="empty-state" *ngIf="!loading() && !error() && !hasData()">
-    <mat-icon aria-hidden="true">insights</mat-icon>
+    <app-glass-icon name="insights" [size]="48"></app-glass-icon>
     <h3>No analytics data available</h3>
     <p>Data will appear once dashboard snapshots are available.</p>
   </div>
