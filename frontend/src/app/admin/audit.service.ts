@@ -44,8 +44,8 @@ export interface AuditLogPage {
 })
 export class AuditService {
   private readonly http = inject(HttpClient);
-  private readonly etlTriggerApiUrl = `${environment.apiUrl}/api/etl-trigger/audit`;
-  private readonly auditLogApiUrl = `${environment.apiUrl}/api/audit-logs`;
+  private readonly etlTriggerApiUrl = `${environment.apiUrl}/etl-trigger/audit`;
+  private readonly auditLogApiUrl = `${environment.apiUrl}/audit-logs`;
 
   /**
    * Get configuration audit logs with advanced filtering.

@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +31,7 @@ import com.onsemi.cim.apps.exensio.exensioreload.repository.AppUserRepository;
 
 @RestController
 @RequestMapping("/api/admin/users")
+@PreAuthorize("hasRole('ADMIN') or hasRole('ROLE_ADMIN') or hasRole('SUPER_ADMIN') or hasRole('ROLE_SUPER_ADMIN')")
 public class UserAdminController {
     
     private final AppUserRepository appUserRepository;
@@ -463,7 +465,7 @@ public class UserAdminController {
      */
     @GetMapping("/roles")
     public ResponseEntity<List<String>> getAvailableRoles() {
-        List<String> roles = List.of("ROLE_USER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        List<String> roles = List.of("USER", "ADMIN", "SUPER_ADMIN");
         return ResponseEntity.ok(roles);
     }
 

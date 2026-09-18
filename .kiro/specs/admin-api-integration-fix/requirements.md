@@ -57,14 +57,25 @@ This document tracks the fixes applied to resolve 400/404 errors and restore adm
 7. **ConfigurationService.getSenders()**
    - Now: Always sends `environment` parameter; defaults to "PROD" if not provided
 
-### Issue 2: 404 on Audit Endpoint ✅ VERIFIED
+### Issue 2: 404 on Audit Endpoint ✅ FIXED
 
-**Root Cause:** Frontend was using correct endpoint at `/api/audit-logs` (not `/api/audit`)
+**Root Cause:** Frontend was constructing incorrect URL with double `/api` prefix.
 
-**Status:** No changes needed - audit service already mapped to correct endpoint:
+- `environment.apiUrl` already contains `/api` (dev: `/api`, prod: `/exensio-reload/api`)
+- Audit service was incorrectly appending `/api/` again
+- Result: `/api/api/audit-logs` instead of `/api/audit-logs`
 
-- Frontend: `auditLogApiUrl = /api/audit-logs` ✓
-- Backend: `ConfigurationAuditLogController` mapped to `/api/audit-logs` ✓
+**Solution Applied:**
+
+1. **AuditService.ts**
+   - Changed: `${environment.apiUrl}/api/etl-trigger/audit` → `${environment.apiUrl}/etl-trigger/audit`
+   - Changed: `${environment.apiUrl}/api/audit-logs` → `${environment.apiUrl}/audit-logs`
+   - Result: URLs now correctly constructed for both dev and prod environments
+
+**Status:** Fixed - audit service now builds correct URLs:
+
+- Dev: `/api/audit-logs` ✓
+- Prod: `/exensio-reload/api/audit-logs` ✓
 
 ### Issue 3: User Management Missing ✅ VERIFIED
 
@@ -91,6 +102,7 @@ This document tracks the fixes applied to resolve 400/404 errors and restore adm
 ### Frontend
 
 1. `frontend/src/app/admin/configuration.service.ts`
+2. `frontend/src/app/admin/audit.service.ts`
 
 ## API Contract Now Aligned
 
@@ -103,6 +115,7 @@ GET /api/configuration/db-connections?environment=PROD&page=0&size=20
 GET /api/configuration/sites?environment=PROD
 GET /api/configuration/senders?site=CEBU&environment=PROD
 GET /api/audit-logs?page=0&size=20
+GET /api/etl-trigger/audit?page=0&size=20
 ```
 
 **Environment parameter behavior:**
@@ -146,10 +159,11 @@ GET /api/audit-logs?page=0&size=20
 1. Test pipelines without environment parameter → Should return PROD pipelines
 2. Test with explicit environment parameter → Should return matching environment data
 3. Test with page/size/sort parameters → Should apply pagination correctly
-4. Test audit logs endpoint → Should return 200 with paginated results
-5. Navigate to Admin menu as super-admin → Should see User Management link
-6. Navigate to /admin/users as super-admin → Should load user list
-7. Navigate to /admin/users as regular admin → Should be blocked by AuthGuard
+4. Test audit logs endpoint → Should return 200 with paginated results (no 404)
+5. Test ETL trigger audit endpoint → Should return 200 with paginated results (no 404)
+6. Navigate to Admin menu as super-admin → Should see User Management link
+7. Navigate to /admin/users as super-admin → Should load user list
+8. Navigate to /admin/users as regular admin → Should be blocked by AuthGuard
 
 ## Deployment Notes
 
