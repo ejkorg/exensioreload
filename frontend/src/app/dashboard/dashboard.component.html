@@ -13,7 +13,7 @@
       </div>
       <div class="header-actions" role="toolbar" aria-label="Dashboard controls">
         <button mat-stroked-button [routerLink]="['/alerts']" class="refresh-btn" aria-label="Open alert center">
-          <mat-icon aria-hidden="true">notifications_active</mat-icon>
+          <app-glass-icon aria-hidden="true" name="notifications_active" [size]="24"></app-glass-icon>
           <span class="btn-label">Alert Center</span>
         </button>
         <button
@@ -22,7 +22,7 @@
           class="refresh-btn"
           aria-label="Open analytics dashboard"
         >
-          <mat-icon aria-hidden="true">insights</mat-icon>
+          <app-glass-icon aria-hidden="true" name="insights" [size]="24"></app-glass-icon>
           <span class="btn-label">Analytics</span>
         </button>
         <app-export-menu [dataProvider]="gatherExportData"></app-export-menu>
@@ -36,7 +36,7 @@
           aria-label="Refresh dashboard data"
           [attr.aria-busy]="loading()"
         >
-          <mat-icon aria-hidden="true">{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+          <app-glass-icon aria-hidden="true" name="{{ loading() ? 'autorenew' : 'refresh' }}" [size]="24"></app-glass-icon>
           <span class="btn-label">Refresh</span>
         </button>
         <button
@@ -47,7 +47,7 @@
           matTooltip="Start a new reload session"
           aria-label="Start a Reload"
         >
-          <mat-icon aria-hidden="true">play_arrow</mat-icon>
+          <app-glass-icon aria-hidden="true" name="play_arrow" [size]="24"></app-glass-icon>
           <span class="btn-label">Start a Reload</span>
         </button>
       </div>
@@ -63,7 +63,7 @@
     [attr.aria-live]="dataFreshness() === 'very-stale' ? 'assertive' : 'polite'"
     aria-atomic="true"
   >
-    <mat-icon aria-hidden="true">{{ dataFreshness() === 'very-stale' ? 'warning' : 'info' }}</mat-icon>
+    <app-glass-icon aria-hidden="true" name="{{ dataFreshness() === 'very-stale' ? 'warning' : 'info' }}" [size]="24"></app-glass-icon>
     <div class="freshness-text">
       <strong>Data freshness</strong>
       <span>{{ freshnessMessage() }}</span>
@@ -79,16 +79,16 @@
         (click)="dismissFreshnessBanner()"
         aria-label="Dismiss freshness warning"
       >
-        <mat-icon aria-hidden="true">close</mat-icon>
+        <app-glass-icon aria-hidden="true" name="close" [size]="24"></app-glass-icon>
       </button>
     </div>
   </div>
 
   <div class="fallback-limits-banner" *ngIf="limitsError() && !limitsBannerDismissed()" role="alert" aria-live="polite">
-    <mat-icon aria-hidden="true">info</mat-icon>
+    <app-glass-icon aria-hidden="true" name="info" [size]="24"></app-glass-icon>
     <span>Using local fallback limits — backend configuration unavailable.</span>
-    <button mat-icon-button (click)="dismissLimitsBanner()" aria-label="Dismiss limits warning">
-      <mat-icon>close</mat-icon>
+    <button mat-button (click)="dismissLimitsBanner()" aria-label="Dismiss limits warning">
+      <app-glass-icon name="close" [size]="24"></app-glass-icon>
     </button>
   </div>
 
@@ -107,12 +107,12 @@
 
   <!-- Active Site Filter Banner -->
   <div class="site-filter-banner" *ngIf="siteFilter()">
-    <mat-icon class="filter-icon">filter_list</mat-icon>
+    <app-glass-icon class="filter-icon" name="filter_list" [size]="24"></app-glass-icon>
     <span class="filter-text"
       >Viewing site: <strong>{{ siteFilter() }}</strong></span
     >
     <button mat-button class="clear-site-filter" (click)="clearSiteFilter()">
-      <mat-icon>close</mat-icon>
+      <app-glass-icon name="close" [size]="24"></app-glass-icon>
       Clear Filter
     </button>
   </div>
@@ -235,7 +235,7 @@
         >
           <div class="metric-header-row">
             <div class="metric-icon-wrapper" [ngClass]="'color-' + metric.color" aria-hidden="true">
-              <mat-icon class="metric-icon">{{ metric.icon }}</mat-icon>
+              <app-glass-icon class="metric-icon" name="{{ metric.icon }}" [size]="24"></app-glass-icon>
             </div>
             <span
               *ngIf="metric.trend !== undefined"
@@ -251,9 +251,7 @@
                 ' percent'
               "
             >
-              <mat-icon class="trend-icon" aria-hidden="true">{{
-                metric.trend > 0 ? 'trending_up' : metric.trend < 0 ? 'trending_down' : 'trending_flat'
-              }}</mat-icon>
+              <app-glass-icon class="trend-icon" aria-hidden="true" [name]="metric.trend > 0 ? 'trending_up' : metric.trend < 0 ? 'trending_down' : 'trending_flat'" [size]="24"></app-glass-icon>
               <span class="trend-value">{{ metric.trend > 0 ? '+' : '' }}{{ metric.trend }}%</span>
             </span>
           </div>
@@ -291,7 +289,7 @@
           [ngClass]="'color-' + metric.color"
         >
           <div class="compact-header">
-            <mat-icon>{{ metric.icon }}</mat-icon>
+            <app-glass-icon name="{{ metric.icon }}" [size]="24"></app-glass-icon>
             <span class="compact-label">{{ metric.label }}</span>
           </div>
           <div class="compact-value">{{ metric.value | number }}</div>
@@ -432,13 +430,13 @@
                 [matTooltip]="'Alert settings for ' + sender.senderLabel"
                 aria-label="Open alert settings"
               >
-                <mat-icon>notifications</mat-icon>
+                <app-glass-icon name="notifications" [size]="24"></app-glass-icon>
               </button>
               @if (sender.isCritical) {
                 <span class="critical-badge" matTooltip="Backlog exceeds 5000">CRITICAL</span>
               } @else if (sender.alert) {
                 <span class="alert-indicator" matTooltip="High backlog detected">
-                  <mat-icon>warning</mat-icon>
+                  <app-glass-icon name="warning" [size]="24"></app-glass-icon>
                 </span>
               }
             </div>
@@ -498,9 +496,9 @@
                 "
               >
                 @if (cap.level === 'critical') {
-                  <mat-icon>error</mat-icon>
+                  <app-glass-icon name="error" [size]="24"></app-glass-icon>
                 } @else {
-                  <mat-icon>warning</mat-icon>
+                  <app-glass-icon name="warning" [size]="24"></app-glass-icon>
                 }
                 CAPACITY {{ cap.level === 'critical' ? 'CRITICAL' : 'WARNING' }}
                 @if (cap.timeToCapacity >= 0) {
@@ -515,7 +513,7 @@
                 [class.cap-critical]="tl === 'critical'"
                 matTooltip="Custom threshold breached — click the bell to adjust"
               >
-                <mat-icon>notifications_active</mat-icon>
+                <app-glass-icon name="notifications_active" [size]="24"></app-glass-icon>
                 THRESHOLD {{ tl | uppercase }}
               </span>
             }
@@ -526,7 +524,7 @@
               (click)="dispatchSender(sender); $event.stopPropagation()"
               [matTooltip]="'Dispatch queue for ' + sender.senderLabel"
             >
-              <mat-icon>send</mat-icon>
+              <app-glass-icon name="send" [size]="24"></app-glass-icon>
               Dispatch
             </button>
           </div>
@@ -599,7 +597,7 @@
               [queryParams]="{ site: site.site }"
               (click)="$event.stopPropagation()"
             >
-              <mat-icon>arrow_forward</mat-icon>
+              <app-glass-icon name="arrow_forward" [size]="24"></app-glass-icon>
               View Details
             </button>
           </div>
@@ -610,7 +608,7 @@
           <div class="skeleton-card" *ngFor="let i of [1, 2, 3, 4]"></div>
         </div>
         <div class="empty-state-container" *ngIf="snapshot() && filteredSites().length === 0">
-          <mat-icon class="empty-icon">search_off</mat-icon>
+          <app-glass-icon class="empty-icon" name="search_off" [size]="24"></app-glass-icon>
           <h3>No Matching Sites</h3>
           <p>No sites have senders matching your search. Try a different search term.</p>
         </div>
@@ -620,9 +618,7 @@
     <!-- Footer -->
     <footer class="dashboard-footer">
       <div class="footer-sync-status">
-        <mat-icon class="sync-icon" [class.spinning]="loading()" [class.pulsing]="lastUpdatePulse()">{{
-          loading() ? 'cloud_sync' : 'cloud_done'
-        }}</mat-icon>
+        <app-glass-icon class="sync-icon" [class.spinning]="loading()" [class.pulsing]="lastUpdatePulse()" [name]="loading() ? 'cloud_sync' : 'cloud_done'" [size]="24"></app-glass-icon>
         <span class="sync-text">
           {{ loading() ? 'Updating...' : 'Live sync active • Last update: ' + fmtTimeAgo(lastUpdated()) }}
         </span>
@@ -644,7 +640,7 @@
   <!-- Error State -->
   <ng-template #errorState>
     <div class="error-container">
-      <mat-icon class="error-icon">error_outline</mat-icon>
+      <app-glass-icon class="error-icon" name="error_outline" [size]="24"></app-glass-icon>
       <h3>{{ errorDetails()?.message || 'Unable to Load Dashboard' }}</h3>
       <p class="error-message">{{ errorDetails()?.details || error() }}</p>
 
@@ -657,22 +653,22 @@
 
       <div class="retry-info" *ngIf="errorDetails() as details">
         <p class="retry-countdown" *ngIf="details.retryAttempts < details.maxRetries && (details.retryIn ?? 0) > 0">
-          <mat-icon>schedule</mat-icon>
+          <app-glass-icon name="schedule" [size]="24"></app-glass-icon>
           Auto-retrying in {{ details.retryIn }}s (Attempt {{ details.retryAttempts }}/{{ details.maxRetries }})
         </p>
         <p class="retry-failed" *ngIf="details.retryAttempts >= details.maxRetries">
-          <mat-icon>error</mat-icon>
+          <app-glass-icon name="error" [size]="24"></app-glass-icon>
           Maximum retry attempts reached. Please retry manually.
         </p>
       </div>
 
       <div class="error-actions">
         <button mat-raised-button color="primary" (click)="manualRetry()" [disabled]="loading()">
-          <mat-icon>{{ loading() ? 'autorenew' : 'refresh' }}</mat-icon>
+          <app-glass-icon name="{{ loading() ? 'autorenew' : 'refresh' }}" [size]="24"></app-glass-icon>
           Try Now
         </button>
         <button mat-stroked-button type="button" (click)="contactSupport()">
-          <mat-icon>help_outline</mat-icon>
+          <app-glass-icon name="help_outline" [size]="24"></app-glass-icon>
           Contact Support
         </button>
       </div>
@@ -701,7 +697,7 @@
 <!-- Empty State - No Sites -->
 <ng-template #emptySites>
   <div class="empty-state-container">
-    <mat-icon class="empty-icon">inbox</mat-icon>
+    <app-glass-icon class="empty-icon" name="inbox" [size]="24"></app-glass-icon>
     <h3>No Sites Configured</h3>
     <p>You don't have any sender sites set up yet. Start monitoring to track payload dispatch.</p>
   </div>
@@ -710,11 +706,11 @@
 <!-- Empty State - No Activity -->
 <ng-template #emptyActivity>
   <div class="empty-state-container">
-    <mat-icon class="empty-icon">sentiment_satisfied_alt</mat-icon>
+    <app-glass-icon class="empty-icon" name="sentiment_satisfied_alt" [size]="24"></app-glass-icon>
     <h3>All Caught Up!</h3>
     <p>Your dashboard shows no pending items. All requests are completed or idle.</p>
     <button mat-raised-button (click)="refresh()">
-      <mat-icon>refresh</mat-icon>
+      <app-glass-icon name="refresh" [size]="24"></app-glass-icon>
       Refresh Dashboard
     </button>
   </div>

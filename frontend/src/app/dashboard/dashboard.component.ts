@@ -26,6 +26,7 @@ import {
 } from '../api/backend.service';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
 import { GlassCheckboxComponent } from '../shared/components/glass-checkbox.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { GlassDialogService } from '../shared/services/glass-dialog.service';
 import { StagingSessionService } from '../shared/services/staging-session.service';
 import { ToastService } from '../shared/services/toast.service';
@@ -133,6 +134,7 @@ interface DashboardErrorDetails {
     RouterModule,
     BulkActionsComponent,
     GlassCheckboxComponent,
+    GlassIconComponent,
     StateLegendTooltipComponent,
     DualTimestampComponent,
     TimeSeriesChartComponent,
