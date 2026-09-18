@@ -56,7 +56,7 @@ public class ConfigurationEtlServerController {
      *
      * GET /api/configuration/etl-servers?environment=PROD&historicalOnly=false&page=0&size=20&sort=serverKey,asc
      *
-     * @param environment the environment to query (e.g., PROD, QA) - REQUIRED
+     * @param environment the environment to query (e.g., PROD, QA) - defaults to PROD if not provided
      * @param historicalOnly if true, returns only historical servers (default: false)
      * @param search optional search filter for serverKey, host, or user
      * @param pageable pagination parameters (page, size, sort)
@@ -64,7 +64,7 @@ public class ConfigurationEtlServerController {
      */
     @GetMapping
     public ResponseEntity<Page<ConfigEtlServer>> getEtlServers(
-            @RequestParam String environment,
+            @RequestParam(required = false, defaultValue = "PROD") String environment,
             @RequestParam(required = false, defaultValue = "false") Boolean historicalOnly,
             @RequestParam(required = false) String search,
             Pageable pageable) {

@@ -56,14 +56,14 @@ public class ConfigurationDbConnectionController {
      *
      * GET /api/configuration/db-connections?environment=PROD&page=0&size=20&sort=connectionKey,asc
      *
-     * @param environment the environment to query (e.g., PROD, QA) - REQUIRED
+     * @param environment the environment to query (e.g., PROD, QA) - defaults to PROD if not provided
      * @param search optional search filter for connectionKey, host, or schema
      * @param pageable pagination parameters (page, size, sort)
      * @return paginated list of database connections matching the criteria
      */
     @GetMapping
     public ResponseEntity<Page<ConfigDbConnection>> getDbConnections(
-            @RequestParam String environment,
+            @RequestParam(required = false, defaultValue = "PROD") String environment,
             @RequestParam(required = false) String search,
             Pageable pageable) {
         

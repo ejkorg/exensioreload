@@ -1,12 +1,17 @@
 package com.onsemi.cim.apps.exensio.exensioreload.controller;
 
-import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.onsemi.cim.apps.exensio.exensioreload.service.ConfigurationService;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST API controller for configuration query endpoints used by Step 1 UI.
@@ -30,12 +35,12 @@ public class ConfigurationQueryController {
      *
      * GET /api/configuration/sites?environment=PROD
      *
-     * @param environment the environment to query (e.g., PROD, QA)
+     * @param environment the environment to query (e.g., PROD, QA) - defaults to PROD if not provided
      * @return list of site names available in the environment, sorted alphabetically
      */
     @GetMapping("/sites")
     public ResponseEntity<List<String>> getSitesByEnvironment(
-            @RequestParam String environment) {
+            @RequestParam(required = false, defaultValue = "PROD") String environment) {
         
         log.info("Fetching sites: environment={}", environment);
         
@@ -54,15 +59,15 @@ public class ConfigurationQueryController {
      *
      * GET /api/configuration/senders?site=CEBU&environment=PROD&historicalMode=false
      *
-     * @param site the site name
-     * @param environment the environment (e.g., PROD, QA)
+     * @param site the site name - REQUIRED
+     * @param environment the environment (e.g., PROD, QA) - defaults to PROD if not provided
      * @param historicalMode optional filter: true for historical senders only, false for non-historical only, null for all
      * @return list of available sender options for the site
      */
     @GetMapping("/senders")
     public ResponseEntity<List<ConfigurationService.SenderOption>> getSendersBySite(
             @RequestParam String site,
-            @RequestParam String environment,
+            @RequestParam(required = false, defaultValue = "PROD") String environment,
             @RequestParam(required = false) Boolean historicalMode) {
         
         log.info("Fetching senders: site={}, environment={}, historicalMode={}", site, environment, historicalMode);

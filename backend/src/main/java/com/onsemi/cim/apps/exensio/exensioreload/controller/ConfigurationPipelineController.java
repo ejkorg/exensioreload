@@ -53,7 +53,7 @@ public class ConfigurationPipelineController {
      *
      * GET /api/configuration/pipelines?environment=PROD&page=0&size=20&sort=pipelineKey,asc
      *
-     * @param environment the environment to query (e.g., PROD, QA) - REQUIRED
+     * @param environment the environment to query (e.g., PROD, QA) - defaults to PROD if not provided
      * @param site optional site filter
      * @param historicalMode optional filter: true for historical only, false for non-historical only
      * @param search optional search filter for pipelineKey or site
@@ -62,7 +62,7 @@ public class ConfigurationPipelineController {
      */
     @GetMapping
     public ResponseEntity<Page<ConfigPipeline>> getPipelines(
-            @RequestParam String environment,
+            @RequestParam(required = false, defaultValue = "PROD") String environment,
             @RequestParam(required = false) String site,
             @RequestParam(required = false) Boolean historicalMode,
             @RequestParam(required = false) String search,

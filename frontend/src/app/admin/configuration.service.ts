@@ -119,9 +119,10 @@ export class ConfigurationService {
     } = {},
   ): Observable<PipelinePage> {
     let httpParams = new HttpParams();
-    if (params.environment && params.environment !== 'ALL') {
-      httpParams = httpParams.set('environment', params.environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = params.environment && params.environment !== 'ALL' ? params.environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
+
     if (params.search) httpParams = httpParams.set('search', params.search);
     if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
     if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
@@ -165,9 +166,9 @@ export class ConfigurationService {
   // Query endpoints for Step 1 UI
   getSites(environment?: string): Observable<string[]> {
     let httpParams = new HttpParams();
-    if (environment && environment !== 'ALL') {
-      httpParams = httpParams.set('environment', environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = environment && environment !== 'ALL' ? environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
 
     return this.http.get<string[]>(`${this.apiUrl}/sites`, {
       params: httpParams,
@@ -178,9 +179,10 @@ export class ConfigurationService {
   getSenders(site: string, environment?: string, historicalMode?: boolean): Observable<SenderOption[]> {
     let httpParams = new HttpParams().set('site', site);
 
-    if (environment && environment !== 'ALL') {
-      httpParams = httpParams.set('environment', environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = environment && environment !== 'ALL' ? environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
+
     if (historicalMode !== undefined) {
       httpParams = httpParams.set('historicalMode', historicalMode.toString());
     }
@@ -194,9 +196,9 @@ export class ConfigurationService {
   // ETL Server endpoints
   getEtlServers(environment?: string): Observable<ConfigEtlServer[]> {
     let httpParams = new HttpParams();
-    if (environment && environment !== 'ALL') {
-      httpParams = httpParams.set('environment', environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = environment && environment !== 'ALL' ? environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
 
     return this.http.get<ConfigEtlServer[]>(`${this.apiUrl}/etl-servers`, {
       params: httpParams,
@@ -216,9 +218,10 @@ export class ConfigurationService {
     } = {},
   ): Observable<EtlServerPage> {
     let httpParams = new HttpParams();
-    if (params.environment && params.environment !== 'ALL') {
-      httpParams = httpParams.set('environment', params.environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = params.environment && params.environment !== 'ALL' ? params.environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
+
     if (params.search) httpParams = httpParams.set('search', params.search);
     if (params.historicalOnly) httpParams = httpParams.set('historicalOnly', params.historicalOnly.toString());
     if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
@@ -269,9 +272,9 @@ export class ConfigurationService {
   // DB Connection endpoints
   getDbConnections(environment?: string): Observable<ConfigDbConnection[]> {
     let httpParams = new HttpParams();
-    if (environment && environment !== 'ALL') {
-      httpParams = httpParams.set('environment', environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = environment && environment !== 'ALL' ? environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
 
     return this.http.get<ConfigDbConnection[]>(`${this.apiUrl}/db-connections`, {
       params: httpParams,
@@ -292,12 +295,16 @@ export class ConfigurationService {
     let httpParams = new HttpParams();
     if (params.page !== undefined) httpParams = httpParams.set('page', params.page.toString());
     if (params.size !== undefined) httpParams = httpParams.set('size', params.size.toString());
-    if (params.environment && params.environment !== 'ALL') {
-      httpParams = httpParams.set('environment', params.environment);
-    }
+    // Always send environment; default to PROD if not provided
+    const env = params.environment && params.environment !== 'ALL' ? params.environment : 'PROD';
+    httpParams = httpParams.set('environment', env);
+
     if (params.search) httpParams = httpParams.set('search', params.search);
-    if (params.sortBy) httpParams = httpParams.set('sortBy', params.sortBy);
-    if (params.sortDir) httpParams = httpParams.set('sortDir', params.sortDir);
+    // Build sort parameter in Spring Data format: "field,direction"
+    if (params.sortBy) {
+      const direction = params.sortDir === 'desc' ? 'desc' : 'asc';
+      httpParams = httpParams.set('sort', `${params.sortBy},${direction}`);
+    }
 
     return this.http.get<DbConnectionPage>(`${this.apiUrl}/db-connections`, {
       params: httpParams,
