@@ -347,6 +347,74 @@ import { Component, Input } from '@angular/core';
           />
         </g>
 
+        <!-- Label -->
+        <g *ngSwitchCase="'label'">
+          <path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M14 2v6h6M9 13h6M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Location On -->
+        <g *ngSwitchCase="'location_on'">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="2" />
+          <circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="2" />
+        </g>
+
+        <!-- DNS / Server -->
+        <g *ngSwitchCase="'dns'">
+          <rect x="2" y="2" width="20" height="8" rx="2" stroke="currentColor" stroke-width="2" />
+          <rect x="2" y="14" width="20" height="8" rx="2" stroke="currentColor" stroke-width="2" />
+          <circle cx="6" cy="6" r="0.5" fill="currentColor" />
+          <circle cx="6" cy="18" r="0.5" fill="currentColor" />
+          <text x="10" y="7" font-size="4" fill="currentColor">QA</text>
+          <text x="10" y="19" font-size="4" fill="currentColor">PRD</text>
+        </g>
+
+        <!-- Tag / ID -->
+        <g *ngSwitchCase="'tag'">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+        </g>
+
+        <!-- LAN / Network -->
+        <g *ngSwitchCase="'lan'">
+          <rect x="2" y="2" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2" />
+          <rect x="16" y="2" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2" />
+          <rect x="9" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2" />
+          <path d="M5 8v3a2 2 0 002 2h10a2 2 0 002-2V8M12 14v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Table -->
+        <g *ngSwitchCase="'table'">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" />
+          <path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke="currentColor" stroke-width="2" />
+        </g>
+
+        <!-- Link -->
+        <g *ngSwitchCase="'link'">
+          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
+
+        <!-- Link Check (Test Connection) -->
+        <g *ngSwitchCase="'link_check'">
+          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
+
+        <!-- Link Off -->
+        <g *ngSwitchCase="'link_off'">
+          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M1 1l22 22" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Save -->
+        <g *ngSwitchCase="'save'">
+          <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
+
         <!-- Menu -->
         <g *ngSwitchCase="'menu'">
           <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />

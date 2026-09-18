@@ -12,77 +12,49 @@
       <div class="form-section">
         <h3>Basic Information</h3>
 
-        <div class="form-group">
-          <label for="pipelineKey">Pipeline Key *</label>
-          <input
-            id="pipelineKey"
-            type="text"
-            formControlName="pipelineKey"
-            class="form-input"
-            [class.error]="form.get('pipelineKey')?.invalid && form.get('pipelineKey')?.touched"
-            placeholder="e.g., CEBU_PROD_ETL_01"
-            [disabled]="mode === 'edit'"
-          />
-          <div class="error-text" *ngIf="form.get('pipelineKey')?.invalid && form.get('pipelineKey')?.touched">
-            {{ getPipelineKeyError() }}
-          </div>
+        <app-glass-input
+          formControlName="pipelineKey"
+          label="Pipeline Key"
+          placeholder="e.g., CEBU_PROD_ETL_01"
+          prefixIcon="label"
+          [error]="form.get('pipelineKey')?.invalid && form.get('pipelineKey')?.touched ? getPipelineKeyError() : null"
+        ></app-glass-input>
+
+        <div class="form-row">
+          <app-glass-select
+            formControlName="environment"
+            label="Environment"
+            placeholder="Select environment"
+            prefixIcon="tune"
+            [options]="['PROD', 'QA']"
+          ></app-glass-select>
+
+          <app-glass-select
+            formControlName="site"
+            label="Site"
+            placeholder="Select a site"
+            prefixIcon="location_on"
+            [options]="sites()"
+            [error]="form.get('site')?.invalid && form.get('site')?.touched ? 'Site is required' : null"
+          ></app-glass-select>
         </div>
 
         <div class="form-row">
-          <div class="form-group">
-            <label for="environment">Environment *</label>
-            <select id="environment" formControlName="environment" class="form-select" (change)="onEnvironmentChange()">
-              <option value="PROD">PROD</option>
-              <option value="QA">QA</option>
-            </select>
-          </div>
+          <app-glass-select
+            formControlName="server"
+            label="ETL Server"
+            placeholder="Select a server"
+            prefixIcon="dns"
+            [options]="servers()"
+            [error]="form.get('server')?.invalid && form.get('server')?.touched ? 'Server is required' : null"
+          ></app-glass-select>
 
-          <div class="form-group">
-            <label for="site">Site *</label>
-            <select
-              id="site"
-              formControlName="site"
-              class="form-select"
-              [class.error]="form.get('site')?.invalid && form.get('site')?.touched"
-            >
-              <option value="">Select a site</option>
-              <option *ngFor="let site of sites()" [value]="site">{{ site }}</option>
-            </select>
-            <div class="error-text" *ngIf="form.get('site')?.invalid && form.get('site')?.touched">
-              Site is required
-            </div>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="server">ETL Server *</label>
-            <select
-              id="server"
-              formControlName="server"
-              class="form-select"
-              [class.error]="form.get('server')?.invalid && form.get('server')?.touched"
-            >
-              <option value="">Select a server</option>
-              <option *ngFor="let server of servers()" [value]="server.serverKey">
-                {{ server.serverKey }} ({{ server.host }})
-              </option>
-            </select>
-            <div class="error-text" *ngIf="form.get('server')?.invalid && form.get('server')?.touched">
-              Server is required
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="configName">Config Name</label>
-            <input
-              id="configName"
-              type="text"
-              formControlName="configName"
-              class="form-input"
-              placeholder="Optional config name"
-            />
-          </div>
+          <app-glass-input
+            formControlName="configName"
+            label="Config Name"
+            placeholder="Optional config name"
+            prefixIcon="settings"
+          ></app-glass-input>
         </div>
       </div>
 
@@ -91,49 +63,31 @@
         <h3>Queue Configuration</h3>
 
         <div class="form-row">
-          <div class="form-group">
-            <label for="senderId">Sender ID *</label>
-            <input
-              id="senderId"
-              type="number"
-              formControlName="senderId"
-              class="form-input"
-              [class.error]="form.get('senderId')?.invalid && form.get('senderId')?.touched"
-              placeholder="e.g., 1"
-            />
-            <div class="error-text" *ngIf="form.get('senderId')?.invalid && form.get('senderId')?.touched">
-              {{ getSenderIdError() }}
-            </div>
-          </div>
+          <app-glass-input
+            formControlName="senderId"
+            label="Sender ID"
+            type="number"
+            placeholder="e.g., 1"
+            prefixIcon="tag"
+            [error]="form.get('senderId')?.invalid && form.get('senderId')?.touched ? getSenderIdError() : null"
+          ></app-glass-input>
 
-          <div class="form-group">
-            <label for="socketPort">Socket Port *</label>
-            <input
-              id="socketPort"
-              type="number"
-              formControlName="socketPort"
-              class="form-input"
-              [class.error]="form.get('socketPort')?.invalid && form.get('socketPort')?.touched"
-              placeholder="e.g., 8000"
-              min="1"
-              max="65535"
-            />
-            <div class="error-text" *ngIf="form.get('socketPort')?.invalid && form.get('socketPort')?.touched">
-              {{ getPortError() }}
-            </div>
-          </div>
+          <app-glass-input
+            formControlName="socketPort"
+            label="Socket Port"
+            type="number"
+            placeholder="e.g., 8000"
+            prefixIcon="lan"
+            [error]="form.get('socketPort')?.invalid && form.get('socketPort')?.touched ? getPortError() : null"
+          ></app-glass-input>
 
-          <div class="form-group">
-            <label for="rerunPeriodMinutes">Rerun Period (min) *</label>
-            <input
-              id="rerunPeriodMinutes"
-              type="number"
-              formControlName="rerunPeriodMinutes"
-              class="form-input"
-              placeholder="e.g., 60"
-              min="1"
-            />
-          </div>
+          <app-glass-input
+            formControlName="rerunPeriodMinutes"
+            label="Rerun Period (min)"
+            type="number"
+            placeholder="e.g., 60"
+            prefixIcon="schedule"
+          ></app-glass-input>
         </div>
       </div>
 
