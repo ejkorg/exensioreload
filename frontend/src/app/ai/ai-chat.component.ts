@@ -17,6 +17,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DualTimestampComponent } from '../shared/components/dual-timestamp.component';
+import { GlassIconComponent } from '../shared/components/glass-icon.component';
 import { AiService } from './ai.service';
 import { ChatMessage, SuggestedAction } from './ai.types';
 
@@ -32,6 +33,7 @@ import { ChatMessage, SuggestedAction } from './ai.types';
     MatTooltipModule,
     MatProgressSpinnerModule,
     DualTimestampComponent,
+    GlassIconComponent,
   ],
   templateUrl: './ai-chat.component.html',
   styleUrls: ['./ai-chat.component.scss'],

@@ -48,11 +48,6 @@ $bg-glass-light: $dark-bg-glass-light;
   font-family: inherit;
 }
 
-// Light theme overrides
-body.light-theme :host {
-  // Light theme styling applied via cascading
-}
-
 // Floating Toggle Button
 .chat-toggle-btn {
   display: flex;
@@ -95,7 +90,7 @@ body.light-theme :host {
   }
 }
 
-body.light-theme .chat-toggle-btn {
+:host-context(body.light-theme) .chat-toggle-btn {
   background: linear-gradient(135deg, $light-primary, $light-primary-hover);
   box-shadow: 0 2px 12px rgba($light-primary, 0.35);
 
@@ -123,7 +118,7 @@ body.light-theme .chat-toggle-btn {
   animation: slideDown 0.25s ease-out;
 }
 
-body.light-theme .chat-panel {
+:host-context(body.light-theme) .chat-panel {
   background: $light-bg-glass;
   border-color: $light-border;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
@@ -191,7 +186,7 @@ body.light-theme .chat-panel {
   }
 }
 
-body.light-theme .chat-header {
+:host-context(body.light-theme) .chat-header {
   background: rgba(0, 0, 0, 0.05);
   border-bottom-color: $light-border;
 
@@ -231,7 +226,7 @@ body.light-theme .chat-header {
   }
 }
 
-body.light-theme .icon-btn {
+:host-context(body.light-theme) .icon-btn {
   color: $light-text-secondary;
 
   &:hover {
@@ -268,7 +263,7 @@ body.light-theme .icon-btn {
   }
 }
 
-body.light-theme .chat-messages {
+:host-context(body.light-theme) .chat-messages {
   &::-webkit-scrollbar-thumb {
     background: $light-border;
 
@@ -315,7 +310,7 @@ body.light-theme .chat-messages {
   }
 }
 
-body.light-theme .welcome-state {
+:host-context(body.light-theme) .welcome-state {
   .welcome-icon {
     background: linear-gradient(135deg, $light-primary, $light-primary-hover);
     box-shadow: 0 4px 20px rgba($light-primary, 0.3);
@@ -344,7 +339,7 @@ body.light-theme .welcome-state {
   }
 }
 
-body.light-theme .example-prompt {
+:host-context(body.light-theme) .example-prompt {
   background: $light-bg-glass-light;
   border-color: $light-border;
   color: $light-text-secondary;
@@ -393,7 +388,7 @@ body.light-theme .example-prompt {
   }
 }
 
-body.light-theme {
+:host-context(body.light-theme) {
   .user-message {
     .message-content {
       background: $light-primary;
@@ -421,7 +416,7 @@ body.light-theme {
   align-self: flex-end;
 }
 
-body.light-theme .message-avatar {
+:host-context(body.light-theme) .message-avatar {
   background: linear-gradient(135deg, $light-primary, $light-primary-hover);
 }
 
@@ -459,7 +454,7 @@ body.light-theme .message-avatar {
   }
 }
 
-body.light-theme .action-btn {
+:host-context(body.light-theme) .action-btn {
   background: rgba(0, 0, 0, 0.08);
   border-color: rgba(0, 0, 0, 0.12);
   color: $light-text-primary;
@@ -495,7 +490,7 @@ body.light-theme .action-btn {
   }
 }
 
-body.light-theme .message-meta {
+:host-context(body.light-theme) .message-meta {
   color: $light-text-secondary;
 }
 
@@ -521,7 +516,7 @@ body.light-theme .message-meta {
   }
 }
 
-body.light-theme .typing-indicator span {
+:host-context(body.light-theme) .typing-indicator span {
   background: $light-text-muted;
 }
 
@@ -617,7 +612,7 @@ body.light-theme .typing-indicator span {
   }
 }
 
-body.light-theme .chat-input-area {
+:host-context(body.light-theme) .chat-input-area {
   background: rgba(0, 0, 0, 0.04);
   border-top-color: $light-border;
 
@@ -666,7 +661,7 @@ body.light-theme .chat-input-area {
   text-align: center;
 }
 
-body.light-theme .not-available-banner {
+:host-context(body.light-theme) .not-available-banner {
   background: rgba(245, 158, 11, 0.1);
   border-color: rgba(245, 158, 11, 0.25);
 }

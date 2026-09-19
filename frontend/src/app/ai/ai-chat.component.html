@@ -8,23 +8,7 @@
     [class.disabled]="!isEnabled()"
     [matTooltip]="isEnabled() ? 'Open AI Assistant' : 'AI not available'"
   >
-    <!-- Modern AI sparkle icon -->
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Main sparkle star -->
-      <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" opacity="0.95" />
-      <!-- Top-right small star -->
-      <path
-        d="M19 2L19.75 4.25L22 5L19.75 5.75L19 8L18.25 5.75L16 5L18.25 4.25L19 2Z"
-        fill="currentColor"
-        opacity="0.7"
-      />
-      <!-- Bottom-left small star -->
-      <path
-        d="M5 16L5.6 17.9L7.5 18.5L5.6 19.1L5 21L4.4 19.1L2.5 18.5L4.4 17.9L5 16Z"
-        fill="currentColor"
-        opacity="0.55"
-      />
-    </svg>
+    <app-glass-icon name="ai_sparkle" [size]="22"></app-glass-icon>
     <span class="btn-label">AI</span>
   </button>
 }
@@ -36,14 +20,7 @@
     <div class="chat-header">
       <div class="header-content">
         <div class="header-ai-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
-            <path
-              d="M19 2L19.75 4.25L22 5L19.75 5.75L19 8L18.25 5.75L16 5L18.25 4.25L19 2Z"
-              fill="currentColor"
-              opacity="0.7"
-            />
-          </svg>
+          <app-glass-icon name="ai_sparkle" [size]="15"></app-glass-icon>
         </div>
         <span class="header-title">AI Assistant</span>
         <span class="header-badge">Beta</span>
@@ -56,22 +33,11 @@
             matTooltip="Clear conversation"
             title="Clear conversation"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-              <path
-                d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <app-glass-icon name="delete" [size]="16"></app-glass-icon>
           </button>
         }
         <button class="icon-btn" (click)="closeChat()" matTooltip="Minimize" title="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
+          <app-glass-icon name="close" [size]="16"></app-glass-icon>
         </button>
       </div>
     </div>
@@ -82,19 +48,7 @@
         <!-- Welcome State -->
         <div class="welcome-state">
           <div class="welcome-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
-              <path
-                d="M19 2L19.75 4.25L22 5L19.75 5.75L19 8L18.25 5.75L16 5L18.25 4.25L19 2Z"
-                fill="currentColor"
-                opacity="0.7"
-              />
-              <path
-                d="M5 16L5.6 17.9L7.5 18.5L5.6 19.1L5 21L4.4 19.1L2.5 18.5L4.4 17.9L5 16Z"
-                fill="currentColor"
-                opacity="0.5"
-              />
-            </svg>
+            <app-glass-icon name="ai_sparkle" [size]="40"></app-glass-icon>
           </div>
           <p class="welcome-text">Ask me anything about your manufacturing data</p>
           <div class="example-prompts">
@@ -111,14 +65,7 @@
         <div [class]="getMessageClass(message.role)">
           @if (message.role === 'assistant') {
             <div class="message-avatar">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
-                <path
-                  d="M19 2L19.75 4.25L22 5L19.75 5.75L19 8L18.25 5.75L16 5L18.25 4.25L19 2Z"
-                  fill="currentColor"
-                  opacity="0.7"
-                />
-              </svg>
+              <app-glass-icon name="ai_sparkle" [size]="14"></app-glass-icon>
             </div>
           }
           <div class="message-content">
@@ -149,9 +96,7 @@
       @if (isLoading()) {
         <div class="assistant-message loading">
           <div class="message-avatar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
-            </svg>
+            <app-glass-icon name="ai_sparkle" [size]="14"></app-glass-icon>
           </div>
           <div class="typing-indicator">
             <span></span>
@@ -165,10 +110,7 @@
     <!-- Error Message -->
     @if (error()) {
       <div class="error-banner">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
-          <path d="M12 8V12M12 16H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-        </svg>
+        <app-glass-icon name="error" [size]="16"></app-glass-icon>
         {{ error() }}
       </div>
     }
@@ -187,15 +129,7 @@
         >
         </textarea>
         <button class="send-btn" (click)="sendMessage()" [disabled]="!inputMessage().trim() || isLoading()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <app-glass-icon name="send" [size]="20"></app-glass-icon>
         </button>
       </div>
       <div class="input-hint">Press Enter to send, Shift+Enter for new line</div>

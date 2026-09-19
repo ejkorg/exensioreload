@@ -731,6 +731,144 @@ import { Component, Input } from '@angular/core';
           <path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6" stroke="currentColor" stroke-width="2" />
         </g>
 
+        <!-- Person Outline -->
+        <g *ngSwitchCase="'person_outline'">
+          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" />
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Mail Outline -->
+        <g *ngSwitchCase="'mail_outline'">
+          <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="2" />
+          <path d="M2 7l10 6 10-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Lock Outline -->
+        <g *ngSwitchCase="'lock_outline'">
+          <rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2" />
+          <path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="2" />
+          <circle cx="12" cy="16" r="1.5" fill="currentColor" />
+        </g>
+
+        <!-- Lock Reset -->
+        <g *ngSwitchCase="'lock_reset'">
+          <rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2" />
+          <path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="2" />
+          <path d="M12 14v3M10 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Admin Panel Settings -->
+        <g *ngSwitchCase="'admin_panel_settings'">
+          <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2" />
+          <path d="M12 11v3M9 14l3-3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="17" cy="17" r="3" stroke="currentColor" stroke-width="2" />
+          <path d="M17 15.5v1l0.8 0.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </g>
+
+        <!-- Info Outline -->
+        <g *ngSwitchCase="'info_outline'">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+          <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Visibility -->
+        <g *ngSwitchCase="'visibility'">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2" />
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" />
+        </g>
+
+        <!-- Visibility Off -->
+        <g *ngSwitchCase="'visibility_off'">
+          <path d="M17.94 17.94A10.94 10.94 0 0112 20C5 20 1 12 1 12a19.78 19.78 0 014.06-5.94" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <path d="M14.12 14.12a3 3 0 11-4.24-4.24M1 1l22 22M9.9 4.24A9.97 9.97 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Home -->
+        <g *ngSwitchCase="'home'">
+          <path
+            d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path d="M9 22V12h6v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
+
+        <!-- Account Tree -->
+        <g *ngSwitchCase="'account_tree'">
+          <circle cx="12" cy="5" r="2.5" stroke="currentColor" stroke-width="2" />
+          <circle cx="5" cy="19" r="2.5" stroke="currentColor" stroke-width="2" />
+          <circle cx="19" cy="19" r="2.5" stroke="currentColor" stroke-width="2" />
+          <path
+            d="M12 7.5V12m0 0l-5.5 4.5M12 12l5.5 4.5"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- Assessment -->
+        <g *ngSwitchCase="'assessment'">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" />
+          <path d="M8 17v-5M12 17V7M16 17v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Settings Input Composite -->
+        <g *ngSwitchCase="'settings_input_composite'">
+          <path
+            d="M2 6h9M17 6h5M2 12h3M11 12h11M2 18h11M21 18h1"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <circle cx="15" cy="6" r="2" stroke="currentColor" stroke-width="2" />
+          <circle cx="9" cy="12" r="2" stroke="currentColor" stroke-width="2" />
+          <circle cx="19" cy="18" r="2" stroke="currentColor" stroke-width="2" />
+        </g>
+
+        <!-- AI Sparkle / Assistant -->
+        <g *ngSwitchCase="'ai_sparkle'">
+          <path
+            d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
+            fill="currentColor"
+            opacity="0.95"
+          />
+          <path
+            d="M19 2L19.75 4.25L22 5L19.75 5.75L19 8L18.25 5.75L16 5L18.25 4.25L19 2Z"
+            fill="currentColor"
+            opacity="0.7"
+          />
+          <path
+            d="M5 16L5.6 17.9L7.5 18.5L5.6 19.1L5 21L4.4 19.1L2.5 18.5L4.4 17.9L5 16Z"
+            fill="currentColor"
+            opacity="0.55"
+          />
+        </g>
+
+        <!-- Send -->
+        <g *ngSwitchCase="'send'">
+          <path
+            d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
+        <!-- Minimize / Expand Down -->
+        <g *ngSwitchCase="'expand_down'">
+          <path
+            d="M6 9l6 6 6-6"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+
         <!-- Default fallback — renders a visible question mark so missing icons are obvious -->
         <g *ngSwitchDefault>
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />

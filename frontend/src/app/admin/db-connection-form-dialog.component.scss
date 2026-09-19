@@ -1,287 +1,167 @@
+// DB Connection Form Dialog - Same style as Pipeline Configuration
 .db-connection-form-dialog {
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: 90vh;
-  background: linear-gradient(135deg, rgba(0, 20, 40, 0.5) 0%, rgba(0, 10, 20, 0.3) 100%);
-  border: 1px solid rgba(0, 212, 255, 0.1);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
+  background: linear-gradient(135deg, rgba(120, 160, 240, 0.08) 0%, rgba(80, 200, 160, 0.08) 100%);
 
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-
-  h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    font-weight: 500;
-    color: var(--text-primary);
-  }
-
-  .close-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
+  .dialog-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    transition: all 0.2s ease;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(120, 160, 240, 0.2);
+    background: rgba(120, 160, 240, 0.05);
+    backdrop-filter: blur(10px);
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-primary);
-    }
-  }
-}
-
-.form-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-section {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-
-  legend {
-    font-size: 0.9rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-secondary);
-    margin-bottom: 0.5rem;
-    padding: 0;
-  }
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-
-  @media (max-width: 600px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-
-  label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  input,
-  select {
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    color: var(--text-primary);
-    font-size: 0.9rem;
-    font-family: inherit;
-    transition: all 0.2s ease;
-
-    &::placeholder {
-      color: var(--text-tertiary);
+    h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
     }
 
-    &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
+    .close-btn {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      transition: color 0.2s ease;
 
-    &:focus {
-      outline: none;
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(0, 212, 255, 0.3);
-      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    &.ng-invalid.ng-touched {
-      border-color: rgba(255, 59, 48, 0.3);
-      background: rgba(255, 59, 48, 0.05);
-
-      &:focus {
-        border-color: rgba(255, 59, 48, 0.5);
-        box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1);
+      &:hover {
+        color: white;
       }
     }
   }
 
-  select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffffff' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 1.5rem;
-    padding-right: 2.5rem;
-  }
-
-  .help-text {
-    margin: 0;
-    font-size: 0.75rem;
-    color: var(--text-tertiary);
-  }
-
-  .error-message {
-    font-size: 0.8rem;
-    color: #ff3b30;
-    margin: 0;
-  }
-}
-
-.form-wide {
-  grid-column: 1 / -1;
-}
-
-.password-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-
-  input {
+  .form-content {
     flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
   }
 
-  .show-password-btn {
-    position: absolute;
-    right: 1rem;
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
+  .form-section {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: rgba(120, 160, 240, 0.08);
+    border: 1px solid rgba(120, 160, 240, 0.15);
+    border-radius: 8px;
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-primary);
+    legend {
+      font-size: 1rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 0.5rem 0;
+      padding: 0;
     }
   }
-}
 
-.checkbox-group {
-  label.checkbox-label {
-    flex-direction: row;
-    align-items: center;
-    gap: 0.75rem;
-    font-weight: 400;
-    cursor: pointer;
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
 
-    input {
-      width: 1.2rem;
-      height: 1.2rem;
+    @media (max-width: 600px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .form-wide {
+    grid-column: 1 / -1;
+  }
+
+  .checkbox-group {
+    label.checkbox-label {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 400;
       cursor: pointer;
-      accent-color: #00d4ff;
+
+      input {
+        width: 1.2rem;
+        height: 1.2rem;
+        cursor: pointer;
+        accent-color: #78a0f0;
+
+        &:disabled {
+          cursor: not-allowed;
+        }
+      }
+
+      span {
+        margin: 0;
+      }
+    }
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem;
+    border-top: 1px solid rgba(120, 160, 240, 0.2);
+    background: rgba(120, 160, 240, 0.05);
+    backdrop-filter: blur(10px);
+    justify-content: flex-end;
+    flex-shrink: 0;
+
+    .spacer {
+      flex: 1;
+    }
+
+    button {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 120px;
+      justify-content: center;
 
       &:disabled {
+        opacity: 0.5;
         cursor: not-allowed;
       }
     }
 
-    span {
-      margin: 0;
-    }
-  }
-}
+    .glass-btn {
+      &.primary {
+        background: linear-gradient(135deg, #78a0f0 0%, #50c8a0 100%);
+        color: white;
+        font-weight: 600;
 
-.form-actions {
-  display: flex;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 0 0 12px 12px;
-  justify-content: flex-end;
-  flex-shrink: 0;
+        &:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(120, 160, 240, 0.3);
+        }
 
-  .spacer {
-    flex: 1;
-  }
-
-  button {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 120px;
-    justify-content: center;
-
-    app-glass-icon {
-      font-size: 1rem;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  .glass-btn {
-    &.primary {
-      background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
-      color: #000;
-      font-weight: 600;
-
-      &:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+        &:active:not(:disabled) {
+          transform: translateY(0);
+        }
       }
 
-      &:active:not(:disabled) {
-        transform: translateY(0);
-      }
-    }
+      &.secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
 
-    &.secondary {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-primary);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-
-      &:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: rgba(255, 255, 255, 0.3);
+        &:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.3);
+        }
       }
     }
   }
@@ -291,80 +171,46 @@
 :host-context(body.light-theme) {
   .db-connection-form-dialog {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
-    border-color: rgba(15, 23, 42, 0.12);
-  }
 
-  .dialog-header {
-    border-bottom-color: rgba(15, 23, 42, 0.08);
+    .dialog-header {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-bottom-color: rgba(15, 23, 42, 0.08);
 
-    h2 {
-      color: #0f172a;
-    }
-
-    .close-btn {
-      color: #334155;
-
-      &:hover {
-        background: rgba(15, 23, 42, 0.08);
+      h2 {
         color: #0f172a;
       }
-    }
-  }
 
-  .form-section legend {
-    color: #334155;
-  }
+      .close-btn {
+        color: #334155;
 
-  .form-group {
-    label {
-      color: #0f172a;
+        &:hover {
+          color: #0f172a;
+        }
+      }
     }
 
-    input,
-    select {
+    .form-section {
       background: rgba(241, 245, 249, 0.96);
-      border-color: rgba(15, 23, 42, 0.12);
-      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.08);
 
-      &::placeholder {
-        color: #94a3b8;
-      }
-
-      &:hover:not(:disabled) {
-        background: rgba(248, 250, 252, 0.98);
-        border-color: rgba(0, 212, 255, 0.3);
-      }
-
-      &:focus {
-        background: rgba(255, 255, 255, 1);
-        border-color: rgba(0, 212, 255, 0.5);
-        box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
-      }
-
-      &:disabled {
-        background: rgba(241, 245, 249, 0.5);
-        color: #94a3b8;
-      }
-
-      &.ng-invalid.ng-touched {
-        border-color: rgba(255, 59, 48, 0.3);
-        background: rgba(255, 59, 48, 0.05);
+      legend {
+        color: #334155;
       }
     }
-  }
 
-  .form-actions {
-    background: linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
-    border-top-color: rgba(15, 23, 42, 0.08);
+    .form-actions {
+      background: linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+      border-top-color: rgba(15, 23, 42, 0.08);
 
-    .glass-btn.secondary {
-      background: rgba(241, 245, 249, 0.96);
-      color: #334155;
-      border-color: rgba(15, 23, 42, 0.12);
+      .glass-btn.secondary {
+        background: rgba(241, 245, 249, 0.96);
+        color: #334155;
+        border-color: rgba(15, 23, 42, 0.12);
 
-      &:hover:not(:disabled) {
-        background: rgba(226, 232, 240, 0.98);
-        border-color: rgba(15, 23, 42, 0.2);
+        &:hover:not(:disabled) {
+          background: rgba(226, 232, 240, 0.98);
+          border-color: rgba(15, 23, 42, 0.2);
+        }
       }
     }
   }
@@ -373,7 +219,7 @@
 /* Scrollbar styling for form content */
 .form-content {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.3) transparent;
+  scrollbar-color: rgba(120, 160, 240, 0.3) transparent;
 
   &::-webkit-scrollbar {
     width: 8px;
@@ -384,11 +230,11 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 212, 255, 0.3);
+    background: rgba(120, 160, 240, 0.3);
     border-radius: 4px;
 
     &:hover {
-      background: rgba(0, 212, 255, 0.5);
+      background: rgba(120, 160, 240, 0.5);
     }
   }
 }

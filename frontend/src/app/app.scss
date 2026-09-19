@@ -276,7 +276,7 @@
   }
 }
 
-body.light-theme {
+:host-context(body.light-theme) {
   .nav-submenu-panel {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
     border: 1px solid rgba(15, 23, 42, 0.12);
@@ -316,7 +316,7 @@ body.light-theme {
   }
 }
 
-body.light-theme {
+:host-context(body.light-theme) {
   .user-info-display {
     border-color: rgba(15, 23, 42, 0.15);
     background: rgba(248, 250, 252, 0.9);
@@ -343,7 +343,7 @@ body.light-theme {
   }
 }
 
-body.light-theme {
+:host-context(body.light-theme) {
   .hub-header {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.93) 100%);
     border-bottom-color: rgba(15, 23, 42, 0.1);
