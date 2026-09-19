@@ -307,6 +307,8 @@ export interface SenderOption {
   name: string;
   port?: number | null;
   portSource?: 'dtp_sender' | 'yaml_fallback' | string | null;
+  source?: 'database' | 'yaml' | 'oracle' | string | null;
+  verified?: boolean | null;
 }
 
 export interface LimitsConfig {

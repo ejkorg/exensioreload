@@ -215,13 +215,23 @@ public interface ConfigurationService {
 
     /**
      * DTO representing a sender option for Step 1 UI.
+     * source: where the candidate came from — "database" (admin config_pipeline),
+     * "yaml" (etljobs.yml fallback), "oracle" (confirmed live in the third-party
+     * Oracle DTP_SENDER table).
+     * verified: true when the senderId was found in DTP_SENDER on the site's
+     * Oracle connection. Step 1 auto-selects only verified senders.
      */
     record SenderOption(
         Integer senderId,
         Integer port,
         String name,
-        String source  // "database" or "yaml"
-    ) {}
+        String source,
+        Boolean verified
+    ) {
+        public SenderOption(Integer senderId, Integer port, String name, String source) {
+            this(senderId, port, name, source, Boolean.FALSE);
+        }
+    }
 
     /**
      * DTO representing the health status of the configuration source.

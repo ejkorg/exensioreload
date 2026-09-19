@@ -69,7 +69,8 @@ export interface SenderOption {
   senderId: number;
   port: number;
   name: string;
-  source?: string; // 'DATABASE' or 'YAML'
+  source?: string; // 'database' | 'yaml' | 'oracle'
+  verified?: boolean; // true when confirmed live in Oracle DTP_SENDER
 }
 
 export interface ConfigDbConnection {

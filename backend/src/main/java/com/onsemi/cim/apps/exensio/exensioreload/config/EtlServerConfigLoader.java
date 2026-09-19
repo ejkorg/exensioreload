@@ -3,10 +3,15 @@ package com.onsemi.cim.apps.exensio.exensioreload.config;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
+
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigEtlServer;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigEtlServerRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.service.PasswordEncryptionService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -16,7 +21,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Loads ETL / DataPort SSH server definitions from {@code classpath:etlservers.yml}.
+ * ETL / DataPort SSH server definitions. Resolution order is admin DB
+ * (config_etl_server) first, {@code classpath:etlservers.yml} as fallback.
  */
 @Component
 public class EtlServerConfigLoader {
@@ -27,6 +33,24 @@ public class EtlServerConfigLoader {
     private final List<EtlServerConfig> configs = new ArrayList<>();
     private volatile boolean loaded = false;
     private String loadError;
+
+    /**
+     * Admin-maintained servers (config_etl_server table) take priority over the
+     * YAML list. Optional so the loader keeps working YAML-only when JPA is
+     * unavailable (e.g. unit tests using the no-arg constructor).
+     */
+    private ConfigEtlServerRepository serverRepository;
+    private PasswordEncryptionService encryptionService;
+
+    @Autowired(required = false)
+    public void setServerRepository(ConfigEtlServerRepository serverRepository) {
+        this.serverRepository = serverRepository;
+    }
+
+    @Autowired(required = false)
+    public void setEncryptionService(PasswordEncryptionService encryptionService) {
+        this.encryptionService = encryptionService;
+    }
 
     @PostConstruct
     public void init() {
@@ -39,14 +63,26 @@ public class EtlServerConfigLoader {
         }
     }
 
+    /**
+     * All known servers: admin DB rows first, YAML entries merged in for names
+     * the DB does not define.
+     */
     public List<EtlServerConfig> getConfigs() {
         ensureLoaded();
-        return List.copyOf(configs);
+        Map<String, EtlServerConfig> merged = new LinkedHashMap<>();
+        for (EtlServerConfig cfg : findAllDbServers()) {
+            merged.put(cfg.getName().trim().toUpperCase(Locale.ROOT), cfg);
+        }
+        for (EtlServerConfig cfg : configs) {
+            merged.putIfAbsent(cfg.getName().trim().toUpperCase(Locale.ROOT), cfg);
+        }
+        return List.copyOf(merged.values());
     }
 
     /**
-     * Returns servers whose YAML key matches the staging {@code site} (e.g. site {@code CEBU} → {@code CEBU-PROD}).
-     * If nothing matches, returns all loaded servers so callers can still attempt SSH.
+     * Returns servers whose key matches the staging {@code site} (e.g. site {@code CEBU} → {@code CEBU-PROD}).
+     * Searches admin DB rows first, YAML entries second. If nothing matches,
+     * returns all loaded servers so callers can still attempt SSH.
      */
     public List<EtlServerConfig> getConfigsForSite(String site) {
         ensureLoaded();
@@ -54,13 +90,14 @@ public class EtlServerConfigLoader {
             return getConfigs();
         }
         String normalizedSite = site.trim().toUpperCase(Locale.ROOT);
-        List<EtlServerConfig> matched = configs.stream()
+        List<EtlServerConfig> all = getConfigs();
+        List<EtlServerConfig> matched = all.stream()
                 .filter(c -> serverMatchesSite(c.getName(), normalizedSite))
                 .toList();
         if (matched.isEmpty()) {
-            log.debug("No etlservers.yml entry matched site '{}'; using all {} configured server(s)",
-                    site, configs.size());
-            return getConfigs();
+            log.debug("No etlservers entry matched site '{}'; using all {} configured server(s)",
+                    site, all.size());
+            return all;
         }
         return matched;
     }
@@ -70,8 +107,14 @@ public class EtlServerConfigLoader {
         if (name == null || name.isBlank()) {
             return null;
         }
+        String normalized = name.trim();
+        for (EtlServerConfig c : findAllDbServers()) {
+            if (c.getName().equalsIgnoreCase(normalized)) {
+                return c;
+            }
+        }
         for (EtlServerConfig c : configs) {
-            if (c.getName().equalsIgnoreCase(name.trim())) {
+            if (c.getName().equalsIgnoreCase(normalized)) {
                 return c;
             }
         }
@@ -80,7 +123,7 @@ public class EtlServerConfigLoader {
 
     public boolean hasConfigs() {
         ensureLoaded();
-        return !configs.isEmpty();
+        return !getConfigs().isEmpty();
     }
 
     public String getLoadError() {
@@ -192,6 +235,48 @@ public class EtlServerConfigLoader {
             }
 
             configs.add(config);
+        }
+    }
+
+    /**
+     * Admin DB helpers — guarded so a missing/unavailable repository simply
+     * yields "no DB rows" and the loader behaves YAML-only.
+     */
+    private List<EtlServerConfig> findAllDbServers() {
+        if (serverRepository == null) return List.of();
+        try {
+            List<ConfigEtlServer> rows = serverRepository.findAll();
+            if (rows == null || rows.isEmpty()) return List.of();
+            List<EtlServerConfig> out = new ArrayList<>();
+            for (ConfigEtlServer row : rows) {
+                if (row == null || row.getServerKey() == null || row.getHost() == null
+                        || row.getHost().isBlank()) {
+                    continue;
+                }
+                EtlServerConfig cfg = new EtlServerConfig();
+                cfg.setName(row.getServerKey());
+                cfg.setHost(row.getHost());
+                cfg.setSshPort(row.getSshPort());
+                cfg.setSocketPort(row.getSocketPort());
+                cfg.setUser(row.getUser());
+                cfg.setPassword(decryptQuietly(row.getEncryptedPassword()));
+                cfg.setTimeoutMs(row.getTimeoutMs());
+                out.add(cfg);
+            }
+            return out;
+        } catch (Exception ex) {
+            log.debug("Admin DB ETL server list failed: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private String decryptQuietly(String encrypted) {
+        if (encrypted == null) return null;
+        if (encryptionService == null) return encrypted;
+        try {
+            return encryptionService.decrypt(encrypted);
+        } catch (Exception ignored) {
+            return encrypted;
         }
     }
 

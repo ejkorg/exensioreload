@@ -5,9 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigDbConnection;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigDbConnectionRepository;
+import com.onsemi.cim.apps.exensio.exensioreload.service.PasswordEncryptionService;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -21,8 +25,11 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,6 +43,24 @@ public class ExternalDbConfig {
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
     private final Map<String, Map<String, Object>> dbConnections;
     private final ConcurrentMap<String, HikariDataSource> dsCache = new ConcurrentHashMap<>();
+
+    /**
+     * Admin-maintained connections (config_db_connection table) take priority over the
+     * YAML fallback map. Both are optional and wired with required=false so this low-level
+     * config bean never fails startup when JPA is unavailable (e.g. unit tests).
+     */
+    private ConfigDbConnectionRepository connectionRepository;
+    private PasswordEncryptionService encryptionService;
+
+    @Autowired(required = false)
+    public void setConnectionRepository(ConfigDbConnectionRepository connectionRepository) {
+        this.connectionRepository = connectionRepository;
+    }
+
+    @Autowired(required = false)
+    public void setEncryptionService(PasswordEncryptionService encryptionService) {
+        this.encryptionService = encryptionService;
+    }
 
     public ExternalDbConfig(Environment env) throws IOException {
         this.env = env;
@@ -144,7 +169,21 @@ public class ExternalDbConfig {
     }
 
     public Set<String> getConfiguredKeys() {
-        return Collections.unmodifiableSet(dbConnections.keySet());
+        Set<String> keys = new HashSet<>(dbConnections.keySet());
+        if (connectionRepository != null) {
+            try {
+                List<ConfigDbConnection> rows = connectionRepository.findAll();
+                if (rows != null) {
+                    for (ConfigDbConnection row : rows) {
+                        if (row != null && row.getConnectionKey() != null) {
+                            keys.add(row.getConnectionKey().trim().toUpperCase(Locale.ROOT));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return Collections.unmodifiableSet(keys);
     }
 
     public void recreatePool(String resolvedKey) {
@@ -162,10 +201,19 @@ public class ExternalDbConfig {
         return getConfigForSite(site, null);
     }
 
+    /**
+     * Resolution order: admin DB (config_db_connection) first, YAML fallback second.
+     * DB rows are stored per connection key, so the site lookup tries the
+     * SITE-ENV key, then a row whose key equals the site, then a startsWith match —
+     * mirroring the YAML key layout.
+     */
     public Map<String, Object> getConfigForSite(String site, String environment) {
         if (site == null || site.isBlank()) return null;
         String s = site.trim().toUpperCase(Locale.ROOT);
         String envPart = (environment == null || environment.isBlank()) ? "QA" : environment.trim().toUpperCase(Locale.ROOT);
+
+        Map<String, Object> fromDb = getDbConfigForSite(s, envPart);
+        if (fromDb != null) return fromDb;
 
         if (dbConnections.containsKey(s)) {
             Map<String, Object> direct = dbConnections.get(s);
@@ -196,7 +244,93 @@ public class ExternalDbConfig {
 
     public Map<String, Object> getConfigByKey(String key) {
         if (key == null || key.isBlank()) return null;
+        Map<String, Object> fromDb = getDbConfigByKey(key.trim().toUpperCase(Locale.ROOT));
+        if (fromDb != null) return fromDb;
         return dbConnections.get(key.trim().toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Admin-DB lookup for a site+environment, returning the YAML-shaped map
+     * ExternalDbConfig consumers expect (host/user/password/dbType/hikari/downloadUrl).
+     */
+    private Map<String, Object> getDbConfigForSite(String normalizedSite, String envPart) {
+        if (connectionRepository == null) return null;
+        try {
+            String siteEnvKey = normalizedSite + "-" + envPart;
+            Optional<ConfigDbConnection> exact = safeFindByKey(siteEnvKey);
+            if (exact.isPresent() && matchesEnv(exact.get(), envPart)) {
+                return toConfigMap(exact.get());
+            }
+            Optional<ConfigDbConnection> bySite = safeFindByKey(normalizedSite);
+            if (bySite.isPresent() && matchesEnv(bySite.get(), envPart)) {
+                return toConfigMap(bySite.get());
+            }
+            List<ConfigDbConnection> envRows;
+            try {
+                envRows = connectionRepository.findByEnvironment(envPart);
+            } catch (Exception ignored) {
+                return null;
+            }
+            if (envRows != null) {
+                for (ConfigDbConnection row : envRows) {
+                    if (row != null && row.getConnectionKey() != null
+                            && row.getConnectionKey().trim().toUpperCase(Locale.ROOT).startsWith(normalizedSite + "-" + envPart)) {
+                        return toConfigMap(row);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private Map<String, Object> getDbConfigByKey(String normalizedKey) {
+        if (connectionRepository == null) return null;
+        try {
+            Optional<ConfigDbConnection> row = safeFindByKey(normalizedKey);
+            return row.map(this::toConfigMap).orElse(null);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Optional<ConfigDbConnection> safeFindByKey(String key) {
+        try {
+            return connectionRepository.findByConnectionKey(key);
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private boolean matchesEnv(ConfigDbConnection row, String envPart) {
+        if (row.getEnvironment() == null) return true;
+        return row.getEnvironment().trim().equalsIgnoreCase(envPart);
+    }
+
+    private Map<String, Object> toConfigMap(ConfigDbConnection row) {
+        Map<String, Object> cfg = new HashMap<>();
+        cfg.put("host", row.getHost());
+        cfg.put("user", row.getUser());
+        cfg.put("password", decryptQuietly(row.getEncryptedPassword()));
+        cfg.put("dbType", row.getDbType() == null ? "ORACLE" : row.getDbType().name());
+        cfg.put("schema", row.getSchema());
+        if (row.getDownloadUrl() != null) cfg.put("downloadUrl", row.getDownloadUrl());
+        Map<String, Object> hikari = new HashMap<>();
+        hikari.put("connectionTimeoutMs", row.getConnectionTimeoutMs());
+        hikari.put("maximumPoolSize", row.getMaximumPoolSize());
+        hikari.put("minimumIdle", row.getMinimumIdle());
+        cfg.put("hikari", hikari);
+        return cfg;
+    }
+
+    private String decryptQuietly(String encrypted) {
+        if (encrypted == null) return null;
+        if (encryptionService == null) return encrypted;
+        try {
+            return encryptionService.decrypt(encrypted);
+        } catch (Exception ignored) {
+            return encrypted;
+        }
     }
 
     public Connection getConnectionByKey(String key, String environment) throws SQLException {

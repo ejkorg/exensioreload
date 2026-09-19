@@ -306,7 +306,9 @@ export class GlassSenderSelectorComponent {
       const id = opt.idSender ?? opt.id;
       const baseName = opt.name || `Sender #${id}`;
       const portText = opt.port ? ` (Port: ${opt.port})` : '';
-      const sourceText = (opt as any).source ? ` [${(opt as any).source}]` : '';
+      const source = (opt as any).source ?? opt.source ?? null;
+      const verified = (opt as any).verified === true || source === 'oracle';
+      const sourceText = source ? ` [${source}${verified ? ' · verified' : ''}]` : '';
       return {
         value: id,
         label: `${baseName}${portText}${sourceText}`,

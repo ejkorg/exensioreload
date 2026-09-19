@@ -24,6 +24,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
+import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigPipeline;
+import com.onsemi.cim.apps.exensio.exensioreload.repository.ConfigPipelineRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Loads and parses pipeline configurations from etljobs.yml (with backward-compatible
@@ -48,8 +51,20 @@ public class PipelineConfigLoader {
     private final Map<String, PipelineConfig> pipelinesByKey = new ConcurrentHashMap<>();
     private final Map<String, List<PipelineConfig>> pipelinesBySite = new ConcurrentHashMap<>();
 
+    /**
+     * Admin-maintained pipelines (config_pipeline table) take priority over the
+     * YAML maps. Optional so the loader keeps working with YAML only when JPA
+     * is unavailable (e.g. unit tests using the single-arg constructor).
+     */
+    private ConfigPipelineRepository pipelineRepository;
+
     public PipelineConfigLoader(ExternalDbConfig externalDbConfig) {
         this.externalDbConfig = externalDbConfig;
+    }
+
+    @Autowired(required = false)
+    public void setPipelineRepository(ConfigPipelineRepository pipelineRepository) {
+        this.pipelineRepository = pipelineRepository;
     }
 
     @PostConstruct
@@ -102,28 +117,64 @@ public class PipelineConfigLoader {
         }
     }
 
+    /**
+     * All known pipelines: admin DB rows first, YAML entries merged in for keys
+     * the DB does not define.
+     */
     public List<PipelineConfig> getAllPipelines() {
-        return List.copyOf(pipelinesByKey.values());
+        Map<String, PipelineConfig> merged = new LinkedHashMap<>();
+        for (ConfigPipeline row : findAllDbPipelines()) {
+            try {
+                PipelineConfig cfg = toPipelineConfig(row);
+                merged.put(cfg.pipelineKey().toUpperCase(Locale.ROOT), cfg);
+            } catch (Exception ex) {
+                log.warn("Skipping admin DB pipeline '{}': {}", row.getPipelineKey(), ex.getMessage());
+            }
+        }
+        for (PipelineConfig cfg : pipelinesByKey.values()) {
+            merged.putIfAbsent(cfg.pipelineKey().toUpperCase(Locale.ROOT), cfg);
+        }
+        return List.copyOf(merged.values());
     }
 
     public Optional<PipelineConfig> getPipeline(String pipelineKey) {
         if (pipelineKey == null || pipelineKey.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(pipelinesByKey.get(pipelineKey.trim().toUpperCase(Locale.ROOT)));
+        String normalized = pipelineKey.trim().toUpperCase(Locale.ROOT);
+        Optional<PipelineConfig> fromDb = findDbPipeline(normalized);
+        if (fromDb.isPresent()) {
+            return fromDb;
+        }
+        return Optional.ofNullable(pipelinesByKey.get(normalized));
     }
 
     public List<PipelineConfig> getPipelinesForSite(String site) {
         if (site == null || site.isBlank()) {
             return Collections.emptyList();
         }
-        List<PipelineConfig> list = pipelinesBySite.get(site.trim().toUpperCase(Locale.ROOT));
-        return list != null ? List.copyOf(list) : Collections.emptyList();
+        Map<String, PipelineConfig> merged = new LinkedHashMap<>();
+        String normalizedSite = site.trim().toUpperCase(Locale.ROOT);
+        for (ConfigPipeline row : findDbPipelinesForSite(normalizedSite)) {
+            try {
+                PipelineConfig cfg = toPipelineConfig(row);
+                merged.put(cfg.pipelineKey().toUpperCase(Locale.ROOT), cfg);
+            } catch (Exception ex) {
+                log.warn("Skipping admin DB pipeline '{}': {}", row.getPipelineKey(), ex.getMessage());
+            }
+        }
+        List<PipelineConfig> yamlList = pipelinesBySite.get(normalizedSite);
+        if (yamlList != null) {
+            for (PipelineConfig cfg : yamlList) {
+                merged.putIfAbsent(cfg.pipelineKey().toUpperCase(Locale.ROOT), cfg);
+            }
+        }
+        return List.copyOf(merged.values());
     }
 
     /**
-     * Load pipeline configuration for a specific site. Checks etljobs.yml first,
-     * then falls back to dbconnections.yml.
+     * Load pipeline configuration for a specific site. Checks the admin DB first,
+     * then etljobs.yml, then falls back to dbconnections.yml.
      */
     public Optional<PipelineConfig> loadPipelineConfig(String site) throws PipelineConfigException {
         if (site == null || site.isBlank()) {
@@ -131,6 +182,18 @@ public class PipelineConfigLoader {
         }
 
         String normalizedSite = site.trim().toUpperCase(Locale.ROOT);
+        List<PipelineConfig> dbPipelines = new ArrayList<>();
+        for (ConfigPipeline row : findDbPipelinesForSite(normalizedSite)) {
+            try {
+                dbPipelines.add(toPipelineConfig(row));
+            } catch (Exception ex) {
+                log.warn("Skipping admin DB pipeline '{}': {}", row.getPipelineKey(), ex.getMessage());
+            }
+        }
+        if (!dbPipelines.isEmpty()) {
+            return Optional.of(dbPipelines.get(0));
+        }
+
         List<PipelineConfig> sitePipelines = pipelinesBySite.get(normalizedSite);
         if (sitePipelines != null && !sitePipelines.isEmpty()) {
             return Optional.of(sitePipelines.get(0));
@@ -404,6 +467,96 @@ public class PipelineConfigLoader {
             names.add(type.name());
         }
         return names;
+    }
+
+    /**
+     * Admin DB helpers — all guarded so a missing/unavailable repository simply
+     * yields "no DB rows" and the loader behaves YAML-only.
+     */
+    private Optional<PipelineConfig> findDbPipeline(String normalizedKey) {
+        if (pipelineRepository == null) return Optional.empty();
+        try {
+            Optional<ConfigPipeline> row = pipelineRepository.findByPipelineKey(normalizedKey);
+            if (row.isEmpty()) return Optional.empty();
+            return Optional.of(toPipelineConfig(row.get()));
+        } catch (Exception ex) {
+            log.debug("Admin DB pipeline lookup failed for '{}': {}", normalizedKey, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private List<ConfigPipeline> findAllDbPipelines() {
+        if (pipelineRepository == null) return Collections.emptyList();
+        try {
+            List<ConfigPipeline> rows = pipelineRepository.findAll();
+            return rows == null ? Collections.emptyList() : rows;
+        } catch (Exception ex) {
+            log.debug("Admin DB pipeline list failed: {}", ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<ConfigPipeline> findDbPipelinesForSite(String normalizedSite) {
+        if (pipelineRepository == null) return Collections.emptyList();
+        List<ConfigPipeline> matches = new ArrayList<>();
+        for (ConfigPipeline row : findAllDbPipelines()) {
+            if (row.getSite() != null && row.getSite().trim().equalsIgnoreCase(normalizedSite)) {
+                matches.add(row);
+            }
+        }
+        return matches;
+    }
+
+    private PipelineConfig toPipelineConfig(ConfigPipeline row) throws PipelineConfigException {
+        String site = row.getSite() == null ? "" : row.getSite().trim().toUpperCase(Locale.ROOT);
+        if (site.isBlank()) {
+            throw new PipelineConfigException("Admin DB pipeline '" + row.getPipelineKey() + "' has blank site");
+        }
+        String pipelineKey = row.getPipelineKey() == null ? site + "-PIPELINE" : row.getPipelineKey().trim();
+        String server = row.getServer() == null || row.getServer().isBlank() ? site : row.getServer().trim();
+        String configName = row.getConfigName() == null ? "" : row.getConfigName();
+
+        List<com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigPipelineStage> dbStages = row.getStages();
+        if (dbStages == null || dbStages.isEmpty()) {
+            throw new PipelineConfigException("Admin DB pipeline '" + pipelineKey + "' has no stages");
+        }
+
+        List<StageDefinition> stages = new ArrayList<>();
+        Map<String, StageDefinition> stagesByName = new LinkedHashMap<>();
+        List<com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigPipelineStage> ordered =
+            new ArrayList<>(dbStages);
+        ordered.sort(java.util.Comparator.comparing(
+            s -> s.getExecutionOrder() == null ? Integer.MAX_VALUE : s.getExecutionOrder()));
+        for (com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigPipelineStage dbStage : ordered) {
+            StageDefinition stageDef = new StageDefinition(
+                dbStage.getName(),
+                toPipelineStageType(dbStage.getType()),
+                dbStage.getDependsOn() == null ? List.of() : List.copyOf(dbStage.getDependsOn()),
+                Collections.emptyMap());
+            if (stagesByName.containsKey(stageDef.name())) {
+                throw new PipelineConfigException("Duplicate stage name '" + stageDef.name()
+                    + "' in admin DB pipeline '" + pipelineKey + "'");
+            }
+            stages.add(stageDef);
+            stagesByName.put(stageDef.name(), stageDef);
+        }
+
+        PipelineConfig config = new PipelineConfig(pipelineKey, site, server, row.getSocketPort(), configName,
+            row.getSenderId(), row.getRerunPeriodMinutes(), stages, stagesByName);
+        validatePipelineConfig(config);
+        return config;
+    }
+
+    private StageType toPipelineStageType(com.onsemi.cim.apps.exensio.exensioreload.entity.StageType dbType)
+            throws PipelineConfigException {
+        if (dbType == null) {
+            throw new PipelineConfigException("Admin DB stage has null type");
+        }
+        try {
+            return StageType.valueOf(dbType.name());
+        } catch (IllegalArgumentException e) {
+            throw new PipelineConfigException("Admin DB stage has unsupported type '" + dbType + "'", e);
+        }
     }
 
     private String getString(Map<String, Object> map, String key, String defaultValue) {

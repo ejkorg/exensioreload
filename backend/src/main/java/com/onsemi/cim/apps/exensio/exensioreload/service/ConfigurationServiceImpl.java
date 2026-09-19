@@ -2,6 +2,7 @@ package com.onsemi.cim.apps.exensio.exensioreload.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.onsemi.cim.apps.exensio.exensioreload.config.ExternalDbConfig;
 import com.onsemi.cim.apps.exensio.exensioreload.config.YamlConfigLoader;
 import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigDbConnection;
 import com.onsemi.cim.apps.exensio.exensioreload.entity.ConfigEtlServer;
@@ -38,6 +39,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     private final PasswordEncryptionService encryptionService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final ExternalDbConfig externalDbConfig;
 
     // Caffeine caches with 1 hour TTL and max 1000 entries
     private Cache<String, ConfigPipeline> pipelineCache;
@@ -54,7 +56,8 @@ public class ConfigurationServiceImpl implements ConfigurationService {
                                    YamlConfigLoader yamlConfigLoader,
                                    PasswordEncryptionService encryptionService,
                                    AuditService auditService,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   @Autowired(required = false) ExternalDbConfig externalDbConfig) {
         this.pipelineRepository = pipelineRepository;
         this.serverRepository = serverRepository;
         this.connectionRepository = connectionRepository;
@@ -62,6 +65,7 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         this.encryptionService = encryptionService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.externalDbConfig = externalDbConfig;
         this.initializeCaches();
     }
 
@@ -89,14 +93,32 @@ public class ConfigurationServiceImpl implements ConfigurationService {
 
     // ==================== Pipeline Operations ====================
 
+    /**
+     * DB-first list: DB rows win; when the DB query succeeds but returns nothing
+     * (fresh install, no admin setups yet), merge in the YAML definitions so the
+     * Step 1 dropdowns still work.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ConfigPipeline> getAllPipelines(String environment) {
         try {
-            if (environment == null || environment.isEmpty()) {
-                return pipelineRepository.findAll();
+            Map<String, ConfigPipeline> merged = new LinkedHashMap<>();
+            List<ConfigPipeline> dbRows = (environment == null || environment.isEmpty())
+                ? pipelineRepository.findAll()
+                : pipelineRepository.findByEnvironment(environment);
+            if (dbRows != null) {
+                for (ConfigPipeline p : dbRows) {
+                    if (p != null && p.getPipelineKey() != null) merged.put(p.getPipelineKey(), p);
+                }
             }
-            return pipelineRepository.findByEnvironment(environment);
+            for (ConfigPipeline p : yamlConfigLoader.loadAllPipelinesFromYaml()) {
+                if (environment != null && !environment.isEmpty() && !environment.equals(p.getEnvironment())) continue;
+                merged.putIfAbsent(p.getPipelineKey(), p);
+            }
+            if (merged.size() > (dbRows == null ? 0 : dbRows.size())) {
+                usingYamlFallback = true;
+            }
+            return new ArrayList<>(merged.values());
         } catch (Exception e) {
             log.warn("Error loading pipelines from database for environment {}, falling back to YAML", environment, e);
             usingYamlFallback = true;
@@ -110,18 +132,29 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     @Transactional(readOnly = true)
     public List<ConfigPipeline> getPipelinesBySite(String site, String environment, Boolean historicalMode) {
         try {
-            List<ConfigPipeline> pipelines;
+            Map<String, ConfigPipeline> merged = new LinkedHashMap<>();
 
             if (historicalMode == null) {
                 // Return all pipelines for the site and environment
-                pipelines = pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, true);
-                pipelines.addAll(pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, false));
+                for (ConfigPipeline p : pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, true)) {
+                    if (p != null && p.getPipelineKey() != null) merged.put(p.getPipelineKey(), p);
+                }
+                for (ConfigPipeline p : pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, false)) {
+                    if (p != null && p.getPipelineKey() != null) merged.put(p.getPipelineKey(), p);
+                }
             } else {
                 // Return pipelines filtered by historical mode
-                pipelines = pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, historicalMode);
+                for (ConfigPipeline p : pipelineRepository.findBySiteAndEnvironmentAndHistoricalModeEnabled(site, environment, historicalMode)) {
+                    if (p != null && p.getPipelineKey() != null) merged.put(p.getPipelineKey(), p);
+                }
             }
 
-            return pipelines;
+            for (ConfigPipeline p : yamlConfigLoader.loadAllPipelinesFromYaml()) {
+                if (!site.equals(p.getSite()) || !environment.equals(p.getEnvironment())) continue;
+                if (historicalMode != null && !historicalMode.equals(p.getHistoricalModeEnabled())) continue;
+                merged.putIfAbsent(p.getPipelineKey(), p);
+            }
+            return new ArrayList<>(merged.values());
         } catch (Exception e) {
             log.warn("Error loading pipelines for site {} from database, falling back to YAML", site, e);
             usingYamlFallback = true;
@@ -244,10 +277,23 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     @Transactional(readOnly = true)
     public List<ConfigEtlServer> getAllEtlServers(String environment) {
         try {
-            if (environment == null || environment.isEmpty()) {
-                return serverRepository.findAll();
+            Map<String, ConfigEtlServer> merged = new LinkedHashMap<>();
+            List<ConfigEtlServer> dbRows = (environment == null || environment.isEmpty())
+                ? serverRepository.findAll()
+                : serverRepository.findByEnvironment(environment);
+            if (dbRows != null) {
+                for (ConfigEtlServer s : dbRows) {
+                    if (s != null && s.getServerKey() != null) merged.put(s.getServerKey(), s);
+                }
             }
-            return serverRepository.findByEnvironment(environment);
+            for (ConfigEtlServer s : yamlConfigLoader.loadAllServersFromYaml()) {
+                if (environment != null && !environment.isEmpty() && !environment.equals(s.getEnvironment())) continue;
+                merged.putIfAbsent(s.getServerKey(), s);
+            }
+            if (merged.size() > (dbRows == null ? 0 : dbRows.size())) {
+                usingYamlFallback = true;
+            }
+            return new ArrayList<>(merged.values());
         } catch (Exception e) {
             log.warn("Error loading ETL servers from database for environment {}, falling back to YAML", environment, e);
             usingYamlFallback = true;
@@ -261,7 +307,18 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     @Transactional(readOnly = true)
     public List<ConfigEtlServer> getHistoricalEtlServers(String environment) {
         try {
-            return serverRepository.findByEnvironmentAndIsHistoricalSenderTrue(environment);
+            Map<String, ConfigEtlServer> merged = new LinkedHashMap<>();
+            List<ConfigEtlServer> dbRows = serverRepository.findByEnvironmentAndIsHistoricalSenderTrue(environment);
+            if (dbRows != null) {
+                for (ConfigEtlServer s : dbRows) {
+                    if (s != null && s.getServerKey() != null) merged.put(s.getServerKey(), s);
+                }
+            }
+            for (ConfigEtlServer s : yamlConfigLoader.loadAllServersFromYaml()) {
+                if (!environment.equals(s.getEnvironment()) || !Boolean.TRUE.equals(s.getIsHistoricalSender())) continue;
+                merged.putIfAbsent(s.getServerKey(), s);
+            }
+            return new ArrayList<>(merged.values());
         } catch (Exception e) {
             log.warn("Error loading historical ETL servers from database, falling back to YAML", e);
             usingYamlFallback = true;
@@ -395,10 +452,23 @@ public class ConfigurationServiceImpl implements ConfigurationService {
     @Transactional(readOnly = true)
     public List<ConfigDbConnection> getAllDbConnections(String environment) {
         try {
-            if (environment == null || environment.isEmpty()) {
-                return connectionRepository.findAll();
+            Map<String, ConfigDbConnection> merged = new LinkedHashMap<>();
+            List<ConfigDbConnection> dbRows = (environment == null || environment.isEmpty())
+                ? connectionRepository.findAll()
+                : connectionRepository.findByEnvironment(environment);
+            if (dbRows != null) {
+                for (ConfigDbConnection c : dbRows) {
+                    if (c != null && c.getConnectionKey() != null) merged.put(c.getConnectionKey(), c);
+                }
             }
-            return connectionRepository.findByEnvironment(environment);
+            for (ConfigDbConnection c : yamlConfigLoader.loadAllConnectionsFromYaml()) {
+                if (environment != null && !environment.isEmpty() && !environment.equals(c.getEnvironment())) continue;
+                merged.putIfAbsent(c.getConnectionKey(), c);
+            }
+            if (merged.size() > (dbRows == null ? 0 : dbRows.size())) {
+                usingYamlFallback = true;
+            }
+            return new ArrayList<>(merged.values());
         } catch (Exception e) {
             log.warn("Error loading DB connections from database for environment {}, falling back to YAML", environment, e);
             usingYamlFallback = true;
@@ -544,45 +614,138 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         return getSendersBySite(site, environment, null);
     }
 
+    /**
+     * Step 1 sender candidates, DB-first. Admin config_pipeline rows win; YAML rows
+     * fill gaps. Each candidate senderId is then checked against the site's
+     * third-party Oracle DTP_SENDER table — verified candidates carry
+     * source="oracle"+verified=true and are the only ones Step 1 auto-selects,
+     * so the data-flow pipeline always points at a sender the Oracle side knows.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SenderOption> getSendersBySite(String site, String environment, Boolean historicalMode) {
         List<SenderOption> senders = new ArrayList<>();
 
         // Get pipelines for the site with optional historical filtering
+        // (getPipelinesBySite already merges admin DB rows first, YAML fallback second)
         List<ConfigPipeline> pipelines = getPipelinesBySite(site, environment, historicalMode);
 
-        // Extract unique senders from pipelines
+        // Extract unique senders from pipelines, remembering whether the winning
+        // row came from the admin DB or the YAML fallback
+        Set<String> dbKeys = dbPipelineKeys();
         Set<Integer> seenSenders = new HashSet<>();
         for (ConfigPipeline pipeline : pipelines) {
-            if (!seenSenders.contains(pipeline.getSenderId())) {
-                senders.add(new SenderOption(
-                    pipeline.getSenderId(),
-                    pipeline.getSocketPort(),
-                    pipeline.getConfigName() != null ? pipeline.getConfigName() : "Pipeline-" + pipeline.getPipelineKey(),
-                    "database"
+            if (pipeline.getSenderId() == null || seenSenders.contains(pipeline.getSenderId())) {
+                continue;
+            }
+            String src = dbKeys.contains(pipeline.getPipelineKey()) ? "database" : "yaml";
+            senders.add(new SenderOption(
+                pipeline.getSenderId(),
+                pipeline.getSocketPort(),
+                pipeline.getConfigName() != null ? pipeline.getConfigName() : "Pipeline-" + pipeline.getPipelineKey(),
+                src
+            ));
+            seenSenders.add(pipeline.getSenderId());
+        }
+
+        // Confirm each candidate against Oracle DTP_SENDER on the site connection
+        List<SenderOption> confirmed = new ArrayList<>();
+        Map<Integer, OracleSender> oracleSenders = loadOracleSenders(site, environment);
+        for (SenderOption candidate : senders) {
+            OracleSender oracle = oracleSenders.get(candidate.senderId());
+            if (oracle != null) {
+                confirmed.add(new SenderOption(
+                    candidate.senderId(),
+                    oracle.port() != null ? oracle.port() : candidate.port(),
+                    oracle.name() != null && !oracle.name().isBlank() ? oracle.name() : candidate.name(),
+                    "oracle",
+                    Boolean.TRUE
                 ));
-                seenSenders.add(pipeline.getSenderId());
+            } else {
+                log.warn("Sender {} for site {} env {} not found in Oracle DTP_SENDER — offered unverified (source={})",
+                    candidate.senderId(), site, environment, candidate.source());
+                confirmed.add(candidate);
             }
         }
 
         // Sort by sender ID for consistency
-        senders.sort((a, b) -> a.senderId().compareTo(b.senderId()));
+        confirmed.sort((a, b) -> a.senderId().compareTo(b.senderId()));
 
-        return senders;
+        return confirmed;
     }
+
+    private Set<String> dbPipelineKeys() {
+        try {
+            List<ConfigPipeline> rows = pipelineRepository.findAll();
+            if (rows == null) return Set.of();
+            Set<String> keys = new HashSet<>();
+            for (ConfigPipeline row : rows) {
+                if (row != null && row.getPipelineKey() != null) keys.add(row.getPipelineKey());
+            }
+            return keys;
+        } catch (Exception e) {
+            return Set.of();
+        }
+    }
+
+    /**
+     * All sender ids (with live port/name) visible in the site's third-party
+     * Oracle DTP_* schema. Empty map = Oracle unreachable or no site connection,
+     * in which case every candidate stays unverified and Step 1 will not auto-select.
+     */
+    private Map<Integer, OracleSender> loadOracleSenders(String site, String environment) {
+        Map<Integer, OracleSender> out = new HashMap<>();
+        if (externalDbConfig == null || site == null || site.isBlank()) {
+            return out;
+        }
+        String[] tables = {"DATAPORT_OWNER.DTP_SENDER", "DTP_SENDER"};
+        try (java.sql.Connection conn = externalDbConfig.getConnection(site, environment)) {
+            if (conn == null) return out;
+            for (String table : tables) {
+                try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                        "SELECT id, name, port FROM " + table);
+                     java.sql.ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int id = rs.getInt("id");
+                        if (rs.wasNull()) continue;
+                        String name = null;
+                        try {
+                            name = rs.getString("name");
+                        } catch (Exception ignored) {
+                        }
+                        Integer port = null;
+                        try {
+                            int p = rs.getInt("port");
+                            if (!rs.wasNull() && p > 0) port = p;
+                        } catch (Exception ignored) {
+                        }
+                        out.putIfAbsent(id, new OracleSender(name, port));
+                    }
+                    if (!out.isEmpty()) return out;
+                } catch (Exception queryEx) {
+                    log.debug("Oracle sender scan missed table {} for site {}: {}", table, site, queryEx.getMessage());
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Oracle sender verification unavailable for site {} env {}: {}", site, environment, ex.getMessage());
+        }
+        return out;
+    }
+
+    private record OracleSender(String name, Integer port) {}
 
     // ==================== Validation ====================
 
     @Override
     public void validatePipeline(ConfigPipeline pipeline) {
-        // Check site exists in connections
-        if (!connectionRepository.existsByConnectionKey(pipeline.getSite())) {
+        // Check site exists in connections — admin DB first, YAML fallback second
+        // (a fresh install with no admin setups yet validates against the YAML files)
+        if (!connectionExists(pipeline.getSite())) {
             throw new ValidationException("Site '" + pipeline.getSite() + "' not found in database connections");
         }
 
-        // Check server exists
-        if (!serverRepository.existsByServerKey(pipeline.getServer())) {
+        // Check server exists — admin DB first, YAML fallback second
+        if (!serverExists(pipeline.getServer())) {
             throw new ValidationException("Server '" + pipeline.getServer() + "' not found in ETL servers");
         }
 
@@ -599,6 +762,43 @@ public class ConfigurationServiceImpl implements ConfigurationService {
         // Validate historical mode distinct sender ID
         if (Boolean.TRUE.equals(pipeline.getHistoricalModeEnabled())) {
             validateDistinctSenderForHistoricalPipeline(pipeline);
+        }
+    }
+
+    /**
+     * Admin DB first, YAML fallback: true when the site/server key is known in
+     * either source. Repository exceptions also fall through to YAML so a DB
+     * outage never blocks validation of YAML-defined setups.
+     */
+    private boolean connectionExists(String site) {
+        if (site == null || site.isBlank()) return false;
+        try {
+            if (connectionRepository.existsByConnectionKey(site)) return true;
+        } catch (Exception e) {
+            log.debug("DB connection existence check failed for '{}', trying YAML: {}", site, e.getMessage());
+        }
+        try {
+            return !yamlConfigLoader.loadAllConnectionsFromYaml().stream()
+                .filter(c -> site.equalsIgnoreCase(c.getConnectionKey()))
+                .toList().isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean serverExists(String server) {
+        if (server == null || server.isBlank()) return false;
+        try {
+            if (serverRepository.existsByServerKey(server)) return true;
+        } catch (Exception e) {
+            log.debug("ETL server existence check failed for '{}', trying YAML: {}", server, e.getMessage());
+        }
+        try {
+            return !yamlConfigLoader.loadAllServersFromYaml().stream()
+                .filter(s -> server.equalsIgnoreCase(s.getServerKey()))
+                .toList().isEmpty();
+        } catch (Exception e) {
+            return false;
         }
     }
 

@@ -4082,14 +4082,23 @@ export class StepperComponent implements OnInit, OnDestroy {
           return true;
         });
 
-        if (filtered.length === 1) {
-          // Single match - auto-resolve
+        if (filtered.length === 1 && this.isOracleVerified(filtered[0])) {
+          // Single match, confirmed live in Oracle DTP_SENDER - auto-resolve
           this.senderOptions.set(filtered);
           this.applySenderSelection(filtered[0]);
           this.senderAutoResolved.set(true);
           this.senderFallback.set(false);
           const portMsg = filtered[0].port ? ` (Port: ${filtered[0].port})` : '';
           this.toast.success(`Historical sender auto-resolved${portMsg}`);
+        } else if (filtered.length === 1) {
+          // Single match but NOT Oracle-verified - offer in dropdown, no auto-select
+          this.senderOptions.set(filtered);
+          this.applySenderSelection(null);
+          this.senderAutoResolved.set(false);
+          this.senderFallback.set(true);
+          this.toast.warning(
+            `Sender #${filtered[0].senderId} is configured but not found in Oracle DTP_SENDER - please verify before selecting`,
+          );
         } else if (filtered.length > 1) {
           // Multiple matches - show dropdown
           this.senderOptions.set(filtered);
@@ -4151,14 +4160,23 @@ export class StepperComponent implements OnInit, OnDestroy {
         // Count unique sender IDs
         const uniqueIds = new Set(validCandidates.map((s: ConfigSenderOption) => s.senderId));
 
-        if (uniqueIds.size === 1) {
-          // Single unique sender ID - auto-resolve
+        if (uniqueIds.size === 1 && this.isOracleVerified(validCandidates[0])) {
+          // Single unique sender ID, confirmed live in Oracle DTP_SENDER - auto-resolve
           this.senderOptions.set(validCandidates);
           this.applySenderSelection(validCandidates[0]);
           this.senderAutoResolved.set(true);
           this.senderFallback.set(false);
           const portMsg = validCandidates[0].port ? ` (Port: ${validCandidates[0].port})` : '';
           this.toast.success(`Sender auto-resolved${portMsg}`);
+        } else if (uniqueIds.size === 1) {
+          // Single match but NOT Oracle-verified - offer in dropdown, no auto-select
+          this.senderOptions.set(validCandidates);
+          this.applySenderSelection(null);
+          this.senderAutoResolved.set(false);
+          this.senderFallback.set(true);
+          this.toast.warning(
+            `Sender #${validCandidates[0].senderId} is configured but not found in Oracle DTP_SENDER - please verify before selecting`,
+          );
         } else if (uniqueIds.size > 1) {
           // Multiple unique sender IDs - show dropdown
           this.senderOptions.set(validCandidates);
@@ -4185,6 +4203,16 @@ export class StepperComponent implements OnInit, OnDestroy {
         return of(null);
       }),
     );
+  }
+
+  /**
+   * Oracle-verified when the backend confirmed the senderId live in the
+   * third-party Oracle DTP_SENDER table. Only verified senders auto-select —
+   * unverified ones stay in the dropdown for manual confirmation.
+   */
+  private isOracleVerified(sender: ConfigSenderOption | null | undefined): boolean {
+    if (!sender) return false;
+    return sender.verified === true || sender.source === 'oracle';
   }
 
   /**
