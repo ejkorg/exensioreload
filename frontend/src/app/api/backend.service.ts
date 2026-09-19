@@ -845,10 +845,17 @@ export class BackendService {
   // ========================================================================
   // Sender Queue Information
   // ========================================================================
-  getSenderQueueCount(senderId: number, site?: string, env?: string): Observable<{ count: number }> {
-    return this.http.get<{ count: number }>(`${this.apiUrl}/sender/${senderId}/queue-count`, {
-      params: this.toParams({ site: site || '', env: env || '' }),
-    });
+  getSenderQueueCount(
+    senderId: number,
+    site?: string,
+    env?: string,
+  ): Observable<{ count: number; threshold: number; available: number; atCapacity: boolean }> {
+    return this.http.get<{ count: number; threshold: number; available: number; atCapacity: boolean }>(
+      `${this.apiUrl}/senders/${senderId}/queue/count`,
+      {
+        params: this.toParams({ site: site || '', environment: env || '' }),
+      },
+    );
   }
 
   getStageStatus(site: string, senderId: number): Observable<StageStatus> {

@@ -815,11 +815,24 @@
           <div class="banner-text">
             <h3 class="banner-title">Sender Queue at Capacity</h3>
             <p class="banner-message">
-              The sender queue has reached its maximum capacity (600+ items). New files are being queued automatically
-              and will be processed as slots become available. Current available slots:
-              <strong>{{ queueAvailableSlots() }}</strong>
+              The sender queue has reached its maximum capacity
+              <span *ngIf="queueTotalCount() !== null"
+                >({{ queueTotalCount() }} items in the external queue)</span
+              >. Staged files wait safely in the local DB and are queued automatically as slots free up
+              (dispatch checks run every ~60 seconds).
+              <span *ngIf="queueLastCheckedAt() as checked"
+                >Last checked {{ checked | date: 'shortTime' }}.</span
+              >
             </p>
           </div>
+          <app-glass-button
+            variant="secondary"
+            size="small"
+            [loading]="queueRefreshLoading()"
+            (clicked)="refreshQueueStatus(true)"
+          >
+            Check Status
+          </app-glass-button>
         </div>
       </section>
 

@@ -579,6 +579,13 @@ export class StepperComponent implements OnInit, OnDestroy {
   queueAtCapacity = signal(false);
   /** Number of available slots in the sender queue (0 if at capacity) */
   queueAvailableSlots = signal(0);
+  /** Live external queue total rows (from backend queue-count endpoint) */
+  queueTotalCount = signal<number | null>(null);
+  /** Whether a queue status refresh is in flight */
+  queueRefreshLoading = signal(false);
+  /** Last time queue status was checked (ISO string) */
+  queueLastCheckedAt = signal<string | null>(null);
+  private queuePollHandle: ReturnType<typeof setInterval> | null = null;
 
   canStageAll = computed(() => {
     return this.previewTotal() > 0 && !!this.getEffectiveDiscoveryFilters() && !this.staging();
@@ -2689,6 +2696,11 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.skippedDuplicatesCount.set(0);
     this.restagedCount.set(0);
     this.allDuplicatesSkipped.set(false);
+    this.stopQueuePolling();
+    this.queueAtCapacity.set(false);
+    this.queueAvailableSlots.set(0);
+    this.queueTotalCount.set(null);
+    this.queueLastCheckedAt.set(null);
     // Task 8.3: Clear verification summary when returning to config (Requirement 6.5)
     this.verificationSummary.set(null);
     this.currentStep.set(0);
@@ -2925,6 +2937,10 @@ export class StepperComponent implements OnInit, OnDestroy {
                 this.queueAtCapacity.set(!!response.queueAtCapacity);
                 this.queueAvailableSlots.set(response?.queueAvailable ?? 0);
               }
+              if (response?.queueAtCapacity) {
+                this.queueTotalCount.set(null);
+                this.queueLastCheckedAt.set(new Date().toISOString());
+              }
 
               if (duplicateCount > 0) {
                 this.toast.success(
@@ -2939,7 +2955,7 @@ export class StepperComponent implements OnInit, OnDestroy {
               if (response?.queueAtCapacity) {
                 const available = response?.queueAvailable ?? 0;
                 this.toast.warning(
-                  `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Remaining files will be queued automatically.`,
+                  `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. ${stagedCount} file${stagedCount === 1 ? ' waits' : 's wait'} in the local DB — monitoring will keep you posted as slots free up.`,
                   8000,
                 );
               }
@@ -3348,6 +3364,16 @@ export class StepperComponent implements OnInit, OnDestroy {
     const stagedCount = response?.staged ?? this.previewTotal();
     const duplicateCount = response?.duplicates ?? 0;
 
+    // Capture queue capacity status from response
+    if (response?.queueAtCapacity !== undefined) {
+      this.queueAtCapacity.set(!!response.queueAtCapacity);
+      this.queueAvailableSlots.set(response?.queueAvailable ?? 0);
+    }
+    if (response?.queueAtCapacity) {
+      this.queueTotalCount.set(null);
+      this.queueLastCheckedAt.set(new Date().toISOString());
+    }
+
     if (duplicateCount > 0) {
       this.toast.success(
         `Staged ${stagedCount} payload${stagedCount === 1 ? '' : 's'} (${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} skipped)`,
@@ -3355,6 +3381,15 @@ export class StepperComponent implements OnInit, OnDestroy {
       );
     } else {
       this.toast.success(`Successfully staged ${stagedCount} payload${stagedCount === 1 ? '' : 's'}`, 5000);
+    }
+
+    // Show warning if queue is at capacity
+    if (response?.queueAtCapacity) {
+      const available = response?.queueAvailable ?? 0;
+      this.toast.warning(
+        `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Staged files wait in the local DB — monitoring will keep you posted as slots free up.`,
+        8000,
+      );
     }
 
     if (stagedCount <= 0) {
@@ -3416,6 +3451,10 @@ export class StepperComponent implements OnInit, OnDestroy {
       this.queueAtCapacity.set(!!response.queueAtCapacity);
       this.queueAvailableSlots.set(response?.queueAvailable ?? 0);
     }
+    if (response?.queueAtCapacity) {
+      this.queueTotalCount.set(null);
+      this.queueLastCheckedAt.set(new Date().toISOString());
+    }
 
     // Persist skipped duplicate count so the monitor banner stays visible
     if (duplicateCount > 0) {
@@ -3471,7 +3510,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     if (response?.queueAtCapacity) {
       const available = response?.queueAvailable ?? 0;
       this.toast.warning(
-        `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Remaining files will be queued automatically.`,
+        `Sender queue is at capacity. ${available} slot${available === 1 ? '' : 's'} available. Staged files wait in the local DB — monitoring will keep you posted as slots free up.`,
         8000,
       );
     }
@@ -3652,6 +3691,7 @@ export class StepperComponent implements OnInit, OnDestroy {
     this.persistMonitoringSession(sessionId);
     this.activeMonitoringSessionId.set(sessionId);
     this.monitoringStartPending.set(true);
+    this.startQueuePolling();
 
     // Use setTimeout to prevent blocking
     setTimeout(() => {
@@ -3664,6 +3704,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   stopMonitoring(clearPersistedSession: boolean = false, markStopped: boolean = true) {
     this.clearWarmupTimeout();
+    this.stopQueuePolling();
     this.warmupTimeoutReached.set(false);
     if (markStopped) {
       this.monitoringStopped.set(true);
@@ -3734,6 +3775,7 @@ export class StepperComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.clearWarmupTimeout();
+    this.stopQueuePolling();
     this.stopMonitoring(false, false);
     this.stagingSession.disconnectSession();
     this.senderLookupSubscription?.unsubscribe();
@@ -3879,6 +3921,87 @@ export class StepperComponent implements OnInit, OnDestroy {
       clearTimeout(this.warmupTimeoutHandle);
       this.warmupTimeoutHandle = null;
     }
+  }
+
+  /**
+   * Poll the external sender queue while Step 3 monitoring is active so the UI
+   * keeps informing the user from time to time as backend capacity frees up.
+   * Runs every 30s while monitoring; stops on terminal states / teardown.
+   */
+  private startQueuePolling(): void {
+    this.stopQueuePolling();
+    this.refreshQueueStatus();
+    this.queuePollHandle = setInterval(() => {
+      if (this.currentStep() !== 2 || !this.requestId()) {
+        return;
+      }
+      const sessionStatus = (this.stagingSession.currentSession()?.status || '').toUpperCase();
+      if (['COMPLETED', 'PARTIALLY_FAILED', 'CANCELLED'].includes(sessionStatus)) {
+        this.stopQueuePolling();
+        return;
+      }
+      this.refreshQueueStatus();
+    }, 30000);
+  }
+
+  private stopQueuePolling(): void {
+    if (this.queuePollHandle) {
+      clearInterval(this.queuePollHandle);
+      this.queuePollHandle = null;
+    }
+  }
+
+  refreshQueueStatus(manual: boolean = false): void {
+    const senderId = this.getSenderIdForRequest();
+    const site = this.selectedSite();
+    if (!senderId || !site) {
+      return;
+    }
+    if (this.queueRefreshLoading()) {
+      return;
+    }
+    this.queueRefreshLoading.set(true);
+    const env = this.selectedEnv() ? this.selectedEnv()!.toLowerCase() : 'qa';
+    this.backend.getSenderQueueCount(senderId, site, env).subscribe({
+      next: (result: any) => {
+        this.queueRefreshLoading.set(false);
+        const count = Number(result?.count ?? NaN);
+        const wasAtCapacity = this.queueAtCapacity();
+        if (result?.atCapacity !== undefined) {
+          this.queueAtCapacity.set(!!result.atCapacity);
+        }
+        if (result?.available !== undefined) {
+          this.queueAvailableSlots.set(Number(result.available) || 0);
+        }
+        if (!Number.isNaN(count)) {
+          this.queueTotalCount.set(count);
+        }
+        this.queueLastCheckedAt.set(new Date().toISOString());
+        if (manual) {
+          const threshold = Number(result?.threshold ?? 600);
+          if (!result?.atCapacity) {
+            this.toast.success(
+              `Queue has capacity (${count}/${threshold} items). Files will be queued automatically.`,
+              5000,
+            );
+          } else {
+            this.toast.info(
+              `Queue still at capacity (${count}/${threshold} items). Staged files wait in the local DB and the dispatch job retries every ~60 seconds.`,
+              5000,
+            );
+          }
+        } else if (wasAtCapacity && !result?.atCapacity) {
+          this.toast.success('Queue capacity freed up. Remaining staged files will now be queued.', 6000);
+        }
+      },
+      error: (err: any) => {
+        this.queueRefreshLoading.set(false);
+        if (manual) {
+          console.error('Failed to check queue status:', err);
+          this.toast.error('Failed to check queue status', 4000);
+        }
+      },
+    });
   }
 
   private formatETA(minutes: number): string {

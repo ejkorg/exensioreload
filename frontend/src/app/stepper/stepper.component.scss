@@ -3222,6 +3222,11 @@
     width: 100%;
   }
 
+  app-glass-button {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
   .banner-icon {
     display: flex;
     align-items: center;

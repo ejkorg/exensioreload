@@ -357,10 +357,10 @@ public class SenderController {
     }
 
     @GetMapping("/{id}/queue/count")
-    public ResponseEntity<java.util.Map<String, Long>> getQueueCount(@PathVariable("id") Integer id,
-                                                                     @RequestParam(required = false, defaultValue = "default") String site,
-                                                                     @RequestParam(required = false, defaultValue = "qa") String environment,
-                                                                     @RequestParam(required = false, name = "connectionKey") String connectionKey) {
+    public ResponseEntity<java.util.Map<String, Object>> getQueueCount(@PathVariable("id") Integer id,
+                                                                      @RequestParam(required = false, defaultValue = "default") String site,
+                                                                      @RequestParam(required = false, defaultValue = "qa") String environment,
+                                                                      @RequestParam(required = false, name = "connectionKey") String connectionKey) {
         // Backwards compatibility: allow callers to pass the connection key as either
         // the `site` param or the `connectionKey` param. Normalize into `site` for lookups.
         if ((connectionKey == null || connectionKey.isBlank()) && site != null && !site.isBlank()) {
@@ -385,9 +385,31 @@ public class SenderController {
             log.warn("Failed to fetch external queue count for sender {} site {} env {}: {}", id, site, environment, ex.getMessage());
         }
 
-        java.util.Map<String, Long> response = new java.util.HashMap<>();
+        int threshold = 1000;
+        try {
+            Integer configured = env != null ? env.getProperty("refdb.dispatch.max-queue-size", Integer.class) : null;
+            if (configured != null && configured > 0) {
+                threshold = configured;
+            }
+        } catch (Exception ignore) {}
+        // Fall back to the legacy sender threshold property when max-queue-size is unset.
+        if (threshold == 1000) {
+            try {
+                Long legacy = env != null ? env.getProperty("app.sender.threshold", Long.class) : null;
+                if (legacy != null && legacy > 0) {
+                    threshold = legacy.intValue();
+                }
+            } catch (Exception ignore) {}
+        }
+        long available = Math.max(0L, (long) threshold - count);
+        boolean atCapacity = count >= threshold;
+
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("senderId", (long) id);
         response.put("count", count);
+        response.put("threshold", (long) threshold);
+        response.put("available", available);
+        response.put("atCapacity", atCapacity);
         return ResponseEntity.ok(response);
     }
 
