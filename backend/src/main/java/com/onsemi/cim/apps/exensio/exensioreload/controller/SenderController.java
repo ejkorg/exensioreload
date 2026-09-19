@@ -386,14 +386,16 @@ public class SenderController {
         }
 
         int threshold = 1000;
+        boolean thresholdConfigured = false;
         try {
             Integer configured = env != null ? env.getProperty("refdb.dispatch.max-queue-size", Integer.class) : null;
             if (configured != null && configured > 0) {
                 threshold = configured;
+                thresholdConfigured = true;
             }
         } catch (Exception ignore) {}
         // Fall back to the legacy sender threshold property when max-queue-size is unset.
-        if (threshold == 1000) {
+        if (!thresholdConfigured) {
             try {
                 Long legacy = env != null ? env.getProperty("app.sender.threshold", Long.class) : null;
                 if (legacy != null && legacy > 0) {

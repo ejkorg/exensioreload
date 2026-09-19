@@ -16,7 +16,7 @@ import { AuthService } from './auth.service';
       <div class="login-box glass-panel">
         <div class="login-header">
           <div class="logo-area">
-            <app-glass-icon name="account_tree" [size]="56" class="logo-icon"></app-glass-icon>
+            <img src="assets/brand-logo.svg" alt="ExensioReload logo" class="logo-icon" width="56" height="56" />
             <div class="logo-text">
               <span class="accent">ExensioReload</span>
               <span class="v-tag">1.0</span>
@@ -133,9 +133,12 @@ import { AuthService } from './auth.service';
         align-items: center;
         gap: 0.2rem;
       }
-      .logo-icon {
-        color: var(--accent-color);
+      img.logo-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
         margin-bottom: 0.5rem;
+        filter: drop-shadow(0 0 12px rgba(129, 140, 248, 0.45));
       }
       .logo-text {
         font-size: 1.8rem;

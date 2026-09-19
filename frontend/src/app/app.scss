@@ -33,7 +33,10 @@
   color: var(--accent-color);
 }
 
-.brand-logo {
+img.brand-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-color) 45%, transparent));
 }
 
